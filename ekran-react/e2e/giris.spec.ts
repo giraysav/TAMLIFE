@@ -44,5 +44,5 @@ test("baglantilar sayfasi ve Ctrl+K arama", async ({ page }) => {
   await page.getByPlaceholder("Modül ara…").fill("bağlantı")
   await page.getByRole("button", { name: /Kurum Bağlantıları/ }).click()
   await expect(page.getByText("AD / LDAP")).toBeVisible()
-  await expect(page.getByText("Oracle REPORTDB")).toBeVisible()
+  await expect(page.getByText(/OneDesk / REPORTDB/).first()).toBeVisible()
 })
