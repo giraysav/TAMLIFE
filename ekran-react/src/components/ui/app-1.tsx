@@ -333,7 +333,7 @@ export function App1() {
       <div className="flex h-full min-h-dvh w-full items-center justify-center bg-background p-4">
         <form
           onSubmit={girisYap}
-          className="flex w-full max-w-sm flex-col gap-4 rounded-xl border bg-card p-6 shadow-sm"
+          className="flex w-full max-w-sm flex-col gap-4 rounded-xl border bg-card p-6 shadow-xs"
           aria-label={dil === "en" ? "Sign in" : "Giris"}
         >
           <h1 className="text-xl font-semibold">{dil === "en" ? "Sign in" : "Giris"}</h1>

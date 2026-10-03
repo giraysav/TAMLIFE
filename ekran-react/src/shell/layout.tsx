@@ -17,7 +17,7 @@ export function ShellLayout() {
         <main className="min-h-0 flex-1 overflow-y-auto p-4">
           <ol className="grid gap-3" data-home-cards="14">
             {ANA_SAYFA_KARTLARI.map((card) => (
-              <li key={card.cardId} data-card-id={card.cardId} className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
+              <li key={card.cardId} data-card-id={card.cardId} className="rounded-xl border bg-card p-4 text-card-foreground shadow-xs">
                 <h2 className="text-base font-medium">{card.title}</h2>
                 {card.empty ? <EmptyState /> : null}
               </li>
