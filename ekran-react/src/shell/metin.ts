@@ -27,6 +27,14 @@ const TR = {
   yuklenemedi: "Yüklenemedi.",
   dil: "Dil",
   oturumKapaniyor: "Oturum süresi doldu.",
+  ara: "Ara (Ctrl+K)",
+  aramaIpucu: "Modül ara…",
+  sonucYok: "Sonuç yok.",
+  durumHazir: "Hazır",
+  durumKapali: "Kapalı",
+  durumEksik: "Eksik",
+  eksikAnahtar: "Eksik anahtarlar",
+  aglar: "Ağ",
 }
 
 const EN: typeof TR = {
@@ -56,6 +64,14 @@ const EN: typeof TR = {
   yuklenemedi: "Could not load.",
   dil: "Language",
   oturumKapaniyor: "Your session has expired.",
+  ara: "Search (Ctrl+K)",
+  aramaIpucu: "Search modules…",
+  sonucYok: "No results.",
+  durumHazir: "Ready",
+  durumKapali: "Off",
+  durumEksik: "Incomplete",
+  eksikAnahtar: "Missing keys",
+  aglar: "Network",
 }
 
 export function metin(dil: Dil) {

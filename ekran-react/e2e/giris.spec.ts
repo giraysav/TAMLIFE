@@ -32,3 +32,17 @@ test("giris, menu, yonetim ve cikis", async ({ page }) => {
   await page.goto("/#/admin")
   await expect(page.getByRole("button", { name: "Giriş" })).toBeVisible()
 })
+
+test("baglantilar sayfasi ve Ctrl+K arama", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await page.goto("/")
+  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
+  await page.getByLabel("Şifre").fill(PAROLA)
+  await page.getByRole("button", { name: "Giriş" }).click()
+  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.keyboard.press("Control+k")
+  await page.getByPlaceholder("Modül ara…").fill("bağlantı")
+  await page.getByRole("button", { name: /Kurum Bağlantıları/ }).click()
+  await expect(page.getByText("AD / LDAP")).toBeVisible()
+  await expect(page.getByText("Oracle REPORTDB")).toBeVisible()
+})

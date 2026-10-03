@@ -154,3 +154,17 @@ def test_forwarded_for_only_from_trusted_proxy(client, monkeypatch):
     monkeypatch.setenv("TAMLIFE_TRUSTED_PROXIES", "10.0.0.9")
     assert client_ip(req("10.0.0.9", "1.2.3.4, 10.0.0.9")) == "1.2.3.4"
     assert client_ip(req("8.8.8.8", "1.2.3.4")) == "8.8.8.8"  # baska esten gelen basliga guvenilmez
+
+
+def test_integrations_admin_only_and_no_values(client, monkeypatch):
+    assert client.get("/api/v1/integrations").status_code == 401
+    login_ok(client)
+    monkeypatch.setenv("ONEDESK_DB_ENABLED", "true")
+    monkeypatch.setenv("ONEDESK_DB_HOST", "gizli-host.example")
+    monkeypatch.setenv("ONEDESK_DB_PASSWORD", "cok-gizli-parola")
+    r = client.get("/api/v1/integrations")
+    assert r.status_code == 200
+    assert "gizli-host.example" not in r.text and "cok-gizli-parola" not in r.text
+    row = next(i for i in r.json()["data"]["items"] if i["id"] == "oracle_onedesk")
+    assert row["state"] == "incomplete" and "ONEDESK_DB_PORT" in row["missing"]
+    assert "ONEDESK_DB_HOST" not in row["missing"]
