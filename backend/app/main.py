@@ -31,8 +31,8 @@ def create_app() -> FastAPI:
             "status": "success",
             "data": {
                 "service": "tamlife",
-                "database": "postgresql",
-                "database_configured": settings.database_url.startswith("postgresql"),
+                "database": settings.database_url.split(":", 1)[0].split("+", 1)[0],
+                "database_configured": bool(settings.database_url),
             },
         }
 
@@ -59,6 +59,11 @@ def create_app() -> FastAPI:
         if user is not None:
             audit_log.remember(actor=user.username, action="logout", outcome="allow")
         return {"status": "success", "data": {}}
+
+    @app.get("/api/v1/session/me")
+    def whoami(request: Request) -> dict:
+        user = _require_user(request)
+        return {"status": "success", "data": {"username": user.username, "role": user.role, "is_admin": user.is_admin}}
 
     @app.get("/api/v1/modules")
     def list_modules(request: Request) -> dict:

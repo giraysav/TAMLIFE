@@ -13,3 +13,13 @@ code { font-size: 0.85rem; }
 .error { color: #8a2b2b; }
 .admin { margin-top: 28px; }
 .admin h3 { font-size: 1rem; margin: 0 0 8px; }
+.bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.bar h1 { margin: 0; flex: 1; }
+button { font: inherit; padding: 8px 16px; border: 0; border-radius: 8px; background: #1c2430; color: #fff; cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: default; }
+.login { min-height: 100vh; box-sizing: border-box; display: grid; place-items: center; }
+.login-card { width: 100%; max-width: 360px; background: #fff; border: 1px solid #d7dee6; border-radius: 12px; padding: 28px; display: grid; gap: 14px; }
+.login-card h1 { margin: 0; }
+.login-card label { display: grid; gap: 6px; font-size: 0.9rem; }
+.login-card input { font: inherit; padding: 9px 10px; border: 1px solid #c4ced8; border-radius: 8px; }
+.login-card input:focus { outline: 2px solid #3b6fd4; border-color: transparent; }

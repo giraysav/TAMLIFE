@@ -6,6 +6,7 @@ names from the old service; there is no separate LDAP_* key.
 
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass
 
 from app.config import AD_LDAP_KEYS, AD_REQUIRED_KEYS, get_settings
@@ -52,7 +53,9 @@ class Directory:
         expected_password = settings.local_password
         if not expected_user or not expected_password:
             return None
-        if username != expected_user or password != expected_password:
+        user_ok = hmac.compare_digest(username.encode(), expected_user.encode())
+        pass_ok = hmac.compare_digest(password.encode(), expected_password.encode())
+        if not (user_ok and pass_ok):
             return None
         role = settings.local_role or "TeamMember"
         return DirectoryUser(username=username, role=role, is_admin=role == "admin")
