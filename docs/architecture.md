@@ -1,39 +1,62 @@
 # TAMLIFE v3.5 mimari
 
-Üç alan. Canlı AD ve canlı Oracle bağlantısı yoktur. Üretim `TAM_Life` ve `Secure_DB` bu ağacın dışındadır ve salt okunurdur. Müşteri satırı kopyalanmaz.
+Üretim uygulaması `D:\Project\TAM_Life\TAMLIFE` bu ağacın dışındadır ve salt okunurdur. Müşteri satırı kopyalanmaz. Canlı AD bind ve canlı Oracle bağlantısı yoktur.
 
-## 1. Dizin (AD/LDAP)
+Eski yapıda her kutu `backend/app/kutucuklar/<ad>` altında ayrı duruyordu. v3.5 bunu tek listeye indirir: klasör başına modül yoktur.
 
-Kimlik `backend/app/ad_fake.py` içindeki sahte adaptörle doğrulanır. `ldap3` yoktur, soket açılmaz, bind yapılmaz.
+## 1. Katalog
 
-Yuvalar ortam değişkenidir: `TAMLIFE_AD_HOST`, `TAMLIFE_AD_PORT`, `TAMLIFE_AD_USE_SSL`, `TAMLIFE_AD_BASE_DN`, `TAMLIFE_AD_BIND_USER`, `TAMLIFE_AD_BIND_PASSWORD`. Parola dosyaya yazılmaz. Yuva dolu olsa bile adaptör gerçek dizine gitmez.
+Tek kaynak `backend/app/catalog.py`. Kimlik, ad ve bayrak üç üretim kaydından birleştirildi:
 
-Yerel deneme kullanıcısı yalnız `TAMLIFE_LOCAL_USER`, `TAMLIFE_LOCAL_PASSWORD` ve `TAMLIFE_LOCAL_ROLE` ile bellekte kontrol edilir. Oturum çerezi HttpOnly ve SameSite Lax'tir. Çerez değeri JSON gövdesine konmaz.
+- `backend/app/moduller.py` içindeki `MODULLER`
+- aynı dosyadaki `ANA_SAYFA_KUTUCUKLARI`
+- `backend/app/kutucuklar/registry.py` içindeki `KUTU_TANIMLARI`
+
+Uydurma modül yoktur. Listede olmayan bir kutu eklenmedi. `ictapn` ayrı modül değildir; kayıt `tamsms` anahtarına bağlıdır. `portfoy` ayrı modül değildir; anahtar `musteri`dir. `talep`, `roller` ve `utilizasyon` ana sayfa kutusu değildir. `topoloji` ana sayfada yoktur ve `musteri` iznine bağlıdır.
+
+Kimlikler: `musteri`, `takvim`, `takvim_ozet`, `onedesk`, `utilizasyon`, `roller`, `talep`, `ekip`, `rapor`, `proje`, `tamsms`, `tamapn`, `gelir_uretim`, `toptan`, `sunum`, `radar`, `baglantili`, `topoloji`.
+
+Bayraklar üretimdeki anlamıyla durur. `yalniz_admin` olanlar `utilizasyon` ve `roller`. `herkese_acik` olan `talep`. Ana sayfada hazır olmayanlar `gelir_uretim`, `toptan` ve `baglantili` (`baglantili` kayıt durumu `stub`). Sağlık tabloları `MODUL_TABLOLARI` ile aynıdır.
+
+## 2. Dizin (AD/LDAP)
+
+Kimlik yuvası `backend/app/ad.py`. `ldap3` yoktur, soket açılmaz, bind yapılmaz. Ayrı `LDAP_*` anahtarı yoktur; eski servis LDAPS ayarını `AD_*` adlarıyla okur.
+
+Anahtarlar (değer yok, varsayılan boş):
+
+`AD_ENABLED`, `AD_SERVER`, `AD_DOMAIN`, `AD_USE_SSL`, `AD_CA_CERT_FILE`, `AD_IZINLI_ALANLAR`, `AD_ALAN_KONTROLU`, `AD_KIMLIK_KONTROLU`, `AD_IZINLI_GRUPLAR`, `AD_ARAMA_KOKU`, `AD_OTOMATIK_AC`.
+
+Dolu sayılması için `AD_ENABLED=true` ve `AD_SERVER` ile `AD_DOMAIN` dolu olmalıdır. Yuva dolu olsa bile adaptör dizine gitmez. Parola ve anahtar değeri bu dosyaya ve API yanıtına yazılmaz; yanıt yalnız anahtar adını ve dolu olup olmadığını söyler.
+
+Panel oturumu dizin değildir. `TAMLIFE_LOCAL_USER`, `TAMLIFE_LOCAL_PASSWORD` ve `TAMLIFE_LOCAL_ROLE` yalnız bellek içi panel kapısıdır. Oturum çerezi HttpOnly ve SameSite Lax'tir. Çerez değeri JSON gövdesine konmaz.
 
 Roller: `admin`, `TeamMngr`, `TeamMember`. `utilizasyon` ve `roller` yalnız admin içindir. `talep` giriş yapana açıktır.
 
-## 2. Panel veritabanı (PostgreSQL)
+## 3. Dış kaynak (Oracle / OneDesk)
 
-Tüm panel şeması PostgreSQL içindir. Adres `TAMLIFE_DATABASE_URL`. Boş ise varsayılan `postgresql+psycopg://localhost:5432/tamlife` (parola yok; veritabanı `tamlife`, sunucu `localhost`, port `5432`).
+Liste `backend/app/external.py`. Her kaynak üretimdeki anahtar adlarını taşır. DSN değeri repoda yoktur. Sürücü yüklenmez. `connect()` kapalıdır.
 
-Geçit `backend/app/gateway.py` içe aktarılırken bağlanmaz. Şema `backend/app/models.py`. Sürüm `backend/alembic` (`0001_panel_schema`). Alembic aynı adresi kullanır.
+Ortak: `ORACLE_CLIENT_DIR`.
 
-Tablolar modül sahibine göre boş açılır: müşteri, takvim, rapor, proje, onedesk, utilizasyon, talep, sms, apn, radar, sunum, gelir üretim, toptan. Kimlik `app_user`. Denetim tek tablodur: `audit_event`. `pin_code` ve `totp_secret` kolonları yoktur. Denetim metninde parola, pin ve çerez reddedilir.
+OneDesk / Oracle (`ONEDESK_DB_ENABLED`): `ONEDESK_DB_ENABLED`, `ONEDESK_DB_HOST`, `ONEDESK_DB_PORT`, `ONEDESK_DB_SERVICE_NAME`, `ONEDESK_DB_USER`, `ONEDESK_DB_PASSWORD`, `ONEDESK_DB_QUERY`, `ONEDESK_DB_TIMEOUT`, `ONEDESK_DB_IMPORT_QUERY`, `ONEDESK_DB_IMPORT_TIMEOUT`, `ONEDESK_DB_URL`, `ONEDESK_BASE_URL`, `ONEDESK_API_KEY`.
 
-Bu makinede `psql` yoksa PostgreSQL kurulu sayılmaz. Adres ayarlanmıştır; sunucu başlatılmamıştır.
+Onent / Oracle (`ONENTDB_DB_ENABLED`): `ONENTDB_DB_ENABLED`, `ONENTDB_DB_HOST`, `ONENTDB_DB_PORT`, `ONENTDB_DB_SERVICE_NAME`, `ONENTDB_DB_USER`, `ONENTDB_DB_PASSWORD`, `ONENTDB_DB_QUERY`, `ONENTDB_DB_TIMEOUT`, `ONENTDB_DB_IMPORT_QUERY`, `ONENTDB_DB_IMPORT_TIMEOUT`, `ONENT_DB_URL`.
 
-## 3. Dışarıdan gelen veritabanı
+Ürün-Tutar / Oracle (`URUNTUTAR_DB_ENABLED`): `URUNTUTAR_DB_ENABLED`, `URUNTUTAR_DB_HOST`, `URUNTUTAR_DB_PORT`, `URUNTUTAR_DB_SERVICE_NAME`, `URUNTUTAR_DB_USER`, `URUNTUTAR_DB_PASSWORD`, `URUNTUTAR_DB_QUERY`, `URUNTUTAR_DB_TIMEOUT`, `URUNTUTAR_DB_IMPORT_QUERY`, `URUNTUTAR_DB_IMPORT_TIMEOUT`, `URUN_TUTAR_DB_URL`.
 
-Oracle REPORTDB ve ikinci kaynak yalnız yuvadır.
+İçe alma kapıları aynı Oracle ön ekini kullanır. Açık olma anahtarı sorgu adıdır: `ONEDESK_DB_IMPORT_QUERY`, `ONENTDB_DB_IMPORT_QUERY`.
 
-| Anahtar | Tür | Ortam değişkeni |
-|---|---|---|
-| reportdb | oracle | `TAMLIFE_REPORTDB_DSN` |
-| secondary | unconfigured | `TAMLIFE_SECONDARY_DSN` |
+Canlı ortamda ayrıca REPORTDB ön eki vardır (kod yolu `ONEDESK_DB` ön ekidir): `ORACLE_REPORTDB_ENABLED`, `ORACLE_REPORTDB_HOST`, `ORACLE_REPORTDB_PORT`, `ORACLE_REPORTDB_SERVICE_NAME`, `ORACLE_REPORTDB_USER`, `ORACLE_REPORTDB_PASSWORD`, `ORACLE_REPORTDB_TIMEOUT`.
 
-DSN değeri repoda ve `external_source` satırında yoktur. Satır yalnız ortam değişkeninin adını tutar. Sürücü yüklenmez, canlı sorgu yoktur. `connect()` her zaman kapalı kalır.
+Üretim ham deposunun içe alma tabloları (`ham_veri.db`): `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`. Paneldeki boş iniş tabloları `ingest_batch` ve `ingest_record`dır; bunlar eski ham deponun adı değildir. Dosya bırakma yeri `data/incoming` boş bırakılır.
 
-Gelen veri `ingest_batch` ve `ingest_record` tablolarına düşer. Dosya bırakma yeri `data/incoming` boş bırakılır.
+## 4. Panel veritabanı (PostgreSQL)
+
+Panel şeması PostgreSQL içindir. Adres `TAMLIFE_DATABASE_URL`. Boş ise varsayılan `postgresql+psycopg://localhost:5432/tamlife` (parola yok).
+
+Geçit `backend/app/gateway.py` içe aktarılırken bağlanmaz. Şema `backend/app/models.py`. Sürüm `backend/alembic` (`0001_panel_schema`).
+
+`pin_code` ve `totp_secret` kolonları yoktur. Denetim metninde parola, pin ve çerez reddedilir.
 
 ## Kök
 

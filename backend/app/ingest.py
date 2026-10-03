@@ -1,41 +1,47 @@
-"""Incoming external databases. Slots only; connect() never opens a driver."""
+"""Incoming external databases. Key names and ingest tables only.
+
+connect() never loads a driver and never opens Oracle.
+"""
 
 from __future__ import annotations
 
-from app.config import get_settings
-from app.models import SOURCE_SLOTS
+import os
+
+from app.external import INGEST_TABLES, PANEL_INGEST_TABLES, SHARED_ORACLE_KEYS, SOURCES
 
 
 class IngestDisabled(RuntimeError):
     pass
 
 
-def status() -> list[dict]:
-    settings = get_settings()
-    configured = {
-        "reportdb": bool(settings.reportdb_dsn),
-        "secondary": bool(settings.secondary_dsn),
-    }
-    kinds = {
-        "reportdb": "oracle",
-        "secondary": settings.secondary_kind or "unconfigured",
-    }
+def _set(key: str) -> bool:
+    return bool(os.environ.get(key, "").strip())
+
+
+def status() -> dict:
     rows = []
-    for key, kind, env_name in SOURCE_SLOTS:
+    for source in SOURCES:
         rows.append(
             {
-                "key": key,
-                "kind": kinds.get(key, kind),
-                "dsn_env": env_name,
-                "configured": configured.get(key, False),
+                "key": source.id,
+                "kind": source.kind,
+                "label": source.label,
+                "dsn_env": source.enabled_key,
+                "keys": list(source.keys),
+                "configured": _set(source.enabled_key),
                 "connected": False,
             }
         )
-    return rows
+    return {
+        "sources": rows,
+        "shared_keys": list(SHARED_ORACLE_KEYS),
+        "ingest_tables": {name: list(columns) for name, columns in INGEST_TABLES.items()},
+        "panel_ingest_tables": list(PANEL_INGEST_TABLES),
+    }
 
 
 def connect(source_key: str) -> None:
-    known = {key for key, _kind, _env in SOURCE_SLOTS}
+    known = {item.id for item in SOURCES}
     if source_key not in known:
         raise KeyError(source_key)
     raise IngestDisabled("live external database connections are disabled")

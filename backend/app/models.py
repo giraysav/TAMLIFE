@@ -40,10 +40,7 @@ TABLE_OWNER = {
     "ingest_record": "ingest",
 }
 
-SOURCE_SLOTS = (
-    ("reportdb", "oracle", "TAMLIFE_REPORTDB_DSN"),
-    ("secondary", "unconfigured", "TAMLIFE_SECONDARY_DSN"),
-)
+# Source key names live in app.external. No DSN value is stored here.
 
 
 class AppUser(Base):
@@ -252,8 +249,9 @@ class IngestRecord(Base):
 
 
 def seed_source_slots(connection) -> None:
-    """Insert the two external slots. No DSN value is stored."""
+    """Insert production source slots. The row stores the env key name, never a DSN value."""
     from sqlalchemy import insert
+    from app.external import SOURCE_SLOTS
 
     present = {row[0] for row in connection.execute(select(ExternalSource.source_key))}
     for key, kind, env_name in SOURCE_SLOTS:

@@ -1,4 +1,8 @@
-"""Panel catalog. Display names only; no customer rows."""
+"""Tek modul listesi. Uretim MODULLER, ANA_SAYFA_KUTUCUKLARI ve kutucuk kaydindan.
+
+Eski uygulamada her kutu ayri klasordeydi. Burada klasor yok; kimlik, ad ve
+bayrak ayni kaynaktan tek listede durur. Musteri satiri yok.
+"""
 
 from __future__ import annotations
 
@@ -14,55 +18,163 @@ class Module:
     public: bool = False
     in_nav: bool = True
     permission: str | None = None
+    i18n: str = ""
+    card_id: str = ""
+    box_id: str = ""
+    permission_group: str = ""
+    note: str = ""
+    ready: bool = True
+    registry_id: str = ""
+    registry_status: str = ""
+    modal_id: str = ""
+    table: str = ""
 
 
-@dataclass(frozen=True)
-class HomeCard:
-    key: str
-    title: str
-    i18n: str
-    card_id: str
-
-
+# Sira: moduller.py MODULLER. Ana sayfa sirasi HOME_ORDER.
 MODULES: tuple[Module, ...] = (
-    Module("musteri", "Müşteri Yönetimi", "module"),
-    Module("takvim", "İzin ve Takvim Yönetimi", "module"),
-    Module("takvim_ozet", "TAM Takvim", "card"),
-    Module("onedesk", "OneDesk", "module"),
-    Module("utilizasyon", "TAM Utilizasyon", "module", admin_only=True, in_nav=False),
-    Module("roller", "Rol Yönetimi", "module", admin_only=True, in_nav=False),
-    Module("talep", "Geliştirme Talepleri", "module", public=True, in_nav=False),
-    Module("ekip", "TAM Özet", "card"),
-    Module("rapor", "Gönderilen Aylık Rapor", "card"),
-    Module("proje", "Takip Edilen Projeler", "card"),
-    Module("tamsms", "TAM SMS", "card"),
-    Module("tamapn", "TAM APN", "card"),
-    Module("gelir_uretim", "TAM GELIR&URETIM", "card"),
-    Module("toptan", "TAM Toptan", "card"),
-    Module("sunum", "TAM Sunum", "card"),
-    Module("radar", "Müşteri Radar", "card"),
-    Module("baglantili", "Bağlantılı Araçlar", "card"),
-    Module("topoloji", "TopoMaker", "module", in_nav=False, permission="musteri"),
+    Module(
+        "musteri", "Müşteri Yönetimi", "modul",
+        i18n="musteri.tamPortfoy", card_id="dash-card-modul-portfoy",
+        box_id="mod_musteri", permission_group="modules",
+        registry_id="portfoy", registry_status="aktif", modal_id="mgmtMusteriModal",
+        table="customers",
+    ),
+    Module(
+        "takvim", "İzin&Takvim Yönetimi", "modul",
+        i18n="tab.takvim", card_id="dash-card-modul-takvim",
+        box_id="mod_takvim", permission_group="modules",
+        note="kişinin kendi takvimi",
+        registry_status="aktif", modal_id="mgmtTakvimModal",
+        table="calendar_records",
+    ),
+    Module(
+        "takvim_ozet", "TAM Takvim", "kart",
+        i18n="card.takvim.title", card_id="dash-card-takvim",
+        box_id="card_takvim_ozet", permission_group="dashboard_cards",
+        note="TeamMember yalnız kendi takvimini görür",
+        registry_id="takvim", registry_status="aktif", modal_id="takvimModal",
+        table="calendar_records",
+    ),
+    Module(
+        "onedesk", "OneDesk", "modul",
+        i18n="card.ats.title", card_id="dash-card-onedesk",
+        box_id="mod_onedesk", permission_group="modules",
+        registry_status="aktif", modal_id="atsModal",
+        table="customers",
+    ),
+    Module(
+        "utilizasyon", "TAM Utilizasyon", "modul", admin_only=True,
+        note="ana sayfa kutucuğu yok; yalnız admin",
+        registry_status="aktif", modal_id="mgmtUtilizasyonModal",
+        table="util_criteria",
+    ),
+    Module(
+        "roller", "Rol Yönetimi", "modul", admin_only=True,
+        note="ana sayfa kutucuğu yok; yalnız admin",
+        table="users",
+    ),
+    Module(
+        "talep", "Geliştirme Talepleri", "modul", public=True,
+        note="ana sayfada kutucuk değil",
+        registry_status="aktif", modal_id="mgmtTalepModal",
+        table="gelistirme_talepleri",
+    ),
+    Module(
+        "ekip", "TAM Özet", "kart",
+        i18n="card.ekip.title", card_id="dash-card-ekip",
+        box_id="card_ekip", permission_group="dashboard_cards",
+        note="TeamMember yalnız kendini görür",
+        registry_status="aktif", modal_id="ekipModal",
+        table="users",
+    ),
+    Module(
+        "rapor", "Gönderilen Aylık Rapor", "kart",
+        i18n="card.rapor.title", card_id="dash-card-rapor",
+        box_id="card_rapor", permission_group="dashboard_cards",
+        registry_status="aktif", modal_id="aylikRaporModal",
+        table="reports",
+    ),
+    Module(
+        "proje", "Takip Edilen Projeler", "kart",
+        i18n="card.proje.title", card_id="dash-card-proje",
+        box_id="card_proje", permission_group="dashboard_cards",
+        registry_status="aktif", modal_id="projeModal",
+        table="project_items",
+    ),
+    Module(
+        "tamsms", "TAM SMS", "kart",
+        i18n="card.tamSms.title", card_id="dash-card-tamsms",
+        box_id="card_tamsms", permission_group="dashboard_cards",
+        registry_id="ictapn", registry_status="aktif", modal_id="ictApnModal",
+        table="ict_revenues",
+    ),
+    Module(
+        "tamapn", "TAM APN", "kart",
+        i18n="card.tamApn.title", card_id="dash-card-tamapn",
+        box_id="card_tamapn", permission_group="dashboard_cards",
+        table="apn_revenues",
+    ),
+    Module(
+        "gelir_uretim", "TAM GELIR&URETIM", "kart", ready=False,
+        i18n="card.gelirUretim.title", card_id="dash-card-gelir-uretim",
+        box_id="card_gelir_uretim", permission_group="dashboard_cards",
+        note="icerik yakinda detaylandirilacak",
+    ),
+    Module(
+        "toptan", "TAM Toptan", "kart", ready=False,
+        i18n="card.toptan.title", card_id="dash-card-toptan",
+        box_id="card_toptan", permission_group="dashboard_cards",
+        note="toptan satış (wholesale); içerik yakında",
+    ),
+    Module(
+        "sunum", "TAM Sunum", "kart",
+        i18n="card.sunum.title", card_id="dash-card-sunum",
+        box_id="card_sunum", permission_group="dashboard_cards",
+        registry_status="aktif", modal_id="sunumModal",
+        table="qbr_reports",
+    ),
+    Module(
+        "radar", "Müşteri Radar", "kart",
+        i18n="card.radar.title", card_id="dash-card-radar",
+        box_id="card_radar", permission_group="dashboard_cards",
+        registry_status="aktif", modal_id="radarModal",
+        table="radar_prospects",
+    ),
+    Module(
+        "baglantili", "Bağlantılı Araçlar", "kart", ready=False,
+        i18n="card.placeholder.title", card_id="dash-card-baglantili",
+        box_id="card_baglantili", permission_group="dashboard_cards",
+        note="içerik henüz yok",
+        registry_status="stub",
+    ),
+    Module(
+        "topoloji", "TopoMaker", "modul", in_nav=False, permission="musteri",
+        note="ana sayfa kutucuğu yok; müşteri iznine bağlı",
+        registry_status="aktif", modal_id="topoMakerModal",
+    ),
 )
 
 BY_KEY = {item.key: item for item in MODULES}
 
-HOME_CARDS: tuple[HomeCard, ...] = (
-    HomeCard("ekip", "TAM Özet", "card.ekip.title", "dash-card-ekip"),
-    HomeCard("takvim_ozet", "TAM Takvim", "card.takvim.title", "dash-card-takvim"),
-    HomeCard("sunum", "TAM Sunum", "card.sunum.title", "dash-card-sunum"),
-    HomeCard("radar", "Müşteri Radar", "card.radar.title", "dash-card-radar"),
-    HomeCard("musteri", "Müşteri Yönetimi", "musteri.tamPortfoy", "dash-card-modul-portfoy"),
-    HomeCard("rapor", "Gönderilen Aylık Rapor", "card.rapor.title", "dash-card-rapor"),
-    HomeCard("proje", "Takip Edilen Projeler", "card.proje.title", "dash-card-proje"),
-    HomeCard("onedesk", "OneDesk", "card.ats.title", "dash-card-onedesk"),
-    HomeCard("toptan", "TAM Toptan", "card.toptan.title", "dash-card-toptan"),
-    HomeCard("tamsms", "TAM SMS", "card.tamSms.title", "dash-card-tamsms"),
-    HomeCard("tamapn", "TAM APN", "card.tamApn.title", "dash-card-tamapn"),
-    HomeCard("gelir_uretim", "TAM GELIR&URETIM", "card.gelirUretim.title", "dash-card-gelir-uretim"),
-    HomeCard("takvim", "İzin ve Takvim Yönetimi", "tab.takvim", "dash-card-modul-takvim"),
-    HomeCard("baglantili", "Bağlantılı Araçlar", "card.placeholder.title", "dash-card-baglantili"),
+# Ana sayfa sirasi: ANA_SAYFA_KUTUCUKLARI. Talep, roller, utilizasyon, topoloji yok.
+HOME_ORDER: tuple[str, ...] = (
+    "ekip",
+    "takvim_ozet",
+    "sunum",
+    "radar",
+    "musteri",
+    "rapor",
+    "proje",
+    "onedesk",
+    "toptan",
+    "tamsms",
+    "tamapn",
+    "gelir_uretim",
+    "takvim",
+    "baglantili",
 )
+
+HOME_CARDS: tuple[Module, ...] = tuple(BY_KEY[key] for key in HOME_ORDER)
 
 
 def get(key: str) -> Module:

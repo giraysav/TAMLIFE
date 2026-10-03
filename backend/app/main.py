@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from app.ad_fake import directory
+from app.ad import directory
 from app.audit import SecretAuditError, audit_log
 from app.authz import can_open
 from app.catalog import HOME_CARDS, MODULES, get
@@ -70,6 +70,16 @@ def create_app() -> FastAPI:
                 "admin_only": item.admin_only,
                 "public": item.public,
                 "in_nav": item.in_nav,
+                "permission": item.permission,
+                "i18n": item.i18n,
+                "card_id": item.card_id,
+                "box_id": item.box_id,
+                "permission_group": item.permission_group,
+                "ready": item.ready,
+                "registry_id": item.registry_id,
+                "registry_status": item.registry_status,
+                "modal_id": item.modal_id,
+                "table": item.table,
             }
             for item in MODULES
         ]
