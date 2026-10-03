@@ -39,6 +39,7 @@ import type { Kullanici, MenuOgesi } from "@/lib/oturum"
 import { AdminSayfasi } from "@/shell/admin-sayfasi"
 import { Arama } from "@/shell/arama"
 import { EntegrasyonSayfasi } from "@/shell/entegrasyon-sayfasi"
+import { VeriSayfasi } from "@/shell/veri-sayfasi"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { ModulSayfasi } from "@/shell/modul-sayfasi"
@@ -215,6 +216,8 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
             <OzetOrbit dil={dil} admin={kullanici.is_admin} onGit={sec} />
           ) : aktif === "admin" ? (
             <AdminSayfasi dil={dil} />
+          ) : aktif === "veri" ? (
+            <VeriSayfasi dil={dil} />
           ) : aktif === "integrations" ? (
             <EntegrasyonSayfasi dil={dil} />
           ) : oge ? (

@@ -46,3 +46,17 @@ test("baglantilar sayfasi ve Ctrl+K arama", async ({ page }) => {
   await expect(page.getByText("AD / LDAP")).toBeVisible()
   await expect(page.getByText("OneDesk / REPORTDB").first()).toBeVisible()
 })
+
+test("veri yonetimi kabugu: Postgres yoksa soyler, 7 tablo adi listelenir", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await page.goto("/")
+  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
+  await page.getByLabel("Şifre").fill(PAROLA)
+  await page.getByRole("button", { name: "Giriş" }).click()
+  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.goto("/#/veri")
+  await expect(page.getByText("PostgreSQL bağlı değil")).toBeVisible()
+  for (const ad of ["veri_setleri", "ham_bloklar", "kurallar", "metrikler", "uygulama_gunlugu", "ingest_batch", "ingest_record"]) {
+    await expect(page.getByText(ad, { exact: true })).toBeVisible()
+  }
+})

@@ -71,3 +71,7 @@ Baglanti yuvalari yalniz dolu veya bos: AD (`AD_ENABLED` ile `AD_SERVER` ve `AD_
 Veri yonetimi tablolari: `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`, `ingest_batch`, `ingest_record`. Satirlar `TAMLIFE_DATABASE_URL` ayarliysa Postgres'e yazilir. Adres donmez.
 
 Sayfa `web` icinde bu iki bolumu gosterir. Katalog tek listedir; modul klasoru yoktur.
+
+## CSRF (OpenAPI'de görünmez)
+
+Giriş sonrası sunucu `tamlife_csrf` çerezini (JS'in okuyabildiği) ve `tamlife_session` çerezini (HttpOnly) verir. Durum değiştiren her istek (login hariç) `x-csrf-token` başlığında çerez değerini taşır; sunucu bunu oturumdaki değerle karşılaştırır. Ayrı bir `/csrf` rotası yoktur. İstemci: `ekran-react/src/lib/http.ts`. Tipler `npm run api:uret` ile canlı `/openapi.json`'dan üretilir (yalnız dev ortamında açık).

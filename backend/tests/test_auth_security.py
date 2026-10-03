@@ -168,3 +168,59 @@ def test_integrations_admin_only_and_no_values(client, monkeypatch):
     row = next(i for i in r.json()["data"]["items"] if i["id"] == "oracle_reportdb")
     assert row["state"] == "incomplete" and "ORACLE_REPORTDB_PORT" in row["missing"]
     assert "ORACLE_REPORTDB_HOST" not in row["missing"]
+
+
+def _tablolar(d):
+    assert [t["name"] for t in d["tables"]] == [
+        "veri_setleri", "ham_bloklar", "kurallar", "metrikler", "uygulama_gunlugu", "ingest_batch", "ingest_record",
+    ]
+    for t in d["tables"]:
+        assert t["rows"] is None or t["exists"] is True  # var olmayan tabloya satir uydurulmaz
+
+
+def test_veri_durumu_admin_only(client):
+    assert client.get("/api/v1/veri").status_code == 401
+
+
+def test_veri_durumu_sqlite_postgres_degil_ve_sir_yok(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("TAMLIFE_DATABASE_URL", f"sqlite:///{(tmp_path / 'v.db').as_posix()}")
+    login_ok(client)
+    r = client.get("/api/v1/veri")
+    d = r.json()["data"]
+    _tablolar(d)
+    assert d["engine"] == "sqlite" and d["postgres"] is False and d["postgres_ready"] is False
+    assert "PostgreSQL bagli degil" in d["note"]
+    assert all(t["exists"] is False and t["rows"] is None for t in d["tables"])
+    assert "://" not in r.text and str(tmp_path) not in r.text
+
+
+def test_veri_durumu_postgres_ulasilamiyor(client, monkeypatch):
+    import socket
+
+    try:
+        socket.create_connection(("127.0.0.1", 5432), timeout=0.5).close()
+        pytest.skip("bu makinede 5432 dinleniyor")
+    except OSError:
+        pass
+    monkeypatch.setenv("TAMLIFE_DATABASE_URL", "postgresql+psycopg://kullanici:gizli-sifre@127.0.0.1:5432/x")
+    login_ok(client)
+    r = client.get("/api/v1/veri")
+    d = r.json()["data"]
+    _tablolar(d)
+    assert d["engine"] == "postgresql" and d["postgres_ready"] is False and "baglanilamadi" in d["note"]
+    assert "gizli-sifre" not in r.text and "kullanici" not in r.text
+
+
+def test_contract_covers_catalog_and_owners_match():
+    from app.catalog import MODULES
+    from app.contract import CONTRACT_DATA
+
+    ids = {m.key for m in MODULES}
+    assert ids <= set(CONTRACT_DATA) and set(CONTRACT_DATA) - ids == {"veri"}
+    for m in MODULES:
+        own = CONTRACT_DATA[m.key]["sahip_tablolar"]
+        assert own == ([m.table] if m.table else []), m.key
+    for key, c in CONTRACT_DATA.items():
+        assert set(c["baska_modul_tablolari"]) == set(c["kullanilan_tablolar"]) - set(c["sahip_tablolar"]), key
+        for f in c["fonksiyonlar"]:
+            assert isinstance(f["ad"], str) and isinstance(f["girdi"], tuple)

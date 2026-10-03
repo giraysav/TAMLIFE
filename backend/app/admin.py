@@ -91,5 +91,54 @@ def _present_name(key: str) -> bool:
     return bool(os.environ.get(key, "").strip())
 
 
+def _scheme(url: str) -> str:
+    return url.split(":", 1)[0].split("+", 1)[0]
+
+
+def veri_durumu() -> dict[str, object]:
+    """Veri yonetimi kabugu: motor turu ve 7 tablonun gercek durumu. URL, host, sifre donmez.
+
+    Satir sayisi yalniz tablo gercekten varsa ve sayilabildiyse doner; aksi halde None.
+    """
+    from sqlalchemy import create_engine, func, inspect, select, table
+
+    url = get_settings().database_url
+    scheme = _scheme(url)
+    postgres = scheme == "postgresql"
+    rows: list[dict[str, object]] = [
+        {"name": name, "exists": None, "rows": None} for name in DATA_TABLES
+    ]
+    postgres_ready = False
+    note = ""
+    try:
+        args = {"connect_timeout": 2} if postgres else {}
+        engine = create_engine(url, pool_pre_ping=True, connect_args=args)
+        try:
+            with engine.connect() as conn:
+                postgres_ready = postgres
+                present = set(inspect(conn).get_table_names())
+                for row in rows:
+                    name = str(row["name"])
+                    row["exists"] = name in present
+                    if name in present:
+                        row["rows"] = conn.execute(select(func.count()).select_from(table(name))).scalar_one()
+        finally:
+            engine.dispose()
+    except Exception:  # noqa: BLE001 - ayrinti (host, sifre) yanita girmesin
+        note = "Veritabanina baglanilamadi."
+    if not postgres:
+        note = f"PostgreSQL bagli degil: panel veritabani motoru {scheme}. Hedef motor PostgreSQL."
+    elif not postgres_ready and not note:
+        note = "PostgreSQL'e baglanilamadi."
+    return {
+        "engine": scheme,
+        "postgres": postgres,
+        "postgres_ready": postgres_ready,
+        "note": note,
+        "tables": rows,
+        "rows_note": "Satir sayisi yalniz tablo varsa gosterilir; veri uretilmez.",
+    }
+
+
 def overview() -> dict[str, object]:
     return {"connections": connections(), "data_management": data_management()}

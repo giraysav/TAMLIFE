@@ -35,6 +35,11 @@ const TR = {
   durumEksik: "Eksik",
   eksikAnahtar: "Eksik anahtarlar",
   aglar: "Ağ",
+  postgresYok: "PostgreSQL bağlı değil",
+  dogrulanamadi: "doğrulanamadı",
+  tabloVar: "tablo var",
+  tabloYok: "tablo yok",
+  satir: "satır",
 }
 
 const EN: typeof TR = {
@@ -72,6 +77,11 @@ const EN: typeof TR = {
   durumEksik: "Incomplete",
   eksikAnahtar: "Missing keys",
   aglar: "Network",
+  postgresYok: "PostgreSQL is not connected",
+  dogrulanamadi: "could not verify",
+  tabloVar: "table exists",
+  tabloYok: "no table",
+  satir: "rows",
 }
 
 export function metin(dil: Dil) {

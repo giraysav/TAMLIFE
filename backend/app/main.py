@@ -10,6 +10,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.ad import directory
 from app.admin import integrations as admin_integrations
 from app.admin import overview as admin_overview
+from app.admin import veri_durumu as admin_veri_durumu
 from app.audit import SecretAuditError, audit_log
 from app.authz import can_open, is_admin
 from app.catalog import HOME_CARDS, MODULES, get
@@ -180,6 +181,11 @@ def create_app() -> FastAPI:
         _require_user(request)
         rows = [{"table": name, "owner": owner} for name, owner in sorted(TABLE_OWNER.items())]
         return {"status": "success", "data": rows}
+
+    @app.get("/api/v1/veri")
+    def veri(request: Request) -> dict:
+        _require_admin(request)
+        return {"status": "success", "data": admin_veri_durumu()}
 
     @app.get("/api/v1/integrations")
     def integrations(request: Request) -> dict:
