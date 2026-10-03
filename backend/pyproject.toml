@@ -1,0 +1,95 @@
+[project]
+name = "tamlife"
+version = "3.5.0"
+description = "TAMLIFE v3.5 FastAPI modul monoliti"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "sqlalchemy>=2",
+    "alembic>=1.14",
+    "import-linter>=2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.importlinter]
+root_package = "app"
+[[tool.importlinter.contracts]]
+name = "No cross-module service or models import"
+type = "forbidden"
+source_modules = [
+    "app.modules.musteri",
+    "app.modules.takvim",
+    "app.modules.onedesk",
+    "app.modules.utilizasyon",
+    "app.modules.roller",
+    "app.modules.talep",
+    "app.modules.ekip",
+    "app.modules.rapor",
+    "app.modules.proje",
+    "app.modules.tamsms",
+    "app.modules.tamapn",
+    "app.modules.gelir_uretim",
+    "app.modules.toptan",
+    "app.modules.sunum",
+    "app.modules.radar",
+    "app.modules.baglantili",
+    "app.modules.topoloji",
+]
+forbidden_modules = [
+    "app.modules.musteri.service",
+    "app.modules.musteri.models",
+    "app.modules.takvim.service",
+    "app.modules.takvim.models",
+    "app.modules.onedesk.service",
+    "app.modules.onedesk.models",
+    "app.modules.utilizasyon.service",
+    "app.modules.utilizasyon.models",
+    "app.modules.roller.service",
+    "app.modules.roller.models",
+    "app.modules.talep.service",
+    "app.modules.talep.models",
+    "app.modules.ekip.service",
+    "app.modules.ekip.models",
+    "app.modules.rapor.service",
+    "app.modules.rapor.models",
+    "app.modules.proje.service",
+    "app.modules.proje.models",
+    "app.modules.tamsms.service",
+    "app.modules.tamsms.models",
+    "app.modules.tamapn.service",
+    "app.modules.tamapn.models",
+    "app.modules.gelir_uretim.service",
+    "app.modules.gelir_uretim.models",
+    "app.modules.toptan.service",
+    "app.modules.toptan.models",
+    "app.modules.sunum.service",
+    "app.modules.sunum.models",
+    "app.modules.radar.service",
+    "app.modules.radar.models",
+    "app.modules.baglantili.service",
+    "app.modules.baglantili.models",
+    "app.modules.topoloji.service",
+    "app.modules.topoloji.models",
+]
+
+[[tool.importlinter.contracts]]
+name = "Core data adapters do not import modules"
+type = "forbidden"
+source_modules = [
+    "app.core",
+    "app.data",
+    "app.adapters",
+]
+forbidden_modules = [
+    "app.modules",
+]
+

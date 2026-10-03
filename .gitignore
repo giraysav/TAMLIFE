@@ -1,0 +1,29 @@
+# ortam
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+dist/
+*.log
+*.out
+*.err
+
+# gizli ve yerel
+.env
+.env.*
+ayar.json
+yerel_kullanici*.json
+dev_kullanici*.json
+*.pfx
+*.key
+*.p12
+
+# veri
+veri/
+instance/
+*.db
+*.db-shm
+*.db-wal
