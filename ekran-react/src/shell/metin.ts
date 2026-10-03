@@ -1,0 +1,63 @@
+export type Dil = "tr" | "en"
+
+const TR = {
+  giris: "Giriş",
+  girisAciklama: "AD/LDAP hesabınızla giriş yapın",
+  kullaniciAdi: "Kullanıcı adı (AD/LDAP)",
+  parola: "Şifre",
+  girisRed: "Kullanıcı adı veya şifre hatalı.",
+  girisKilit: "Çok fazla deneme. Biraz bekleyip tekrar deneyin.",
+  girisAg: "Sunucuya ulaşılamadı.",
+  cikis: "Çıkış",
+  menu: "Menü",
+  genel: "Genel",
+  genelBakis: "Genel Bakış",
+  hosgeldin: (ad: string) => `Hoş geldin, ${ad}`,
+  gruplar: { work: "Çalışma alanım", insights: "Raporlar ve görünümler", admin: "Yönetim" },
+  hazirlaniyor: "Hazırlanıyor",
+  hazirlaniyorAciklama: "Bu modül henüz hazır değil.",
+  tasinacak: "Bu modülün ekranı veri geçişi sırasında eklenecek.",
+  yetkisiz: "Bu sayfaya erişim yetkiniz yok.",
+  yonetimBaslik: "Sistem Yönetimi",
+  baglantilar: "Bağlantılar",
+  ayarli: "ayarlı",
+  ayarsiz: "ayarlı değil",
+  veriYonetimi: "Veri yönetimi",
+  yukleniyor: "Yükleniyor…",
+  yuklenemedi: "Yüklenemedi.",
+  dil: "Dil",
+  oturumKapaniyor: "Oturum süresi doldu.",
+}
+
+const EN: typeof TR = {
+  giris: "Sign in",
+  girisAciklama: "Sign in with your AD/LDAP account",
+  kullaniciAdi: "Username (AD/LDAP)",
+  parola: "Password",
+  girisRed: "Username or password is incorrect.",
+  girisKilit: "Too many attempts. Please wait and try again.",
+  girisAg: "Could not reach the server.",
+  cikis: "Sign out",
+  menu: "Menu",
+  genel: "General",
+  genelBakis: "Overview",
+  hosgeldin: (ad: string) => `Welcome, ${ad}`,
+  gruplar: { work: "My workspace", insights: "Reports and views", admin: "Administration" },
+  hazirlaniyor: "Coming soon",
+  hazirlaniyorAciklama: "This module is not ready yet.",
+  tasinacak: "This module's screen will be added during data migration.",
+  yetkisiz: "You do not have access to this page.",
+  yonetimBaslik: "System administration",
+  baglantilar: "Connections",
+  ayarli: "configured",
+  ayarsiz: "not configured",
+  veriYonetimi: "Data management",
+  yukleniyor: "Loading…",
+  yuklenemedi: "Could not load.",
+  dil: "Language",
+  oturumKapaniyor: "Your session has expired.",
+}
+
+export function metin(dil: Dil) {
+  return dil === "en" ? EN : TR
+}

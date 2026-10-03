@@ -17,6 +17,7 @@ import {
   Users,
   Wifi,
 } from "lucide-react"
+import { apiGet } from "@/lib/oturum"
 import CommunityOrbit from "@/components/ui/community-orbit"
 import type { OrbitItem, OrbitStat, OrbitTag } from "@/components/ui/community-orbit"
 
@@ -61,16 +62,6 @@ const IC = [
 
 const YER = [...DIS, ...IC]
 
-async function getir<T>(yol: string): Promise<T | null> {
-  try {
-    const cevap = await fetch(yol, { credentials: "same-origin" })
-    if (!cevap.ok) return null
-    return ((await cevap.json()) as { data: T }).data
-  } catch {
-    return null
-  }
-}
-
 type Props = {
   dil: "tr" | "en"
   admin: boolean
@@ -84,8 +75,8 @@ export function OzetOrbit({ dil, admin, onGit }: Props) {
   useEffect(() => {
     let iptal = false
     void Promise.all([
-      getir<Kart[]>("/api/v1/home"),
-      getir<{ modules: number; tables: number; external_sources: number }>("/api/v1/summary"),
+      apiGet<Kart[]>("/api/v1/home"),
+      apiGet<{ modules: number; tables: number; external_sources: number }>("/api/v1/summary"),
     ]).then(([home, ozet]) => {
       if (iptal) return
       setKartlar(home ?? [])

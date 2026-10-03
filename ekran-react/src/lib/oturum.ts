@@ -1,0 +1,141 @@
+import { useCallback, useEffect, useRef, useState } from "react"
+import { csrfBasliklari } from "@/lib/http"
+
+export type MenuOgesi = {
+  id: string
+  label: string
+  description: string
+  group: "work" | "insights" | "admin"
+  icon: string
+  ready: boolean
+}
+
+export type Kullanici = {
+  username: string
+  role: string
+  is_admin: boolean
+  idle_timeout_minutes: number
+  navigation: MenuOgesi[]
+}
+
+export type OturumDurumu = "yukleniyor" | "yok" | "var"
+
+const YENILE_ARALIK_MS = 2 * 60 * 1000
+const OLAYLAR = ["pointerdown", "keydown", "scroll"] as const
+
+/** Her API cagrisi: 401 gelirse oturum kapanmis demektir. */
+export async function apiGet<T>(yol: string): Promise<T | null> {
+  try {
+    const cevap = await fetch(yol, { credentials: "same-origin" })
+    if (cevap.status === 401) {
+      window.dispatchEvent(new Event("tamlife:oturum-bitti"))
+      return null
+    }
+    if (!cevap.ok) return null
+    return ((await cevap.json()) as { data: T }).data
+  } catch {
+    return null
+  }
+}
+
+export type GirisSonucu = "ok" | "red" | "kilit" | "ag"
+
+export function useOturum() {
+  const [durum, setDurum] = useState<OturumDurumu>("yukleniyor")
+  const [kullanici, setKullanici] = useState<Kullanici | null>(null)
+  const sonHareket = useRef(Date.now())
+  const sonYenileme = useRef(Date.now())
+
+  const yukle = useCallback(async (): Promise<boolean> => {
+    try {
+      const cevap = await fetch("/api/v1/session/me", { credentials: "same-origin" })
+      if (!cevap.ok) throw new Error(String(cevap.status))
+      const govde = (await cevap.json()) as { data: Kullanici }
+      setKullanici(govde.data)
+      setDurum("var")
+      sonYenileme.current = Date.now()
+      return true
+    } catch {
+      setKullanici(null)
+      setDurum("yok")
+      return false
+    }
+  }, [])
+
+  useEffect(() => {
+    void yukle()
+  }, [yukle])
+
+  useEffect(() => {
+    const bitti = () => {
+      setKullanici(null)
+      setDurum("yok")
+    }
+    window.addEventListener("tamlife:oturum-bitti", bitti)
+    return () => window.removeEventListener("tamlife:oturum-bitti", bitti)
+  }, [])
+
+  // Bosta sure: kullanici hareketsizse sunucudakiyle ayni sinirda istemci de kapanir;
+  // hareket varsa sunucu oturumu periyodik olarak canli tutulur.
+  useEffect(() => {
+    if (durum !== "var" || !kullanici) return
+    const sinirMs = kullanici.idle_timeout_minutes * 60 * 1000
+    const hareket = () => {
+      sonHareket.current = Date.now()
+    }
+    for (const olay of OLAYLAR) window.addEventListener(olay, hareket, { passive: true })
+    const zamanlayici = window.setInterval(() => {
+      const simdi = Date.now()
+      if (simdi - sonHareket.current > sinirMs) {
+        void fetch("/api/v1/session/logout", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: csrfBasliklari(),
+        }).finally(() => window.dispatchEvent(new Event("tamlife:oturum-bitti")))
+        return
+      }
+      if (simdi - sonYenileme.current > YENILE_ARALIK_MS && simdi - sonHareket.current < YENILE_ARALIK_MS) {
+        void yukle()
+      }
+    }, 15 * 1000)
+    return () => {
+      window.clearInterval(zamanlayici)
+      for (const olay of OLAYLAR) window.removeEventListener(olay, hareket)
+    }
+  }, [durum, kullanici, yukle])
+
+  const giris = useCallback(
+    async (ad: string, parola: string): Promise<GirisSonucu> => {
+      try {
+        const cevap = await fetch("/api/v1/session/login", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: ad.trim(), password: parola }),
+        })
+        if (cevap.status === 429) return "kilit"
+        if (!cevap.ok) return "red"
+        sonHareket.current = Date.now()
+        return (await yukle()) ? "ok" : "red"
+      } catch {
+        return "ag"
+      }
+    },
+    [yukle],
+  )
+
+  const cikis = useCallback(async () => {
+    try {
+      await fetch("/api/v1/session/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: csrfBasliklari(),
+      })
+    } finally {
+      setKullanici(null)
+      setDurum("yok")
+    }
+  }, [])
+
+  return { durum, kullanici, giris, cikis }
+}
