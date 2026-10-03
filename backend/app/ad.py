@@ -49,6 +49,8 @@ class Directory:
         settings = get_settings()
         self.lookups += 1
         _ = self.configured()
+        if settings.env not in {"dev", "test"}:
+            return None
         expected_user = settings.local_user
         expected_password = settings.local_password
         if not expected_user or not expected_password:

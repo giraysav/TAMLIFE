@@ -27,7 +27,7 @@ AD_REQUIRED_KEYS: tuple[str, ...] = ("AD_ENABLED", "AD_SERVER", "AD_DOMAIN")
 
 
 def _slot(alias: str):
-    secret = alias.endswith("PASSWORD") or alias.endswith("API_KEY")
+    secret = alias.endswith(("PASSWORD", "API_KEY"))
     return Field(default="", validation_alias=alias, repr=not secret)
 
 
@@ -42,7 +42,14 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://localhost:5432/tamlife"
 
     cookie_name: str = "tamlife_session"
-    cookie_secure: bool = False
+    cookie_secure: bool | None = None  # bos: dev disinda otomatik true
+    session_idle_minutes: int = 30
+    session_max_hours: int = 12
+    login_max_attempts: int = 5
+    login_window_seconds: int = 300
+    login_lockout_seconds: int = 300
+    allowed_origins: str = ""  # virgulle ayrilmis ek Origin listesi
+    allowed_hosts: str = "127.0.0.1,localhost,testserver"
 
     # Panel session only. Not a directory bind.
     local_user: str = ""
@@ -104,6 +111,20 @@ class Settings(BaseSettings):
     oracle_reportdb_user: str = _slot("ORACLE_REPORTDB_USER")
     oracle_reportdb_password: str = _slot("ORACLE_REPORTDB_PASSWORD")
     oracle_reportdb_timeout: str = _slot("ORACLE_REPORTDB_TIMEOUT")
+
+    @property
+    def cookie_secure_effective(self) -> bool:
+        if self.cookie_secure is not None:
+            return self.cookie_secure
+        return self.env not in {"dev", "test"}
+
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        return [item.strip() for item in self.allowed_origins.split(",") if item.strip()]
+
+    @property
+    def allowed_hosts_list(self) -> list[str]:
+        return [item.strip() for item in self.allowed_hosts.split(",") if item.strip()]
 
     def present(self, key: str) -> bool:
         allowed = set(AD_LDAP_KEYS) | set(source_key_names())

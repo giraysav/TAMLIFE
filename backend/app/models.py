@@ -251,6 +251,7 @@ class IngestRecord(Base):
 def seed_source_slots(connection) -> None:
     """Insert production source slots. The row stores the env key name, never a DSN value."""
     from sqlalchemy import insert
+
     from app.external import SOURCE_SLOTS
 
     present = {row[0] for row in connection.execute(select(ExternalSource.source_key))}

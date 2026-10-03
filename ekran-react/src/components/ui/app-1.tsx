@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input"
 import { AdminVeri } from "@/components/ui/admin-veri"
 import { API_KOK } from "@/lib/api"
 import { OzetOrbit } from "@/components/ui/ozet-orbit"
+import { csrfBasliklari } from "@/lib/http"
 
 type Yetki = {
   oturum: boolean
@@ -305,18 +306,24 @@ export function App1() {
         })
         setGirisParola("")
       })
-      .catch(() => {
-        setGirisHata(dil === "en" ? "Sign-in was not accepted." : "Giris onaylanmadi.")
+      .catch((hata: Error) => {
+        const kilit = hata.message === "429"
+        setGirisHata(
+          kilit
+            ? dil === "en" ? "Too many attempts. Try again later." : "Cok fazla deneme. Biraz bekleyin."
+            : dil === "en" ? "Sign-in was not accepted." : "Giris onaylanmadi.",
+        )
       })
       .finally(() => setGirisBekliyor(false))
   }
 
   function cikisYap() {
-    fetch("/api/v1/session/logout", { method: "POST", credentials: "same-origin" })
+    fetch("/api/v1/session/logout", { method: "POST", credentials: "same-origin", headers: csrfBasliklari() })
       .then((response) => {
         if (!response.ok) throw new Error(String(response.status))
         setYetki(BOS_YETKI)
         setSelectedId("ozet")
+        setGirisAd("")
         setGirisParola("")
         setGirisHata(null)
       })

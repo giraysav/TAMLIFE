@@ -85,16 +85,14 @@ export function OzetOrbit({ dil, admin, onGit }: Props) {
     let iptal = false
     void Promise.all([
       getir<Kart[]>("/api/v1/home"),
-      getir<unknown[]>("/api/v1/modules"),
-      getir<unknown[]>("/api/v1/schema"),
-      getir<{ sources: unknown[] }>("/api/v1/sources"),
-    ]).then(([home, moduller, sema, kaynaklar]) => {
+      getir<{ modules: number; tables: number; external_sources: number }>("/api/v1/summary"),
+    ]).then(([home, ozet]) => {
       if (iptal) return
       setKartlar(home ?? [])
       setSayilar({
-        modul: moduller?.length ?? 0,
-        tablo: sema?.length ?? 0,
-        kaynak: kaynaklar?.sources.length ?? 0,
+        modul: ozet?.modules ?? 0,
+        tablo: ozet?.tables ?? 0,
+        kaynak: ozet?.external_sources ?? 0,
       })
     })
     return () => {
