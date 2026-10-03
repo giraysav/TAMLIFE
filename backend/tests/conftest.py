@@ -21,3 +21,16 @@ def client() -> Iterator[TestClient]:
     application = create_app()
     with TestClient(application) as test_client:
         yield test_client
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _sema() -> None:
+    """Tek sema kaynagi Alembic: testler tablolari revizyonlardan kurar."""
+    from pathlib import Path
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    command.upgrade(Config(str(ini)), "head")
