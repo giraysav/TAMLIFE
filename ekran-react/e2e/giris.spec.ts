@@ -1,6 +1,34 @@
 import { expect, test } from "@playwright/test"
 
-test("giris ekrani acilir", async ({ page }) => {
+const KULLANICI = process.env.E2E_USER ?? "admin"
+const PAROLA = process.env.E2E_PASS ?? ""
+
+test("oturum yokken giris ekrani, menu ve veri yok", async ({ page }) => {
+  await page.goto("/#/admin")
+  await expect(page.getByRole("button", { name: "Giriş" })).toBeVisible()
+  await expect(page.getByText("Sistem Yönetimi")).toHaveCount(0)
+})
+
+test("yanlis parola reddedilir", async ({ page }) => {
   await page.goto("/")
-  await expect(page.getByRole("button", { name: "Giris" })).toBeVisible()
+  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
+  await page.getByLabel("Şifre").fill("kesinlikle-yanlis")
+  await page.getByRole("button", { name: "Giriş" }).click()
+  await expect(page.getByRole("alert")).toContainText("hatalı")
+  await expect(page.getByLabel("Şifre")).toHaveValue("")
+})
+
+test("giris, menu, yonetim ve cikis", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await page.goto("/")
+  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
+  await page.getByLabel("Şifre").fill(PAROLA)
+  await page.getByRole("button", { name: "Giriş" }).click()
+  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.getByRole("link", { name: "Sistem Yönetimi" }).click()
+  await expect(page.getByText("ORACLE_REPORTDB")).toBeVisible()
+  await page.getByRole("button", { name: "Çıkış" }).first().click()
+  await expect(page.getByRole("button", { name: "Giriş" })).toBeVisible()
+  await page.goto("/#/admin")
+  await expect(page.getByRole("button", { name: "Giriş" })).toBeVisible()
 })

@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     login_lockout_seconds: int = 300
     allowed_origins: str = ""  # virgulle ayrilmis ek Origin listesi
     allowed_hosts: str = "127.0.0.1,localhost,testserver"
+    trusted_proxies: str = ""  # virgulle ayrilmis proxy IP'leri; X-Forwarded-For yalniz bunlardan kabul
 
     # Panel session only. Not a directory bind.
     local_user: str = ""
@@ -121,6 +122,10 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> list[str]:
         return [item.strip() for item in self.allowed_origins.split(",") if item.strip()]
+
+    @property
+    def trusted_proxies_list(self) -> list[str]:
+        return [item.strip() for item in self.trusted_proxies.split(",") if item.strip()]
 
     @property
     def allowed_hosts_list(self) -> list[str]:

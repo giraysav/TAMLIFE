@@ -66,7 +66,13 @@ limiter = LoginLimiter()
 
 
 def client_ip(request: Request) -> str:
-    return request.client.host if request.client else "-"
+    """Gercek istemci IP'si. X-Forwarded-For yalniz guvenilir proxy'den gelirse okunur."""
+    peer = request.client.host if request.client else "-"
+    if peer in get_settings().trusted_proxies_list:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return peer
 
 
 def _same_origin(request: Request) -> bool:

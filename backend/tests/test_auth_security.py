@@ -139,3 +139,18 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     ids = {item["id"] for item in client.get("/api/v1/session/me").json()["data"]["navigation"]}
     assert "talep" in ids and "musteri" in ids
     assert not ids & {"utilizasyon", "roller", "admin", "integrations", "veri"}
+
+
+def test_forwarded_for_only_from_trusted_proxy(client, monkeypatch):
+    from starlette.requests import Request
+
+    from app.security import client_ip
+
+    def req(peer, xff):
+        scope = {"type": "http", "headers": [(b"x-forwarded-for", xff.encode())], "client": (peer, 1)}
+        return Request(scope)
+
+    assert client_ip(req("10.0.0.9", "1.2.3.4")) == "10.0.0.9"  # guvenilir degil: yoksayilir
+    monkeypatch.setenv("TAMLIFE_TRUSTED_PROXIES", "10.0.0.9")
+    assert client_ip(req("10.0.0.9", "1.2.3.4, 10.0.0.9")) == "1.2.3.4"
+    assert client_ip(req("8.8.8.8", "1.2.3.4")) == "8.8.8.8"  # baska esten gelen basliga guvenilmez
