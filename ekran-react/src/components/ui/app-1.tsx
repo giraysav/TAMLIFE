@@ -2,12 +2,12 @@
 
 import { useEffect, useState, type FormEvent } from "react"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { BarChart3, Bell, ClipboardList, FileText, Search, Users } from "lucide-react"
+import { Bell, Search } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   ChartContainer,
   ChartLegend,
@@ -22,7 +22,6 @@ import {
   app1Chart,
   app1Nav,
   app1Projects,
-  app1User,
   arayuz,
   chartConfig,
   dilOku,
@@ -34,6 +33,7 @@ import { App1Sidebar } from "@/components/ui/app-1-utils/app-1-sidebar"
 import { Input } from "@/components/ui/input"
 import { AdminVeri } from "@/components/ui/admin-veri"
 import { API_KOK } from "@/lib/api"
+import { OzetOrbit } from "@/components/ui/ozet-orbit"
 
 type Yetki = {
   oturum: boolean
@@ -204,11 +204,13 @@ function RolSayfasi({ dil, metin }: { dil: Dil; metin: ArayuzMetin }) {
 export function App1() {
   const [dil, setDil] = useState<Dil>(dilOku)
   const [yetki, setYetki] = useState<Yetki>({
-    oturum: true,
+    oturum: false,
     admin: false,
-    moduller: app1Nav.map((item) => item.id),
+    moduller: ["ozet"],
     menu: { rol: false, admin: false },
   })
+  const [oturumKontrol, setOturumKontrol] = useState(true)
+  const [kullanici, setKullanici] = useState({ name: "", initials: "", email: "" })
   const [selectedId, setSelectedId] = useState("ozet")
   const [girisAd, setGirisAd] = useState("")
   const [girisParola, setGirisParola] = useState("")
@@ -219,6 +221,11 @@ export function App1() {
   const gorunen = yetki.moduller.filter((id) => id === "ozet" || navIdleri.includes(id))
   const menuRol = yetki.admin && yetki.menu.rol
   const menuAdmin = yetki.admin && yetki.menu.admin
+
+  function kullaniciAyarla(ad?: string) {
+    const name = ad?.trim() ?? ""
+    setKullanici({ name, initials: name.slice(0, 2).toUpperCase(), email: "" })
+  }
 
   useEffect(() => {
     document.documentElement.lang = dil
@@ -231,8 +238,9 @@ export function App1() {
         if (!response.ok) throw new Error(String(response.status))
         return response.json()
       })
-      .then((govde: { data?: { is_admin?: boolean } }) => {
+      .then((govde: { data?: { is_admin?: boolean; username?: string } }) => {
         if (iptal) return
+        kullaniciAyarla(govde.data?.username)
         const admin = Boolean(govde.data?.is_admin)
         setYetki({
           oturum: true,
@@ -245,18 +253,10 @@ export function App1() {
         })
       })
       .catch(() => {
-        if (!iptal) {
-          setYetki((eski) =>
-            eski.oturum
-              ? eski
-              : {
-                  oturum: true,
-                  admin: false,
-                  moduller: app1Nav.map((item) => item.id),
-                  menu: { rol: false, admin: false },
-                },
-          )
-        }
+        if (!iptal) setYetki((eski) => ({ ...eski, oturum: false }))
+      })
+      .finally(() => {
+        if (!iptal) setOturumKontrol(false)
       })
     return () => {
       iptal = true
@@ -287,8 +287,9 @@ export function App1() {
         try {
           const yetkiCevap = await fetch("/api/v1/session/me", { credentials: "same-origin" })
           if (yetkiCevap.ok) {
-            const govde = (await yetkiCevap.json()) as { data?: { is_admin?: boolean } }
+            const govde = (await yetkiCevap.json()) as { data?: { is_admin?: boolean; username?: string } }
             admin = Boolean(govde.data?.is_admin)
+            kullaniciAyarla(govde.data?.username)
           }
         } catch {
           admin = false
@@ -333,15 +334,11 @@ export function App1() {
     }
   }
 
-  const stats = [
-    { label: metin.toplamProje, value: "24", hint: metin.toplamProjeIpucu, icon: FileText },
-    { label: metin.aktifGorev, value: "127", hint: metin.aktifGorevIpucu, icon: ClipboardList },
-    { label: metin.ekipUyeleri, value: "16", hint: metin.ekipUyeleriIpucu, icon: Users },
-    { label: metin.tamamlanma, value: "87%", hint: metin.tamamlanmaIpucu, icon: BarChart3 },
-  ]
   const grafik = app1Chart.map((row) => ({ ...row, week: metin.hafta(row.week) }))
   const secili = app1Nav.find((item) => item.id === selectedId)
   const bosBaslik = selectedId === "rol" ? metin.rol : selectedId === "admin" ? metin.admin : secili?.ad[dil]
+
+  if (oturumKontrol) return null
 
   if (!yetki.oturum) {
     return (
@@ -394,11 +391,12 @@ export function App1() {
         selectedId={selectedId}
         onSelect={setSelectedId}
         onCikis={cikisYap}
+        kullanici={kullanici}
       />
       <SidebarInset className="min-w-0">
         <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b bg-background px-4 sm:px-6">
           <SidebarTrigger aria-label={metin.menu} />
-          <h1 className="truncate text-lg font-semibold">{metin.hosgeldin(app1User.name.split(" ")[0])}</h1>
+          <h1 className="truncate text-lg font-semibold">{metin.hosgeldin(kullanici.name)}</h1>
           <div className="ml-auto flex items-center gap-1">
             <Button
               type="button"
@@ -438,8 +436,7 @@ export function App1() {
               <Bell />
             </Button>
             <Avatar className="ml-1 size-8">
-              <AvatarImage src={app1User.avatar} alt={app1User.name} className="object-[50%_15%]" />
-              <AvatarFallback>{app1User.initials}</AvatarFallback>
+              <AvatarFallback>{kullanici.initials}</AvatarFallback>
             </Avatar>
           </div>
         </header>
@@ -448,22 +445,7 @@ export function App1() {
 
           {selectedId === "ozet" ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {stats.map((stat) => (
-                  <Card key={stat.label}>
-                    <CardHeader>
-                      <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-                      <CardAction>
-                        <stat.icon aria-hidden className="size-5 text-muted-foreground" />
-                      </CardAction>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-2xl font-semibold tabular-nums">{stat.value}</p>
-                      <p className="text-xs text-muted-foreground">{stat.hint}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <OzetOrbit dil={dil} admin={menuAdmin} onGit={setSelectedId} />
 
               <Card>
                 <CardHeader>

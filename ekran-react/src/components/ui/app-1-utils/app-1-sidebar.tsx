@@ -14,7 +14,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/app-1-utils/sidebar"
-import { app1Nav, app1Team, app1User, type ArayuzMetin, type Dil } from "@/components/ui/app-1-utils/app-1-data"
+import { app1Nav, app1Team, type ArayuzMetin, type Dil } from "@/components/ui/app-1-utils/app-1-data"
 
 export function App1Sidebar({
   dil,
@@ -26,7 +26,9 @@ export function App1Sidebar({
   selectedId,
   onSelect,
   onCikis,
+  kullanici,
 }: {
+  kullanici: { name: string; initials: string; email: string }
   dil: Dil
   metin: ArayuzMetin
   gorunen: string[]
@@ -169,12 +171,11 @@ export function App1Sidebar({
                   }}
                 >
                   <Avatar className="size-7">
-                    <AvatarImage src={app1User.avatar} alt="" />
-                    <AvatarFallback>{app1User.initials}</AvatarFallback>
+                    <AvatarFallback>{kullanici.initials}</AvatarFallback>
                   </Avatar>
                   <span className="min-w-0 flex-1 text-left">
-                    <span className="block truncate font-medium">{app1User.name}</span>
-                    <span className="block truncate text-xs opacity-70">{app1User.email}</span>
+                    <span className="block truncate font-medium">{kullanici.name}</span>
+                    
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
