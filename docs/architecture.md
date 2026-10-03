@@ -61,3 +61,13 @@ Geçit `backend/app/gateway.py` içe aktarılırken bağlanmaz. Şema `backend/a
 ## Kök
 
 İngilizce kök: `backend`, `web`, `data`, `docs`. React kabuğu `web` altındadır ve iş kuralı taşımaz.
+
+## 5. Yonetim
+
+Yalniz admin oturumu. `GET /api/v1/admin`. Oturum yoksa 401, admin degilse 403.
+
+Baglanti yuvalari yalniz dolu veya bos: AD (`AD_ENABLED` ile `AD_SERVER` ve `AD_DOMAIN`), `ORACLE_REPORTDB`, `ONEDESK`, `ONENT`, `URUNTUTAR`. Deger donmez.
+
+Veri yonetimi tablolari: `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`, `ingest_batch`, `ingest_record`. Satirlar `TAMLIFE_DATABASE_URL` ayarliysa Postgres'e yazilir. Adres donmez.
+
+Sayfa `web` icinde bu iki bolumu gosterir. Katalog tek listedir; modul klasoru yoktur.

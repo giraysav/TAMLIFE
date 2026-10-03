@@ -10,3 +10,6 @@ h1 { font-size: 1.4rem; margin-bottom: 0.2rem; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 article { background: white; border: 1px solid #d7dee6; border-radius: 10px; padding: 14px 16px; }
 code { font-size: 0.85rem; }
+.error { color: #8a2b2b; }
+.admin { margin-top: 28px; }
+.admin h3 { font-size: 1rem; margin: 0 0 8px; }

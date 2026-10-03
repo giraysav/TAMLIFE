@@ -6,8 +6,9 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from app.ad import directory
+from app.admin import overview as admin_overview
 from app.audit import SecretAuditError, audit_log
-from app.authz import can_open
+from app.authz import can_open, is_admin
 from app.catalog import HOME_CARDS, MODULES, get
 from app.config import get_settings
 from app.ingest import status as ingest_status
@@ -123,7 +124,19 @@ def create_app() -> FastAPI:
         rows = [{"table": name, "owner": owner} for name, owner in sorted(TABLE_OWNER.items())]
         return {"status": "success", "data": rows}
 
+    @app.get("/api/v1/admin")
+    def admin_area(request: Request) -> dict:
+        _require_admin(request)
+        return {"status": "success", "data": admin_overview()}
+
     return app
+
+
+def _require_admin(request: Request) -> Principal:
+    user = _require_user(request)
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Yetki yok")
+    return user
 
 
 def _require_user(request: Request) -> Principal:

@@ -22,3 +22,7 @@ def can_open(user: Principal, module: Module, lookup: Callable[[str], Module]) -
     if module.permission:
         return can_open(user, lookup(module.permission), lookup)
     return user.role in {"TeamMngr", "TeamMember"}
+
+
+def is_admin(user: Principal) -> bool:
+    return bool(user.is_admin or user.role == "admin")

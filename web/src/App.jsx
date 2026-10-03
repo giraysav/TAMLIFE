@@ -1,3 +1,5 @@
+import Admin from "./Admin.jsx";
+
 const areas = [
   {
     title: "Dizin",
@@ -26,6 +28,7 @@ export default function App() {
           </article>
         ))}
       </div>
+      <Admin />
     </main>
   );
 }
