@@ -15,6 +15,7 @@ from app.catalog import HOME_CARDS, MODULES, get
 from app.config import get_settings
 from app.ingest import status as ingest_status
 from app.models import TABLE_OWNER
+from app.navigation import navigation_for
 from app.security import client_ip, limiter
 from app.security import install as install_security
 from app.session import Principal, current_user, login, logout
@@ -89,7 +90,18 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/session/me")
     def whoami(request: Request) -> dict:
         user = _require_user(request)
-        return {"status": "success", "data": {"username": user.username, "role": user.role, "is_admin": user.is_admin}}
+        nav = navigation_for(user)
+        return {
+            "status": "success",
+            "data": {
+                "username": user.username,
+                "role": user.role,
+                "is_admin": user.is_admin,
+                "idle_timeout_minutes": get_settings().session_idle_minutes,
+                "navigation": nav,
+                "permissions": {"modules": [item["id"] for item in nav]},
+            },
+        }
 
     @app.get("/api/v1/modules")
     def list_modules(request: Request) -> dict:

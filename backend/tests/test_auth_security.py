@@ -124,3 +124,18 @@ def test_docs_hidden_in_production(monkeypatch, path):
 
     with TestClient(create_app()) as c:
         assert c.get(path).status_code == 404
+
+
+def test_me_returns_navigation_by_role(client, monkeypatch):
+    login_ok(client)
+    data = client.get("/api/v1/session/me").json()["data"]
+    ids = {item["id"] for item in data["navigation"]}
+    assert {"musteri", "utilizasyon", "roller", "admin", "integrations", "veri"} <= ids
+    assert data["idle_timeout_minutes"] == get_settings().session_idle_minutes
+    assert "topoloji" not in ids  # menude gorunmez
+    client.post("/api/v1/session/logout", headers={"X-CSRF-Token": client.cookies.get("tamlife_csrf")})
+    monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMember")
+    login_ok(client)
+    ids = {item["id"] for item in client.get("/api/v1/session/me").json()["data"]["navigation"]}
+    assert "talep" in ids and "musteri" in ids
+    assert not ids & {"utilizasyon", "roller", "admin", "integrations", "veri"}
