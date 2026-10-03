@@ -203,7 +203,12 @@ function RolSayfasi({ dil, metin }: { dil: Dil; metin: ArayuzMetin }) {
 
 export function App1() {
   const [dil, setDil] = useState<Dil>(dilOku)
-  const [yetki, setYetki] = useState<Yetki>(BOS_YETKI)
+  const [yetki, setYetki] = useState<Yetki>({
+    oturum: true,
+    admin: false,
+    moduller: app1Nav.map((item) => item.id),
+    menu: { rol: false, admin: false },
+  })
   const [selectedId, setSelectedId] = useState("ozet")
   const [girisAd, setGirisAd] = useState("")
   const [girisParola, setGirisParola] = useState("")
@@ -221,28 +226,36 @@ export function App1() {
 
   useEffect(() => {
     let iptal = false
-    fetch(`${API_KOK}/api/yetkiler`, { credentials: "include" })
+    fetch("/api/v1/session/me", { credentials: "same-origin" })
       .then((response) => {
         if (!response.ok) throw new Error(String(response.status))
         return response.json()
       })
-      .then((govde: Yetki) => {
+      .then((govde: { data?: { is_admin?: boolean } }) => {
         if (iptal) return
-        const moduller = Array.isArray(govde.moduller) && govde.moduller.length ? govde.moduller : ["ozet"]
-        const oturumAcik = Boolean(govde.oturum)
+        const admin = Boolean(govde.data?.is_admin)
         setYetki({
-          oturum: oturumAcik,
-          admin: Boolean(govde.admin),
-          moduller,
+          oturum: true,
+          admin,
+          moduller: navIdleri,
           menu: {
-            rol: Boolean(govde.menu?.rol),
-            admin: Boolean(govde.menu?.admin),
+            rol: admin,
+            admin,
           },
         })
       })
       .catch(() => {
         if (!iptal) {
-          setYetki(BOS_YETKI)
+          setYetki((eski) =>
+            eski.oturum
+              ? eski
+              : {
+                  oturum: true,
+                  admin: false,
+                  moduller: app1Nav.map((item) => item.id),
+                  menu: { rol: false, admin: false },
+                },
+          )
         }
       })
     return () => {
@@ -262,29 +275,31 @@ export function App1() {
     event.preventDefault()
     setGirisHata(null)
     setGirisBekliyor(true)
-    fetch(`${API_KOK}/api/giris`, {
+    fetch("/api/v1/session/login", {
       method: "POST",
-      credentials: "include",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: girisAd, password: girisParola }),
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(String(response.status))
-        let govde: Partial<Yetki> = {}
+        let admin = false
         try {
-          const yetkiCevap = await fetch(`${API_KOK}/api/yetkiler`, { credentials: "include" })
-          if (yetkiCevap.ok) govde = (await yetkiCevap.json()) as Yetki
+          const yetkiCevap = await fetch("/api/v1/session/me", { credentials: "same-origin" })
+          if (yetkiCevap.ok) {
+            const govde = (await yetkiCevap.json()) as { data?: { is_admin?: boolean } }
+            admin = Boolean(govde.data?.is_admin)
+          }
         } catch {
-          govde = {}
+          admin = false
         }
-        const moduller = Array.isArray(govde.moduller) && govde.moduller.length ? govde.moduller : ["ozet"]
         setYetki({
           oturum: true,
-          admin: Boolean(govde.admin),
-          moduller,
+          admin,
+          moduller: navIdleri,
           menu: {
-            rol: Boolean(govde.menu?.rol),
-            admin: Boolean(govde.menu?.admin),
+            rol: admin,
+            admin,
           },
         })
         setGirisParola("")
@@ -296,7 +311,7 @@ export function App1() {
   }
 
   function cikisYap() {
-    fetch(`${API_KOK}/api/cikis`, { method: "POST", credentials: "include" })
+    fetch("/api/v1/session/logout", { method: "POST", credentials: "same-origin" })
       .then((response) => {
         if (!response.ok) throw new Error(String(response.status))
         setYetki(BOS_YETKI)
