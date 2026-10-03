@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from app.modules.catalog import ANA_SAYFA_KARTLARI, BOS_KARTLAR, MODULLER, PROD_MODUL_ANAHTARLARI
+from app.modules.catalog import (
+    ANA_SAYFA_KARTLARI,
+    BOS_KARTLAR,
+    MODULLER,
+    PROD_MODUL_ANAHTARLARI,
+)
 
 PROD = frozenset({
     "musteri",

@@ -2,61 +2,26 @@
 root_package = app
 
 [importlinter:contract:no-cross-service]
-name = No cross-module service or models import
-type = forbidden
-source_modules =
-    app.modules.musteri
-    app.modules.takvim
-    app.modules.onedesk
-    app.modules.utilizasyon
-    app.modules.roller
-    app.modules.talep
-    app.modules.ekip
-    app.modules.rapor
-    app.modules.proje
-    app.modules.tamsms
-    app.modules.tamapn
-    app.modules.gelir_uretim
-    app.modules.toptan
-    app.modules.sunum
-    app.modules.radar
+name = Moduller birbirinden bagimsiz
+type = independence
+modules =
     app.modules.baglantili
+    app.modules.ekip
+    app.modules.gelir_uretim
+    app.modules.musteri
+    app.modules.onedesk
+    app.modules.proje
+    app.modules.radar
+    app.modules.rapor
+    app.modules.roller
+    app.modules.sunum
+    app.modules.takvim
+    app.modules.talep
+    app.modules.tamapn
+    app.modules.tamsms
     app.modules.topoloji
-forbidden_modules =
-    app.modules.musteri.service
-    app.modules.musteri.models
-    app.modules.takvim.service
-    app.modules.takvim.models
-    app.modules.onedesk.service
-    app.modules.onedesk.models
-    app.modules.utilizasyon.service
-    app.modules.utilizasyon.models
-    app.modules.roller.service
-    app.modules.roller.models
-    app.modules.talep.service
-    app.modules.talep.models
-    app.modules.ekip.service
-    app.modules.ekip.models
-    app.modules.rapor.service
-    app.modules.rapor.models
-    app.modules.proje.service
-    app.modules.proje.models
-    app.modules.tamsms.service
-    app.modules.tamsms.models
-    app.modules.tamapn.service
-    app.modules.tamapn.models
-    app.modules.gelir_uretim.service
-    app.modules.gelir_uretim.models
-    app.modules.toptan.service
-    app.modules.toptan.models
-    app.modules.sunum.service
-    app.modules.sunum.models
-    app.modules.radar.service
-    app.modules.radar.models
-    app.modules.baglantili.service
-    app.modules.baglantili.models
-    app.modules.topoloji.service
-    app.modules.topoloji.models
+    app.modules.toptan
+    app.modules.utilizasyon
 
 [importlinter:contract:core-independent]
 name = Core data adapters do not import modules

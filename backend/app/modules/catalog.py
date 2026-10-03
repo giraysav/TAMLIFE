@@ -75,7 +75,7 @@ def get(anahtar: str) -> Modul:
 
 
 
-def setup(app) -> None:  # noqa: ANN001
+def setup(app) -> None:
     """Modul kapisi. Is kurali yok."""
     from fastapi import APIRouter
 

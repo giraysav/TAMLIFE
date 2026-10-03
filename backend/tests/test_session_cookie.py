@@ -54,7 +54,7 @@ def test_secure_flag_off_when_setting_false(monkeypatch) -> None:
     client = _client(monkeypatch, "false")
     response = _login(client)
     assert response.status_code == 200
-    header = [item for item in response.headers.get_list("set-cookie") if item.lower().startswith("tamlife_session=")][0]
+    header = next(item for item in response.headers.get_list("set-cookie") if item.lower().startswith("tamlife_session="))
     lowered = header.lower()
     assert "httponly" in lowered
     assert "samesite=lax" in lowered

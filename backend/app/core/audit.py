@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Integer, String, Table, Text
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from app.core.errors import error_body
@@ -58,7 +59,7 @@ def write(
             _reject(str(key))
             _reject(str(value))
     row = AuditEvent(
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         actor_id=actor_id,
         action=action,
         module=module,
@@ -89,7 +90,7 @@ def setup(app: FastAPI) -> None:
         if target.parent and str(target.parent) not in {"", "."}:
             target.parent.mkdir(parents=True, exist_ok=True)
     engine = make_engine(url)
-    AuditEvent.__table__.create(engine, checkfirst=True)
+    AuditEvent.metadata.create_all(engine, tables=[cast(Table, AuditEvent.__table__)], checkfirst=True)
     factory = session_factory(engine)
     app.state.audit_factory = factory
 

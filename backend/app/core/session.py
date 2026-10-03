@@ -41,18 +41,18 @@ class LoginIn(BaseModel):
 
 def authenticate(username: str, password: str, settings: Settings) -> SessionUser | None:
     """Yerel kullanici yalniz dev/test ve ortam degiskeni varken. Sonra sahte AD."""
-    if settings.env in {"dev", "test"} and settings.local_user and settings.local_password:
-        if _same(username, settings.local_user):
-            if not _same(password, settings.local_password):
-                return None
-            role = settings.local_role or "TeamMember"
-            return SessionUser(
-                id=1,
-                username=settings.local_user,
-                role=role,
-                is_admin=role == "admin",
-                allowed_modules={},
-            )
+    yerel_acik = settings.env in {"dev", "test"} and settings.local_user and settings.local_password
+    if yerel_acik and _same(username, settings.local_user):
+        if not _same(password, settings.local_password):
+            return None
+        role = settings.local_role or "TeamMember"
+        return SessionUser(
+            id=1,
+            username=settings.local_user,
+            role=role,
+            is_admin=role == "admin",
+            allowed_modules={},
+        )
     from app.adapters.ad_fake import directory
 
     hit = directory.authenticate(username, password)
@@ -86,10 +86,10 @@ def _reference() -> str:
 
 
 class CsrfMiddleware:
-    def __init__(self, app) -> None:  # noqa: ANN001
+    def __init__(self, app) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send) -> None:  # noqa: ANN001
+    async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http" or scope["method"].upper() in _SAFE:
             await self.app(scope, receive, send)
             return

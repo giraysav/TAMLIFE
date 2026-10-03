@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import os
+
+# Panel default is PostgreSQL. Tests do not start a server and do not use that default.
+os.environ.setdefault("TAMLIFE_DATABASE_URL", "sqlite:///./var/tamlife.db")
+
+
 from collections.abc import Iterator
 
 import pytest

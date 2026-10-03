@@ -6,11 +6,11 @@ import secrets
 from pathlib import Path
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
 
+from alembic import command
 from app.core.audit import write
 from app.data.gateway import session_factory
 from app.main import create_app

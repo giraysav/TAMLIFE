@@ -23,6 +23,7 @@ dev_kullanici*.json
 
 # veri
 veri/
+data/
 instance/
 *.db
 *.db-shm

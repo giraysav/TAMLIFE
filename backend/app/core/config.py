@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     local_user: str = ""
     local_password: str = ""
     local_role: str = "TeamMember"
-    database_url: str = "sqlite:///./var/tamlife.db"
+    # Panel store. No password in this file. Override with TAMLIFE_DATABASE_URL.
+    database_url: str = "postgresql+psycopg://localhost:5432/tamlife"
     json_limit: int = 1024 * 1024
     upload_limit: int = 20 * 1024 * 1024
     port: int = 8117

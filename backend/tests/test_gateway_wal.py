@@ -1,4 +1,4 @@
-"""PRAGMA journal_mode = wal."""
+"""Panel store does not enable SQLite WAL."""
 
 from __future__ import annotations
 
@@ -14,5 +14,6 @@ def test_journal_mode_wal(tmp_path: Path) -> None:
     engine = make_engine("sqlite:///" + db_file.as_posix())
     with engine.connect() as conn:
         mode = conn.execute(text("PRAGMA journal_mode")).scalar()
-    assert mode == "wal"
+    assert mode != "wal"
+    assert mode == "delete"
     assert not str(db_file).lower().endswith("sirket.db")

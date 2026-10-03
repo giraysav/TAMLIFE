@@ -1,4 +1,8 @@
-"""SQLite engine ve oturum. journal_mode=WAL."""
+"""PostgreSQL engine and session for the panel.
+
+SQLite files under data/ are unused once Postgres is up.
+The panel store does not set SQLite journal_mode=WAL.
+"""
 
 from __future__ import annotations
 
@@ -17,9 +21,8 @@ def make_engine(url: str) -> Engine:
     if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
-        def _sqlite_pragmas(dbapi_connection, _connection_record) -> None:  # noqa: ANN001
+        def _sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:  # noqa: ANN001
             cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 

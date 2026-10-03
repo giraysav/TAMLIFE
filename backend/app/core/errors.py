@@ -25,7 +25,7 @@ class BodyLimitMiddleware:
         self.json_limit = json_limit
         self.upload_limit = upload_limit
 
-    async def __call__(self, scope, receive, send) -> None:  # noqa: ANN001
+    async def __call__(self, scope, receive, send) -> None:
         if scope["type"] == "http":
             headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
             raw = headers.get("content-length", "")
