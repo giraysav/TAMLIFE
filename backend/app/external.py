@@ -1,9 +1,9 @@
 """Dis kaynaklar. Uretim anahtar adlari ve ice alma tablolari.
 
 Deger okunmaz, surucu yuklenmez, baglanti acilmaz.
-OneDesk, Onent ve Urun-Tutar anahtarlari api_services.OracleSourceConfig
-ile integrations.py kaydindan gelir. ORACLE_REPORTDB_* yalniz canli ortamda
-tanimli anahtarlardir; kod on eki ONEDESK_DB'dir.
+OneDesk DB, canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski
+kodun ONEDESK_DB_* adi artik yok). Onent ve Urun-Tutar anahtarlari
+api_services.OracleSourceConfig ile integrations.py kaydindan gelir.
 """
 
 from __future__ import annotations
@@ -38,23 +38,13 @@ class Source:
 
 SHARED_ORACLE_KEYS: tuple[str, ...] = ("ORACLE_CLIENT_DIR",)
 
-ORACLE_REPORTDB_KEYS: tuple[str, ...] = (
-    "ORACLE_REPORTDB_ENABLED",
-    "ORACLE_REPORTDB_HOST",
-    "ORACLE_REPORTDB_PORT",
-    "ORACLE_REPORTDB_SERVICE_NAME",
-    "ORACLE_REPORTDB_USER",
-    "ORACLE_REPORTDB_PASSWORD",
-    "ORACLE_REPORTDB_TIMEOUT",
-)
-
 SOURCES: tuple[Source, ...] = (
     Source(
-        "oracle_onedesk",
+        "oracle_reportdb",
         "oracle",
-        "OneDesk / Oracle",
-        "ONEDESK_DB_ENABLED",
-        _oracle("ONEDESK_DB", "ONEDESK_DB_URL", "ONEDESK_BASE_URL", "ONEDESK_API_KEY"),
+        "OneDesk / REPORTDB",
+        "ORACLE_REPORTDB_ENABLED",
+        _oracle("ORACLE_REPORTDB", "ORACLE_REPORTDB_URL", "ONEDESK_BASE_URL", "ONEDESK_API_KEY"),
     ),
     Source(
         "oracle_onent",
@@ -71,11 +61,11 @@ SOURCES: tuple[Source, ...] = (
         _oracle("URUNTUTAR_DB", "URUN_TUTAR_DB_URL"),
     ),
     Source(
-        "oracle_onedesk_import",
+        "oracle_reportdb_import",
         "oracle",
-        "OneDesk / veri iceri alma",
-        "ONEDESK_DB_IMPORT_QUERY",
-        _oracle("ONEDESK_DB", "ONEDESK_DB_URL"),
+        "OneDesk / REPORTDB veri iceri alma",
+        "ORACLE_REPORTDB_IMPORT_QUERY",
+        _oracle("ORACLE_REPORTDB", "ORACLE_REPORTDB_URL"),
     ),
     Source(
         "oracle_onent_import",
@@ -83,13 +73,6 @@ SOURCES: tuple[Source, ...] = (
         "Onent / veri iceri alma",
         "ONENTDB_DB_IMPORT_QUERY",
         _oracle("ONENTDB_DB", "ONENT_DB_URL"),
-    ),
-    Source(
-        "oracle_reportdb",
-        "oracle",
-        "Oracle REPORTDB",
-        "ORACLE_REPORTDB_ENABLED",
-        ORACLE_REPORTDB_KEYS,
     ),
 )
 

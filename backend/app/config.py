@@ -70,17 +70,6 @@ class Settings(BaseSettings):
     ad_otomatik_ac: str = _slot("AD_OTOMATIK_AC")
 
     oracle_client_dir: str = _slot("ORACLE_CLIENT_DIR")
-    onedesk_db_enabled: str = _slot("ONEDESK_DB_ENABLED")
-    onedesk_db_host: str = _slot("ONEDESK_DB_HOST")
-    onedesk_db_port: str = _slot("ONEDESK_DB_PORT")
-    onedesk_db_service_name: str = _slot("ONEDESK_DB_SERVICE_NAME")
-    onedesk_db_user: str = _slot("ONEDESK_DB_USER")
-    onedesk_db_password: str = _slot("ONEDESK_DB_PASSWORD")
-    onedesk_db_query: str = _slot("ONEDESK_DB_QUERY")
-    onedesk_db_timeout: str = _slot("ONEDESK_DB_TIMEOUT")
-    onedesk_db_import_query: str = _slot("ONEDESK_DB_IMPORT_QUERY")
-    onedesk_db_import_timeout: str = _slot("ONEDESK_DB_IMPORT_TIMEOUT")
-    onedesk_db_url: str = _slot("ONEDESK_DB_URL")
     onedesk_base_url: str = _slot("ONEDESK_BASE_URL")
     onedesk_api_key: str = _slot("ONEDESK_API_KEY")
     onentdb_db_enabled: str = _slot("ONENTDB_DB_ENABLED")
@@ -112,6 +101,10 @@ class Settings(BaseSettings):
     oracle_reportdb_user: str = _slot("ORACLE_REPORTDB_USER")
     oracle_reportdb_password: str = _slot("ORACLE_REPORTDB_PASSWORD")
     oracle_reportdb_timeout: str = _slot("ORACLE_REPORTDB_TIMEOUT")
+    oracle_reportdb_query: str = _slot("ORACLE_REPORTDB_QUERY")
+    oracle_reportdb_import_query: str = _slot("ORACLE_REPORTDB_IMPORT_QUERY")
+    oracle_reportdb_import_timeout: str = _slot("ORACLE_REPORTDB_IMPORT_TIMEOUT")
+    oracle_reportdb_url: str = _slot("ORACLE_REPORTDB_URL")
 
     @property
     def cookie_secure_effective(self) -> bool:
