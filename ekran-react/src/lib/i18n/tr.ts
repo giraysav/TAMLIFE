@@ -6,7 +6,7 @@ export const tr: Record<string, string> = {
   "musteri.tamPortfoy": "Müşteri Yönetimi",
   "card.rapor.title": "Gönderilen Aylık Rapor",
   "card.proje.title": "Takip Edilen Projeler",
-  "card.ats.title": "OneDesk",
+  "card.ats.title": "Onedesk",
   "card.toptan.title": "TAM Toptan",
   "card.tamSms.title": "TAM SMS",
   "card.tamApn.title": "TAM APN",

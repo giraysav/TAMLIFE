@@ -2,7 +2,7 @@
 
 Uretim karsiliklari: kutucuklar/utilizasyon/toplu_atama.py ve blueprints/projects_bp.py
 (save_customer_score, skor_toplu_*, *_score_approval*, puanlama_personeli, istirak_final_dahil).
-Dogrulanmadi: metrik kaynaklari (OneDesk, Urun-Tutar, Onent, rapor sayisi) henuz bagli degil;
+Dogrulanmadi: metrik kaynaklari (Onedesk, Urun-Tutar, Onent, rapor sayisi) henuz bagli degil;
 bu yuzden yalniz musteri karti segmenti metrik uretir, digerleri 'eksik' kalir.
 """
 

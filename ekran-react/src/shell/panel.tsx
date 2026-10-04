@@ -1,30 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
-import type { LucideIcon } from "lucide-react"
-import {
-  BarChart3,
-  CalendarDays,
-  Database,
-  FileText,
-  Inbox,
-  Layers,
-  Link2,
-  LayoutDashboard,
-  MessageSquare,
-  Network,
-  Presentation,
-  Radar,
-  Settings,
-  ShieldCheck,
-  Users,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronDown, LayoutDashboard } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -37,61 +17,76 @@ import {
 import { OzetOrbit } from "@/components/ui/ozet-orbit"
 import type { Kullanici, MenuOgesi } from "@/lib/oturum"
 import { AdminSayfasi } from "@/shell/admin-sayfasi"
+import { AnaKartlar } from "@/shell/ana-kartlar"
 import { Arama } from "@/shell/arama"
 import { EntegrasyonSayfasi } from "@/shell/entegrasyon-sayfasi"
-import { VeriSayfasi } from "@/shell/veri-sayfasi"
+import { IKON } from "@/shell/ikon"
+import { KullaniciMenu } from "@/shell/kullanici-menu"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { ModulSayfasi } from "@/shell/modul-sayfasi"
+import { ProfilSayfasi } from "@/shell/profil-sayfasi"
+import { VeriSayfasi } from "@/shell/veri-sayfasi"
+import { YonetimSayfasi } from "@/shell/yonetim-sayfasi"
 
-const IKON: Record<string, LucideIcon> = {
-  customers: Users,
-  team: Users,
-  calendar: CalendarDays,
-  inbox: Inbox,
-  chart: BarChart3,
-  shield: ShieldCheck,
-  message: MessageSquare,
-  file: FileText,
-  layers: Layers,
-  network: Network,
-  presentation: Presentation,
-  radar: Radar,
-  link: Link2,
-  database: Database,
-  settings: Settings,
-}
-
-const GRUPLAR = ["work", "insights", "admin"] as const
+/** Yan menu sirasi: Genel, Calisma alanim, Raporlar ve gorunumler, Yonetim alanlari. */
+const GRUPLAR = ["genel", "work", "insights", "admin"] as const
+type Grup = (typeof GRUPLAR)[number]
+/** Sag ustteki kullanici menusunde duran, yan menude gosterilmeyen ogeler. */
+const YAN_MENU_DISI = new Set(["talep"])
+const ANAHTAR = "tamlife.menu"
 
 function hashId(): string {
   return decodeURIComponent(window.location.hash.replace(/^#\/?/, "")) || "ozet"
 }
 
-type Props = {
-  kullanici: Kullanici
-  dil: Dil
-  onDil: (dil: Dil) => void
-  onCikis: () => void
+function kapaliOku(): Record<string, boolean> {
+  try {
+    const ham = JSON.parse(window.localStorage.getItem(ANAHTAR) ?? "{}") as unknown
+    return ham && typeof ham === "object" ? (ham as Record<string, boolean>) : {}
+  } catch {
+    return {}
+  }
 }
 
-function Menu({ kullanici, dil, secili, onSec, onCikis }: Props & { secili: string; onSec: (id: string) => void }) {
+type MenuProps = {
+  kullanici: Kullanici
+  dil: Dil
+  secili: string
+  onSec: (id: string) => void
+}
+
+function Menu({ kullanici, dil, secili, onSec }: MenuProps) {
   const t = metin(dil)
   const { setOpenMobile } = useSidebar()
-  const gruplu = useMemo(
-    () =>
-      GRUPLAR.map((grup) => ({ grup, satirlar: kullanici.navigation.filter((o) => o.group === grup) })).filter(
-        (g) => g.satirlar.length > 0,
-      ),
-    [kullanici.navigation],
-  )
+  const [kapali, setKapali] = useState<Record<string, boolean>>(kapaliOku)
+
+  const gruplu = useMemo(() => {
+    const yan = kullanici.navigation.filter((o) => !YAN_MENU_DISI.has(o.id))
+    return GRUPLAR.map((grup) => ({
+      grup,
+      satirlar: grup === "genel" ? [] : yan.filter((o) => o.group === grup),
+    })).filter((g) => g.grup === "genel" || g.satirlar.length > 0)
+  }, [kullanici.navigation])
+
+  function ac(grup: Grup) {
+    setKapali((onceki) => {
+      const sonraki = { ...onceki, [grup]: !onceki[grup] }
+      try {
+        window.localStorage.setItem(ANAHTAR, JSON.stringify(sonraki))
+      } catch {
+        /* tarayici kaydedemiyor */
+      }
+      return sonraki
+    })
+  }
 
   function git(id: string) {
     onSec(id)
     setOpenMobile(false)
   }
 
-  function oge(o: MenuOgesi) {
+  function oge(o: { id: string; label: string; icon: string; ready?: boolean }) {
     const Ikon = IKON[o.icon] ?? LayoutDashboard
     const aktif = secili === o.id
     return (
@@ -102,7 +97,7 @@ function Menu({ kullanici, dil, secili, onSec, onCikis }: Props & { secili: stri
         >
           <Ikon aria-hidden />
           <span>{o.label}</span>
-          {!o.ready ? <span className="ml-auto size-1.5 rounded-full bg-muted-foreground/50" title={t.hazirlaniyor} /> : null}
+          {o.ready === false ? <span className="ml-auto size-1.5 rounded-full bg-muted-foreground/50" title={t.hazirlaniyor} /> : null}
         </SidebarMenuButton>
       </SidebarMenuItem>
     )
@@ -118,53 +113,58 @@ function Menu({ kullanici, dil, secili, onSec, onCikis }: Props & { secili: stri
       </SidebarHeader>
       <SidebarContent>
         <nav aria-label="TAM Life">
-          <SidebarGroup>
-            <SidebarGroupLabel>{t.genel}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={secili === "ozet"}
-                    render={<a href="#/ozet" aria-current={secili === "ozet" ? "page" : undefined} onClick={() => git("ozet")} />}
-                  >
-                    <LayoutDashboard aria-hidden />
-                    <span>{t.genelBakis}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-          {gruplu.map(({ grup, satirlar }) => (
-            <SidebarGroup key={grup}>
-              <SidebarGroupLabel>{t.gruplar[grup]}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>{satirlar.map(oge)}</SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))}
+          {gruplu.map(({ grup, satirlar }) => {
+            const acik = !kapali[grup]
+            const kimlik = `menu-${grup}`
+            return (
+              <SidebarGroup key={grup}>
+                <button
+                  type="button"
+                  aria-expanded={acik}
+                  aria-controls={kimlik}
+                  onClick={() => ac(grup)}
+                  className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                >
+                  {t.gruplar[grup]}
+                  <ChevronDown aria-hidden className={`size-4 transition-transform ${acik ? "" : "-rotate-90"}`} />
+                </button>
+                {acik ? (
+                  <SidebarGroupContent id={kimlik}>
+                    <SidebarMenu>
+                      {grup === "genel"
+                        ? oge({ id: "ozet", label: t.genelBakis, icon: "ozet" })
+                        : satirlar.map((o: MenuOgesi) => oge(o))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                ) : null}
+              </SidebarGroup>
+            )
+          })}
         </nav>
       </SidebarContent>
-      <SidebarFooter>
-        <div className="flex items-center gap-2 px-2 py-1">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-            {kullanici.username.slice(0, 2).toUpperCase()}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{kullanici.username}</span>
-          <Button type="button" variant="outline" size="sm" onClick={onCikis}>
-            {t.cikis}
-          </Button>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   )
+}
+
+type Props = {
+  kullanici: Kullanici
+  dil: Dil
+  onDil: (dil: Dil) => void
+  onCikis: () => void
 }
 
 export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
   const t = metin(dil)
   const [secili, setSecili] = useState(hashId)
-  const izinli = useMemo(() => new Set(["ozet", ...kullanici.navigation.map((o) => o.id)]), [kullanici.navigation])
+  const yonetimOgeleri = useMemo(() => kullanici.navigation.filter((o) => o.group === "admin"), [kullanici.navigation])
+  const izinli = useMemo(() => {
+    const kume = new Set(["ozet", "profil", ...kullanici.navigation.map((o) => o.id)])
+    if (kullanici.is_admin) kume.add("yonetim")
+    return kume
+  }, [kullanici.navigation, kullanici.is_admin])
   const aktif = izinli.has(secili) ? secili : "ozet"
   const oge = kullanici.navigation.find((o) => o.id === aktif)
+  const baslik = aktif === "ozet" ? t.hosgeldin(kullanici.username) : aktif === "profil" ? t.profil : aktif === "yonetim" ? t.yonetim : oge?.label
 
   useEffect(() => {
     const degisti = () => setSecili(hashId())
@@ -174,8 +174,8 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
 
   useEffect(() => {
     document.documentElement.lang = dil
-    document.title = `${oge?.label ?? t.genelBakis} · TAM Life`
-  }, [dil, oge, t.genelBakis])
+    document.title = `${aktif === "ozet" ? t.genelBakis : (baslik ?? "")} · TAM Life`
+  }, [dil, aktif, baslik, t.genelBakis])
 
   function sec(id: string) {
     window.location.hash = `#/${id}`
@@ -184,42 +184,39 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
 
   return (
     <SidebarProvider>
-      <Menu kullanici={kullanici} dil={dil} onDil={onDil} onCikis={onCikis} secili={aktif} onSec={sec} />
+      <Menu kullanici={kullanici} dil={dil} secili={aktif} onSec={sec} />
       <SidebarInset className="min-w-0">
         <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b bg-background px-4 sm:px-6">
           <SidebarTrigger aria-label={t.menu} />
-          <h1 className="truncate text-lg font-semibold">{aktif === "ozet" ? t.hosgeldin(kullanici.username) : oge?.label}</h1>
+          <h1 className="truncate text-lg font-semibold">{baslik}</h1>
           <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center rounded-md border" role="group" aria-label={t.dil}>
-              {(["tr", "en"] as const).map((d) => (
-                <Button
-                  key={d}
-                  type="button"
-                  size="sm"
-                  variant={dil === d ? "default" : "ghost"}
-                  className="h-8 px-2 first:rounded-r-none last:rounded-l-none"
-                  aria-pressed={dil === d}
-                  onClick={() => onDil(d)}
-                >
-                  {d.toUpperCase()}
-                </Button>
-              ))}
-            </div>
             <Arama ogeler={kullanici.navigation} dil={dil} onGit={sec} />
-            <Button type="button" variant="outline" size="sm" onClick={onCikis}>
-              {t.cikis}
-            </Button>
+            <KullaniciMenu
+              kullanici={kullanici}
+              dil={dil}
+              onDil={onDil}
+              onGit={sec}
+              onCikis={onCikis}
+              talepVar={kullanici.navigation.some((o) => o.id === "talep")}
+            />
           </div>
         </header>
         <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
           {aktif === "ozet" ? (
-            <OzetOrbit dil={dil} admin={kullanici.is_admin} onGit={sec} />
+            <>
+              <OzetOrbit dil={dil} admin={kullanici.is_admin} onGit={sec} />
+              <AnaKartlar ogeler={kullanici.navigation} dil={dil} onGit={sec} />
+            </>
+          ) : aktif === "profil" ? (
+            <ProfilSayfasi kullanici={kullanici} dil={dil} />
+          ) : aktif === "yonetim" ? (
+            <YonetimSayfasi ogeler={yonetimOgeleri} dil={dil} onGit={sec} />
           ) : aktif === "admin" ? (
             <AdminSayfasi dil={dil} />
-          ) : aktif === "veri" ? (
-            <VeriSayfasi dil={dil} />
           ) : aktif === "integrations" ? (
             <EntegrasyonSayfasi dil={dil} />
+          ) : aktif === "veri" ? (
+            <VeriSayfasi dil={dil} />
           ) : oge ? (
             <ModulSayfasi oge={oge} dil={dil} />
           ) : null}

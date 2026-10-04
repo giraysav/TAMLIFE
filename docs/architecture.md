@@ -32,13 +32,13 @@ Panel oturumu dizin değildir. `TAMLIFE_LOCAL_USER`, `TAMLIFE_LOCAL_PASSWORD` ve
 
 Roller: `admin`, `TeamMngr`, `TeamMember`. `utilizasyon` ve `roller` yalnız admin içindir. `talep` giriş yapana açıktır.
 
-## 3. Dış kaynak (Oracle / OneDesk)
+## 3. Dış kaynak (Oracle / Onedesk)
 
 Liste `backend/app/external.py`. Her kaynak üretimdeki anahtar adlarını taşır. DSN değeri repoda yoktur. Sürücü yüklenmez. `connect()` kapalıdır.
 
 Ortak: `ORACLE_CLIENT_DIR`.
 
-OneDesk DB (REPORTDB) / Oracle (`ORACLE_REPORTDB_ENABLED`): `ORACLE_REPORTDB_ENABLED`, `ORACLE_REPORTDB_HOST`, `ORACLE_REPORTDB_PORT`, `ORACLE_REPORTDB_SERVICE_NAME`, `ORACLE_REPORTDB_USER`, `ORACLE_REPORTDB_PASSWORD`, `ORACLE_REPORTDB_QUERY`, `ORACLE_REPORTDB_TIMEOUT`, `ORACLE_REPORTDB_IMPORT_QUERY`, `ORACLE_REPORTDB_IMPORT_TIMEOUT`, `ORACLE_REPORTDB_URL`, `ONEDESK_BASE_URL`, `ONEDESK_API_KEY`.
+Onedesk DB (REPORTDB) / Oracle (`ORACLE_REPORTDB_ENABLED`): `ORACLE_REPORTDB_ENABLED`, `ORACLE_REPORTDB_HOST`, `ORACLE_REPORTDB_PORT`, `ORACLE_REPORTDB_SERVICE_NAME`, `ORACLE_REPORTDB_USER`, `ORACLE_REPORTDB_PASSWORD`, `ORACLE_REPORTDB_QUERY`, `ORACLE_REPORTDB_TIMEOUT`, `ORACLE_REPORTDB_IMPORT_QUERY`, `ORACLE_REPORTDB_IMPORT_TIMEOUT`, `ORACLE_REPORTDB_URL`, `ONEDESK_BASE_URL`, `ONEDESK_API_KEY`.
 
 Onent / Oracle (`ONENTDB_DB_ENABLED`): `ONENTDB_DB_ENABLED`, `ONENTDB_DB_HOST`, `ONENTDB_DB_PORT`, `ONENTDB_DB_SERVICE_NAME`, `ONENTDB_DB_USER`, `ONENTDB_DB_PASSWORD`, `ONENTDB_DB_QUERY`, `ONENTDB_DB_TIMEOUT`, `ONENTDB_DB_IMPORT_QUERY`, `ONENTDB_DB_IMPORT_TIMEOUT`, `ONENT_DB_URL`.
 
@@ -46,7 +46,7 @@ Onent / Oracle (`ONENTDB_DB_ENABLED`): `ONENTDB_DB_ENABLED`, `ONENTDB_DB_HOST`, 
 
 İçe alma kapıları aynı Oracle ön ekini kullanır. Açık olma anahtarı sorgu adıdır: `ORACLE_REPORTDB_IMPORT_QUERY`, `ONENTDB_DB_IMPORT_QUERY`.
 
-OneDesk DB, canlı `.env`'deki adıyla `ORACLE_REPORTDB_*` ön ekini kullanır; eski kodun `ONEDESK_DB_*` adı kaldırıldı. `ONEDESK_BASE_URL` ve `ONEDESK_API_KEY` DB değil REST ayarıdır, adı değişmedi.
+Onedesk DB, canlı `.env`'deki adıyla `ORACLE_REPORTDB_*` ön ekini kullanır; eski kodun `ONEDESK_DB_*` adı kaldırıldı. `ONEDESK_BASE_URL` ve `ONEDESK_API_KEY` DB değil REST ayarıdır, adı değişmedi.
 
 Üretim ham deposunun içe alma tabloları (`ham_veri.db`): `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`. Paneldeki boş iniş tabloları `ingest_batch` ve `ingest_record`dır; bunlar eski ham deponun adı değildir. Dosya bırakma yeri `data/incoming` boş bırakılır.
 
@@ -66,7 +66,7 @@ Geçit `backend/app/gateway.py` içe aktarılırken bağlanmaz. Şema `backend/a
 
 Yalniz admin oturumu. `GET /api/v1/admin`. Oturum yoksa 401, admin degilse 403.
 
-Baglanti yuvalari yalniz dolu veya bos: AD (`AD_ENABLED` ile `AD_SERVER` ve `AD_DOMAIN`), `ORACLE_REPORTDB` (OneDesk DB), `ONENT`, `URUNTUTAR`. Deger donmez.
+Baglanti yuvalari yalniz dolu veya bos: AD (`AD_ENABLED` ile `AD_SERVER` ve `AD_DOMAIN`), `ORACLE_REPORTDB` (Onedesk DB), `ONENT`, `URUNTUTAR`. Deger donmez.
 
 Veri yonetimi tablolari: `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`, `ingest_batch`, `ingest_record`. Satirlar `TAMLIFE_DATABASE_URL` ayarliysa Postgres'e yazilir. Adres donmez.
 

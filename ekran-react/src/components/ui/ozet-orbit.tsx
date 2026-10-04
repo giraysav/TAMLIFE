@@ -104,8 +104,8 @@ export function OzetOrbit({ dil, admin, onGit }: Props) {
   ]
   const tags: OrbitTag[] = admin
     ? [
-        { icon: <ShieldCheck aria-hidden />, label: tr ? "Yönetim" : "Admin", onClick: () => onGit("admin") },
-        { icon: <Users aria-hidden />, label: tr ? "Rol yönetimi" : "Roles", onClick: () => onGit("rol") },
+        { icon: <ShieldCheck aria-hidden />, label: tr ? "Yönetim" : "Admin", onClick: () => onGit("yonetim") },
+        { icon: <Users aria-hidden />, label: tr ? "Rol yönetimi" : "Roles", onClick: () => onGit("roller") },
       ]
     : []
 

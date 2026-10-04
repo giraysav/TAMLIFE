@@ -16,15 +16,15 @@ Kaynak: eski kod (`D:\Project\TAM_Life\TAMLIFE`, yalnız okundu). `.env` için y
 ### 1.2 Oracle kaynakları ve `.env` anahtarları (adlandırma kararı)
 | Kaynak | Ön ek (v3.5) | Eski kodda | Not |
 |---|---|---|---|
-| **OneDesk DB** | `ORACLE_REPORTDB_` | `ONEDESK_DB_` | Canlı `.env` zaten `ORACLE_REPORTDB_*` tutuyor; v3.5 bu adı kullanır |
+| **Onedesk DB** | `ORACLE_REPORTDB_` | `ONEDESK_DB_` | Canlı `.env` zaten `ORACLE_REPORTDB_*` tutuyor; v3.5 bu adı kullanır |
 | Onent DB | `ONENTDB_DB_` | aynı | `ONENT_DB_URL` |
 | Ürün-Tutar DB | `URUNTUTAR_DB_` | aynı | `URUN_TUTAR_DB_URL` |
-| OneDesk REST (DB değil) | `ONEDESK_BASE_URL`, `ONEDESK_API_KEY` | aynı | adı değişmedi |
+| Onedesk REST (DB değil) | `ONEDESK_BASE_URL`, `ONEDESK_API_KEY` | aynı | adı değişmedi |
 | Excel (Müşteri Ham Veri) | — | — | dosya yükleme |
 
 Her Oracle ön eki için anahtarlar: `_ENABLED _HOST _PORT _SERVICE_NAME _USER _PASSWORD _QUERY _TIMEOUT _IMPORT_QUERY _IMPORT_TIMEOUT` (+ `_URL`). Ortak: `ORACLE_CLIENT_DIR`.
 
-**Gözlem (yalnız anahtar adları):** canlı `.env` içinde `ORACLE_REPORTDB_*` ve `ONEDESK_DB_QUERY` var, ama eski kod `ONEDESK_DB_*` okuyor. Yani eski kodda OneDesk DB bağlantı anahtarları `.env` ile eşleşmiyor olabilir. v3.5'te ad tek yere (`ORACLE_REPORTDB_`) indiği için bu uyuşmazlık biter; devreye almadan önce canlı `.env` değerleri sahibi tarafından doğrulanmalı.
+**Gözlem (yalnız anahtar adları):** canlı `.env` içinde `ORACLE_REPORTDB_*` ve `ONEDESK_DB_QUERY` var, ama eski kod `ONEDESK_DB_*` okuyor. Yani eski kodda Onedesk DB bağlantı anahtarları `.env` ile eşleşmiyor olabilir. v3.5'te ad tek yere (`ORACLE_REPORTDB_`) indiği için bu uyuşmazlık biter; devreye almadan önce canlı `.env` değerleri sahibi tarafından doğrulanmalı.
 
 ## 2. Ekran: Veri Yönetimi (yalnız admin)
 
@@ -32,7 +32,7 @@ Eski "Final Skoru Atama / Veri Yönlendirici" üç adımdı; v3.5'te beş sekme:
 
 | # | Sekme | İş |
 |---|---|---|
-| 1 | **Veri içeri alma** | Kaynak durumu (OneDesk/REPORTDB, Onent, Ürün-Tutar, Excel), bağlantı testi, veri çekme/yükleme, set listesi (kaynak başına son 3), set sil, ilerleme |
+| 1 | **Veri içeri alma** | Kaynak durumu (Onedesk/REPORTDB, Onent, Ürün-Tutar, Excel), bağlantı testi, veri çekme/yükleme, set listesi (kaynak başına son 3), set sil, ilerleme |
 | 2 | **Final skor kriterleri** | Çatı ve iştirak kriter tabloları (başlık, tür, ağırlık, baremler), veri kaynağı seçimi, kural önizleme/deneme |
 | 3 | **Skorları dağıt** | Toplu önizleme (hesapla, yazma) → uygula; personel → çatı → iştirak ağacı; iştirak "final skora dahil" seçimi |
 | 4 | **Personel skoru ve ağırlık** | Personel ağırlık/dağılım, puanlamadan çıkarılan personel listesi |
@@ -47,7 +47,7 @@ Tek müşteriye elle skor atama müşteri kartında kalır (Müşteri modülü),
 - Barem hücreleri kuraldır: sayısal (`1-49`, `500+`, `>=500`, `<50`) veya kategorik (`SMB`, `SA, PA, WHOLESALE`).
 - **Hesap yalnız sunucuda**; istemcinin gönderdiği skor kabul edilmez. Eksik kriteri olan müşteri atlanır (neden raporlanır).
 - Kriter tablosu kaydedilince tüm çatı müşteriler yeniden hesaplanır; yalnız skoru değişene yazılır, geçmişe `kriter_degisikligi` düşer. Geçmiş kaynağı: `sayfa` | `toplu` | `kriter_degisikligi`.
-- Metrik kaynak önceliği: Ürün-Tutar DB > Excel özeti; şikayet/talep: OneDesk DB (REPORTDB) > panel; lokasyon: Ürün-Tutar > Onent > panel.
+- Metrik kaynak önceliği: Ürün-Tutar DB > Excel özeti; şikayet/talep: Onedesk DB (REPORTDB) > panel; lokasyon: Ürün-Tutar > Onent > panel.
 - Yetki: `final_skor_atama` yalnız **admin ve TeamMngr**. TeamMember kendi çatı müşterisi için **talep** açar (müşteri başına tek bekleyen talep); yönetici onaylar/reddeder.
 
 ## 4. Hedef veri modeli
@@ -117,7 +117,7 @@ Tek kaynak PostgreSQL (SQLite dosyaları tek şemada toplanır; geliştirmede SQ
 | V7 | **Veri taşıma** (prod → v3.5) ve eşdeğerlik testi | Skorlar eski sistemle aynı |
 
 ## 9. Açık sorular
-1. Canlı `.env`'de OneDesk DB gerçekten `ORACLE_REPORTDB_*` ile mi tanımlı, eski kod neden `ONEDESK_DB_*` okuyor? (Değer paylaşılmadan, sahibi doğrulamalı.)
+1. Canlı `.env`'de Onedesk DB gerçekten `ORACLE_REPORTDB_*` ile mi tanımlı, eski kod neden `ONEDESK_DB_*` okuyor? (Değer paylaşılmadan, sahibi doğrulamalı.)
 2. Skor geçmişi saklama süresi var mı?
 3. Veri Yönlendirici kuralları (ham_depo → metrik) eski kodda 2026-09-29'da skordan kaldırılmış; hâlâ taşınsın mı yoksa yalnız kriter kaynak seçimi mi kalsın?
 4. İştirak "final skora dahil" etkisi (katsayı) tanımlı değil; ertelensin mi?

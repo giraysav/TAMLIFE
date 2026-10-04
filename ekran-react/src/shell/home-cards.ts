@@ -58,7 +58,7 @@ export const ANA_SAYFA_KARTLARI: readonly HomeCard[] = [
   },
   {
     "key": "onedesk",
-    "title": "OneDesk",
+    "title": "Onedesk",
     "i18n": "card.ats.title",
     "cardId": "dash-card-onedesk",
     "empty": false

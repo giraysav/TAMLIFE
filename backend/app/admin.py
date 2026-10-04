@@ -25,7 +25,7 @@ _NOTE = "Satırlar TAMLIFE_DATABASE_URL tanımlıysa Postgres'e yazılır."
 
 
 def connections() -> list[dict[str, object]]:
-    """AD, ORACLE_REPORTDB (OneDesk DB), ONENT, URUNTUTAR. Configured or not."""
+    """AD, ORACLE_REPORTDB (Onedesk DB), ONENT, URUNTUTAR. Configured or not."""
     settings = get_settings()
     return [
         {"id": "ad", "slot": "AD", "configured": directory.configured()},

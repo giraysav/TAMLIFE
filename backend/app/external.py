@@ -1,7 +1,7 @@
 """Dis kaynaklar. Uretim anahtar adlari ve ice alma tablolari.
 
 Deger okunmaz, surucu yuklenmez, baglanti acilmaz.
-OneDesk DB, canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski
+Onedesk DB, canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski
 kodun ONEDESK_DB_* adi artik yok). Onent ve Urun-Tutar anahtarlari
 api_services.OracleSourceConfig ile integrations.py kaydindan gelir.
 """
@@ -42,7 +42,7 @@ SOURCES: tuple[Source, ...] = (
     Source(
         "oracle_reportdb",
         "oracle",
-        "OneDesk / REPORTDB",
+        "Onedesk / REPORTDB",
         "ORACLE_REPORTDB_ENABLED",
         _oracle("ORACLE_REPORTDB", "ORACLE_REPORTDB_URL", "ONEDESK_BASE_URL", "ONEDESK_API_KEY"),
     ),
@@ -63,7 +63,7 @@ SOURCES: tuple[Source, ...] = (
     Source(
         "oracle_reportdb_import",
         "oracle",
-        "OneDesk / REPORTDB veri iceri alma",
+        "Onedesk / REPORTDB veri iceri alma",
         "ORACLE_REPORTDB_IMPORT_QUERY",
         _oracle("ORACLE_REPORTDB", "ORACLE_REPORTDB_URL"),
     ),

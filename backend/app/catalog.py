@@ -56,7 +56,7 @@ MODULES: tuple[Module, ...] = (
         table="calendar_records",
     ),
     Module(
-        "onedesk", "OneDesk", "modul",
+        "onedesk", "Onedesk", "modul",
         i18n="card.ats.title", card_id="dash-card-onedesk",
         box_id="mod_onedesk", permission_group="modules",
         registry_status="aktif", modal_id="atsModal",
