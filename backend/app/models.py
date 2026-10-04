@@ -51,7 +51,7 @@ TABLE_OWNER = {
     "radar_prospect": "radar",
     "presentation": "sunum",
     "income_production": "gelir_uretim",
-    "wholesale_item": "toptan",
+    "role_view": "roller",
     "external_source": "ingest",
     "ingest_batch": "ingest",
     "ingest_record": "ingest",
@@ -287,12 +287,15 @@ class IncomeProduction(Base):
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
 
 
-class WholesaleItem(Base):
-    __tablename__ = "wholesale_item"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    period: Mapped[str] = mapped_column(String(20), default="")
-    label: Mapped[str] = mapped_column(String(200), default="")
-    amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+class RoleView(Base):
+    """Rolun gorunumu: hangi modul/alt modulleri gorur, hangi sayfayla acilir. Admin belirler."""
+
+    __tablename__ = "role_view"
+    role: Mapped[str] = mapped_column(String(40), primary_key=True)
+    modules: Mapped[list] = mapped_column(JSON, default=list)
+    landing: Mapped[str] = mapped_column(String(80), default="ozet")
+    updated_by: Mapped[str] = mapped_column(String(120), default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ExternalSource(Base):

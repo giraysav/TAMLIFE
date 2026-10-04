@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.ad import directory
@@ -15,12 +16,19 @@ from app.audit import SecretAuditError, audit_log
 from app.authz import can_open, is_admin
 from app.catalog import HOME_CARDS, MODULES, get
 from app.config import get_settings
+from app.deps import get_db
 from app.ingest import status as ingest_status
 from app.models import TABLE_OWNER
 from app.navigation import navigation_for
+from app.rolgorunum import RolHata, etkin, gorunumler, katalog, kaydet
 from app.security import client_ip, limiter
 from app.security import install as install_security
 from app.session import Principal, current_user, login, logout
+
+
+class RolGovde(BaseModel):
+    modules: list[str] = Field(max_length=500)
+    landing: str = Field(max_length=80)
 
 
 class LoginBody(BaseModel):
@@ -90,9 +98,10 @@ def create_app() -> FastAPI:
         return {"status": "success", "data": {}}
 
     @app.get("/api/v1/session/me")
-    def whoami(request: Request) -> dict:
+    def whoami(request: Request, db: Session = Depends(get_db)) -> dict:
         user = _require_user(request)
-        nav = navigation_for(user)
+        gorunum = etkin(db, user)
+        nav = navigation_for(user, gorunum.izinli)
         return {
             "status": "success",
             "data": {
@@ -101,13 +110,15 @@ def create_app() -> FastAPI:
                 "is_admin": user.is_admin,
                 "idle_timeout_minutes": get_settings().session_idle_minutes,
                 "navigation": nav,
+                "landing": gorunum.landing,
                 "permissions": {"modules": [item["id"] for item in nav]},
             },
         }
 
     @app.get("/api/v1/modules")
-    def list_modules(request: Request) -> dict:
+    def list_modules(request: Request, db: Session = Depends(get_db)) -> dict:
         user = _require_user(request)
+        izinli = etkin(db, user).izinli
         data = [
             {
                 "key": item.key,
@@ -128,28 +139,33 @@ def create_app() -> FastAPI:
                 "table": item.table,
             }
             for item in MODULES
-            if can_open(user, item, get)
+            if can_open(user, item, get, izinli)
         ]
         return {"status": "success", "data": data}
 
     @app.get("/api/v1/home")
-    def home(request: Request) -> dict:
+    def home(request: Request, db: Session = Depends(get_db)) -> dict:
         user = _require_user(request)
+        izinli = etkin(db, user).izinli
         data = [
             {"key": card.key, "title": card.title, "i18n": card.i18n, "card_id": card.card_id}
             for card in HOME_CARDS
-            if can_open(user, card, get)
+            if can_open(user, card, get, izinli)
         ]
         return {"status": "success", "data": data}
 
-    @app.get("/api/v1/modules/{key}")
-    def open_module(key: str, request: Request) -> dict:
+    @app.get("/api/v1/modules/{key:path}")
+    def open_module(key: str, request: Request, db: Session = Depends(get_db)) -> dict:
         user = _require_user(request)
+        izinli = etkin(db, user).izinli
+        ana, _, alt = key.partition("/")
         try:
-            module = get(key)
+            module = get(ana)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Modul yok") from exc
-        if not can_open(user, module, get):
+        if alt and alt not in {c.key for c in module.children}:
+            raise HTTPException(status_code=404, detail="Modul yok")
+        if not can_open(user, module, get, izinli) or (alt and izinli is not None and key not in izinli):
             audit_log.remember(
                 actor=user.username,
                 action="open",
@@ -161,11 +177,12 @@ def create_app() -> FastAPI:
         return {"status": "success", "data": {"module": key}}
 
     @app.get("/api/v1/summary")
-    def summary(request: Request) -> dict:
+    def summary(request: Request, db: Session = Depends(get_db)) -> dict:
         user = _require_user(request)
+        izinli = etkin(db, user).izinli
         data = {
-            "modules": sum(1 for item in MODULES if can_open(user, item, get)),
-            "home_cards": sum(1 for card in HOME_CARDS if can_open(user, card, get)),
+            "modules": sum(1 for item in MODULES if can_open(user, item, get, izinli)),
+            "home_cards": sum(1 for card in HOME_CARDS if can_open(user, card, get, izinli)),
             "tables": len(TABLE_OWNER),
             "external_sources": len(ingest_status()["sources"]),
         }
@@ -181,6 +198,28 @@ def create_app() -> FastAPI:
         _require_user(request)
         rows = [{"table": name, "owner": owner} for name, owner in sorted(TABLE_OWNER.items())]
         return {"status": "success", "data": rows}
+
+    @app.get("/api/v1/roller")
+    def roller(request: Request, db: Session = Depends(get_db)) -> dict:
+        _require_admin(request)
+        return {"status": "success", "data": {"roles": gorunumler(db), "catalog": katalog()}}
+
+    @app.put("/api/v1/roller/{rol}")
+    def roller_kaydet(rol: str, body: RolGovde, request: Request, db: Session = Depends(get_db)) -> dict:
+        admin = _require_admin(request)
+        try:
+            sonuc = kaydet(db, rol, body.modules, body.landing, admin.username)
+            db.commit()
+        except RolHata as exc:
+            raise HTTPException(status_code=exc.kod, detail=exc.mesaj) from exc
+        audit_log.remember(
+            actor=admin.username,
+            action="roller.kaydet",
+            outcome="allow",
+            module_key="roller",
+            detail=f"rol={rol} adet={len(sonuc['modules'])} giris={sonuc['landing']}",
+        )
+        return {"status": "success", "data": sonuc}
 
     @app.get("/api/v1/veri")
     def veri(request: Request) -> dict:

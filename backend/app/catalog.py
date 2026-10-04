@@ -10,6 +10,20 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class SubModule:
+    """Ana modulun alt modulu (sol menude modulun altinda acilan fonksiyon penceresi).
+
+    Kimlik `<modul>/<alt>` bicimindedir; ornek `musteri/liste`. Alt moduller ayrintilari
+    verildikce `Module.children` icine eklenir; su an hicbir modulde tanimli degildir.
+    """
+
+    key: str
+    title: str
+    description: str = ""
+    ready: bool = False
+
+
+@dataclass(frozen=True)
 class Module:
     key: str
     title: str
@@ -28,6 +42,7 @@ class Module:
     registry_status: str = ""
     modal_id: str = ""
     table: str = ""
+    children: tuple[SubModule, ...] = ()
 
 
 # Sira: moduller.py MODULLER. Ana sayfa sirasi HOME_ORDER.
@@ -102,32 +117,26 @@ MODULES: tuple[Module, ...] = (
         table="project_items",
     ),
     Module(
-        "tamsms", "TAM SMS", "kart",
+        "tamsms", "ICT Sms & Gelir", "kart",
         i18n="card.tamSms.title", card_id="dash-card-tamsms",
         box_id="card_tamsms", permission_group="dashboard_cards",
         registry_id="ictapn", registry_status="aktif", modal_id="ictApnModal",
         table="ict_revenues",
     ),
     Module(
-        "tamapn", "TAM APN", "kart",
+        "tamapn", "APN Gelir ve Kurulum", "kart",
         i18n="card.tamApn.title", card_id="dash-card-tamapn",
         box_id="card_tamapn", permission_group="dashboard_cards",
         table="apn_revenues",
     ),
     Module(
-        "gelir_uretim", "TAM GELIR&URETIM", "kart", ready=False,
+        "gelir_uretim", "Gelir Faydası Sağlanan İşler", "kart", ready=False,
         i18n="card.gelirUretim.title", card_id="dash-card-gelir-uretim",
         box_id="card_gelir_uretim", permission_group="dashboard_cards",
         note="icerik yakinda detaylandirilacak",
     ),
     Module(
-        "toptan", "TAM Toptan", "kart", ready=False,
-        i18n="card.toptan.title", card_id="dash-card-toptan",
-        box_id="card_toptan", permission_group="dashboard_cards",
-        note="toptan satış (wholesale); içerik yakında",
-    ),
-    Module(
-        "sunum", "TAM Sunum", "kart",
+        "sunum", "Çeyrek Bazlı Sunum", "kart",
         i18n="card.sunum.title", card_id="dash-card-sunum",
         box_id="card_sunum", permission_group="dashboard_cards",
         registry_status="aktif", modal_id="sunumModal",
@@ -166,7 +175,6 @@ HOME_ORDER: tuple[str, ...] = (
     "rapor",
     "proje",
     "onedesk",
-    "toptan",
     "tamsms",
     "tamapn",
     "gelir_uretim",

@@ -1,0 +1,5 @@
+line-length = 140
+
+[lint.flake8-bugbear]
+# FastAPI bagimliliklari varsayilan arguman olarak Depends() ile verilir.
+extend-immutable-calls = ["fastapi.Depends"]

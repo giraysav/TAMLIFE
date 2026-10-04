@@ -18,11 +18,10 @@ PRESENTATION: dict[str, tuple[str, str, str]] = {
     "ekip": ("insights", "team", "Yetkiniz kapsamındaki TAM özeti"),
     "rapor": ("insights", "file", "Aylık raporlar ve gönderim durumu"),
     "proje": ("work", "layers", "Projeler ve müşteri bazlı çalışmalar"),
-    "tamsms": ("insights", "message", "SMS gelir ve üretim kayıtları"),
-    "tamapn": ("insights", "network", "APN gelir ve üretim kayıtları"),
-    "gelir_uretim": ("insights", "chart", "Gelir ve üretim görünümü"),
-    "toptan": ("work", "layers", "Toptan satış çalışmaları"),
-    "sunum": ("work", "presentation", "TAM sunumlarını hazırlayın"),
+    "tamsms": ("insights", "message", "ICT SMS gelir ve üretim kayıtları"),
+    "tamapn": ("insights", "network", "APN gelir ve kurulum kayıtları"),
+    "gelir_uretim": ("insights", "chart", "Gelir faydası sağlanan işler"),
+    "sunum": ("work", "presentation", "Çeyrek bazlı sunumları hazırlayın"),
     "radar": ("work", "radar", "Müşteri fırsatları ve takip kayıtları"),
     "baglantili": ("work", "link", "Kurum içi bağlantılı araçlar"),
 }
@@ -35,12 +34,12 @@ ADMIN_ITEMS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
-def navigation_for(user: Principal) -> list[dict[str, object]]:
+def navigation_for(user: Principal, izinli: frozenset[str] | None = None) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for module in MODULES:
         if not module.in_nav or module.key not in PRESENTATION:
             continue
-        if not can_open(user, module, get):
+        if not can_open(user, module, get, izinli):
             continue
         group, icon, description = PRESENTATION[module.key]
         rows.append(
@@ -51,11 +50,21 @@ def navigation_for(user: Principal) -> list[dict[str, object]]:
                 "group": group,
                 "icon": icon,
                 "ready": module.ready,
+                "children": [
+                    {
+                        "id": f"{module.key}/{c.key}",
+                        "label": c.title,
+                        "description": c.description,
+                        "ready": c.ready,
+                    }
+                    for c in module.children
+                    if izinli is None or is_admin(user) or f"{module.key}/{c.key}" in izinli
+                ],
             }
         )
     if is_admin(user):
         rows.extend(
-            {"id": key, "label": label, "description": text, "group": "admin", "icon": icon, "ready": True}
+            {"id": key, "label": label, "description": text, "group": "admin", "icon": icon, "ready": True, "children": []}
             for key, label, text, icon in ADMIN_ITEMS
         )
     return rows
