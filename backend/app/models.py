@@ -4,7 +4,20 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, select
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    select,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -25,8 +38,12 @@ TABLE_OWNER = {
     "project_item": "proje",
     "project_action": "proje",
     "onedesk_record": "onedesk",
-    "utilization_criterion": "utilizasyon",
-    "utilization_score": "utilizasyon",
+    "util_criteria_set": "utilizasyon",
+    "score_detail": "utilizasyon",
+    "score_history": "utilizasyon",
+    "score_approval_request": "utilizasyon",
+    "scoring_exclusion": "utilizasyon",
+    "affiliate_final_flag": "utilizasyon",
     "demand": "talep",
     "demand_log": "talep",
     "sms_revenue": "tamsms",
@@ -71,6 +88,9 @@ class Customer(Base):
     name: Mapped[str] = mapped_column(String(200), default="")
     segment: Mapped[str] = mapped_column(String(80), default="")
     status: Mapped[str] = mapped_column(String(40), default="")
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)  # sorumlu TAM
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)  # bos = cati
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)  # final skor, yalniz cati
 
 
 class CustomerContact(Base):
@@ -140,21 +160,76 @@ class OnedeskRecord(Base):
     status: Mapped[str] = mapped_column(String(40), default="")
 
 
-class UtilizationCriterion(Base):
-    __tablename__ = "utilization_criterion"
+class UtilCriteriaSet(Base):
+    """Final skor kriter tablosu. scope: 'parent' (cati) | 'affiliate' (istirak). Her kayit yeni surum."""
+
+    __tablename__ = "util_criteria_set"
+    __table_args__ = (UniqueConstraint("scope", "version", name="uq_util_criteria_scope_version"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    scope: Mapped[str] = mapped_column(String(40), default="")
-    name: Mapped[str] = mapped_column(String(200), default="")
-    weight: Mapped[str] = mapped_column(String(40), default="")
+    scope: Mapped[str] = mapped_column(String(20))
+    version: Mapped[int] = mapped_column(Integer)
+    criteria: Mapped[list] = mapped_column(JSON, default=list)
+    updated_by: Mapped[str] = mapped_column(String(120), default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class UtilizationScore(Base):
-    __tablename__ = "utilization_score"
+class ScoreDetail(Base):
+    __tablename__ = "score_detail"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    score: Mapped[float] = mapped_column(Float)
+    detail: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ScoreHistory(Base):
+    """source: 'sayfa' | 'toplu' | 'kriter_degisikligi'."""
+
+    __tablename__ = "score_history"
+    __table_args__ = (Index("ix_score_history_customer_at", "customer_id", "at"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    period: Mapped[str] = mapped_column(String(20), default="")
-    subject_key: Mapped[str] = mapped_column(String(80), default="")
-    score: Mapped[str] = mapped_column(String(40), default="")
-    criterion_id: Mapped[int | None] = mapped_column(ForeignKey("utilization_criterion.id"), nullable=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"))
+    score: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(40))
+    actor: Mapped[str] = mapped_column(String(120), default="")
+    at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    detail: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+
+class ScoreApprovalRequest(Base):
+    """Musteri basina tek bekleyen talep: kismi benzersiz indeks."""
+
+    __tablename__ = "score_approval_request"
+    __table_args__ = (
+        Index(
+            "uq_score_request_pending",
+            "customer_id",
+            unique=True,
+            sqlite_where=text("status = 'pending'"),
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"))
+    requested_by: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ScoringExclusion(Base):
+    """Puanlamaya girmeyen personel."""
+
+    __tablename__ = "scoring_exclusion"
+    user_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"), primary_key=True)
+    set_by: Mapped[str] = mapped_column(String(120), default="")
+    at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AffiliateFinalFlag(Base):
+    __tablename__ = "affiliate_final_flag"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    included: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Demand(Base):
