@@ -29,8 +29,8 @@ import { ProfilSayfasi } from "@/shell/profil-sayfasi"
 import { VeriSayfasi } from "@/shell/veri-sayfasi"
 import { YonetimSayfasi } from "@/shell/yonetim-sayfasi"
 
-/** Yan menu sirasi: Genel, Calisma alanim, Raporlar ve gorunumler, Yonetim alanlari. */
-const GRUPLAR = ["genel", "work", "insights", "admin"] as const
+/** Yan menu sirasi: Genel, Calisma alanim, Raporlar ve gorunumler. Yonetim yalniz sag ustteki kullanici menusunde. */
+const GRUPLAR = ["genel", "work", "insights"] as const
 type Grup = (typeof GRUPLAR)[number]
 /** Sag ustteki kullanici menusunde duran, yan menude gosterilmeyen ogeler. */
 const YAN_MENU_DISI = new Set(["talep"])
