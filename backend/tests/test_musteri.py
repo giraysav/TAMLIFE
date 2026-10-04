@@ -246,3 +246,19 @@ def test_yetkisiz_ve_csrf(veri, monkeypatch):
     assert veri.get("/api/v1/musteri").status_code == 403
     assert veri.get("/api/v1/musteri/1").status_code == 403
     _ = datetime.now(UTC)
+
+
+def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):
+    """Yerel/dev oturumunda app_user satiri bos olabilir; musteri ekleme ve rapor gonderimi gecerli kisi kimligiyle yazilir."""
+    hdr = login_ok(client)
+    with Session(engine()) as db:
+        assert db.query(AppUser).count() == 0
+    mid = client.post("/api/v1/musteri", json={"name": "Satirsiz Test"}, headers=hdr).json()["data"]["id"]
+    with Session(engine()) as db:
+        kisi = db.query(AppUser).filter_by(username="admin").one()
+        assert db.get(Customer, mid).owner_id == kisi.id
+    assert client.post(f"/api/v1/musteri/{mid}/rapor/gonder", json={"onay": True}, headers=hdr).status_code == 200
+    with Session(engine()) as db:
+        r = db.query(Report).filter_by(customer_id=mid).one()
+        g = db.query(ReportDispatch).filter_by(customer_id=mid).one()
+        assert r.user_id == kisi.id and g.sender_id == kisi.id

@@ -4,6 +4,368 @@
  */
 
 export interface paths {
+    "/api/v1/skor/kriterler/{scope}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kriterleri Oku */
+        get: operations["kriterleri_oku_api_v1_skor_kriterler__scope__get"];
+        /** Kriterleri Kaydet */
+        put: operations["kriterleri_kaydet_api_v1_skor_kriterler__scope__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skor/toplu/onizleme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toplu Onizleme */
+        post: operations["toplu_onizleme_api_v1_skor_toplu_onizleme_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skor/toplu/uygula": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toplu Uygula */
+        post: operations["toplu_uygula_api_v1_skor_toplu_uygula_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skor/musteri/{musteri_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Musteri Skoru */
+        put: operations["musteri_skoru_api_v1_skor_musteri__musteri_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skor/talepler": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Talepleri Listele */
+        get: operations["talepleri_listele_api_v1_skor_talepler_get"];
+        put?: never;
+        /** Talep Ac */
+        post: operations["talep_ac_api_v1_skor_talepler_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skor/talepler/{talep_id}/karar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Talep Karar */
+        post: operations["talep_karar_api_v1_skor_talepler__talep_id__karar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skor/puanlama-disi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Puanlama Disi */
+        put: operations["puanlama_disi_api_v1_skor_puanlama_disi_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skor/istirak/{musteri_id}/final-dahil": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Istirak Final Dahil */
+        put: operations["istirak_final_dahil_api_v1_skor_istirak__musteri_id__final_dahil_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liste */
+        get: operations["liste_api_v1_musteri_get"];
+        put?: never;
+        /** Ekle */
+        post: operations["ekle_api_v1_musteri_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kart */
+        get: operations["kart_api_v1_musteri__musteri_id__get"];
+        put?: never;
+        post?: never;
+        /** Sil */
+        delete: operations["sil_api_v1_musteri__musteri_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/kimlik": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Kimlik */
+        put: operations["kimlik_api_v1_musteri__musteri_id__kimlik_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/iletisim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Iletisim */
+        put: operations["iletisim_api_v1_musteri__musteri_id__iletisim_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/sorumlu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sorumlu */
+        put: operations["sorumlu_api_v1_musteri__musteri_id__sorumlu_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/ayri-rapor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Ayri Rapor */
+        put: operations["ayri_rapor_api_v1_musteri__musteri_id__ayri_rapor_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/rapor/taslak": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Taslak Oku */
+        get: operations["taslak_oku_api_v1_musteri__musteri_id__rapor_taslak_get"];
+        /** Taslak Yaz */
+        put: operations["taslak_yaz_api_v1_musteri__musteri_id__rapor_taslak_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/rapor/alicilar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Alicilar */
+        put: operations["alicilar_api_v1_musteri__musteri_id__rapor_alicilar_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/rapor/gonder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gonder */
+        post: operations["gonder_api_v1_musteri__musteri_id__rapor_gonder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/musteri/{musteri_id}/rapor/gecmis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gecmis */
+        get: operations["gecmis_api_v1_musteri__musteri_id__rapor_gecmis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rapor/gonderim/{gonderim_id}/geri-al": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Geri Al */
+        post: operations["geri_al_api_v1_rapor_gonderim__gonderim_id__geri_al_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rapor/gonderilenler": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gonderilenler */
+        get: operations["gonderilenler_api_v1_rapor_gonderilenler_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rapor/durum": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Durum */
+        get: operations["durum_api_v1_rapor_durum_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -280,10 +642,55 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AlicilarGovde */
+        AlicilarGovde: {
+            /** Kime */
+            kime?: (string | string[]) | null;
+            /** Bilgi */
+            bilgi?: (string | string[]) | null;
+        };
+        /** AyriRaporGovde */
+        AyriRaporGovde: {
+            /** Ayri Rapor */
+            ayri_rapor: boolean;
+        };
+        /** GonderGovde */
+        GonderGovde: {
+            /**
+             * Onay
+             * @default false
+             */
+            onay: boolean;
+            /** To */
+            to?: string | string[] | null;
+            /** Cc */
+            cc?: string | string[] | null;
+            /** Subject */
+            subject?: string | null;
+            /** Pdf Base64 */
+            pdf_base64?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IstirakGovde */
+        IstirakGovde: {
+            /** Dahil */
+            dahil: boolean;
+        };
+        /** KararGovde */
+        KararGovde: {
+            /** Action */
+            action: string;
+        };
+        /** KriterGovde */
+        KriterGovde: {
+            /** Criteria */
+            criteria: {
+                [key: string]: unknown;
+            }[];
         };
         /** LoginBody */
         LoginBody: {
@@ -292,12 +699,62 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MusteriSkoru */
+        MusteriSkoru: {
+            /** Tam Id */
+            tam_id: number;
+            /** Score */
+            score: number | string;
+            /** Detay */
+            detay?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** PuanlamaDisi */
+        PuanlamaDisi: {
+            /** Disi */
+            disi: number[];
+        };
         /** RolGovde */
         RolGovde: {
             /** Modules */
             modules: string[];
             /** Landing */
             landing: string;
+        };
+        /**
+         * Serbest
+         * @description Alan listesi servis katmaninda dogrulanir; burada yalniz boyut sinirlanir.
+         */
+        Serbest: {
+            [key: string]: unknown;
+        };
+        /** SorumluGovde */
+        SorumluGovde: {
+            /** Owner Id */
+            owner_id: number;
+        };
+        /** TalepGovde */
+        TalepGovde: {
+            /** Customer Id */
+            customer_id: number;
+        };
+        /** TaslakGovde */
+        TaslakGovde: {
+            /** Alanlar */
+            alanlar?: {
+                [key: string]: unknown;
+            };
+        };
+        /** TopluOnizleme */
+        TopluOnizleme: {
+            /** Tam Id */
+            tam_id?: number | null;
+        };
+        /** TopluUygula */
+        TopluUygula: {
+            /** Customer Ids */
+            customer_ids: number[];
         };
         /** ValidationError */
         ValidationError: {
@@ -312,6 +769,17 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** YeniMusteri */
+        YeniMusteri: {
+            /** Name */
+            name: string;
+            /** Segment */
+            segment?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Owner Id */
+            owner_id?: number | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -321,6 +789,879 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    kriterleri_oku_api_v1_skor_kriterler__scope__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kriterleri_kaydet_api_v1_skor_kriterler__scope__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KriterGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toplu_onizleme_api_v1_skor_toplu_onizleme_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopluOnizleme"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toplu_uygula_api_v1_skor_toplu_uygula_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopluUygula"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    musteri_skoru_api_v1_skor_musteri__musteri_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MusteriSkoru"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    talepleri_listele_api_v1_skor_talepler_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    talep_ac_api_v1_skor_talepler_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TalepGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    talep_karar_api_v1_skor_talepler__talep_id__karar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                talep_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KararGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    puanlama_disi_api_v1_skor_puanlama_disi_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PuanlamaDisi"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    istirak_final_dahil_api_v1_skor_istirak__musteri_id__final_dahil_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IstirakGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    liste_api_v1_musteri_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                page?: number;
+                per_page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ekle_api_v1_musteri_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YeniMusteri"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kart_api_v1_musteri__musteri_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sil_api_v1_musteri__musteri_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kimlik_api_v1_musteri__musteri_id__kimlik_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Serbest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    iletisim_api_v1_musteri__musteri_id__iletisim_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Serbest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sorumlu_api_v1_musteri__musteri_id__sorumlu_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SorumluGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ayri_rapor_api_v1_musteri__musteri_id__ayri_rapor_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AyriRaporGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    taslak_oku_api_v1_musteri__musteri_id__rapor_taslak_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    taslak_yaz_api_v1_musteri__musteri_id__rapor_taslak_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaslakGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alicilar_api_v1_musteri__musteri_id__rapor_alicilar_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlicilarGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gonder_api_v1_musteri__musteri_id__rapor_gonder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GonderGovde"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gecmis_api_v1_musteri__musteri_id__rapor_gecmis_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                musteri_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    geri_al_api_v1_rapor_gonderim__gonderim_id__geri_al_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gonderim_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gonderilenler_api_v1_rapor_gonderilenler_get: {
+        parameters: {
+            query?: {
+                yil?: number | null;
+                ay?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    durum_api_v1_rapor_durum_get: {
+        parameters: {
+            query?: {
+                yil?: number | null;
+                ay?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;

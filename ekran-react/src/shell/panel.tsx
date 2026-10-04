@@ -25,8 +25,11 @@ import { KullaniciMenu } from "@/shell/kullanici-menu"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { ModulSayfasi } from "@/shell/modul-sayfasi"
+import { MusteriSayfasi } from "@/shell/musteri-sayfasi"
 import { ProfilSayfasi } from "@/shell/profil-sayfasi"
+import { RaporSayfasi } from "@/shell/rapor-sayfasi"
 import { RollerSayfasi } from "@/shell/roller-sayfasi"
+import { hashParcala } from "@/shell/rota"
 import { VeriSayfasi } from "@/shell/veri-sayfasi"
 import { YonetimSayfasi } from "@/shell/yonetim-sayfasi"
 
@@ -38,7 +41,7 @@ const YAN_MENU_DISI = new Set(["talep"])
 const ANAHTAR = "tamlife.menu"
 
 function hashId(): string {
-  return decodeURIComponent(window.location.hash.replace(/^#\/?/, ""))
+  return hashParcala().yol
 }
 
 function kapaliOku(): Record<string, boolean> {
@@ -268,6 +271,10 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
             <EntegrasyonSayfasi dil={dil} />
           ) : aktif === "veri" ? (
             <VeriSayfasi dil={dil} />
+          ) : aktif === "musteri" ? (
+            <MusteriSayfasi dil={dil} />
+          ) : aktif === "rapor" ? (
+            <RaporSayfasi dil={dil} />
           ) : aktif === "roller" ? (
             <RollerSayfasi dil={dil} saltOkunur={!kullanici.is_admin} />
           ) : alt && oge ? (

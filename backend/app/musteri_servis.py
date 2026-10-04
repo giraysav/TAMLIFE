@@ -34,6 +34,7 @@ from app.models import (
     SmsRevenue,
 )
 from app.session import Principal
+from app.skor_servis import kullanici_kaydi
 from app.trmetin import eslestirme_anahtari
 
 SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE")
@@ -279,6 +280,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "istirak_ekle": eylem_yetkisi(user, "add"),
         "sil": eylem_yetkisi(user, "delete"),
         "tam_degistir": yonetici,
+        "rapor_geri_al": is_admin(user),
         "ayri_rapor_sec": musteri.parent_id is not None,
     }
     if yonetici:
@@ -445,7 +447,7 @@ def musteri_ekle(db: Session, user: Principal, govde: dict) -> dict:
         raise MusteriHata(404, "Üst müşteri bulunamadı.")
     if segment is None and ust is not None and ust.segment in SEGMENTLER:
         segment = ust.segment  # istirak segment gondermezse catinin segmentini alir
-    uid = kullanici_id(db, user)
+    uid = kullanici_kaydi(db, user).id  # yazan kisinin app_user satiri yoksa olusturulur (yerel/dev oturumu)
     if not yonetici_mi(user):
         if istenen_tam and istenen_tam != uid:
             raise MusteriHata(403, "Başka bir personel adına müşteri ekleyemezsiniz.")

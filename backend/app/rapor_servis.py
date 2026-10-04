@@ -22,8 +22,9 @@ from sqlalchemy.orm import Session
 
 from app import rapor_metin
 from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
-from app.musteri_servis import MusteriHata, kullanici_id, musteri_getir, rapor_birimi_mi, yonetici_mi
+from app.musteri_servis import MusteriHata, musteri_getir, rapor_birimi_mi, yonetici_mi
 from app.session import Principal
+from app.skor_servis import kullanici_kaydi
 from app.trmetin import tr_kucuk
 
 AZAMI_PDF = 30 * 1024 * 1024
@@ -234,14 +235,14 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
         raise RaporHata(exc.kod, "Alıcılar: " + exc.mesaj) from exc
     konu = " ".join(str(govde.get("subject") or f"TAM Aylık Rapor - {musteri.name}").split())[:200]
     pdf = _pdf_coz(govde.get("pdf_base64"))
-    kisi = db.scalar(select(AppUser).where(AppUser.username == user.username))
+    kisi = kullanici_kaydi(db, user)
     zaman = simdi()
     dosya: tuple[str, int, str] | None = None
     try:
         with db.begin_nested():
             rapor = Report(
                 customer_id=musteri.id,
-                user_id=kisi.id if kisi else kullanici_id(db, user) or 0,
+                user_id=kisi.id,
                 report_month=ay,
                 report_year=yil,
                 is_submitted=True,
@@ -258,7 +259,7 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
                     customer_id=musteri.id,
                     year=yil,
                     month=ay,
-                    sender_id=kisi.id if kisi else None,
+                    sender_id=kisi.id,
                     sender=user.username[:120],
                     at=zaman,
                     subject=konu,
