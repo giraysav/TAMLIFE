@@ -21,8 +21,8 @@ def can_open(
         return False
     if izinli is not None and not is_admin(user) and module.key not in izinli:
         return False
-    if module.admin_only and not (user.is_admin or user.role == "admin"):
-        return False
+    if module.admin_only and not (user.is_admin or user.role == "admin") and (izinli is None or module.key not in izinli):
+        return False  # admin_only: varsayilan kapali; yalniz admin acikca rol gorunumune ekleyebilir
     if module.public:
         return True
     if user.is_admin or user.role == "admin":

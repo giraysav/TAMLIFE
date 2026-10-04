@@ -12,7 +12,6 @@ import {
   Presentation,
   Radar,
   TrendingUp,
-  Users,
   Wifi,
 } from "lucide-react"
 import { apiGet } from "@/lib/oturum"
@@ -22,7 +21,6 @@ import type { OrbitItem } from "@/components/ui/community-orbit"
 type Kart = { key: string; title: string }
 
 const IKON: Record<string, LucideIcon> = {
-  ekip: Users,
   takvim_ozet: CalendarDays,
   takvim: CalendarDays,
   sunum: Presentation,

@@ -77,12 +77,12 @@ test("yan menu: grup sirasi, ok ile ac/kapat, Onedesk adi", async ({ page }) => 
   test.skip(!PAROLA, "E2E_PASS tanimli degil")
   await girisYap(page)
   const gruplar = await page.locator("nav[aria-label='TAM Life'] button[aria-expanded]").allTextContents()
-  expect(gruplar.map((g) => g.trim())).toEqual(["Genel", "Çalışma alanım", "Raporlar ve görünümler"])
+  expect(gruplar.map((g) => g.trim())).toEqual(["Genel", "Benim Yerim", "Raporlar"])
   await expect(page.locator("nav[aria-label='TAM Life']").getByText("Yönetim", { exact: true })).toHaveCount(0)
   await expect(page.getByRole("link", { name: "Onedesk", exact: true }).first()).toBeVisible()
   await expect(page.getByText("OneDesk", { exact: true })).toHaveCount(0)
   await expect(page.locator("nav a", { hasText: "Geliştirme Talepleri" })).toHaveCount(0)
-  const calisma = page.getByRole("button", { name: "Çalışma alanım" })
+  const calisma = page.getByRole("button", { name: "Benim Yerim" })
   await expect(calisma).toHaveAttribute("aria-expanded", "true")
   await calisma.click()
   await expect(calisma).toHaveAttribute("aria-expanded", "false")
@@ -150,7 +150,7 @@ test("sayfa icinde geri oku: modulden genel bakisa doner", async ({ page }) => {
   await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
 })
 
-test("rol yonetimi: uc rol, admin sabit, admin'e ozel moduller kilitli", async ({ page }) => {
+test("rol yonetimi: uc rol, admin sabit, hicbir modul kilitli degil", async ({ page }) => {
   test.skip(!PAROLA, "E2E_PASS tanimli degil")
   await girisYap(page)
   await page.goto("/#/roller")
@@ -159,8 +159,10 @@ test("rol yonetimi: uc rol, admin sabit, admin'e ozel moduller kilitli", async (
     await expect(page.locator("main").getByText(rol, { exact: true }).first()).toBeVisible()
   }
   await expect(page.getByText("Admin tüm sayfaları görür ve bu görünüm değiştirilemez.")).toBeVisible()
-  const kilitli = page.getByRole("checkbox", { name: /TAM Utilizasyon/ })
-  await expect(kilitli.first()).toBeDisabled()
+  const utilizasyon = page.getByRole("checkbox", { name: /TAM Utilizasyon/ })
+  await expect(utilizasyon.first()).toBeEnabled() // hicbir modul kilitli degil
+  await expect(page.getByRole("checkbox", { name: /Rol Yönetimi/ }).first()).toBeEnabled()
+  await expect(page.getByText("varsayılan kapalı").first()).toBeVisible()
   await expect(page.getByLabel("Giriş sayfası").first()).toBeVisible()
   await expect(page.getByRole("button", { name: "Kaydet" })).toHaveCount(2)
 })

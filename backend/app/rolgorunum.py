@@ -39,7 +39,7 @@ class Gorunum:
 
 
 def tum_kimlikler(yonetici_dahil: bool = False) -> list[str]:
-    """Modul anahtarlari ve 'modul/alt' kimlikleri. Admin'e ozel olanlar yonetici_dahil ile gelir."""
+    """Modul anahtarlari ve 'modul/alt' kimlikleri. admin_only moduller yonetici_dahil ile gelir (varsayilan kapali)."""
     sonuc: list[str] = []
     for m in MODULES:
         if m.admin_only and not yonetici_dahil:
@@ -63,7 +63,7 @@ def etkin(db: Session, user: Principal) -> Gorunum:
     except SQLAlchemyError:
         return Gorunum(frozenset(), GIRIS_VARSAYILAN, guvenli_kapali=True)
     moduller = list(satir.modules) if satir else varsayilan_moduller()
-    gecerli = set(tum_kimlikler(yonetici_dahil=False))
+    gecerli = set(tum_kimlikler(yonetici_dahil=True))
     izinli = frozenset(k for k in moduller if k in gecerli)
     landing = satir.landing if satir and (satir.landing == GIRIS_VARSAYILAN or satir.landing in izinli) else GIRIS_VARSAYILAN
     return Gorunum(izinli, landing)
@@ -115,12 +115,9 @@ def kaydet(db: Session, rol: str, moduller: object, landing: object, actor: str)
         raise RolHata(404, "Rol duzenlenemez.")
     if not isinstance(moduller, list) or not all(isinstance(x, str) for x in moduller) or len(moduller) > 500:
         raise RolHata(400, "Modul listesi gecersiz.")
-    izinli_evren = set(tum_kimlikler(yonetici_dahil=False))
-    yonetici_ozel = set(tum_kimlikler(yonetici_dahil=True)) - izinli_evren
-    bilinmeyen = [k for k in moduller if k not in izinli_evren]
-    if bilinmeyen:
-        neden = "yalniz admin" if any(k in yonetici_ozel for k in bilinmeyen) else "bilinmeyen modul"
-        raise RolHata(400, f"Gecersiz modul ({neden}).")
+    evren = set(tum_kimlikler(yonetici_dahil=True))
+    if any(k not in evren for k in moduller):
+        raise RolHata(400, "Gecersiz modul.")
     temiz = sorted(set(moduller), key=tum_kimlikler(yonetici_dahil=True).index)
     if not isinstance(landing, str) or (landing != GIRIS_VARSAYILAN and landing not in temiz):
         raise RolHata(400, "Giris sayfasi verilen modullerden biri olmali.")

@@ -269,7 +269,7 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
           ) : aktif === "veri" ? (
             <VeriSayfasi dil={dil} />
           ) : aktif === "roller" ? (
-            <RollerSayfasi dil={dil} />
+            <RollerSayfasi dil={dil} saltOkunur={!kullanici.is_admin} />
           ) : alt && oge ? (
             <ModulSayfasi baslik={alt.label} aciklama={alt.description} hazir={alt.ready} ust={oge.label} dil={dil} onGit={sec} />
           ) : oge ? (

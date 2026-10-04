@@ -8,13 +8,6 @@ export type HomeCard = {
 
 export const ANA_SAYFA_KARTLARI: readonly HomeCard[] = [
   {
-    "key": "ekip",
-    "title": "TAM Özet",
-    "i18n": "card.ekip.title",
-    "cardId": "dash-card-ekip",
-    "empty": false
-  },
-  {
     "key": "takvim_ozet",
     "title": "TAM Takvim",
     "i18n": "card.takvim.title",

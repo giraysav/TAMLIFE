@@ -201,7 +201,10 @@ def create_app() -> FastAPI:
 
     @app.get("/api/v1/roller")
     def roller(request: Request, db: Session = Depends(get_db)) -> dict:
-        _require_admin(request)
+        user = _require_user(request)
+        izinli = etkin(db, user).izinli
+        if not is_admin(user) and (izinli is None or "roller" not in izinli):
+            raise HTTPException(status_code=403, detail="Yetki yok")  # salt okunur gorunum: yalniz rol ekrani verilenlere
         return {"status": "success", "data": {"roles": gorunumler(db), "catalog": katalog()}}
 
     @app.put("/api/v1/roller/{rol}")

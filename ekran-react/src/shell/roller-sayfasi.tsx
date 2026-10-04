@@ -11,7 +11,7 @@ type Katalog = { id: string; label: string; admin_only: boolean; children: { id:
 type Veri = { roles: Rol[]; catalog: Katalog[] }
 
 /** Rol Yonetimi: admin her rolun gorecegi sayfalari ve giris sayfasini belirler. Sunucu da ayni kurali zorlar. */
-export function RollerSayfasi({ dil }: { dil: Dil }) {
+export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boolean }) {
   const t = metin(dil)
   const [veri, setVeri] = useState<Veri | null | undefined>(undefined)
   const [taslak, setTaslak] = useState<Record<string, { modules: Set<string>; landing: string }>>({})
@@ -93,17 +93,18 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
                           <label className={`flex items-center gap-2 text-sm ${m.admin_only ? "text-muted-foreground" : ""}`}>
                             <input
                               type="checkbox"
-                              disabled={m.admin_only}
-                              checked={!m.admin_only && !!tas?.modules.has(m.id)}
+                              disabled={saltOkunur}
+                              checked={!!tas?.modules.has(m.id)}
                               onChange={(e) => degistir(r.role, m.id, e.target.checked)}
                             />
                             {m.label}
-                            {m.admin_only ? <span className="text-xs">({t.yalnizAdmin})</span> : null}
+                            {m.admin_only ? <span className="text-xs">({t.varsayilanKapali})</span> : null}
                           </label>
                           {m.children.map((c) => (
                             <label key={c.id} className="ml-6 flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
+                                disabled={saltOkunur}
                                 checked={!!tas?.modules.has(c.id)}
                                 onChange={(e) => degistir(r.role, c.id, e.target.checked)}
                               />
@@ -117,6 +118,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
                       <span className="text-xs font-medium text-muted-foreground">{t.rolGirisSayfasi}</span>
                       <select
                         className="h-9 rounded-md border bg-background px-2"
+                        disabled={saltOkunur}
                         value={tas?.landing ?? "ozet"}
                         onChange={(e) => setTaslak((o) => ({ ...o, [r.role]: { ...o[r.role], landing: e.target.value } }))}
                       >
@@ -129,9 +131,13 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
                       </select>
                     </label>
                     <div className="flex items-center gap-3">
-                      <Button type="button" size="sm" onClick={() => void kaydet(r.role)}>
-                        {t.kaydet}
-                      </Button>
+                      {saltOkunur ? (
+                        <span className="text-sm text-muted-foreground">{t.saltOkunur}</span>
+                      ) : (
+                        <Button type="button" size="sm" onClick={() => void kaydet(r.role)}>
+                          {t.kaydet}
+                        </Button>
+                      )}
                       {bilgi[r.role] ? (
                         <span role="status" className="text-sm text-muted-foreground">
                           {bilgi[r.role]}

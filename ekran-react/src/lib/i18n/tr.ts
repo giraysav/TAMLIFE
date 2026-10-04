@@ -1,5 +1,4 @@
 export const tr: Record<string, string> = {
-  "card.ekip.title": "TAM Özet",
   "card.takvim.title": "TAM Takvim",
   "card.sunum.title": "Çeyrek Bazlı Sunum",
   "card.radar.title": "Müşteri Radar",

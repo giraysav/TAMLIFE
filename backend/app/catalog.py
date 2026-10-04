@@ -95,14 +95,6 @@ MODULES: tuple[Module, ...] = (
         table="gelistirme_talepleri",
     ),
     Module(
-        "ekip", "TAM Özet", "kart",
-        i18n="card.ekip.title", card_id="dash-card-ekip",
-        box_id="card_ekip", permission_group="dashboard_cards",
-        note="TeamMember yalnız kendini görür",
-        registry_status="aktif", modal_id="ekipModal",
-        table="users",
-    ),
-    Module(
         "rapor", "Gönderilen Aylık Rapor", "kart",
         i18n="card.rapor.title", card_id="dash-card-rapor",
         box_id="card_rapor", permission_group="dashboard_cards",
@@ -167,7 +159,6 @@ BY_KEY = {item.key: item for item in MODULES}
 
 # Ana sayfa sirasi: ANA_SAYFA_KUTUCUKLARI. Talep, roller, utilizasyon, topoloji yok.
 HOME_ORDER: tuple[str, ...] = (
-    "ekip",
     "takvim_ozet",
     "sunum",
     "radar",

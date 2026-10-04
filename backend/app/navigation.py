@@ -15,14 +15,13 @@ PRESENTATION: dict[str, tuple[str, str, str]] = {
     "utilizasyon": ("admin", "chart", "Kurumsal skor ve kriter yönetimi"),
     "roller": ("admin", "shield", "Kullanıcılar, roller ve erişim yetkileri"),
     "talep": ("work", "message", "Geliştirme talepleri ve değişiklikler"),
-    "ekip": ("insights", "team", "Yetkiniz kapsamındaki TAM özeti"),
     "rapor": ("insights", "file", "Aylık raporlar ve gönderim durumu"),
-    "proje": ("work", "layers", "Projeler ve müşteri bazlı çalışmalar"),
-    "tamsms": ("insights", "message", "ICT SMS gelir ve üretim kayıtları"),
-    "tamapn": ("insights", "network", "APN gelir ve kurulum kayıtları"),
+    "proje": ("insights", "layers", "Projeler ve müşteri bazlı çalışmalar"),
+    "tamsms": ("work", "message", "ICT SMS gelir ve üretim kayıtları"),
+    "tamapn": ("work", "network", "APN gelir ve kurulum kayıtları"),
     "gelir_uretim": ("insights", "chart", "Gelir faydası sağlanan işler"),
-    "sunum": ("work", "presentation", "Çeyrek bazlı sunumları hazırlayın"),
-    "radar": ("work", "radar", "Müşteri fırsatları ve takip kayıtları"),
+    "sunum": ("insights", "presentation", "Çeyrek bazlı sunumları hazırlayın"),
+    "radar": ("insights", "radar", "Müşteri fırsatları ve takip kayıtları"),
     "baglantili": ("work", "link", "Kurum içi bağlantılı araçlar"),
 }
 
@@ -42,6 +41,8 @@ def navigation_for(user: Principal, izinli: frozenset[str] | None = None) -> lis
         if not can_open(user, module, get, izinli):
             continue
         group, icon, description = PRESENTATION[module.key]
+        if group == "admin" and not is_admin(user):
+            group = "work"  # admin disi role verilen yonetim modulu Benim Yerim altinda gorunur
         rows.append(
             {
                 "id": module.key,
