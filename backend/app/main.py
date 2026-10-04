@@ -19,11 +19,13 @@ from app.config import get_settings
 from app.deps import get_db
 from app.ingest import status as ingest_status
 from app.models import TABLE_OWNER
+from app.musteri_api import router as musteri_router
 from app.navigation import navigation_for
 from app.rolgorunum import RolHata, etkin, gorunumler, katalog, kaydet
 from app.security import client_ip, limiter
 from app.security import install as install_security
 from app.session import Principal, current_user, login, logout
+from app.skor_api import router as skor_router
 
 
 class RolGovde(BaseModel):
@@ -48,6 +50,8 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
     install_security(app)
+    app.include_router(skor_router)
+    app.include_router(musteri_router)
 
     @app.get("/api/v1/health")
     def health() -> dict:

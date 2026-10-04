@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     select,
     text,
@@ -30,8 +31,11 @@ TABLE_OWNER = {
     "app_user": "core",
     "audit_event": "core",
     "customer": "musteri",
-    "customer_contact": "musteri",
+    "customer_team": "musteri",
+    "matrix_config": "musteri",
     "report": "rapor",
+    "report_draft": "rapor",
+    "report_dispatch": "rapor",
     "report_recipient": "rapor",
     "calendar_entry": "takvim",
     "project": "proje",
@@ -91,31 +95,129 @@ class Customer(Base):
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)  # sorumlu TAM
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)  # bos = cati
     score: Mapped[float | None] = mapped_column(Float, nullable=True)  # final skor, yalniz cati
+    # --- Musteri karti (uretim customers). Tutarlar uretimdeki gibi metin: "0,00 TL" bicimi
+    customer_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    ncst: Mapped[str] = mapped_column(String(50), default="")  # uretimde pinned_entries JSON icindeydi
+    sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    inventory_count: Mapped[int] = mapped_column(Integer, default=0)
+    ft_volume: Mapped[str] = mapped_column(String(100), default="0,00 ₺")
+    tam_ft: Mapped[str] = mapped_column(String(100), default="0,00 ₺")
+    alarm_count: Mapped[int] = mapped_column(Integer, default=0)
+    complaint_count: Mapped[int] = mapped_column(Integer, default=0)
+    request_count: Mapped[int] = mapped_column(Integer, default=0)
+    alarm_closed_count: Mapped[int] = mapped_column(Integer, default=0)
+    complaint_closed_count: Mapped[int] = mapped_column(Integer, default=0)
+    request_closed_count: Mapped[int] = mapped_column(Integer, default=0)
+    report_count: Mapped[int] = mapped_column(Integer, default=0)
+    cacti_urls: Mapped[list] = mapped_column(JSON, default=list)
+    separate_report: Mapped[bool] = mapped_column(Boolean, default=False)  # istirak icin ayri aylik rapor
 
 
-class CustomerContact(Base):
-    __tablename__ = "customer_contact"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"))
-    name: Mapped[str] = mapped_column(String(200), default="")
-    channel: Mapped[str] = mapped_column(String(40), default="")
+class CustomerTeam(Base):
+    """Ekip ve iletisim (uretim destech_contacts). Uretimde unvan METNIYLE bagliydi; burada musteri kimligine."""
 
+    __tablename__ = "customer_team"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    sales_manager: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    presales_manager: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tac_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tac_gsm: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    tac_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sol_kmt_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sol_kmt_gsm: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    sol_kmt_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mobil_kmt_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mobil_kmt_gsm: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    mobil_kmt_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mobil_kmt_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class MatrixConfig(Base):
+    """Destech / CI / RACI matrisleri (Excel'den): baslik ve satirlar; musteriye unvan eslesmesiyle baglanir."""
+
+    __tablename__ = "matrix_config"
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    headers: Mapped[list] = mapped_column(JSON, default=list)
+    rows: Mapped[list] = mapped_column(JSON, default=list)
+    updated_by: Mapped[str] = mapped_column(String(100), default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class Report(Base):
+    """Aylik rapor (uretim reports). Alan adlari uretimle birebir; anlamlari uretim kodunda yorumlanmadi."""
+
     __tablename__ = "report"
     id: Mapped[int] = mapped_column(primary_key=True)
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)
-    period: Mapped[str] = mapped_column(String(20), default="")
-    title: Mapped[str] = mapped_column(String(200), default="")
-    status: Mapped[str] = mapped_column(String(40), default="")
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    report_month: Mapped[int] = mapped_column(Integer)
+    report_year: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"))
+    sun_success_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cloud_issue_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    flag_escalation_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggestions_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bubble_report_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    excel_data: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cacti_data: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_edited_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    flag_count: Mapped[int] = mapped_column(Integer, default=0)
+    is_submitted: Mapped[bool] = mapped_column(Boolean, default=False)
 
+
+class ReportDraft(Base):
+    """Aylik rapor taslagi (uretim analiz.db rapor_taslak): musteri + yil + ay basina tek taslak."""
+
+    __tablename__ = "report_draft"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    month: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fields: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_by: Mapped[str] = mapped_column(String(120), default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ReportDispatch(Base):
+    """Gonderim kaydi (uretim rapor_gonderim). Ayda tek gonderim: durum 'sent' icin kismi benzersiz indeks.
+    status: 'sent' | 'reverted' (geri alma yalniz admin; ay yeniden acilir, kayit arsivde kalir)."""
+
+    __tablename__ = "report_dispatch"
+    __table_args__ = (
+        Index(
+            "uq_report_dispatch_month",
+            "customer_id",
+            "year",
+            "month",
+            unique=True,
+            sqlite_where=text("status = 'sent'"),
+            postgresql_where=text("status = 'sent'"),
+        ),
+        Index("ix_report_dispatch_period", "year", "month"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"))
+    year: Mapped[int] = mapped_column(Integer)
+    month: Mapped[int] = mapped_column(Integer)
+    sender_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
+    sender: Mapped[str] = mapped_column(String(120), default="")
+    at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    subject: Mapped[str] = mapped_column(String(300), default="")
+    report_id: Mapped[int | None] = mapped_column(ForeignKey("report.id"), nullable=True)
+    pdf_file: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    pdf_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pdf_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="sent")
+    reverted_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reverted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class ReportRecipient(Base):
-    __tablename__ = "report_recipient"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    report_id: Mapped[int] = mapped_column(ForeignKey("report.id"))
-    label: Mapped[str] = mapped_column(String(200), default="")
+    """Musterinin aylik rapor iletisi alicilari (uretim rapor_alicilari). Adresler ';' ile ayrilir.
+    Iletiyi gonderen her zaman personeldir; panel yalnizca taslagi hazirlar."""
 
+    __tablename__ = "report_recipient"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    to_addrs: Mapped[str] = mapped_column(Text, default="")
+    cc_addrs: Mapped[str] = mapped_column(Text, default="")
 
 class CalendarEntry(Base):
     __tablename__ = "calendar_entry"
@@ -249,20 +351,33 @@ class DemandLog(Base):
 
 
 class SmsRevenue(Base):
+    """ICT SMS gelir kaydi (uretim ict_revenues). Musteriye unvan eslesmesiyle baglanir."""
+
     __tablename__ = "sms_revenue"
     id: Mapped[int] = mapped_column(primary_key=True)
-    period: Mapped[str] = mapped_column(String(20), default="")
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)
-    amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
-
+    tam_name: Mapped[str] = mapped_column(String(100))
+    customer_name: Mapped[str] = mapped_column(String(200))
+    amount: Mapped[float] = mapped_column(Float, default=0)
+    currency: Mapped[str] = mapped_column(String(10), default="TRY")
+    year: Mapped[int] = mapped_column(Integer)
+    month: Mapped[int] = mapped_column(Integer)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class ApnRevenue(Base):
+    """APN gelir ve kurulum kaydi (uretim apn_revenues)."""
+
     __tablename__ = "apn_revenue"
     id: Mapped[int] = mapped_column(primary_key=True)
-    period: Mapped[str] = mapped_column(String(20), default="")
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)
-    amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
-
+    tam_name: Mapped[str] = mapped_column(String(100))
+    customer_name: Mapped[str] = mapped_column(String(200))
+    amount: Mapped[float] = mapped_column(Float, default=0)
+    currency: Mapped[str] = mapped_column(String(10), default="TRY")
+    installation_pct: Mapped[float] = mapped_column(Float, default=0)
+    year: Mapped[int] = mapped_column(Integer)
+    month: Mapped[int] = mapped_column(Integer)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class RadarProspect(Base):
     __tablename__ = "radar_prospect"

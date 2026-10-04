@@ -14,3 +14,6 @@ dist/
 *.db-wal
 data/incoming/*
 !data/incoming/.gitkeep
+
+# aylik rapor PDF arsivi (yerel)
+data/reports/
