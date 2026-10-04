@@ -1,0 +1,1868 @@
+{
+ "cases": [
+  {
+   "ad": "sikayet=0",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 0,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=1",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 1,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      30,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=49",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 49,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      30,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=50",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 50,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=199",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 199,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=200",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 200,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=499",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 499,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=500",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 500,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sikayet=5000",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 5000,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 30.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=0",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 0,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=1",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 1,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      30,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=19",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 19,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      30,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=20",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 20,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=99",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 99,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=100",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 100,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=299",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 299,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "lokasyon=300",
+   "kriterler": [
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "lokasyon_sayisi": {
+     "deger": 300,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_servis_sayisi",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=SMB",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "SMB",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=MA",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "MA",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=SA",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "SA",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=PA",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "PA",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=WHOLESALE",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "WHOLESALE",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=toptan",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "toptan",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=WS",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "WS",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=bilinmeyen",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "bilinmeyen",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=0",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 0,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=3",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 3,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      30,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=4",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 4,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=6",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 6,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=7",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 7,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=9",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 9,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=10",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 10,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor=12",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 12,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "servis_hepsi",
+   "kriterler": [
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "servisler": {
+     "deger": [
+      "Güvenlik",
+      "Cloud",
+      "Data",
+      "DWDM",
+      "SDWAN",
+      "SOC"
+     ],
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "servis_cesitliligi",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "servis_az",
+   "kriterler": [
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "servisler": {
+     "deger": [
+      "Ses"
+     ],
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "servis_cesitliligi",
+      30,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "servis_bos",
+   "kriterler": [
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 20
+    }
+   ],
+   "metrikler": {
+    "servisler": {
+     "deger": [],
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "servis_cesitliligi",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "servis_dahil",
+   "kriterler": [
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 10,
+     "servis_dahil": [
+      "Cloud",
+      "Data"
+     ]
+    }
+   ],
+   "metrikler": {
+    "servisler": {
+     "deger": [
+      "Cloud",
+      "Data",
+      "Ses"
+     ],
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "servis_cesitliligi",
+      30,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "servis_yok_manuel",
+   "kriterler": [
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 20
+    }
+   ],
+   "metrikler": {},
+   "manuel": {
+    "servis cesitliligi": 70
+   },
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "servis_cesitliligi",
+      70,
+      "manuel"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "hepsi_dolu",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    },
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    },
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 20
+    },
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    },
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 250,
+     "kaynak": "test"
+    },
+    "lokasyon_sayisi": {
+     "deger": 120,
+     "kaynak": "test"
+    },
+    "servisler": {
+     "deger": [
+      "Güvenlik",
+      "Cloud",
+      "Data",
+      "DWDM"
+     ],
+     "kaynak": "test"
+    },
+    "segment": {
+     "deger": "MA",
+     "kaynak": "test"
+    },
+    "rapor_sayisi": {
+     "deger": 8,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 100.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      70,
+      "otomatik"
+     ],
+     [
+      "auto_servis_sayisi",
+      70,
+      "otomatik"
+     ],
+     [
+      "servis_cesitliligi",
+      70,
+      "otomatik"
+     ],
+     [
+      "auto_segment",
+      70,
+      "otomatik"
+     ],
+     [
+      "auto_rapor",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "bir_eksik",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    },
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    },
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 20
+    },
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    },
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 250,
+     "kaynak": "test"
+    },
+    "lokasyon_sayisi": {
+     "deger": 120,
+     "kaynak": "test"
+    },
+    "segment": {
+     "deger": "MA",
+     "kaynak": "test"
+    },
+    "rapor_sayisi": {
+     "deger": 8,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 56.0,
+    "eksik": [
+     "Servis çeşitliliği"
+    ],
+    "tamam": false,
+    "agirlik_toplami": 100.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      70,
+      "otomatik"
+     ],
+     [
+      "auto_servis_sayisi",
+      70,
+      "otomatik"
+     ],
+     [
+      "servis_cesitliligi",
+      0,
+      "eksik"
+     ],
+     [
+      "auto_segment",
+      70,
+      "otomatik"
+     ],
+     [
+      "auto_rapor",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "hic_veri_yok",
+   "kriterler": [
+    {
+     "title": "Şikayet / Talep yoğunluğu",
+     "weight": 30
+    },
+    {
+     "title": "Lokasyon sayısı",
+     "weight": 20
+    },
+    {
+     "title": "Servis çeşitliliği",
+     "weight": 20
+    },
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15
+    },
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {},
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [
+     "Şikayet / Talep yoğunluğu",
+     "Lokasyon sayısı",
+     "Servis çeşitliliği",
+     "Müşteri segmenti",
+     "Aylık rapor"
+    ],
+    "tamam": false,
+    "agirlik_toplami": 100.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      0,
+      "eksik"
+     ],
+     [
+      "auto_servis_sayisi",
+      0,
+      "eksik"
+     ],
+     [
+      "servis_cesitliligi",
+      0,
+      "eksik"
+     ],
+     [
+      "auto_segment",
+      0,
+      "eksik"
+     ],
+     [
+      "auto_rapor",
+      0,
+      "eksik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "agirlik_sifir",
+   "kriterler": [
+    {
+     "title": "Şikayet",
+     "weight": 0
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 100,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 0.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "bos_kriter",
+   "kriterler": [],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 100,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": false,
+    "agirlik_toplami": 0,
+    "puanlar": []
+   }
+  },
+  {
+   "ad": "ozel_baremler",
+   "kriterler": [
+    {
+     "title": "Şikayet",
+     "weight": 10,
+     "b30": "1-49",
+     "b50": "50-499",
+     "b70": "500+",
+     "b100": ">=2000"
+    },
+    {
+     "title": "Segment",
+     "weight": 10,
+     "b50": "SMB",
+     "b100": "SA, PA ve WHOLESALE"
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 2500,
+     "kaynak": "test"
+    },
+    "segment": {
+     "deger": "MA",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      100,
+      "otomatik"
+     ],
+     [
+      "auto_segment",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "ozel_baremler2",
+   "kriterler": [
+    {
+     "title": "Şikayet",
+     "weight": 10,
+     "b30": "1-49",
+     "b50": "50-499",
+     "b70": "500+",
+     "b100": ">=2000"
+    },
+    {
+     "title": "Segment",
+     "weight": 10,
+     "b50": "SMB",
+     "b100": "SA, PA ve WHOLESALE"
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 600,
+     "kaynak": "test"
+    },
+    "segment": {
+     "deger": "smb",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 60.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      70,
+      "otomatik"
+     ],
+     [
+      "auto_segment",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "ozel_baremler3",
+   "kriterler": [
+    {
+     "title": "Şikayet",
+     "weight": 10,
+     "b30": "1-49",
+     "b50": "50-499",
+     "b70": "500+",
+     "b100": ">=2000"
+    },
+    {
+     "title": "Segment",
+     "weight": 10,
+     "b50": "SMB",
+     "b100": "SA, PA ve WHOLESALE"
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 10,
+     "kaynak": "test"
+    },
+    "segment": {
+     "deger": "SA",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 65.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      30,
+      "otomatik"
+     ],
+     [
+      "auto_segment",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "kaynaksiz",
+   "kriterler": [
+    {
+     "title": "Bilinmeyen ölçüt",
+     "weight": 10
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 5,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [
+     "Bilinmeyen ölçüt"
+    ],
+    "tamam": false,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_kaynaksiz",
+      0,
+      "eksik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "tur_kayitli",
+   "kriterler": [
+    {
+     "title": "x",
+     "type": "auto_onedesk",
+     "weight": 10
+    }
+   ],
+   "metrikler": {
+    "sikayet_talep": {
+     "deger": 60,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_onedesk",
+      50,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sozlesme_tutar",
+   "kriterler": [
+    {
+     "title": "Sözleşme bedeli",
+     "weight": 10
+    }
+   ],
+   "metrikler": {
+    "fatura_bedeli": {
+     "deger": 300000,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      70,
+      "otomatik"
+     ]
+    ]
+   }
+  }
+ ],
+ "aralik": [
+  [
+   "1-49",
+   [
+    1,
+    49
+   ]
+  ],
+  [
+   "50-499",
+   [
+    50,
+    499
+   ]
+  ],
+  [
+   "500+",
+   [
+    500,
+    null
+   ]
+  ],
+  [
+   "500 ve uzeri",
+   [
+    500,
+    null
+   ]
+  ],
+  [
+   ">=500",
+   [
+    500,
+    null
+   ]
+  ],
+  [
+   "<50",
+   [
+    0,
+    49
+   ]
+  ],
+  [
+   "> 99",
+   [
+    100,
+    null
+   ]
+  ],
+  [
+   "<=10",
+   [
+    0,
+    10
+   ]
+  ],
+  [
+   "en az 5",
+   [
+    5,
+    null
+   ]
+  ],
+  [
+   "en fazla 7",
+   [
+    0,
+    7
+   ]
+  ],
+  [
+   "1.000.000+",
+   [
+    1000000,
+    null
+   ]
+  ],
+  [
+   "50.000-249.999",
+   [
+    50000,
+    249999
+   ]
+  ],
+  [
+   "100",
+   [
+    100,
+    100
+   ]
+  ],
+  [
+   "30 puan",
+   null
+  ],
+  [
+   "(30p) 1-5",
+   [
+    1,
+    5
+   ]
+  ],
+  [
+   "x",
+   null
+  ],
+  [
+   "",
+   null
+  ],
+  [
+   "abc",
+   null
+  ],
+  [
+   "10 ile 20",
+   [
+    10,
+    20
+   ]
+  ],
+  [
+   "20-10",
+   [
+    10,
+    20
+   ]
+  ]
+ ],
+ "kategori": [
+  [
+   "SMB",
+   [
+    "smb"
+   ]
+  ],
+  [
+   "MA",
+   [
+    "ma"
+   ]
+  ],
+  [
+   "SA, PA, WHOLESALE",
+   [
+    "pa",
+    "sa",
+    "wholesale"
+   ]
+  ],
+  [
+   "SA ve PA veya WS",
+   [
+    "pa",
+    "sa",
+    "wholesale"
+   ]
+  ],
+  [
+   "x",
+   []
+  ],
+  [
+   "",
+   []
+  ],
+  [
+   "toptan",
+   [
+    "wholesale"
+   ]
+  ],
+  [
+   "(70p) MA",
+   [
+    "ma"
+   ]
+  ]
+ ],
+ "normal": [
+  [
+   "ÇĞİÖŞÜ çğıöşü",
+   "cgiosu cgiosu"
+  ],
+  [
+   "  Çok   Boşluk ",
+   "cok bosluk"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "Lokasyon Sayısı",
+   "lokasyon sayisi"
+  ]
+ ],
+ "tur": [
+  [
+   "Servis Çeşitliliği",
+   "servis_cesitliligi"
+  ],
+  [
+   "Şikayet",
+   "auto_onedesk"
+  ],
+  [
+   "Talep sayısı",
+   "auto_onedesk"
+  ],
+  [
+   "Lokasyon",
+   "auto_servis_sayisi"
+  ],
+  [
+   "Bağlantı tipi",
+   "auto_baglanti"
+  ],
+  [
+   "Segment",
+   "auto_segment"
+  ],
+  [
+   "Sözleşme",
+   "auto_sozlesme"
+  ],
+  [
+   "Rapor",
+   "auto_rapor"
+  ],
+  [
+   "Başka",
+   "auto_kaynaksiz"
+  ]
+ ]
+}
