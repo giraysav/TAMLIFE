@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import re
+import secrets
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -13,7 +18,7 @@ from app.admin import integrations as admin_integrations
 from app.admin import overview as admin_overview
 from app.admin import veri_durumu as admin_veri_durumu
 from app.audit import SecretAuditError, audit_log
-from app.authz import can_open, is_admin
+from app.authz import ROLES, can_open, is_admin
 from app.catalog import HOME_CARDS, MODULES, get
 from app.config import get_settings
 from app.deps import get_db
@@ -31,6 +36,10 @@ from app.skor_api import router as skor_router
 class RolGovde(BaseModel):
     modules: list[str] = Field(max_length=500)
     landing: str = Field(max_length=80)
+
+
+LOOPBACK = {"127.0.0.1", "::1"}
+SSO_KULLANICI = re.compile(r"^[A-Za-z0-9._@\-]{1,64}$")
 
 
 class LoginBody(BaseModel):
@@ -92,6 +101,28 @@ def create_app() -> FastAPI:
         except SecretAuditError:
             pass
         return {"status": "success", "data": {"username": found.username, "role": found.role}}
+
+    @app.post("/api/v1/session/sso", response_model=None)
+    def sso_oturum(request: Request, response: Response) -> dict:
+        """Uretim paneli (Flask) vekili girisli yoneticiyi iletir. Yalniz loopback + paylasilan sir."""
+        ayar = get_settings()
+        sir = ayar.sso_secret
+        kullanici = request.headers.get("x-tam-user", "").strip()
+        rol = request.headers.get("x-tam-role", "").strip()
+        verilen = request.headers.get("x-tam-proxy-secret", "")
+        eslesme = len(sir) >= 32 and secrets.compare_digest(verilen.encode(), sir.encode())
+        ag = (request.client.host if request.client else "") in LOOPBACK
+        if not (eslesme and ag and SSO_KULLANICI.match(kullanici) and rol in ROLES):
+            audit_log.remember(
+                actor=kullanici if SSO_KULLANICI.match(kullanici) else "-",
+                action="sso",
+                outcome="deny",
+                detail=f"sir={'ok' if eslesme else 'yok'} ag={'ok' if ag else 'yok'}",
+            )
+            raise HTTPException(status_code=401, detail="SSO reddedildi")
+        login(request, response, Principal(kullanici, rol, rol == "admin"))
+        audit_log.remember(actor=kullanici, action="login", outcome="allow", detail="sso")
+        return {"status": "success", "data": {"username": kullanici, "role": rol}}
 
     @app.post("/api/v1/session/logout")
     def close_session(request: Request, response: Response) -> dict:
@@ -243,7 +274,28 @@ def create_app() -> FastAPI:
         _require_admin(request)
         return {"status": "success", "data": admin_overview()}
 
+    _arayuz_bagla(app, get_settings().static_dir)
     return app
+
+
+def _arayuz_bagla(app: FastAPI, dizin: str) -> None:
+    """Derlenmis arayuzu (ekran-react/dist) kok yolda sunar. Dizin yoksa yalniz API calisir."""
+    kok = Path(dizin).resolve() if dizin else None
+    if kok is None or not (kok / "index.html").is_file():
+        return
+    if (kok / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=kok / "assets"), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    def arayuz_index() -> FileResponse:
+        return FileResponse(kok / "index.html")
+
+    @app.get("/{dosya}", include_in_schema=False)
+    def arayuz_dosya(dosya: str) -> FileResponse:
+        yol = (kok / dosya).resolve()
+        if yol.parent != kok or not yol.is_file():
+            raise HTTPException(status_code=404, detail="Yok")
+        return FileResponse(yol)
 
 
 def _require_admin(request: Request) -> Principal:

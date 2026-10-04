@@ -14,6 +14,13 @@ from app.session import csrf_valid
 
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 LOGIN_PATH = "/api/v1/session/login"
+SSO_PATH = "/api/v1/session/sso"
+CSRF_MUAF = {LOGIN_PATH, SSO_PATH}  # oturum henuz yok; Origin denetimi yine uygulanir
+# Derlenmis arayuz (HTML/JS/CSS): ayni kaynaktan yukleme, satir ici betik yok. API cevaplari 'none' kalir.
+UI_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+)
 
 
 class LoginLimiter:
@@ -90,7 +97,7 @@ def install(app: FastAPI) -> None:
         if request.method in UNSAFE:
             if not _same_origin(request):
                 return JSONResponse({"detail": "Kaynak reddedildi"}, status_code=403)
-            if request.url.path != LOGIN_PATH and not csrf_valid(request):
+            if request.url.path not in CSRF_MUAF and not csrf_valid(request):
                 return JSONResponse({"detail": "CSRF dogrulanamadi"}, status_code=403)
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -98,5 +105,8 @@ def install(app: FastAPI) -> None:
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault("Cache-Control", "no-store")
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-        response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+        arayuz = not request.url.path.startswith("/api/") and response.headers.get("content-type", "").startswith(
+            ("text/html", "text/css", "text/javascript", "application/javascript", "image/")
+        )
+        response.headers.setdefault("Content-Security-Policy", UI_CSP if arayuz else "default-src 'none'; frame-ancestors 'none'")
         return response

@@ -71,8 +71,9 @@ def login(request: Request, response: Response, principal: Principal) -> None:
         _purge(now)
         _STORE[token] = _Entry(principal=principal, csrf=csrf, created=now, last_seen=now)
     secure = settings.cookie_secure_effective
-    response.set_cookie(settings.cookie_name, token, httponly=True, samesite="strict", secure=secure, path="/")
-    response.set_cookie(CSRF_COOKIE, csrf, httponly=False, samesite="strict", secure=secure, path="/")
+    yol = settings.cookie_path
+    response.set_cookie(settings.cookie_name, token, httponly=True, samesite="strict", secure=secure, path=yol)
+    response.set_cookie(CSRF_COOKIE, csrf, httponly=False, samesite="strict", secure=secure, path=yol)
 
 
 def _entry(request: Request, touch: bool) -> _Entry | None:
@@ -110,8 +111,8 @@ def logout(request: Request, response: Response) -> None:
     if token:
         with _LOCK:
             _STORE.pop(token, None)
-    response.delete_cookie(settings.cookie_name, path="/")
-    response.delete_cookie(CSRF_COOKIE, path="/")
+    response.delete_cookie(settings.cookie_name, path=settings.cookie_path)
+    response.delete_cookie(CSRF_COOKIE, path=settings.cookie_path)
 
 
 def reset_for_tests() -> None:

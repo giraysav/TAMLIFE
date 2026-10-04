@@ -1,4 +1,4 @@
-import { csrfBasliklari } from "@/lib/http"
+import { apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
 
 export type Sonuc<T> = {
   ok: boolean
@@ -16,13 +16,13 @@ function hataMetni(govde: unknown): string {
 
 async function iste<T>(yontem: string, yol: string, govde?: unknown): Promise<Sonuc<T>> {
   try {
-    const cevap = await fetch(yol, {
+    const cevap = await fetch(apiYolu(yol), {
       method: yontem,
       credentials: "same-origin",
       headers: yontem === "GET" ? undefined : csrfBasliklari(govde !== undefined ? { "Content-Type": "application/json" } : {}),
       body: govde !== undefined ? JSON.stringify(govde) : undefined,
     })
-    if (cevap.status === 401) window.dispatchEvent(new Event("tamlife:oturum-bitti"))
+    if (oturumYok(cevap)) window.dispatchEvent(new Event("tamlife:oturum-bitti"))
     const json = (await cevap.json().catch(() => null)) as Record<string, unknown> | null
     return {
       ok: cevap.ok,

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:prod": "tsc -b && vite build --base=/admin/dev/",
     "lint": "oxlint",
     "preview": "vite preview",
     "api:uret": "npx --yes openapi-typescript http://127.0.0.1:8117/openapi.json -o src/lib/api-types.ts",

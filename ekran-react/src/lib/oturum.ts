@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { csrfBasliklari } from "@/lib/http"
+import { GOMULU, apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
 
 export type AltOge = {
   id: string
@@ -35,8 +35,8 @@ const OLAYLAR = ["pointerdown", "keydown", "scroll"] as const
 /** Her API cagrisi: 401 gelirse oturum kapanmis demektir. */
 export async function apiGet<T>(yol: string): Promise<T | null> {
   try {
-    const cevap = await fetch(yol, { credentials: "same-origin" })
-    if (cevap.status === 401) {
+    const cevap = await fetch(apiYolu(yol), { credentials: "same-origin" })
+    if (oturumYok(cevap)) {
       window.dispatchEvent(new Event("tamlife:oturum-bitti"))
       return null
     }
@@ -57,7 +57,16 @@ export function useOturum() {
 
   const yukle = useCallback(async (): Promise<boolean> => {
     try {
-      const cevap = await fetch("/api/v1/session/me", { credentials: "same-origin" })
+      let cevap = await fetch(apiYolu("/api/v1/session/me"), { credentials: "same-origin" })
+      // Uretim panelinin arkasinda: vekil girisli yoneticiyi iletir, ikinci giris istenmez.
+      if (cevap.status === 401 && GOMULU) {
+        const sso = await fetch(apiYolu("/api/v1/session/sso"), { method: "POST", credentials: "same-origin" })
+        if (sso.ok) cevap = await fetch(apiYolu("/api/v1/session/me"), { credentials: "same-origin" })
+      }
+      if (GOMULU && cevap.redirected) {
+        window.location.reload() // uretim paneli oturumu bitmis: giris sayfasina yonlenir
+        return false
+      }
       if (!cevap.ok) throw new Error(String(cevap.status))
       const govde = (await cevap.json()) as { data: Kullanici }
       setKullanici(govde.data)
@@ -77,6 +86,11 @@ export function useOturum() {
 
   useEffect(() => {
     const bitti = () => {
+      // Gomulu modda sayfa yenilenir: uretim paneli oturumu surerse SSO yeniden acar, bittiyse giris sayfasi gelir.
+      if (GOMULU) {
+        window.location.reload()
+        return
+      }
       setKullanici(null)
       setDurum("yok")
     }
@@ -96,7 +110,7 @@ export function useOturum() {
     const zamanlayici = window.setInterval(() => {
       const simdi = Date.now()
       if (simdi - sonHareket.current > sinirMs) {
-        void fetch("/api/v1/session/logout", {
+        void fetch(apiYolu("/api/v1/session/logout"), {
           method: "POST",
           credentials: "same-origin",
           headers: csrfBasliklari(),
@@ -116,7 +130,7 @@ export function useOturum() {
   const giris = useCallback(
     async (ad: string, parola: string): Promise<GirisSonucu> => {
       try {
-        const cevap = await fetch("/api/v1/session/login", {
+        const cevap = await fetch(apiYolu("/api/v1/session/login"), {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
@@ -135,12 +149,14 @@ export function useOturum() {
 
   const cikis = useCallback(async () => {
     try {
-      await fetch("/api/v1/session/logout", {
+      await fetch(apiYolu("/api/v1/session/logout"), {
         method: "POST",
         credentials: "same-origin",
         headers: csrfBasliklari(),
       })
     } finally {
+      // Gomulu modda cikis uretim paneline doner (SSO ile yeniden otomatik acilmasin diye sayfa degisir).
+      if (GOMULU) window.location.assign("/")
       setKullanici(null)
       setDurum("yok")
     }

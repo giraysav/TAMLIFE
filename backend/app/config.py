@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     env: str = "dev"
     database_url: str = "postgresql+psycopg://localhost:5432/tamlife"
+    sqlite_izin: bool = False  # dev/test disinda SQLite icin acik onay; yalniz /admin/dev on yayin asamasi (PostgreSQL gelene kadar)
 
     cookie_name: str = "tamlife_session"
     cookie_secure: bool | None = None  # bos: dev disinda otomatik true
@@ -51,6 +52,11 @@ class Settings(BaseSettings):
     allowed_origins: str = ""  # virgulle ayrilmis ek Origin listesi
     allowed_hosts: str = "127.0.0.1,localhost,testserver"
     trusted_proxies: str = ""  # virgulle ayrilmis proxy IP'leri; X-Forwarded-For yalniz bunlardan kabul
+
+    # Uretim paneli (Flask) arkasinda /admin/dev altinda calisma. Bos = kendi basina (taban yol "/").
+    base_path: str = "/"  # cerez yolu; ornek "/admin/dev"
+    sso_secret: str = Field(default="", repr=False)  # Flask vekili ile paylasilan sir (>=32 karakter); bos = SSO kapali
+    static_dir: str = ""  # derlenmis arayuz (ekran-react/dist); bos = yok, yalniz API
 
     # Panel session only. Not a directory bind.
     local_user: str = ""
@@ -119,6 +125,11 @@ class Settings(BaseSettings):
     @property
     def trusted_proxies_list(self) -> list[str]:
         return [item.strip() for item in self.trusted_proxies.split(",") if item.strip()]
+
+    @property
+    def cookie_path(self) -> str:
+        yol = "/" + self.base_path.strip().strip("/")
+        return yol if yol != "/" else "/"
 
     @property
     def allowed_hosts_list(self) -> list[str]:

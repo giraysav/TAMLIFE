@@ -17,3 +17,6 @@ data/incoming/*
 
 # aylik rapor PDF arsivi (yerel)
 data/reports/
+
+# sunucuya ozel yeni panel ortami (sir icerir)
+deploy/prod/dev-panel.env.bat

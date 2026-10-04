@@ -17,9 +17,10 @@ def database_url() -> str:
 
 def make_engine(url: str | None = None) -> Engine:
     target = url or database_url()
-    sqlite_ok = target.startswith("sqlite") and get_settings().env in {"dev", "test"}
+    ayar = get_settings()
+    sqlite_ok = target.startswith("sqlite") and (ayar.env in {"dev", "test"} or ayar.sqlite_izin)
     if not (target.startswith("postgresql") or sqlite_ok):
-        raise RuntimeError("panel database must be PostgreSQL (sqlite only in dev/test)")
+        raise RuntimeError("panel database must be PostgreSQL (sqlite only in dev/test or TAMLIFE_SQLITE_IZIN=true)")
     return create_engine(target, pool_pre_ping=True)
 
 

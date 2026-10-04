@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { apiGet } from "@/lib/oturum"
-import { csrfBasliklari } from "@/lib/http"
+import { apiYolu, csrfBasliklari } from "@/lib/http"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
@@ -47,7 +47,7 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
     const t1 = taslak[rol]
     setBilgi((b) => ({ ...b, [rol]: "" }))
     try {
-      const cevap = await fetch(`/api/v1/roller/${rol}`, {
+      const cevap = await fetch(apiYolu(`/api/v1/roller/${rol}`), {
         method: "PUT",
         credentials: "same-origin",
         headers: csrfBasliklari({ "Content-Type": "application/json" }),
