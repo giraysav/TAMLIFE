@@ -162,7 +162,6 @@ test("rol yonetimi: uc rol, admin sabit, hicbir modul kilitli degil", async ({ p
   const utilizasyon = page.getByRole("checkbox", { name: /TAM Utilizasyon/ })
   await expect(utilizasyon.first()).toBeEnabled() // hicbir modul kilitli degil
   await expect(page.getByRole("checkbox", { name: /Rol Yönetimi/ }).first()).toBeEnabled()
-  await expect(page.getByText("varsayılan kapalı").first()).toBeVisible()
   await expect(page.getByLabel("Giriş sayfası").first()).toBeVisible()
   await expect(page.getByRole("button", { name: "Kaydet" })).toHaveCount(2)
 })

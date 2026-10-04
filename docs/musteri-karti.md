@@ -34,3 +34,8 @@ Kaynak (yalnız okundu): `kutucuklar/portfoy/{servis.py,kart/servis.py,kart/duze
 - Excel ile müşteri/matris/gelir yükleme, Cacti kazıma.
 - `report` metin alanlarının taslak alanlarıyla eşlemesi.
 - Ayın sınırı UTC'dir (üretimle aynı); Türkiye saatiyle ay başı/sonu farkı doğrulanmadı.
+
+## Ekran düzeni (eski panele uygun)
+Eski panelin kart dili (`musteri_karti.js`, `customer_detail.html`) kullanıldı; renkler `index.css` içinde `tl-*` (mavi `#0055A5`, lacivert `#002855`, sarı `#FFC72C`, aksan `#00A3E0`).
+- **Müşteri kartı:** lacivert kimlik kartı (sarı sol vurgu, segment/sektör/iştirak rozetleri, Düzenle, **Aylık Rapor** ve **Final skor** kutuları, 3 sütunlu bilgi satırları, iştirak çipleri); sağda küçük işlemler (iştirak ekle, sil); katlanır, sarı vurgulu başlıklı bölümler (açık/kapalı durumu tarayıcıda hatırlanır): Ekip & İletişim (Satış ekibi, TAC, Çözüm KMT, Mobil KMT), sol 2/3'te Operasyon (alarm/şikayet/talep kutuları, yıl içi kapanan), Ekip (Destech) ve Kritik CI tabloları (lacivert başlık); sağ 1/3'te Raporlar, Gelirler, İzleme.
+- **Aylık rapor:** `#/musteri?m=<id>&sekme=rapor`. Sol 2/3: "Operasyonel Rapor İçeriği Girişi" (gönderildi bandı, İngilizce rapor, Taslağı kaydet / Raporu gönder, e-posta gövde bloğu, renkli etiketli beş alan); sağ 1/3: Rapor Geçmişi ve Rapor Alıcıları.

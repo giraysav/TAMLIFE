@@ -98,7 +98,6 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
                               onChange={(e) => degistir(r.role, m.id, e.target.checked)}
                             />
                             {m.label}
-                            {m.admin_only ? <span className="text-xs">({t.varsayilanKapali})</span> : null}
                           </label>
                           {m.children.map((c) => (
                             <label key={c.id} className="ml-6 flex items-center gap-2 text-sm">

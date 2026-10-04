@@ -1,12 +1,15 @@
 import { MusteriKarti } from "@/shell/musteri-karti"
 import { MusteriListesi } from "@/shell/musteri-listesi"
+import { MusteriRapor } from "@/shell/musteri-rapor"
 import type { Dil } from "@/shell/metin"
 import { useHashSorgu } from "@/shell/rota"
 
-/** Musteri Yonetimi: #/musteri liste, #/musteri?m=<id> musteri karti (header'daki geri oku listeye doner). */
+/** Musteri Yonetimi: #/musteri liste, ?m=<id> musteri karti, ?m=<id>&sekme=rapor aylik rapor (header geri oku bir onceki ekrana doner). */
 export function MusteriSayfasi({ dil }: { dil: Dil }) {
   const sorgu = useHashSorgu()
   const kimlik = Number(sorgu.get("m"))
-  if (Number.isInteger(kimlik) && kimlik > 0) return <MusteriKarti key={kimlik} id={kimlik} dil={dil} />
+  if (Number.isInteger(kimlik) && kimlik > 0) {
+    return sorgu.get("sekme") === "rapor" ? <MusteriRapor key={`r${kimlik}`} id={kimlik} dil={dil} /> : <MusteriKarti key={kimlik} id={kimlik} dil={dil} />
+  }
   return <MusteriListesi dil={dil} />
 }

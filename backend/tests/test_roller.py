@@ -41,8 +41,8 @@ def test_varsayilan_gorunum_ve_giris(client, monkeypatch):
     data = client.get("/api/v1/session/me").json()["data"]
     assert data["landing"] == "ozet"
     ids = {i["id"] for i in data["navigation"]}
-    assert "musteri" in ids and "talep" in ids
-    assert not ids & {"utilizasyon", "roller", "admin", "integrations", "veri"}
+    assert {"musteri", "talep", "utilizasyon", "roller"} <= ids  # TAM Utilizasyon ve Rol Yonetimi varsayilan olarak acik
+    assert not ids & {"admin", "integrations", "veri"}
 
 
 def test_admin_rolu_kisitlar_ve_giris_sayfasi_belirler(client, monkeypatch):
@@ -140,8 +140,11 @@ def test_yonetim_modulleri_role_verilebilir_ama_tam_yetki_admin_de(client, monke
     assert client.get("/api/v1/roller").status_code == 200
     assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri"], "landing": "ozet"}, headers=hdr2).status_code == 403
     assert client.get("/api/v1/admin").status_code == 403
-    # Member'a verilmedi: gormez, rol ekranina da giremez
+    # Member'a admin acikca vermedi: gormez, rol ekranina da giremez
     _cikis(client, hdr2)
+    hdr3 = _rol_ile_giris(client, monkeypatch, "admin")
+    assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri"], "landing": "ozet"}, headers=hdr3).status_code == 200
+    _cikis(client, hdr3)
     _rol_ile_giris(client, monkeypatch, "TeamMember")
     assert "utilizasyon" not in _nav_idleri(client)
     assert client.get("/api/v1/modules/utilizasyon").status_code == 403

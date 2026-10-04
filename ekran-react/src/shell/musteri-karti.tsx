@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 import type { FormEvent, ReactNode } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Building2, FileText, Pencil } from "lucide-react"
 import { apiOku, apiYaz } from "@/lib/api-yaz"
-import { AylikRapor } from "@/shell/aylik-rapor"
+import { Bolum, Bos, DUGME, DUGME_ANA, Etiket, GIRDI, KartTablo, Metrik, Rozet, Satir } from "@/shell/kart-ui"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/shell/musteri-metin"
 import { sorguAyarla } from "@/shell/rota"
@@ -14,7 +10,7 @@ import { sorguAyarla } from "@/shell/rota"
 type Sayilar = { envanter: number; alarm: number; sikayet: number; talep: number; alarm_kapanan: number; sikayet_kapanan: number; talep_kapanan: number }
 type Matris = { basliklar: string[]; satirlar: string[][] }
 type Gelir = { toplam: Record<string, number>; son: { donem: string; tutar: number; para: string; musteri: string; installation_pct?: number }[] }
-type Kart = {
+export type Kart = {
   kimlik: {
     id: number
     unvan: string
@@ -33,7 +29,7 @@ type Kart = {
   ekip: Matris
   iletisim: Record<string, string>
   kritik_ci: Matris
-  izleme: { cacti: string[] }
+  izleme: { cacti: string[]; son_kazima: string | null; kazima_adedi: number }
   raporlar?: { toplam: number; son: { donem: string; gonderildi: boolean; duzenleyen: string | null; tarih: string | null; bayrak: number }[] }
   gelirler?: { ict?: Gelir; apn?: Gelir }
   erisim: { rapor: boolean; gelir: boolean; kimlik_duzenle: boolean; sil: boolean; tam_degistir: boolean; rapor_geri_al: boolean; ayri_rapor_sec: boolean; istirak_ekle: boolean }
@@ -41,105 +37,74 @@ type Kart = {
 }
 
 const SEGMENTLER = ["SMB", "SA", "MA", "PA", "WHOLESALE"]
-const ILETISIM = [
-  ["sales_manager", "satis"],
-  ["presales_manager", "presales"],
-  ["tac_name", "tacAd"],
-  ["tac_gsm", "tacGsm"],
-  ["tac_email", "tacEposta"],
-  ["sol_kmt_name", "solAd"],
-  ["sol_kmt_gsm", "solGsm"],
-  ["sol_kmt_email", "solEposta"],
-  ["mobil_kmt_name", "mobilAd"],
-  ["mobil_kmt_gsm", "mobilGsm"],
-  ["mobil_kmt_email", "mobilEposta"],
-  ["mobil_kmt_detail", "mobilNot"],
+const ILETISIM_GRUPLARI = [
+  { baslik: "satisEkibi", alanlar: [["sales_manager", "satis", 100], ["presales_manager", "presales", 100]] },
+  { baslik: "tac", alanlar: [["tac_name", "adSoyad", 100], ["tac_gsm", "gsm", 50], ["tac_email", "eposta", 100]] },
+  { baslik: "cozumKmt", alanlar: [["sol_kmt_name", "adSoyad", 100], ["sol_kmt_gsm", "gsm", 50], ["sol_kmt_email", "eposta", 100]] },
+  { baslik: "mobilKmt", alanlar: [["mobil_kmt_name", "adSoyad", 100], ["mobil_kmt_gsm", "gsm", 50], ["mobil_kmt_email", "eposta", 100]] },
 ] as const
 
-function Alan({ id, etiket, children }: { id: string; etiket: string; children: ReactNode }) {
+type Metin = ReturnType<typeof musteriMetin>
+
+function Girdi({ id, etiket, ad, deger, onChange, uzun = 150, tip = "text", kapali = false }: { id: string; etiket: string; ad?: string; deger: string; onChange: (v: string) => void; uzun?: number; tip?: string; kapali?: boolean }) {
   return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id}>{etiket}</Label>
-      {children}
+    <label className="block min-w-0" htmlFor={id}>
+      <Etiket>{etiket}</Etiket>
+      <input id={id} aria-label={ad ?? etiket} type={tip} value={deger} maxLength={uzun} disabled={kapali} onChange={(e) => onChange(e.target.value)} className={GIRDI} />
+    </label>
+  )
+}
+
+function Kutu({ children, ek = "" }: { children: ReactNode; ek?: string }) {
+  return <div className={`rounded-xl border border-white/60 bg-white/95 p-3 text-tl-navy shadow-sm ${ek}`}>{children}</div>
+}
+
+function GelirBlok({ baslik, g, apn }: { baslik: string; g: Gelir; apn?: boolean }) {
+  const toplam =
+    Object.entries(g.toplam)
+      .map(([p, v]) => `${v.toLocaleString("tr-TR")} ${p}`)
+      .join(" · ") || "—"
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between">
+        <span className="text-xs font-black text-slate-500">{baslik}</span>
+        <span className="font-mono text-xs font-black text-emerald-600">{toplam}</span>
+      </div>
+      {g.son.length === 0 ? <Bos>—</Bos> : null}
+      {g.son.map((k, i) => (
+        <div key={i} className="flex justify-between gap-2 border-b border-slate-100 py-1 text-xs last:border-0">
+          <span className="font-mono font-bold text-slate-500">{k.donem}</span>
+          {apn && k.installation_pct !== undefined ? <span className="text-slate-400">%{k.installation_pct}</span> : null}
+          <span className="font-mono font-black text-slate-700">
+            {k.tutar.toLocaleString("tr-TR")} {k.para}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
 
-function Bolum({ baslik, children }: { baslik: string; children: ReactNode }) {
+function Operasyon({ kart, t }: { kart: Kart; t: Metin }) {
+  const s = kart.operasyon.kendi
+  const d = kart.operasyon.istirak_dahil
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{baslik}</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3">{children}</CardContent>
-    </Card>
-  )
-}
-
-function Tablo({ veri, bos }: { veri: Matris; bos: string }) {
-  if (veri.satirlar.length === 0) return <p className="text-sm text-muted-foreground">{bos}</p>
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-left text-xs text-muted-foreground">
-            {veri.basliklar.map((b, i) => (
-              <th key={i} scope="col" className="px-2 py-2 font-medium">
-                {b}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {veri.satirlar.map((s, i) => (
-            <tr key={i} className="border-b last:border-0">
-              {s.map((h, j) => (
-                <td key={j} className="px-2 py-2">
-                  {h}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function Sayim({ baslik, s, t }: { baslik: string; s: Sayilar; t: ReturnType<typeof musteriMetin> }) {
-  return (
-    <div className="grid gap-1 text-sm">
-      <p className="text-xs font-medium text-muted-foreground">{baslik}</p>
-      <p className="tabular-nums">
-        {t.envanter}: {s.envanter} · {t.alarm}: {s.alarm} ({s.alarm_kapanan} {t.kapanan}) · {t.sikayet}: {s.sikayet} ({s.sikayet_kapanan} {t.kapanan}) · {t.talep}: {s.talep} ({s.talep_kapanan}{" "}
-        {t.kapanan})
-      </p>
-    </div>
-  )
-}
-
-function GelirListe({ baslik, g, t, apn }: { baslik: string; g: Gelir; t: ReturnType<typeof musteriMetin>; apn?: boolean }) {
-  return (
-    <div className="grid gap-1 text-sm">
-      <p className="text-xs font-medium text-muted-foreground">
-        {baslik} ·{" "}
-        {Object.entries(g.toplam)
-          .map(([p, v]) => `${v.toLocaleString("tr-TR")} ${p}`)
-          .join(" · ") || "—"}
-      </p>
-      {g.son.length === 0 ? <p className="text-muted-foreground">{t.sonucYok}</p> : null}
-      <ul className="grid gap-0.5">
-        {g.son.map((k, i) => (
-          <li key={i} className="flex justify-between gap-2 tabular-nums">
-            <span>{k.donem}</span>
-            <span>
-              {k.tutar.toLocaleString("tr-TR")} {k.para}
-              {apn && k.installation_pct !== undefined ? ` · %${k.installation_pct} ${t.kurulum}` : ""}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <Bolum anahtar="operasyon" baslik={t.operasyon}>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <Metrik etiket={t.alarm} deger={s.alarm_kapanan} alt={t.yilIciKapanan} zemin="bg-rose-500/5" yazi="text-rose-600" />
+        <Metrik etiket={t.sikayet} deger={s.sikayet_kapanan} alt={t.yilIciKapanan} zemin="bg-amber-500/5" yazi="text-amber-600" />
+        <Metrik etiket={t.talep} deger={s.talep_kapanan} alt={t.yilIciKapanan} zemin="bg-blue-500/5" yazi="text-blue-600" />
+      </div>
+      {d ? (
+        <p className="mt-3 text-xs font-bold text-slate-500">
+          {t.istirakDahil}:{" "}
+          <span className="font-mono text-slate-700">
+            {t.envanter} {d.envanter.toLocaleString("tr-TR")} · {t.alarm} {d.alarm_kapanan.toLocaleString("tr-TR")} · {t.sikayet} {d.sikayet_kapanan.toLocaleString("tr-TR")} · {t.talep}{" "}
+            {d.talep_kapanan.toLocaleString("tr-TR")}
+          </span>
+        </p>
+      ) : null}
+      <p className="mt-2 text-[10px] text-slate-400">{t.acikAciklama}</p>
+    </Bolum>
   )
 }
 
@@ -147,11 +112,12 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const t = musteriMetin(dil)
   const [kart, setKart] = useState<Kart | null | undefined>(undefined)
   const [durum, setDurum] = useState(0)
-  const [sekme, setSekme] = useState<"kart" | "rapor">("kart")
+  const [duzenle, setDuzenle] = useState(false)
   const [kim, setKim] = useState<Record<string, string>>({})
   const [ilet, setIlet] = useState<Record<string, string>>({})
   const [tam, setTam] = useState("")
   const [mesaj, setMesaj] = useState<Record<string, string>>({})
+  const [yeniIstirak, setYeniIstirak] = useState<string | null>(null)
 
   const yukle = useCallback(async () => {
     const sonuc = await apiOku<Kart>(`/api/v1/musteri/${id}`)
@@ -176,31 +142,35 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
 
   useEffect(() => {
     setKart(undefined)
-    setSekme("kart")
+    setDuzenle(false)
     void yukle()
   }, [yukle])
 
-  function bildir(anahtar: string, metin: string) {
-    setMesaj((m) => ({ ...m, [anahtar]: metin }))
-  }
+  const bildir = (anahtar: string, metin: string) => setMesaj((m) => ({ ...m, [anahtar]: metin }))
 
   async function kimligiKaydet(olay: FormEvent) {
     olay.preventDefault()
     const sonuc = await apiYaz("PUT", `/api/v1/musteri/${id}/kimlik`, { ...kim, inventory: kim.inventory === "" ? 0 : Number(kim.inventory) })
-    bildir("kimlik", sonuc.ok ? t.kaydedildi : `${t.kaydedilemedi}: ${sonuc.hata}`)
-    if (sonuc.ok) await yukle()
+    if (!sonuc.ok) {
+      bildir("kimlik", `${t.kaydedilemedi}: ${sonuc.hata}`)
+      return
+    }
+    if (kart?.erisim.tam_degistir && tam && Number(tam) !== kart.kimlik.tam_id) {
+      const t2 = await apiYaz("PUT", `/api/v1/musteri/${id}/sorumlu`, { owner_id: Number(tam) })
+      if (!t2.ok) {
+        bildir("kimlik", `${t.kaydedilemedi}: ${t2.hata}`)
+        return
+      }
+    }
+    bildir("kimlik", t.kaydedildi)
+    setDuzenle(false)
+    await yukle()
   }
 
   async function iletisimiKaydet(olay: FormEvent) {
     olay.preventDefault()
     const sonuc = await apiYaz("PUT", `/api/v1/musteri/${id}/iletisim`, ilet)
     bildir("iletisim", sonuc.ok ? t.kaydedildi : `${t.kaydedilemedi}: ${sonuc.hata}`)
-    if (sonuc.ok) await yukle()
-  }
-
-  async function sorumluKaydet() {
-    const sonuc = await apiYaz("PUT", `/api/v1/musteri/${id}/sorumlu`, { owner_id: Number(tam) })
-    bildir("tam", sonuc.ok ? t.kaydedildi : `${t.kaydedilemedi}: ${sonuc.hata}`)
     if (sonuc.ok) await yukle()
   }
 
@@ -217,6 +187,15 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
     else bildir("sil", `${t.kaydedilemedi}: ${sonuc.hata}`)
   }
 
+  async function istirakEkle(olay: FormEvent) {
+    olay.preventDefault()
+    const sonuc = await apiYaz<{ id: number }>("POST", "/api/v1/musteri", { name: yeniIstirak ?? "", parent_id: id })
+    if (sonuc.ok && sonuc.veri) {
+      setYeniIstirak(null)
+      sorguAyarla("musteri", { m: String(sonuc.veri.id) })
+    } else bildir("istirak", `${t.kaydedilemedi}: ${sonuc.hata}`)
+  }
+
   if (kart === undefined) return <p className="text-sm text-muted-foreground">…</p>
   if (kart === null) {
     return (
@@ -226,47 +205,87 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
     )
   }
   const e = kart.erisim
-  const duzenle = e.kimlik_duzenle
-  const girdi = (anahtar: string, onChange: (v: string) => void, deger: string, uzun = 150, disabled = !duzenle) => (
-    <Input id={`k-${anahtar}`} value={deger} maxLength={uzun} disabled={disabled} onChange={(ev) => onChange(ev.target.value)} />
-  )
+  const k = kart.kimlik
+  const o = kart.operasyon
+  const raporAdedi = kart.raporlar ? kart.raporlar.toplam : null
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-xl font-semibold">{kart.kimlik.unvan}</h2>
-        {kart.kimlik.segment ? <Badge variant="secondary">{kart.kimlik.segment}</Badge> : null}
-        {kart.kimlik.cati ? <Badge variant="outline">{t.istirak}</Badge> : null}
-        <div className="ml-auto flex items-center gap-2" role="tablist" aria-label={kart.kimlik.unvan}>
-          {(["kart", "rapor"] as const).map((s) => (
-            <Button key={s} type="button" role="tab" aria-selected={sekme === s} size="sm" variant={sekme === s ? "default" : "outline"} onClick={() => setSekme(s)}>
-              {s === "kart" ? t.sekmeKart : t.sekmeRapor}
-            </Button>
-          ))}
-          {e.sil ? (
-            <Button type="button" size="sm" variant="outline" className="text-destructive" onClick={() => void sil()}>
-              {t.sil}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {mesaj.sil ? (
-        <p role="alert" className="text-sm text-destructive">
-          {mesaj.sil}
-        </p>
-      ) : null}
+    <div className="space-y-4 font-sans">
+      {/* KIMLIK: lacivert hero, sari sol vurgu */}
+      <section aria-label={k.unvan} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-tl-navy to-[#003b80] text-white shadow-sm">
+        <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-tl-yellow" />
+        <div className="space-y-4 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start">
+            <div className="flex min-w-0 flex-1 items-start gap-3.5">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-tl-yellow/30 bg-white/10 text-tl-yellow shadow-md">
+                <Building2 aria-hidden className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="break-words text-xl font-black leading-tight sm:text-2xl">{k.unvan}</h2>
+                <p className="mt-1 text-xs font-bold text-white/70">{t.musteriKarti}</p>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {k.segment ? <Rozet ton="sari">{k.segment}</Rozet> : null}
+                  {k.sektor ? <span className="rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white">{k.sektor}</span> : null}
+                  {k.cati ? <Rozet ton="amber">{t.istirak}</Rozet> : null}
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-start gap-2 md:justify-end">
+              {e.kimlik_duzenle && !duzenle ? (
+                <button type="button" onClick={() => setDuzenle(true)} className={DUGME}>
+                  <Pencil aria-hidden className="size-3.5" />
+                  {t.duzenle}
+                </button>
+              ) : null}
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-stretch gap-2">
+                  <a
+                    href={`#/musteri?m=${k.id}&sekme=rapor`}
+                    className="flex min-w-[8rem] flex-col rounded-xl border border-white/60 bg-white/95 p-3 text-tl-navy shadow-sm transition-colors hover:border-tl-yellow hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+                    title={t.aylikRapor}
+                  >
+                    <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.aylikRapor}</span>
+                    {raporAdedi !== null ? (
+                      <span className="font-mono text-3xl font-black">{raporAdedi.toLocaleString("tr-TR")}</span>
+                    ) : (
+                      <FileText aria-hidden className="ml-auto size-8 text-tl-navy" />
+                    )}
+                    <span className="text-[10px] font-bold text-tl-blue">{t.ac} ›</span>
+                  </a>
+                  <Kutu ek="min-w-[8rem]">
+                    <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.finalSkor}</div>
+                    {o.final_skor === null ? (
+                      <div className="text-xs font-bold text-slate-400">{t.skorCatida}</div>
+                    ) : (
+                      <>
+                        <div className="font-mono text-3xl font-black">%{o.final_skor.toFixed(1)}</div>
+                        {o.skor_talebi_bekliyor ? <div className="text-[10px] font-bold text-amber-600">{t.skorBekliyor}</div> : null}
+                      </>
+                    )}
+                  </Kutu>
+                </div>
+                {k.cati ? (
+                  e.ayri_rapor_sec ? (
+                    <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-2.5 py-1.5">
+                      <input type="checkbox" className="size-4 accent-tl-yellow" checked={!!k.ayri_rapor} onChange={(ev) => void ayriRapor(ev.target.checked)} />
+                      <span className="text-[10px] font-black">{t.ayriRapor}</span>
+                      <span className="text-[10px] font-bold text-white/70">{k.ayri_rapor ? t.ayriRaporVar : t.catiRaporunaDahil}</span>
+                    </label>
+                  ) : (
+                    <span className="text-[10px] font-bold text-white/70">{k.ayri_rapor ? t.ayriRaporVar : t.catiRaporunaDahil}</span>
+                  )
+                ) : null}
+              </div>
+            </div>
+          </div>
+          {mesaj.ayri ? <p role="alert" className="text-xs font-bold text-rose-200">{mesaj.ayri}</p> : null}
 
-      {sekme === "rapor" ? (
-        <AylikRapor musteriId={id} dil={dil} geriAlabilir={e.rapor_geri_al} />
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Bolum baslik={t.kimlik}>
-            <form onSubmit={kimligiKaydet} className="grid gap-3 sm:grid-cols-2" aria-label={t.kimlik}>
-              <Alan id="k-name" etiket={t.unvan}>
-                {girdi("name", (v) => setKim({ ...kim, name: v }), kim.name ?? "")}
-              </Alan>
-              <Alan id="k-segment" etiket={t.segment}>
-                <select id="k-segment" disabled={!duzenle} value={kim.segment ?? ""} onChange={(ev) => setKim({ ...kim, segment: ev.target.value })} className="h-9 rounded-md border bg-background px-2 text-sm">
+          {duzenle ? (
+            <form onSubmit={kimligiKaydet} aria-label={t.duzenle} className="grid gap-3 rounded-xl bg-white/95 p-4 text-tl-navy sm:grid-cols-2 lg:grid-cols-4">
+              <Girdi id="k-name" etiket={t.unvan} deger={kim.name ?? ""} onChange={(v) => setKim({ ...kim, name: v })} />
+              <label className="block min-w-0" htmlFor="k-segment">
+                <Etiket>{t.segment}</Etiket>
+                <select id="k-segment" value={kim.segment ?? ""} onChange={(ev) => setKim({ ...kim, segment: ev.target.value })} className={GIRDI}>
                   <option value="">{t.seciniz}</option>
                   {[...new Set([...SEGMENTLER, kim.segment ?? ""])]
                     .filter(Boolean)
@@ -276,155 +295,199 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                       </option>
                     ))}
                 </select>
-              </Alan>
-              <Alan id="k-customer_no" etiket={t.musteriNo}>
-                {girdi("customer_no", (v) => setKim({ ...kim, customer_no: v }), kim.customer_no ?? "", 50)}
-              </Alan>
-              <Alan id="k-ncst" etiket={t.ncst}>
-                {girdi("ncst", (v) => setKim({ ...kim, ncst: v }), kim.ncst ?? "", 50)}
-              </Alan>
-              <Alan id="k-sector" etiket={t.sektor}>
-                {girdi("sector", (v) => setKim({ ...kim, sector: v }), kim.sector ?? "", 100)}
-              </Alan>
-              <Alan id="k-inventory" etiket={t.envanter}>
-                {girdi("inventory", (v) => setKim({ ...kim, inventory: v.replace(/\D/g, "") }), kim.inventory ?? "", 12)}
-              </Alan>
-              <Alan id="k-ft_volume" etiket={t.ftHacim}>
-                {girdi("ft_volume", (v) => setKim({ ...kim, ft_volume: v }), kim.ft_volume ?? "", 100)}
-              </Alan>
-              <Alan id="k-tam_ft" etiket={t.tamFt}>
-                {girdi("tam_ft", (v) => setKim({ ...kim, tam_ft: v }), kim.tam_ft ?? "", 100)}
-              </Alan>
-              {duzenle ? (
-                <div className="flex items-center gap-3 sm:col-span-2">
-                  <Button type="submit">{t.kaydet}</Button>
-                  {mesaj.kimlik ? <span role="status" className="text-sm text-muted-foreground">{mesaj.kimlik}</span> : null}
-                </div>
-              ) : null}
-            </form>
-            <dl className="grid gap-1 text-sm sm:grid-cols-[10rem_1fr]">
-              <dt className="text-muted-foreground">{t.sorumlu}</dt>
-              <dd>
-                {e.tam_degistir && kart.tam_secenekleri ? (
-                  <span className="flex items-center gap-2">
-                    <select aria-label={t.sorumlu} value={tam} onChange={(ev) => setTam(ev.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm">
-                      {kart.tam_secenekleri.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.ad}
-                        </option>
-                      ))}
-                    </select>
-                    <Button type="button" size="sm" variant="outline" onClick={() => void sorumluKaydet()}>
-                      {t.sorumluDegistir}
-                    </Button>
-                    {mesaj.tam ? <span role="status" className="text-muted-foreground">{mesaj.tam}</span> : null}
-                  </span>
-                ) : (
-                  (kart.kimlik.tam ?? "—")
-                )}
-              </dd>
-              {kart.kimlik.cati ? (
-                <>
-                  <dt className="text-muted-foreground">{t.cati}</dt>
-                  <dd>
-                    <a className="underline-offset-4 hover:underline" href={`#/musteri?m=${kart.kimlik.cati.id}`}>
-                      {kart.kimlik.cati.unvan}
-                    </a>
-                  </dd>
-                </>
-              ) : null}
-              {kart.kimlik.istirakler.length > 0 ? (
-                <>
-                  <dt className="text-muted-foreground">{t.istirakler}</dt>
-                  <dd className="grid gap-0.5">
-                    {kart.kimlik.istirakler.map((i) => (
-                      <a key={i.id} className="underline-offset-4 hover:underline" href={`#/musteri?m=${i.id}`}>
-                        {i.unvan}
-                        {i.ncst ? ` · ${i.ncst}` : ""}
-                      </a>
-                    ))}
-                  </dd>
-                </>
-              ) : null}
-            </dl>
-            {e.ayri_rapor_sec ? (
-              <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" className="mt-1" checked={!!kart.kimlik.ayri_rapor} onChange={(ev) => void ayriRapor(ev.target.checked)} />
-                <span>
-                  {t.ayriRapor}
-                  <span className="block text-xs text-muted-foreground">{t.ayriRaporAciklama}</span>
-                </span>
               </label>
-            ) : null}
-            {mesaj.ayri ? <p role="alert" className="text-sm text-destructive">{mesaj.ayri}</p> : null}
-          </Bolum>
-
-          <Bolum baslik={t.operasyon}>
-            <p className="text-sm">
-              {t.finalSkor}: <strong>{kart.operasyon.final_skor ?? "—"}</strong>
-              {kart.operasyon.skor_talebi_bekliyor ? <Badge variant="secondary" className="ml-2">{t.skorBekliyor}</Badge> : null}
-            </p>
-            <Sayim baslik={t.kendi} s={kart.operasyon.kendi} t={t} />
-            {kart.operasyon.istirak_dahil ? <Sayim baslik={t.istirakDahil} s={kart.operasyon.istirak_dahil} t={t} /> : null}
-          </Bolum>
-
-          <Bolum baslik={t.iletisim}>
-            <form onSubmit={iletisimiKaydet} className="grid gap-3 sm:grid-cols-2" aria-label={t.iletisim}>
-              {ILETISIM.map(([alan, anahtar]) => (
-                <Alan key={alan} id={`i-${alan}`} etiket={t[anahtar]}>
-                  <Input id={`i-${alan}`} value={ilet[alan] ?? ""} maxLength={alan === "mobil_kmt_detail" ? 2000 : 100} onChange={(ev) => setIlet({ ...ilet, [alan]: ev.target.value })} />
-                </Alan>
-              ))}
-              <div className="flex items-center gap-3 sm:col-span-2">
-                <Button type="submit">{t.kaydet}</Button>
-                {mesaj.iletisim ? <span role="status" className="text-sm text-muted-foreground">{mesaj.iletisim}</span> : null}
+              <Girdi id="k-customer_no" etiket={t.musteriNo} deger={kim.customer_no ?? ""} uzun={50} onChange={(v) => setKim({ ...kim, customer_no: v })} />
+              <Girdi id="k-ncst" etiket={t.ncst} deger={kim.ncst ?? ""} uzun={50} onChange={(v) => setKim({ ...kim, ncst: v })} />
+              <Girdi id="k-sector" etiket={t.sektor} deger={kim.sector ?? ""} uzun={100} onChange={(v) => setKim({ ...kim, sector: v })} />
+              <Girdi id="k-inventory" etiket={t.envanter} deger={kim.inventory ?? ""} uzun={12} onChange={(v) => setKim({ ...kim, inventory: v.replace(/\D/g, "") })} />
+              <Girdi id="k-ft_volume" etiket={t.ftHacim} deger={kim.ft_volume ?? ""} uzun={100} onChange={(v) => setKim({ ...kim, ft_volume: v })} />
+              <Girdi id="k-tam_ft" etiket={t.tamFt} deger={kim.tam_ft ?? ""} uzun={100} onChange={(v) => setKim({ ...kim, tam_ft: v })} />
+              {e.tam_degistir && kart.tam_secenekleri ? (
+                <label className="block min-w-0" htmlFor="k-tam">
+                  <Etiket>{t.sorumluTam}</Etiket>
+                  <select id="k-tam" value={tam} onChange={(ev) => setTam(ev.target.value)} className={GIRDI}>
+                    {kart.tam_secenekleri.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.ad}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-4">
+                <button type="submit" className={DUGME_ANA}>
+                  {t.kaydet}
+                </button>
+                <button type="button" className={DUGME} onClick={() => setDuzenle(false)}>
+                  {t.vazgec}
+                </button>
+                {mesaj.kimlik ? <span role="status" className="text-xs font-bold text-slate-500">{mesaj.kimlik}</span> : null}
               </div>
             </form>
-          </Bolum>
+          ) : (
+            <div className="grid grid-cols-1 gap-x-4 rounded-xl bg-white/95 px-4 py-2 text-tl-navy sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <Satir etiket={t.musteriNo}>{k.musteri_no || "—"}</Satir>
+                <Satir etiket={t.ncst}>{k.ncst || "—"}</Satir>
+                <Satir etiket={t.segment}>{k.segment || "—"}</Satir>
+                <Satir etiket={t.sektor}>{k.sektor || "—"}</Satir>
+              </div>
+              <div>
+                <Satir etiket={t.sorumluTam}>{k.tam || "—"}</Satir>
+                <Satir etiket={t.cati}>
+                  {k.cati ? (
+                    <a className="text-tl-blue hover:underline" href={`#/musteri?m=${k.cati.id}`}>
+                      {k.cati.unvan}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </Satir>
+              </div>
+              <div>
+                <Satir etiket={t.ftHacim}>
+                  <span className="font-mono text-emerald-600">{o.ft_hacim}</span>
+                </Satir>
+                <Satir etiket={t.tamFt}>
+                  <span className="font-mono text-tl-blue">{o.tam_ft}</span>
+                </Satir>
+                <Satir etiket={t.envanter}>
+                  <span className="font-mono">{k.envanter.toLocaleString("tr-TR")}</span>
+                </Satir>
+              </div>
+            </div>
+          )}
 
-          <Bolum baslik={t.ekip}>
-            <Tablo veri={kart.ekip} bos={t.satirYok} />
-          </Bolum>
-          <Bolum baslik={t.kritikCi}>
-            <Tablo veri={kart.kritik_ci} bos={t.satirYok} />
-          </Bolum>
-
-          {kart.gelirler ? (
-            <Bolum baslik={t.gelirler}>
-              {kart.gelirler.ict ? <GelirListe baslik={t.ictGelir} g={kart.gelirler.ict} t={t} /> : null}
-              {kart.gelirler.apn ? <GelirListe baslik={t.apnGelir} g={kart.gelirler.apn} t={t} apn /> : null}
-            </Bolum>
-          ) : null}
-
-          {kart.raporlar ? (
-            <Bolum baslik={`${t.raporlar} (${kart.raporlar.toplam})`}>
-              {kart.raporlar.son.length === 0 ? <p className="text-sm text-muted-foreground">{t.sonucYok}</p> : null}
-              <ul className="grid gap-1 text-sm">
-                {kart.raporlar.son.map((r, i) => (
-                  <li key={i} className="flex justify-between gap-2">
-                    <span>{r.donem}</span>
-                    <span className="text-muted-foreground">
-                      {r.gonderildi ? t.gonderildi : t.taslak}
-                      {r.duzenleyen ? ` · ${r.duzenleyen}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Bolum>
-          ) : null}
-
-          <Bolum baslik={t.izleme}>
-            {kart.izleme.cacti.length === 0 ? <p className="text-sm text-muted-foreground">{t.izlemeYok}</p> : null}
-            <ul className="grid gap-1 text-sm">
-              {kart.izleme.cacti.map((u) => (
-                <li key={u} className="break-all">
-                  {u}
-                </li>
+          <div>
+            <div className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-white/70">
+              {t.istirakler} ({k.istirakler.length})
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {k.istirakler.length === 0 ? <span className="text-white/60">—</span> : null}
+              {k.istirakler.map((i) => (
+                <a
+                  key={i.id}
+                  href={`#/musteri?m=${i.id}`}
+                  className="rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1 text-xs font-bold text-tl-navy transition-colors hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+                >
+                  {i.unvan}
+                </a>
               ))}
-            </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* kucuk islemler */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {mesaj.istirak ? <span role="alert" className="text-xs font-bold text-destructive">{mesaj.istirak}</span> : null}
+        {mesaj.sil ? <span role="alert" className="text-xs font-bold text-destructive">{mesaj.sil}</span> : null}
+        {e.istirak_ekle && !k.cati ? (
+          yeniIstirak === null ? (
+            <button type="button" className={DUGME} onClick={() => setYeniIstirak("")}>
+              {t.istirakEkle}
+            </button>
+          ) : (
+            <form onSubmit={istirakEkle} className="flex items-center gap-2" aria-label={t.istirakEkle}>
+              <input aria-label={t.istirakUnvani} placeholder={t.istirakUnvani} value={yeniIstirak} maxLength={150} required onChange={(ev) => setYeniIstirak(ev.target.value)} className={`${GIRDI} w-64`} />
+              <button type="submit" className={DUGME_ANA}>
+                {t.kaydet}
+              </button>
+              <button type="button" className={DUGME} onClick={() => setYeniIstirak(null)}>
+                {t.vazgec}
+              </button>
+            </form>
+          )
+        ) : null}
+        {e.sil ? (
+          <button type="button" onClick={() => void sil()} className="inline-flex items-center rounded-xl border border-rose-200 bg-rose-500/10 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-500/20 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-400">
+            {t.sil}
+          </button>
+        ) : null}
+      </div>
+
+      {/* EKIP & ILETISIM */}
+      <Bolum anahtar="ekip" baslik={t.iletisim}>
+        <form onSubmit={iletisimiKaydet} aria-label={t.iletisim} className="space-y-4">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
+            {ILETISIM_GRUPLARI.map((g) => (
+              <div key={g.baslik} className="min-w-0">
+                <div className="mb-2 border-b border-slate-100 pb-1 text-[10px] font-black uppercase tracking-wide text-tl-navy/70">{t[g.baslik]}</div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {g.alanlar.map(([alan, etiket, azami]) => (
+                    <Girdi
+                      key={alan}
+                      id={`i-${alan}`}
+                      etiket={t[etiket]}
+                      ad={`${t[g.baslik]} · ${t[etiket]}`}
+                      deger={ilet[alan] ?? ""}
+                      uzun={azami}
+                      tip={alan.endsWith("_email") ? "email" : alan.endsWith("_gsm") ? "tel" : "text"}
+                      onChange={(v) => setIlet({ ...ilet, [alan]: v })}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <label className="block" htmlFor="i-mobil_kmt_detail">
+            <Etiket>{`${t.mobilKmt} · ${t.not}`}</Etiket>
+            <textarea id="i-mobil_kmt_detail" rows={2} maxLength={2000} value={ilet.mobil_kmt_detail ?? ""} onChange={(ev) => setIlet({ ...ilet, mobil_kmt_detail: ev.target.value })} className={GIRDI} />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="submit" className={DUGME_ANA}>
+              {t.kaydet}
+            </button>
+            {mesaj.iletisim ? <span role="status" className="text-xs font-bold text-slate-500">{mesaj.iletisim}</span> : null}
+          </div>
+        </form>
+      </Bolum>
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <Operasyon kart={kart} t={t} />
+          <Bolum anahtar="ekip_destech" baslik={t.ekip}>
+            {kart.ekip.satirlar.length ? <KartTablo basliklar={kart.ekip.basliklar} satirlar={kart.ekip.satirlar} /> : <Bos>{t.satirYok}</Bos>}
+          </Bolum>
+          <Bolum anahtar="kritik_ci" baslik={t.kritikCi}>
+            {kart.kritik_ci.satirlar.length ? <KartTablo basliklar={kart.kritik_ci.basliklar} satirlar={kart.kritik_ci.satirlar} /> : <Bos>{t.satirYok}</Bos>}
           </Bolum>
         </div>
-      )}
+        <div className="space-y-4">
+          {kart.raporlar ? (
+            <Bolum anahtar="raporlar" baslik={`${t.raporlar} (${kart.raporlar.toplam})`}>
+              {kart.raporlar.son.length === 0 ? <Bos>{t.raporYok}</Bos> : null}
+              {kart.raporlar.son.map((r, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 border-b border-slate-100 py-1.5 text-xs last:border-0">
+                  <span className="font-mono font-black text-slate-700">{r.donem}</span>
+                  <span className="truncate text-slate-400">{r.duzenleyen ?? ""}</span>
+                  {r.bayrak ? <span className="font-bold text-rose-600">⚑ {r.bayrak}</span> : null}
+                  <Rozet ton={r.gonderildi ? "yesil" : "gri"}>{r.gonderildi ? t.gonderildi : t.taslak}</Rozet>
+                </div>
+              ))}
+            </Bolum>
+          ) : null}
+          {kart.gelirler ? (
+            <Bolum anahtar="gelirler" baslik={t.gelirler}>
+              <div className="grid grid-cols-1 gap-4">
+                {kart.gelirler.ict ? <GelirBlok baslik={t.ictGelir} g={kart.gelirler.ict} /> : null}
+                {kart.gelirler.apn ? <GelirBlok baslik={t.apnGelir} g={kart.gelirler.apn} apn /> : null}
+              </div>
+            </Bolum>
+          ) : null}
+          <Bolum anahtar="izleme" baslik={t.izleme}>
+            {kart.izleme.cacti.length === 0 ? <Bos>{t.izlemeYok}</Bos> : null}
+            {kart.izleme.cacti.map((u) => (
+              <span key={u} className="block truncate text-xs font-bold text-slate-500" title={u}>
+                {u}
+              </span>
+            ))}
+            <div className="mt-3 text-xs font-bold text-slate-500">
+              {t.sonKazima}: <span className="font-mono text-slate-700">{kart.izleme.son_kazima ?? "—"}</span> ({kart.izleme.kazima_adedi})
+            </div>
+          </Bolum>
+        </div>
+      </div>
     </div>
   )
 }

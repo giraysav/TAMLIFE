@@ -63,7 +63,7 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
         <form onSubmit={ara} className="flex flex-1 items-center gap-2" role="search">
           <Input value={arama} onChange={(e) => setArama(e.target.value)} placeholder={t.ara} aria-label={t.ara} maxLength={100} className="max-w-sm" />
           <Button type="submit" variant="outline">
-            {t.ara.replace("…", "")}
+            {t.aramaDugmesi}
           </Button>
         </form>
         <Button type="button" onClick={() => setYeniAcik((a) => !a)} aria-expanded={yeniAcik}>
@@ -114,17 +114,17 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
               <table className="w-full text-sm">
                 <caption className="sr-only">{t.liste}</caption>
                 <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th scope="col" className="px-4 py-3 font-medium">
+                  <tr className="bg-tl-navy text-left text-xs text-white">
+                    <th scope="col" className="px-4 py-3 font-black">
                       {t.unvan}
                     </th>
-                    <th scope="col" className="px-4 py-3 font-medium">
+                    <th scope="col" className="px-4 py-3 font-black">
                       {t.segment}
                     </th>
-                    <th scope="col" className="px-4 py-3 font-medium">
+                    <th scope="col" className="px-4 py-3 font-black">
                       {t.sorumlu}
                     </th>
-                    <th scope="col" className="px-4 py-3 text-right font-medium">
+                    <th scope="col" className="px-4 py-3 text-right font-black">
                       {t.skor}
                     </th>
                   </tr>
@@ -138,11 +138,11 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
                     </tr>
                   ) : (
                     veri.items.map((m) => (
-                      <tr key={m.id} className="border-b last:border-0 hover:bg-accent/50">
+                      <tr key={m.id} className="border-b border-slate-100 last:border-0 hover:bg-tl-yellow/10">
                         <td className="px-4 py-3">
                           <a
                             href={`#/musteri?m=${m.id}`}
-                            className="font-medium underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                            className="font-bold text-tl-navy underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
                           >
                             {m.parent_id ? "↳ " : ""}
                             {m.name}

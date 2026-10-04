@@ -2,6 +2,12 @@
 @source ".";
 
 @theme {
+  /* Eski panelin (Turkcell) renkleri: musteri karti ve aylik rapor bu paletle cizilir */
+  --color-tl-blue: #0055a5;
+  --color-tl-navy: #002855;
+  --color-tl-yellow: #ffc72c;
+  --color-tl-accent: #00a3e0;
+
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

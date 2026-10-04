@@ -1,7 +1,7 @@
 """Rol gorunumleri: hangi rol hangi modul/alt modulu gorur ve hangi sayfayla acilir.
 
 Admin her sey icin yetki verir (admin ekraninda Rol Yonetimi). Admin her zaman tum sayfalari gorur.
-Kayit yoksa varsayilan: admin'e ozel olmayan butun moduller, giris sayfasi 'ozet'.
+Kayit yoksa varsayilan: butun moduller (TAM Utilizasyon ve Rol Yonetimi dahil), giris sayfasi 'ozet'.
 Veritabani okunamazsa yonetici olmayan kullanici kapali kalir (yalniz genel bakis ve profil).
 """
 
@@ -39,7 +39,7 @@ class Gorunum:
 
 
 def tum_kimlikler(yonetici_dahil: bool = False) -> list[str]:
-    """Modul anahtarlari ve 'modul/alt' kimlikleri. admin_only moduller yonetici_dahil ile gelir (varsayilan kapali)."""
+    """Modul anahtarlari ve 'modul/alt' kimlikleri. admin_only moduller yonetici_dahil ile gelir (varsayilan olarak acik; yonetim sayfasi yine admin'e ozel)."""
     sonuc: list[str] = []
     for m in MODULES:
         if m.admin_only and not yonetici_dahil:
@@ -50,7 +50,7 @@ def tum_kimlikler(yonetici_dahil: bool = False) -> list[str]:
 
 
 def varsayilan_moduller() -> list[str]:
-    return tum_kimlikler(yonetici_dahil=False)
+    return tum_kimlikler(yonetici_dahil=True)
 
 
 def etkin(db: Session, user: Principal) -> Gorunum:

@@ -109,8 +109,8 @@ def test_team_member_sees_only_allowed(monkeypatch, client):
     monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMember")
     login_ok(client)
     keys = {m["key"] for m in client.get("/api/v1/modules").json()["data"]}
-    assert "utilizasyon" not in keys and "roller" not in keys and "talep" in keys
-    assert client.get("/api/v1/modules/utilizasyon").status_code == 403
+    assert {"utilizasyon", "roller", "talep"} <= keys  # varsayilan olarak hicbir modul kapali degil
+    assert client.get("/api/v1/modules/utilizasyon").status_code == 200
     for path in ("/api/v1/admin", "/api/v1/sources", "/api/v1/directory"):
         assert client.get(path).status_code == 403, path
 
@@ -138,7 +138,8 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     login_ok(client)
     ids = {item["id"] for item in client.get("/api/v1/session/me").json()["data"]["navigation"]}
     assert "talep" in ids and "musteri" in ids
-    assert not ids & {"utilizasyon", "roller", "admin", "integrations", "veri"}
+    assert {"utilizasyon", "roller"} <= ids  # varsayilan acik
+    assert not ids & {"admin", "integrations", "veri"}  # yonetim sayfalari yalniz admin
 
 
 def test_forwarded_for_only_from_trusted_proxy(client, monkeypatch):
