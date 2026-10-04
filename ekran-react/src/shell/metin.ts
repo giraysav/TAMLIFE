@@ -54,6 +54,20 @@ const TR = {
   yonetimAciklama: "Sistem ve veri yönetimi alanları.",
   gelistirmeTalepleri: "Geliştirme Talepleri",
   moduller: "Modüller",
+  geri: "Geri",
+  kaydet: "Kaydet",
+  yalnizAdmin: "yalnız admin",
+  rolAciklama: "Her rolün göreceği sayfaları ve giriş sayfasını siz belirlersiniz. Admin tüm sayfaları görür.",
+  rolKayitli: "Kayıtlı görünüm",
+  rolVarsayilan: "Varsayılan görünüm (henüz kaydedilmedi)",
+  rolAdminSabit: "Sabit görünüm",
+  rolAdminAciklama: "Admin tüm sayfaları görür ve bu görünüm değiştirilemez.",
+  rolGorecegiSayfalar: "Göreceği sayfalar",
+  rolGirisSayfasi: "Giriş sayfası",
+  rolKaydedildi: "Kaydedildi.",
+  rolKaydedilemedi: "Kaydedilemedi.",
+  altModuller: "Alt modüller",
+  altModulYok: "Bu modülün alt modülleri henüz tanımlanmadı.",
 }
 
 const EN: typeof TR = {
@@ -110,6 +124,20 @@ const EN: typeof TR = {
   yonetimAciklama: "System and data administration areas.",
   gelistirmeTalepleri: "Development Requests",
   moduller: "Modules",
+  geri: "Back",
+  kaydet: "Save",
+  yalnizAdmin: "admin only",
+  rolAciklama: "You decide which pages each role sees and which page it lands on. Admin sees every page.",
+  rolKayitli: "Saved view",
+  rolVarsayilan: "Default view (not saved yet)",
+  rolAdminSabit: "Fixed view",
+  rolAdminAciklama: "Admin sees every page and this view cannot be changed.",
+  rolGorecegiSayfalar: "Pages it can see",
+  rolGirisSayfasi: "Landing page",
+  rolKaydedildi: "Saved.",
+  rolKaydedilemedi: "Could not save.",
+  altModuller: "Sub-modules",
+  altModulYok: "This module's sub-modules are not defined yet.",
 }
 
 export function metin(dil: Dil) {

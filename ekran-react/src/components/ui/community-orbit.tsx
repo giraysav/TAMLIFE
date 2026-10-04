@@ -47,6 +47,7 @@ export interface CommunityOrbitProps {
 
 const STAGE_W = 1200
 const STAGE_H = 490
+const STAGE_H_SADE = 450 // istatistik yokken sahne daha kisa
 const CENTER = { x: 600, y: 620 }
 const RADIUS: Record<OrbitRing, number> = { outer: 492, inner: 404 }
 const COMPACT_BELOW = 640
@@ -59,10 +60,10 @@ function positionOnRing(ring: OrbitRing, angle: number): CSSProperties {
 }
 
 // Soldan baslar, tepeden gecer, sagda biter.
-function arcPath(r: number) {
-  const dy = CENTER.y - STAGE_H
+function arcPath(r: number, stageH: number) {
+  const dy = CENTER.y - stageH
   const dx = Math.sqrt(r * r - dy * dy)
-  return `M ${CENTER.x - dx} ${STAGE_H} A ${r} ${r} 0 0 1 ${CENTER.x + dx} ${STAGE_H}`
+  return `M ${CENTER.x - dx} ${stageH} A ${r} ${r} 0 0 1 ${CENTER.x + dx} ${stageH}`
 }
 
 const chip = "border border-border bg-card shadow-[0_2px_6px_rgba(0,0,0,0.05)] dark:shadow-none"
@@ -162,6 +163,7 @@ export default function CommunityOrbit({ items, stats, headline, tags = [], minS
   const [scale, setScale] = useState(1)
   const [compact, setCompact] = useState(false)
   const reduced = useReducedMotion() ?? false
+  const stageH = stats.length > 0 ? STAGE_H : STAGE_H_SADE
 
   useLayoutEffect(() => {
     const frame = frameRef.current
@@ -181,7 +183,7 @@ export default function CommunityOrbit({ items, stats, headline, tags = [], minS
       <div
         ref={frameRef}
         className="relative mx-auto w-full max-w-[1200px] overflow-hidden"
-        style={{ height: compact ? "auto" : STAGE_H * scale }}
+        style={{ height: compact ? "auto" : stageH * scale }}
       >
         {compact ? (
           <div className="grid grid-cols-2 gap-6 py-4">
@@ -194,7 +196,7 @@ export default function CommunityOrbit({ items, stats, headline, tags = [], minS
             className="absolute left-1/2 top-0"
             style={{
               width: STAGE_W,
-              height: STAGE_H,
+              height: stageH,
               transform: `translateX(-50%) scale(${scale})`,
               transformOrigin: "top center",
             }}
@@ -202,8 +204,8 @@ export default function CommunityOrbit({ items, stats, headline, tags = [], minS
             <svg
               className="pointer-events-none absolute inset-0"
               width={STAGE_W}
-              height={STAGE_H}
-              viewBox={`0 0 ${STAGE_W} ${STAGE_H}`}
+              height={stageH}
+              viewBox={`0 0 ${STAGE_W} ${stageH}`}
               fill="none"
               aria-hidden
               style={{
@@ -212,7 +214,7 @@ export default function CommunityOrbit({ items, stats, headline, tags = [], minS
               }}
             >
               <motion.path
-                d={arcPath(RADIUS.outer)}
+                d={arcPath(RADIUS.outer, stageH)}
                 className="stroke-border"
                 strokeWidth={2}
                 initial={{ pathLength: reduced ? 1 : 0 }}
@@ -220,7 +222,7 @@ export default function CommunityOrbit({ items, stats, headline, tags = [], minS
                 transition={{ duration: 1.4, ease: "easeOut" }}
               />
               <motion.path
-                d={arcPath(RADIUS.inner)}
+                d={arcPath(RADIUS.inner, stageH)}
                 className="stroke-border"
                 strokeWidth={3}
                 initial={{ pathLength: reduced ? 1 : 0 }}

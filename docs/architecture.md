@@ -14,9 +14,9 @@ Tek kaynak `backend/app/catalog.py`. Kimlik, ad ve bayrak üç üretim kaydında
 
 Uydurma modül yoktur. Listede olmayan bir kutu eklenmedi. `ictapn` ayrı modül değildir; kayıt `tamsms` anahtarına bağlıdır. `portfoy` ayrı modül değildir; anahtar `musteri`dir. `talep`, `roller` ve `utilizasyon` ana sayfa kutusu değildir. `topoloji` ana sayfada yoktur ve `musteri` iznine bağlıdır.
 
-Kimlikler: `musteri`, `takvim`, `takvim_ozet`, `onedesk`, `utilizasyon`, `roller`, `talep`, `ekip`, `rapor`, `proje`, `tamsms`, `tamapn`, `gelir_uretim`, `toptan`, `sunum`, `radar`, `baglantili`, `topoloji`.
+Kimlikler: `musteri`, `takvim`, `takvim_ozet`, `onedesk`, `utilizasyon`, `roller`, `talep`, `ekip`, `rapor`, `proje`, `tamsms`, `tamapn`, `gelir_uretim`, `sunum`, `radar`, `baglantili`, `topoloji`.
 
-Bayraklar üretimdeki anlamıyla durur. `yalniz_admin` olanlar `utilizasyon` ve `roller`. `herkese_acik` olan `talep`. Ana sayfada hazır olmayanlar `gelir_uretim`, `toptan` ve `baglantili` (`baglantili` kayıt durumu `stub`). Sağlık tabloları `MODUL_TABLOLARI` ile aynıdır.
+Bayraklar üretimdeki anlamıyla durur. `yalniz_admin` olanlar `utilizasyon` ve `roller`. `herkese_acik` olan `talep`. Ana sayfada hazır olmayanlar `gelir_uretim` ve `baglantili` (`baglantili` kayıt durumu `stub`). Sağlık tabloları `MODUL_TABLOLARI` ile aynıdır.
 
 ## 2. Dizin (AD/LDAP)
 
@@ -75,3 +75,10 @@ Sayfa `web` icinde bu iki bolumu gosterir. Katalog tek listedir; modul klasoru y
 ## CSRF (OpenAPI'de görünmez)
 
 Giriş sonrası sunucu `tamlife_csrf` çerezini (JS'in okuyabildiği) ve `tamlife_session` çerezini (HttpOnly) verir. Durum değiştiren her istek (login hariç) `x-csrf-token` başlığında çerez değerini taşır; sunucu bunu oturumdaki değerle karşılaştırır. Ayrı bir `/csrf` rotası yoktur. İstemci: `ekran-react/src/lib/http.ts`. Tipler `npm run api:uret` ile canlı `/openapi.json`'dan üretilir (yalnız dev ortamında açık).
+
+## Rol görünümleri ve alt modüller
+
+- Üç ana rol: `admin`, Manager (`TeamMngr`), Member (`TeamMember`). Her rolün göreceği modül/alt modüller ve **giriş sayfası** admin tarafından belirlenir (Yönetim → Rol Yönetimi, `GET/PUT /api/v1/roller`). Kayıt `role_view` tablosundadır; kayıt yoksa admin'e özel olmayan tüm modüller ve giriş sayfası `ozet` varsayılır.
+- Kural sunucuda zorlanır (`/session/me`, `/modules`, `/home`, `/modules/{modul}/{alt}`). Admin her şeyi görür; `utilizasyon` ve `roller` admin'e özeldir ve başka role verilemez. Veritabanı okunamazsa yönetici olmayan kullanıcı kapalı kalır (yalnız genel bakış ve profil).
+- **Alt modül hazırlığı:** `catalog.Module.children` (`SubModule`) tanımlıdır, kimlik `<modul>/<alt>`; sol menüde modülün altında açılır, adres `#/<modul>/<alt>`, rol görünümünde ayrı işaretlenir. Henüz hiçbir modülde alt modül tanımlı değildir; ayrıntılar verildikçe `catalog.py`'ye eklenir.
+- Kaldırılan: TAM Toptan modülü. Yeni adlar: ICT Sms & Gelir, APN Gelir ve Kurulum, Gelir Faydası Sağlanan İşler, Çeyrek Bazlı Sunum.

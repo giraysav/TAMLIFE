@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { csrfBasliklari } from "@/lib/http"
 
+export type AltOge = {
+  id: string
+  label: string
+  description: string
+  ready: boolean
+}
+
 export type MenuOgesi = {
   id: string
   label: string
@@ -8,6 +15,7 @@ export type MenuOgesi = {
   group: "work" | "insights" | "admin"
   icon: string
   ready: boolean
+  children: AltOge[]
 }
 
 export type Kullanici = {
@@ -15,6 +23,7 @@ export type Kullanici = {
   role: string
   is_admin: boolean
   idle_timeout_minutes: number
+  landing: string
   navigation: MenuOgesi[]
 }
 

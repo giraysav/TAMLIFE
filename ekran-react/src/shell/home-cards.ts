@@ -23,7 +23,7 @@ export const ANA_SAYFA_KARTLARI: readonly HomeCard[] = [
   },
   {
     "key": "sunum",
-    "title": "TAM Sunum",
+    "title": "Çeyrek Bazlı Sunum",
     "i18n": "card.sunum.title",
     "cardId": "dash-card-sunum",
     "empty": false
@@ -64,29 +64,22 @@ export const ANA_SAYFA_KARTLARI: readonly HomeCard[] = [
     "empty": false
   },
   {
-    "key": "toptan",
-    "title": "TAM Toptan",
-    "i18n": "card.toptan.title",
-    "cardId": "dash-card-toptan",
-    "empty": true
-  },
-  {
     "key": "tamsms",
-    "title": "TAM SMS",
+    "title": "ICT Sms & Gelir",
     "i18n": "card.tamSms.title",
     "cardId": "dash-card-tamsms",
     "empty": false
   },
   {
     "key": "tamapn",
-    "title": "TAM APN",
+    "title": "APN Gelir ve Kurulum",
     "i18n": "card.tamApn.title",
     "cardId": "dash-card-tamapn",
     "empty": false
   },
   {
     "key": "gelir_uretim",
-    "title": "TAM GELIR&URETIM",
+    "title": "Gelir Faydası Sağlanan İşler",
     "i18n": "card.gelirUretim.title",
     "cardId": "dash-card-gelir-uretim",
     "empty": true

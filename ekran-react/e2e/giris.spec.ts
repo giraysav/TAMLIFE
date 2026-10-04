@@ -117,3 +117,50 @@ test("kullanici menusu sag ustte: profil, yonetim, talepler, dil, cikis", async 
   await page.getByRole("menuitem", { name: "Geliştirme Talepleri" }).click()
   await expect(page).toHaveURL(/#\/talep$/)
 })
+
+test("genel bakis tek parca, yeni adlar, Toptan yok", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  const main = page.locator("main")
+  for (const kaldirilan of ["Modüller", "Ana sayfa kartı", "Panel tablosu", "Dış kaynak", "Rol yönetimi"]) {
+    await expect(main.getByText(kaldirilan, { exact: true })).toHaveCount(0)
+  }
+  await expect(main.getByRole("button", { name: "Yönetim" })).toHaveCount(0)
+  await expect(main.getByText("TAM Life tek panelde, tüm modüller bir arada.")).toBeVisible()
+  const nav = page.locator("nav[aria-label='TAM Life']")
+  for (const ad of ["ICT Sms & Gelir", "APN Gelir ve Kurulum", "Gelir Faydası Sağlanan İşler", "Çeyrek Bazlı Sunum", "Onedesk"]) {
+    await expect(nav.getByRole("link", { name: ad })).toBeVisible()
+  }
+  for (const eski of ["TAM Toptan", "TAM SMS", "TAM APN", "TAM GELIR&URETIM", "TAM Sunum", "OneDesk"]) {
+    await expect(nav.getByText(eski, { exact: true })).toHaveCount(0)
+  }
+})
+
+test("sayfa icinde geri oku: modulden genel bakisa doner", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  await expect(page.getByRole("button", { name: "Geri" })).toHaveCount(0) // genel bakista yok
+  await page.locator("nav a", { hasText: "Müşteri Yönetimi" }).click()
+  await expect(page.getByRole("heading", { name: "Müşteri Yönetimi", level: 1 })).toBeVisible()
+  await page.locator("nav a", { hasText: "Onedesk" }).click()
+  await expect(page.getByRole("heading", { name: "Onedesk", level: 1 })).toBeVisible()
+  await page.getByRole("button", { name: "Geri" }).click()
+  await expect(page.getByRole("heading", { name: "Müşteri Yönetimi", level: 1 })).toBeVisible()
+  await page.getByRole("button", { name: "Geri" }).click()
+  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+})
+
+test("rol yonetimi: uc rol, admin sabit, admin'e ozel moduller kilitli", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  await page.goto("/#/roller")
+  await expect(page.getByRole("heading", { name: "Rol Yönetimi", level: 1 })).toBeVisible()
+  for (const rol of ["Admin", "Manager", "Member"]) {
+    await expect(page.locator("main").getByText(rol, { exact: true }).first()).toBeVisible()
+  }
+  await expect(page.getByText("Admin tüm sayfaları görür ve bu görünüm değiştirilemez.")).toBeVisible()
+  const kilitli = page.getByRole("checkbox", { name: /TAM Utilizasyon/ })
+  await expect(kilitli.first()).toBeDisabled()
+  await expect(page.getByLabel("Giriş sayfası").first()).toBeVisible()
+  await expect(page.getByRole("button", { name: "Kaydet" })).toHaveCount(2)
+})
