@@ -18,5 +18,8 @@ data/incoming/*
 # aylik rapor PDF arsivi (yerel)
 data/reports/
 
+# calisma verisi: panel loglari, SQLite, uretim geri alma yedekleri (.env kopyasi sir icerir)
+backend/var/
+
 # sunucuya ozel yeni panel ortami (sir icerir)
 deploy/prod/dev-panel.env.bat
