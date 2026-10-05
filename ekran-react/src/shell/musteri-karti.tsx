@@ -207,7 +207,6 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const e = kart.erisim
   const k = kart.kimlik
   const o = kart.operasyon
-  const raporAdedi = kart.raporlar ? kart.raporlar.toplam : null
 
   return (
     <div className="space-y-4 font-sans">
@@ -231,25 +230,15 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-start gap-2 md:justify-end">
-              {e.kimlik_duzenle && !duzenle ? (
-                <button type="button" onClick={() => setDuzenle(true)} className={DUGME}>
-                  <Pencil aria-hidden className="size-3.5" />
-                  {t.duzenle}
-                </button>
-              ) : null}
               <div className="flex flex-col items-end gap-1.5">
                 <div className="flex items-stretch gap-2">
                   <a
                     href={`#/musteri?m=${k.id}&sekme=rapor`}
                     className="flex min-w-[8rem] flex-col rounded-xl border border-white/60 bg-white/95 p-3 text-tl-navy shadow-sm transition-colors hover:border-tl-yellow hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
-                    title={t.aylikRapor}
+                    title={t.aylikRaporGonder}
                   >
-                    <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.aylikRapor}</span>
-                    {raporAdedi !== null ? (
-                      <span className="font-mono text-3xl font-black">{raporAdedi.toLocaleString("tr-TR")}</span>
-                    ) : (
-                      <FileText aria-hidden className="ml-auto size-8 text-tl-navy" />
-                    )}
+                    <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.aylikRaporGonder}</span>
+                    <FileText aria-hidden className="ml-auto size-8 text-tl-navy" />
                     <span className="text-[10px] font-bold text-tl-blue">{t.ac} ›</span>
                   </a>
                   <Kutu ek="min-w-[8rem]">
@@ -382,6 +371,12 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
       <div className="flex flex-wrap items-center justify-end gap-2">
         {mesaj.istirak ? <span role="alert" className="text-xs font-bold text-destructive">{mesaj.istirak}</span> : null}
         {mesaj.sil ? <span role="alert" className="text-xs font-bold text-destructive">{mesaj.sil}</span> : null}
+        {e.kimlik_duzenle && !duzenle ? (
+          <button type="button" onClick={() => setDuzenle(true)} className={DUGME}>
+            <Pencil aria-hidden className="size-3.5" />
+            {t.duzenle}
+          </button>
+        ) : null}
         {e.istirak_ekle && !k.cati ? (
           yeniIstirak === null ? (
             <button type="button" className={DUGME} onClick={() => setYeniIstirak("")}>

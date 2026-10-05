@@ -55,8 +55,8 @@ test("musteri karti ve aylik rapor akisi (ekle, duzenle, iletisim, taslak, alici
   await iletisim.getByRole("button", { name: "Kaydet" }).click()
   await expect(iletisim.getByRole("status")).toHaveText("Kaydedildi.")
 
-  // aylik rapor sayfasi: hero'daki Aylik Rapor kutusu acar; sol form, sag gecmis ve alicilar
-  await page.locator("main").getByRole("link", { name: /Aylık Rapor/ }).first().click()
+  // aylik rapor sayfasi: hero'daki "Aylik Rapor Gonder" kutusu acar (sayac yok); sol form, sag gecmis ve alicilar
+  await page.locator("main").getByRole("link", { name: /Aylık Rapor Gönder/ }).first().click()
   await expect(page.getByRole("heading", { name: ad, level: 2 })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Operasyonel Rapor İçeriği Girişi" })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Rapor Geçmişi" })).toBeVisible()
