@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.kullanicilar import kullanici_kaydi
 from app.models import (
     AffiliateFinalFlag,
     AppUser,
@@ -46,16 +47,6 @@ def simdi() -> datetime:
 def final_skor_yetkisi(user: Principal) -> bool:
     """Uretim eylem_yetkisi('final_skor_atama'): yalniz admin ve TeamMngr."""
     return bool(user.is_admin or user.role in {"admin", "TeamMngr"})
-
-
-def kullanici_kaydi(db: Session, user: Principal) -> AppUser:
-    """Oturumdaki kisinin app_user satiri; yoksa olusturur (yerel/dev oturumu icin)."""
-    satir = db.scalar(select(AppUser).where(AppUser.username == user.username))
-    if satir is None:
-        satir = AppUser(username=user.username, display_name=user.username, role=user.role, is_admin=user.is_admin)
-        db.add(satir)
-        db.flush()
-    return satir
 
 
 # --- kriterler -------------------------------------------------------------------------------

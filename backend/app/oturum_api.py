@@ -5,12 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.ad import directory
 from app.audit import SecretAuditError, audit_log
 from app.config import get_settings
 from app.deps import get_db, require_user
+from app.kullanicilar import giris_isle
 from app.navigation import navigation_for
 from app.ortak import ok
 from app.rolgorunum import etkin
@@ -26,7 +28,7 @@ class LoginBody(BaseModel):
 
 
 @router.post("/login", response_model=None)
-def open_session(body: LoginBody, request: Request, response: Response) -> Response | dict:
+def open_session(body: LoginBody, request: Request, response: Response, db: Session = Depends(get_db)) -> Response | dict:
     ip = client_ip(request)
     name = body.username.strip()
     wait = limiter.retry_after(ip, name)
@@ -39,7 +41,12 @@ def open_session(body: LoginBody, request: Request, response: Response) -> Respo
         audit_log.remember(actor=name, action="login", outcome="deny", detail="bad credentials")
         raise HTTPException(status_code=401, detail="Giris reddedildi")
     limiter.succeeded(ip, name)
-    login(request, response, Principal(found.username, found.role, found.is_admin))
+    kisi = Principal(found.username, found.role, found.is_admin)
+    login(request, response, kisi)
+    try:
+        giris_isle(db, kisi)  # kisi listesi ve son giris; DB sorunu girisi engellemez
+    except SQLAlchemyError:
+        db.rollback()
     try:
         audit_log.remember(actor=found.username, action="login", outcome="allow", detail="local")
     except SecretAuditError:
@@ -68,6 +75,6 @@ def whoami(user: Principal = Depends(require_user), db: Session = Depends(get_db
             "idle_timeout_minutes": get_settings().session_idle_minutes,
             "navigation": nav,
             "landing": gorunum.landing,
-            "permissions": {"modules": [item["id"] for item in nav]},
+            "permissions": {"modules": [item["id"] for item in nav], "actions": sorted(gorunum.yetkiler)},
         }
     )

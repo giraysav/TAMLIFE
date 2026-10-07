@@ -3,46 +3,25 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.audit import audit_log
-from app.authz import can_open
-from app.catalog import get
-from app.deps import get_db, require_user
+from app.deps import get_db
+from app.erisim import Erisim, modul_erisim
 from app.musteri import servis as ms
-from app.ortak import EN_BUYUK_SAYFA_NO, KimlikTipi, ok
+from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, ok
 from app.rapor import servis as rs
-from app.rolgorunum import etkin
 from app.session import Principal
 
 router = APIRouter(prefix="/api/v1", tags=["musteri"])
 
 
-@dataclass(frozen=True)
-class Erisim:
-    user: Principal
-    izinli: frozenset[str] | None
-
-
-def _modul(anahtar: str) -> Callable[..., Erisim]:
-    """Rolun gorunumunde bu modul varsa gecer; yoksa 403 (sunucuda zorlanir)."""
-
-    def bagimlilik(user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> Erisim:
-        izinli = etkin(db, user).izinli
-        if not can_open(user, get(anahtar), get, izinli):
-            raise HTTPException(status_code=403, detail="Yetki yok")
-        return Erisim(user, izinli)
-
-    return bagimlilik
-
-
-musteri_erisim = _modul("musteri")
-rapor_erisim = _modul("rapor")
+musteri_erisim = modul_erisim("musteri")
+rapor_erisim = modul_erisim("rapor")
 
 
 def _yap(db: Session, islem: Callable[[], Any], yaz: bool = False) -> Any:
@@ -109,6 +88,24 @@ def liste(
     db: Session = Depends(get_db),
 ):
     return _yap(db, lambda: ms.liste(db, e.user, q, page, per_page))
+
+
+@router.get("/musteri/portfoy")
+def portfoy(
+    q: str = Query(default="", max_length=100),
+    tam: int | None = Query(default=None, ge=1, le=EN_BUYUK_KIMLIK),
+    segment: str = Query(default="", max_length=20),
+    page: int = Query(default=1, ge=1, le=EN_BUYUK_SAYFA_NO),
+    per_page: int = Query(default=ms.PORTFOY_SAYFA, ge=1, le=ms.EN_FAZLA_SAYFA_BASINA),
+    e: Erisim = Depends(musteri_erisim),
+    db: Session = Depends(get_db),
+):
+    return _yap(db, lambda: ms.portfoy(db, e.user, q, tam, segment, page, per_page))
+
+
+@router.get("/musteri/secenekler")
+def secenekler(e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: ms.secenekler(db, e.user))
 
 
 @router.post("/musteri")

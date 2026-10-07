@@ -252,7 +252,9 @@ def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):
     """Yerel/dev oturumunda app_user satiri bos olabilir; musteri ekleme ve rapor gonderimi gecerli kisi kimligiyle yazilir."""
     hdr = login_ok(client)
     with Session(engine()) as db:
-        assert db.query(AppUser).count() == 0
+        assert db.query(AppUser).filter_by(username="admin").count() == 1  # giris satiri olusturur
+        db.query(AppUser).delete()  # satir sonradan kaybolmus gibi: yazma yine olusturmali
+        db.commit()
     mid = client.post("/api/v1/musteri", json={"name": "Satirsiz Test"}, headers=hdr).json()["data"]["id"]
     with Session(engine()) as db:
         kisi = db.query(AppUser).filter_by(username="admin").one()

@@ -11,13 +11,16 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.audit import audit_log
 from app.config import get_settings
+from app.gelir.api import router as gelir_router
 from app.katalog_api import router as katalog_router
 from app.musteri.api import router as musteri_router
+from app.onedesk.api import router as onedesk_router
 from app.ortak import UygulamaHatasi, ok
 from app.oturum_api import router as oturum_router
 from app.rol_api import router as rol_router
 from app.security import install as install_security
 from app.skor.api import router as skor_router
+from app.takvim.api import router as takvim_router
 from app.tampon.router import router as tampon_router
 from app.yonetim import dosya_gunlugu
 from app.yonetim.gunlukler import kalici_yaz
@@ -47,7 +50,7 @@ def create_app() -> FastAPI:
     audit_log.sink = kalici_yaz  # denetim olaylari audit_event'e KALICI yazilir
     if settings.env != "test":
         dosya_gunlugu.kur()
-    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, yonetim_router, tampon_router):
+    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, onedesk_router, gelir_router, takvim_router, yonetim_router, tampon_router):
         app.include_router(router)
 
     @app.get("/api/v1/health")

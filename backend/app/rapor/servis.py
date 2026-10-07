@@ -20,12 +20,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.kullanicilar import kullanici_kaydi
 from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
 from app.musteri.servis import MusteriHata, musteri_getir, rapor_birimi_mi, yonetici_mi
 from app.ortak import tr_kucuk
 from app.rapor import metin as rapor_metin
 from app.session import Principal
-from app.skor.servis import kullanici_kaydi
 
 AZAMI_PDF = 30 * 1024 * 1024
 EN_FAZLA_ALICI = 20

@@ -17,6 +17,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.authz import is_admin
+from app.kullanicilar import kullanici_kaydi
 from app.models import (
     AffiliateFinalFlag,
     ApnRevenue,
@@ -35,7 +36,6 @@ from app.models import (
 )
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
-from app.skor.servis import kullanici_kaydi
 
 SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE")
 VARSAYILAN_TUTAR = "0,00 ₺"
@@ -140,6 +140,107 @@ def liste(db: Session, user: Principal, arama: str = "", sayfa: int = 1, adet: i
             }
             for c in satirlar
         ],
+        "total": toplam,
+        "page": sayfa,
+        "per_page": adet,
+        "pages": math.ceil(toplam / adet) if toplam else 0,
+    }
+
+
+# --- portfoy (kart izgarasi) ---------------------------------------------------------------------------
+PORTFOY_SAYFA = 24
+
+
+def _kalip(arama: str) -> str:
+    ham = arama.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{ham}%"
+
+
+def secenekler(db: Session, user: Principal) -> dict:
+    """Form ve filtre secenekleri: segmentler, TAM listesi (yalniz yonetici secer), iştirak icin cati musteriler."""
+    uid = kullanici_id(db, user)
+    yonetici = yonetici_mi(user)
+    kisiler = db.scalars(select(AppUser).where(AppUser.active.is_(True)).order_by(AppUser.display_name, AppUser.username)).all()
+    if not yonetici:
+        kisiler = [k for k in kisiler if k.id == uid]
+    catilar = select(Customer.id, Customer.name).where(Customer.parent_id.is_(None)).order_by(Customer.name)
+    if not yonetici:
+        catilar = catilar.where(Customer.owner_id == uid) if uid else catilar.where(Customer.id == -1)
+    return {
+        "segmentler": list(SEGMENTLER),
+        "yonetici": yonetici,
+        "kendi_id": uid,
+        "tam": [{"id": k.id, "ad": k.display_name or k.username} for k in kisiler],
+        "catilar": [{"id": i, "ad": a} for i, a in db.execute(catilar)],
+    }
+
+
+def portfoy(
+    db: Session, user: Principal, arama: str = "", tam_id: int | None = None, segment: str = "", sayfa: int = 1, adet: int = PORTFOY_SAYFA
+) -> dict:
+    """Cati musterilerin kart listesi (uretim 'Musterilerim'): iştirakler cati kartinin icinde; arama iştirak adini da kapsar.
+
+    Member yalniz kendi musterilerini ve catisi kendisinde olan iştirakleri gorur; yonetici hepsini.
+    """
+    adet = min(max(1, adet), EN_FAZLA_SAYFA_BASINA)
+    yonetici = yonetici_mi(user)
+    gorunen: set[int] | None = None
+    if not yonetici:
+        uid = kullanici_id(db, user)
+        benim = select(Customer.id).where(Customer.owner_id == uid) if uid else select(Customer.id).where(Customer.id == -1)
+        gorunen = set(db.scalars(select(Customer.id).where(or_(Customer.owner_id == uid, Customer.parent_id.in_(benim))))) if uid else set()
+    cati = select(Customer).where(Customer.parent_id.is_(None))
+    if gorunen is not None:
+        ustler = set(db.scalars(select(Customer.parent_id).where(Customer.id.in_(gorunen or {-1}), Customer.parent_id.is_not(None))))
+        cati = cati.where(Customer.id.in_((gorunen | ustler) or {-1}))
+    if tam_id:
+        cati = cati.where(Customer.owner_id == tam_id)
+    if segment:
+        cati = cati.where(Customer.segment == segment)
+    if arama.strip():
+        kalip = _kalip(arama)
+        alt = select(Customer.parent_id).where(Customer.parent_id.is_not(None), Customer.name.ilike(kalip, escape="\\"))
+        if gorunen is not None:
+            alt = alt.where(Customer.id.in_(gorunen or {-1}))
+        cati = cati.where(or_(Customer.name.ilike(kalip, escape="\\"), Customer.segment.ilike(kalip, escape="\\"), Customer.id.in_(alt)))
+    tum = db.scalars(cati.order_by(Customer.name, Customer.id)).all()
+    toplam = len(tum)
+    sayfa = max(1, min(sayfa, max(1, math.ceil(toplam / adet))))
+    parca = tum[(sayfa - 1) * adet : sayfa * adet]
+
+    alt_sorgu = select(Customer).where(Customer.parent_id.in_([c.id for c in tum] or [-1]))
+    if gorunen is not None:
+        alt_sorgu = alt_sorgu.where(Customer.id.in_(gorunen or {-1}))
+    altlar: dict[int, list[Customer]] = {}
+    for a in db.scalars(alt_sorgu.order_by(Customer.name)):
+        altlar.setdefault(a.parent_id, []).append(a)
+    sahipler = {u.id: (u.display_name or u.username) for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in parca if c.owner_id} or {-1})))}
+    skorlu = [c.score for c in tum if c.score]
+    return {
+        "items": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "segment": c.segment or "",
+                "owner": sahipler.get(c.owner_id) if c.owner_id else None,
+                "owner_id": c.owner_id,
+                "score": round(c.score, 1) if c.score else None,
+                "alarm": c.alarm_count or 0,
+                "sikayet": c.complaint_count or 0,
+                "talep": c.request_count or 0,
+                "istirakler": [{"id": a.id, "name": a.name} for a in altlar.get(c.id, [])],
+            }
+            for c in parca
+        ],
+        "ozet": {
+            "cati": toplam,
+            "istirak": sum(len(v) for v in altlar.values()),
+            "alarm": sum(c.alarm_count or 0 for c in tum),
+            "sikayet": sum(c.complaint_count or 0 for c in tum),
+            "talep": sum(c.request_count or 0 for c in tum),
+            "ortalama_skor": round(sum(skorlu) / len(skorlu), 1) if skorlu else None,
+            "skorlu": len(skorlu),
+        },
         "total": toplam,
         "page": sayfa,
         "per_page": adet,

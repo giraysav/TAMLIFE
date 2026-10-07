@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -35,7 +36,7 @@ TABLE_OWNER = {
     "report_draft": "rapor",
     "report_dispatch": "rapor",
     "report_recipient": "rapor",
-    "calendar_entry": "takvim",
+    "calendar_day": "takvim",
     "project": "proje",
     "project_item": "proje",
     "project_action": "proje",
@@ -50,6 +51,7 @@ TABLE_OWNER = {
     "demand_log": "talep",
     "sms_revenue": "tamsms",
     "apn_revenue": "tamapn",
+    "apn_work": "tamapn",
     "radar_prospect": "radar",
     "presentation": "sunum",
     "income_production": "gelir_uretim",
@@ -72,6 +74,7 @@ class AppUser(Base):
     role: Mapped[str] = mapped_column(String(40))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # panele son giris; TAM Takvim listesi
 
 
 class AuditEvent(Base):
@@ -219,14 +222,17 @@ class ReportRecipient(Base):
     to_addrs: Mapped[str] = mapped_column(Text, default="")
     cc_addrs: Mapped[str] = mapped_column(Text, default="")
 
-class CalendarEntry(Base):
-    __tablename__ = "calendar_entry"
+class CalendarDay(Base):
+    """Izin&Takvim Yonetimi: kisi basina gun durumu ve toplanti sayilari (uretim calendar_records, tarih gercek DATE)."""
+
+    __tablename__ = "calendar_day"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_calendar_day_user_day"), Index("ix_calendar_day_day", "day"))
     id: Mapped[int] = mapped_column(primary_key=True)
-    owner_username: Mapped[str] = mapped_column(String(120), default="")
-    kind: Mapped[str] = mapped_column(String(40), default="")
-    title: Mapped[str] = mapped_column(String(200), default="")
-    starts_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    ends_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    day: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(30), default="calisiyor")
+    online_count: Mapped[int] = mapped_column(Integer, default=0)
+    face_count: Mapped[int] = mapped_column(Integer, default=0)  # yuz yuze toplanti
 
 
 class Project(Base):
@@ -254,12 +260,28 @@ class ProjectAction(Base):
 
 
 class OnedeskRecord(Base):
+    """Onedesk alarm / talep / sikayet kaydi. Kaynak: admin Veri Girisi hatti (canli Onedesk DB baglantisi ileride). kind: alarm|talep|sikayet; status: open|closed."""
+
     __tablename__ = "onedesk_record"
+    __table_args__ = (
+        Index("ix_onedesk_kind_status", "kind", "status"),
+        Index("ix_onedesk_closed_at", "closed_at"),
+        Index("ix_onedesk_opened_at", "opened_at"),
+        Index("ix_onedesk_customer", "customer_id"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     kind: Mapped[str] = mapped_column(String(40), default="")
     external_key: Mapped[str] = mapped_column(String(80), default="")
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(40), default="")
+    customer_label: Mapped[str] = mapped_column(String(200), default="")  # kaynaktaki musteri adi (musteriyle eslesmeyen kayitlar icin)
+    location: Mapped[str] = mapped_column(String(200), default="")  # lokasyon / CI adi
+    category: Mapped[str] = mapped_column(String(200), default="")
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    root_cause: Mapped[str] = mapped_column(Text, default="")  # RCA: kok sebep
+    resolution: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(20), default="import")  # import | ornek
 
 
 class UtilCriteriaSet(Base):
@@ -359,6 +381,7 @@ class SmsRevenue(Base):
     customer_name: Mapped[str] = mapped_column(String(200))
     amount: Mapped[float] = mapped_column(Float, default=0)
     currency: Mapped[str] = mapped_column(String(10), default="TRY")
+    project: Mapped[str] = mapped_column(String(200), default="")  # proje bilgisi
     year: Mapped[int] = mapped_column(Integer)
     month: Mapped[int] = mapped_column(Integer)
     created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -374,8 +397,25 @@ class ApnRevenue(Base):
     amount: Mapped[float] = mapped_column(Float, default=0)
     currency: Mapped[str] = mapped_column(String(10), default="TRY")
     installation_pct: Mapped[float] = mapped_column(Float, default=0)
+    apn_name: Mapped[str] = mapped_column(String(200), default="")
+    request_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # talep tarihi
+    delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # teslim tarihi
     year: Mapped[int] = mapped_column(Integer)
     month: Mapped[int] = mapped_column(Integer)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ApnWork(Base):
+    """APN > Musteri Calismalari: toplanti konusu, tarihi, planli calisma tarihi, APN adi, musteri."""
+
+    __tablename__ = "apn_work"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_name: Mapped[str] = mapped_column(String(200))
+    meeting_subject: Mapped[str] = mapped_column(String(300), default="")
+    meeting_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    planned_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    apn_name: Mapped[str] = mapped_column(String(200), default="")
     created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -387,11 +427,20 @@ class RadarProspect(Base):
 
 
 class Presentation(Base):
+    """Ceyrek bazli sunum ogesi. source='takvim': TAM Takvim ozetinin o ceyrekteki goruntusu (period '2026-Q4'); ceyrek+kaynak basina tek kayit."""
+
     __tablename__ = "presentation"
+    __table_args__ = (
+        Index("uq_presentation_period_source", "period", "source", unique=True, sqlite_where=text("source <> ''"), postgresql_where=text("source <> ''")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)
     period: Mapped[str] = mapped_column(String(20), default="")
     title: Mapped[str] = mapped_column(String(200), default="")
+    source: Mapped[str] = mapped_column(String(30), default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    sent_by: Mapped[str] = mapped_column(String(120), default="")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class IncomeProduction(Base):
@@ -409,6 +458,7 @@ class RoleView(Base):
     role: Mapped[str] = mapped_column(String(40), primary_key=True)
     modules: Mapped[list] = mapped_column(JSON, default=list)
     landing: Mapped[str] = mapped_column(String(80), default="ozet")
+    permissions: Mapped[list] = mapped_column(JSON, default=list)  # ek yetkiler (rolgorunum.YETKILER), ornek takvim.sunuma_gonder
     updated_by: Mapped[str] = mapped_column(String(120), default="")
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
