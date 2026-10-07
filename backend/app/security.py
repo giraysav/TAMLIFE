@@ -14,8 +14,7 @@ from app.session import csrf_valid
 
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 LOGIN_PATH = "/api/v1/session/login"
-SSO_PATH = "/api/v1/session/sso"
-CSRF_MUAF = {LOGIN_PATH, SSO_PATH}  # oturum henuz yok; Origin denetimi yine uygulanir
+CSRF_MUAF = {LOGIN_PATH}  # oturum henuz yok; Origin denetimi yine uygulanir
 # Derlenmis arayuz (HTML/JS/CSS): ayni kaynaktan yukleme, satir ici betik yok. API cevaplari 'none' kalir.
 UI_CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "

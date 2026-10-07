@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.orm import Session
 
-from app import rapor_servis
 from app.deps import engine
 from app.models import ApnRevenue, AppUser, Customer, MatrixConfig, Report, ReportDispatch, SmsRevenue
+from app.rapor import servis as rapor_servis
 from tests.conftest import login_ok
 
 AY = rapor_servis.donem()

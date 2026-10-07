@@ -79,7 +79,7 @@ export function KullaniciMenu({ kullanici, dil, onDil, onGit, onCikis, talepVar 
             {t.profil}
           </button>
           {kullanici.is_admin ? (
-            <button type="button" role="menuitem" className={OGE} onClick={() => git("yonetim")}>
+            <button type="button" role="menuitem" className={OGE} onClick={() => git("yonetim/durum")}>
               <ShieldCheck aria-hidden className="size-4" />
               {t.yonetim}
             </button>

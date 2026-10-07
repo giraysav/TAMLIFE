@@ -20,15 +20,19 @@ from app.main import create_app
 from app.models import Base
 from app.security import limiter
 from app.session import reset_for_tests
+from app.yonetim.kalici_yazici import yazici
 
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("TAMLIFE_DATABASE_URL", f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
+    monkeypatch.setenv("TAMLIFE_LOG_DIR", str(tmp_path / "log"))  # testler repo icine gunluk/yedek yazmasin
+    monkeypatch.setenv("TAMLIFE_BACKUP_DIR", str(tmp_path / "yedek"))
     dispose_engines()
     Base.metadata.create_all(engine())
     limiter.reset()
     reset_for_tests()
+    yazici.sifirla()
     with TestClient(create_app(), base_url="http://testserver") as c:
         yield c
     dispose_engines()

@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { istemci } from "@/app/providers"
 import { useOturum } from "@/lib/oturum"
 import { Giris } from "@/shell/giris"
 import type { Dil } from "@/shell/metin"
@@ -15,6 +16,11 @@ function dilOku(): Dil {
 export default function App() {
   const { durum, kullanici, giris, cikis } = useOturum()
   const [dil, setDil] = useState<Dil>(dilOku)
+
+  // Oturum kapaninca onbellekteki yonetim verisi bellekte kalmasin (ayni sekmede baska kullanici girebilir).
+  useEffect(() => {
+    if (durum === "yok") istemci.clear()
+  }, [durum])
 
   function dilSec(sonraki: Dil) {
     setDil(sonraki)

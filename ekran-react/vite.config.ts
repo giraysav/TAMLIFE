@@ -15,5 +15,7 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     strictPort: false,
+    // Yerel gelistirme: API (backend/dev.ps1) 8117'de. Tarayici tek kaynaktan (Vite) konusur, CORS/Origin sorunu olmaz.
+    proxy: { "/api": "http://127.0.0.1:8117" },
   },
 })

@@ -10,11 +10,8 @@ PROTECTED = (
     "/api/v1/session/me",
     "/api/v1/modules",
     "/api/v1/home",
-    "/api/v1/summary",
-    "/api/v1/schema",
-    "/api/v1/sources",
-    "/api/v1/admin",
-    "/api/v1/directory",
+    "/api/v1/yonetim/ozet",
+    "/api/v1/tampon/kaynaklar",
 )
 
 
@@ -111,7 +108,7 @@ def test_team_member_sees_only_allowed(monkeypatch, client):
     keys = {m["key"] for m in client.get("/api/v1/modules").json()["data"]}
     assert {"utilizasyon", "roller", "talep"} <= keys  # varsayilan olarak hicbir modul kapali degil
     assert client.get("/api/v1/modules/utilizasyon").status_code == 200
-    for path in ("/api/v1/admin", "/api/v1/sources", "/api/v1/directory"):
+    for path in ("/api/v1/yonetim/ozet", "/api/v1/tampon/kaynaklar"):
         assert client.get(path).status_code == 403, path
 
 
@@ -130,7 +127,13 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     login_ok(client)
     data = client.get("/api/v1/session/me").json()["data"]
     ids = {item["id"] for item in data["navigation"]}
-    assert {"musteri", "utilizasyon", "roller", "admin", "integrations", "veri"} <= ids
+    assert {"musteri", "utilizasyon", "yonetim"} <= ids
+    assert not ids & {"roller", "admin", "integrations", "veri"}  # admin icin tek giris: Yonetim (alti bolum); eski kimlikler yok
+    yonetim = next(i for i in data["navigation"] if i["id"] == "yonetim")
+    assert [c["id"] for c in yonetim["children"]] == [
+        f"yonetim/{b}" for b in ("durum", "tampon", "veritabani", "roller", "arizalar", "gunlukler")
+    ]
+    assert yonetim["group"] == "admin"
     assert data["idle_timeout_minutes"] == get_settings().session_idle_minutes
     assert "topoloji" not in ids  # menude gorunmez
     client.post("/api/v1/session/logout", headers={"X-CSRF-Token": client.cookies.get("tamlife_csrf")})
@@ -139,7 +142,7 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     ids = {item["id"] for item in client.get("/api/v1/session/me").json()["data"]["navigation"]}
     assert "talep" in ids and "musteri" in ids
     assert {"utilizasyon", "roller"} <= ids  # varsayilan acik
-    assert not ids & {"admin", "integrations", "veri"}  # yonetim sayfalari yalniz admin
+    assert not ids & {"admin", "integrations", "veri", "yonetim"}  # yonetim sayfalari yalniz admin
 
 
 def test_forwarded_for_only_from_trusted_proxy(client, monkeypatch):
@@ -157,46 +160,27 @@ def test_forwarded_for_only_from_trusted_proxy(client, monkeypatch):
     assert client_ip(req("8.8.8.8", "1.2.3.4")) == "8.8.8.8"  # baska esten gelen basliga guvenilmez
 
 
-def test_integrations_admin_only_and_no_values(client, monkeypatch):
-    assert client.get("/api/v1/integrations").status_code == 401
+def test_kurum_baglantilari_yonetimde_sir_sizdirmaz(client, monkeypatch):
     login_ok(client)
     monkeypatch.setenv("ORACLE_REPORTDB_ENABLED", "true")
     monkeypatch.setenv("ORACLE_REPORTDB_HOST", "gizli-host.example")
     monkeypatch.setenv("ORACLE_REPORTDB_PASSWORD", "cok-gizli-parola")
-    r = client.get("/api/v1/integrations")
-    assert r.status_code == 200
-    assert "gizli-host.example" not in r.text and "cok-gizli-parola" not in r.text
-    row = next(i for i in r.json()["data"]["items"] if i["id"] == "oracle_reportdb")
-    assert row["state"] == "incomplete" and "ORACLE_REPORTDB_PORT" in row["missing"]
-    assert "ORACLE_REPORTDB_HOST" not in row["missing"]
+    kaynaklar = client.get("/api/v1/tampon/kaynaklar")
+    ozet = client.get("/api/v1/yonetim/ozet")
+    for r in (kaynaklar, ozet):
+        assert r.status_code == 200
+        assert "gizli-host.example" not in r.text and "cok-gizli-parola" not in r.text
+    row = next(k for k in kaynaklar.json()["data"] if k["anahtar"] == "oracle_reportdb")
+    assert row["yapilandirma"] == "eksik" and "ORACLE_REPORTDB_PORT" in row["eksik"]
+    assert "ORACLE_REPORTDB_HOST" not in row["eksik"]  # dolu olan anahtarin adi bile yok sayilir
+    kontrol = next(k for k in ozet.json()["data"]["saglik"]["kontroller"] if k["id"] == "entegrasyon")
+    assert kontrol["durum"] == "uyari"  # yarim yapilandirma uyari verir
 
 
-def _tablolar(d):
-    assert [t["name"] for t in d["tables"]] == [
-        "veri_setleri", "ham_bloklar", "kurallar", "metrikler", "uygulama_gunlugu", "ingest_batch", "ingest_record",
-    ]
-    for t in d["tables"]:
-        assert t["rows"] is None or t["exists"] is True  # var olmayan tabloya satir uydurulmaz
-
-
-def test_veri_durumu_admin_only(client):
-    assert client.get("/api/v1/veri").status_code == 401
-
-
-def test_veri_durumu_sqlite_postgres_degil_ve_sir_yok(client, monkeypatch, tmp_path):
-    monkeypatch.setenv("TAMLIFE_DATABASE_URL", f"sqlite:///{(tmp_path / 'v.db').as_posix()}")
-    login_ok(client)
-    r = client.get("/api/v1/veri")
-    d = r.json()["data"]
-    _tablolar(d)
-    assert d["engine"] == "sqlite" and d["postgres"] is False and d["postgres_ready"] is False
-    assert "PostgreSQL bagli degil" in d["note"]
-    assert all(t["exists"] is False and t["rows"] is None for t in d["tables"])
-    assert "://" not in r.text and str(tmp_path) not in r.text
-
-
-def test_veri_durumu_postgres_ulasilamiyor(client, monkeypatch):
+def test_db_erisilemezken_giris_bloklanmaz_ve_hata_kodlanir(client, monkeypatch):
     import socket
+
+    from fastapi.testclient import TestClient
 
     try:
         socket.create_connection(("127.0.0.1", 5432), timeout=0.5).close()
@@ -204,24 +188,10 @@ def test_veri_durumu_postgres_ulasilamiyor(client, monkeypatch):
     except OSError:
         pass
     monkeypatch.setenv("TAMLIFE_DATABASE_URL", "postgresql+psycopg://kullanici:gizli-sifre@127.0.0.1:5432/x")
-    login_ok(client)
-    r = client.get("/api/v1/veri")
-    d = r.json()["data"]
-    _tablolar(d)
-    assert d["engine"] == "postgresql" and d["postgres_ready"] is False and "baglanilamadi" in d["note"]
+    istemci = TestClient(client.app, base_url="http://testserver", raise_server_exceptions=False)
+    basla = time.monotonic()
+    login_ok(istemci)  # giris veritabani gerektirmez; denetim olayi kuyruga alinir, istek beklemez
+    assert time.monotonic() - basla < 15
+    r = istemci.get("/api/v1/yonetim/ozet")  # veritabani gerektiren uc: ham metin degil kod + kayit no
+    assert r.status_code == 500 and r.json()["hata_kodu"] == "TL-DB-01" and len(r.json()["kayit_no"]) == 32
     assert "gizli-sifre" not in r.text and "kullanici" not in r.text
-
-
-def test_contract_covers_catalog_and_owners_match():
-    from app.catalog import MODULES
-    from app.contract import CONTRACT_DATA
-
-    ids = {m.key for m in MODULES}
-    assert ids <= set(CONTRACT_DATA) and set(CONTRACT_DATA) - ids == {"veri"}
-    for m in MODULES:
-        own = CONTRACT_DATA[m.key]["sahip_tablolar"]
-        assert own == ([m.table] if m.table else []), m.key
-    for key, c in CONTRACT_DATA.items():
-        assert set(c["baska_modul_tablolari"]) == set(c["kullanilan_tablolar"]) - set(c["sahip_tablolar"]), key
-        for f in c["fonksiyonlar"]:
-            assert isinstance(f["ad"], str) and isinstance(f["girdi"], tuple)

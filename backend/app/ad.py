@@ -1,7 +1,6 @@
-"""AD/LDAP adapter. Checks production config presence. Does not bind.
+"""AD/LDAP baglayicisi: yalniz yapilandirma doluluk denetimi ve panel-yerel giris. Dizine BAGLANMAZ (ldap kutuphanesi, soket, bind yok).
 
-No ldap library, no socket, no directory bind. LDAPS settings use the AD_*
-names from the old service; there is no separate LDAP_* key.
+LDAPS ayarlari eski servisteki AD_* adlarini kullanir; ayri LDAP_* anahtari yoktur.
 """
 
 from __future__ import annotations
@@ -9,7 +8,7 @@ from __future__ import annotations
 import hmac
 from dataclasses import dataclass
 
-from app.config import AD_LDAP_KEYS, AD_REQUIRED_KEYS, get_settings
+from app.config import get_settings
 
 
 @dataclass(frozen=True)
@@ -20,35 +19,15 @@ class DirectoryUser:
 
 
 class Directory:
-    """Slot names are visible. authenticate never opens a socket."""
-
-    def __init__(self) -> None:
-        self.lookups = 0
-        self.ldap_calls = 0
-
     def configured(self) -> bool:
+        """AD_ENABLED=true ve AD_SERVER + AD_DOMAIN dolu mu (deger okunmaz, yalniz doluluk)."""
         settings = get_settings()
         enabled = settings.ad_enabled.strip().lower() == "true"
         return bool(enabled and settings.present("AD_SERVER") and settings.present("AD_DOMAIN"))
 
-    def slot(self) -> dict:
-        settings = get_settings()
-        flags = {key: settings.present(key) for key in AD_LDAP_KEYS}
-        return {
-            "mode": "presence",
-            "bind": "disabled",
-            "configured": self.configured(),
-            "present": [key for key, filled in flags.items() if filled],
-            "missing": [key for key in AD_REQUIRED_KEYS if not flags[key]],
-            "keys": list(AD_LDAP_KEYS),
-            "ldap_calls": self.ldap_calls,
-        }
-
     def authenticate(self, username: str, password: str) -> DirectoryUser | None:
-        """Panel-local check only. A filled AD slot still does not bind."""
+        """Yalniz dev/test'te panel-yerel kullanici (TAMLIFE_LOCAL_*). Dolu AD yuvasi bile bind yapmaz."""
         settings = get_settings()
-        self.lookups += 1
-        _ = self.configured()
         if settings.env not in {"dev", "test"}:
             return None
         expected_user = settings.local_user

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { GOMULU, apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
+import { apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
 
 export type AltOge = {
   id: string
@@ -57,16 +57,7 @@ export function useOturum() {
 
   const yukle = useCallback(async (): Promise<boolean> => {
     try {
-      let cevap = await fetch(apiYolu("/api/v1/session/me"), { credentials: "same-origin" })
-      // Uretim panelinin arkasinda: vekil girisli yoneticiyi iletir, ikinci giris istenmez.
-      if (cevap.status === 401 && GOMULU) {
-        const sso = await fetch(apiYolu("/api/v1/session/sso"), { method: "POST", credentials: "same-origin" })
-        if (sso.ok) cevap = await fetch(apiYolu("/api/v1/session/me"), { credentials: "same-origin" })
-      }
-      if (GOMULU && cevap.redirected) {
-        window.location.reload() // uretim paneli oturumu bitmis: giris sayfasina yonlenir
-        return false
-      }
+      const cevap = await fetch(apiYolu("/api/v1/session/me"), { credentials: "same-origin" })
       if (!cevap.ok) throw new Error(String(cevap.status))
       const govde = (await cevap.json()) as { data: Kullanici }
       setKullanici(govde.data)
@@ -86,11 +77,6 @@ export function useOturum() {
 
   useEffect(() => {
     const bitti = () => {
-      // Gomulu modda sayfa yenilenir: uretim paneli oturumu surerse SSO yeniden acar, bittiyse giris sayfasi gelir.
-      if (GOMULU) {
-        window.location.reload()
-        return
-      }
       setKullanici(null)
       setDurum("yok")
     }
@@ -155,8 +141,6 @@ export function useOturum() {
         headers: csrfBasliklari(),
       })
     } finally {
-      // Gomulu modda cikis uretim paneline doner (SSO ile yeniden otomatik acilmasin diye sayfa degisir).
-      if (GOMULU) window.location.assign("/")
       setKullanici(null)
       setDurum("yok")
     }

@@ -25,12 +25,17 @@ PRESENTATION: dict[str, tuple[str, str, str]] = {
     "baglantili": ("work", "link", "Kurum içi bağlantılı araçlar"),
 }
 
-# Yalnız admin. (id, etiket, aciklama, ikon)
-ADMIN_ITEMS: tuple[tuple[str, str, str, str], ...] = (
-    ("integrations", "Kurum Bağlantıları", "Kurumsal bağımlılıkların yapılandırma durumu", "network"),
-    ("veri", "Veri Yönlendirici", "Veri kaynakları, aktarım kuralları ve skorlar", "database"),
-    ("admin", "Sistem Yönetimi", "Kullanıcılar ve sistem yönetimi", "settings"),
+# Yalnız admin: TEK giriş, altı bölüm (kimlik "yonetim/<bolum>"). Eski admin / integrations / veri / roller girişleri buraya indi.
+YONETIM_BOLUMLERI: tuple[tuple[str, str, str], ...] = (
+    ("durum", "Genel Durum", "Sağlık kontrolleri ve göstergeler"),
+    ("tampon", "Veri Girişi", "Dış kaynak verisi: tampon, analiz, dağıtım"),
+    ("veritabani", "Veritabanı", "Sürüm, tablolar, bütünlük ve yedek"),
+    ("roller", "Roller", "Rol görünümleri ve giriş sayfaları"),
+    ("arizalar", "Arızalar", "Hata kayıtları ve çözüm adımları"),
+    ("gunlukler", "Günlükler", "Denetim olayları, oturumlar, uygulama günlüğü"),
 )
+# Admin için ayrı menü öğesi olmayan, Yönetim altına katlanan modüller (admin olmayana rol görünümüyle aynen görünür).
+YONETIME_KATLANAN = frozenset({"roller"})
 
 
 def navigation_for(user: Principal, izinli: frozenset[str] | None = None) -> list[dict[str, object]]:
@@ -39,6 +44,8 @@ def navigation_for(user: Principal, izinli: frozenset[str] | None = None) -> lis
         if not module.in_nav or module.key not in PRESENTATION:
             continue
         if not can_open(user, module, get, izinli):
+            continue
+        if is_admin(user) and module.key in YONETIME_KATLANAN:
             continue
         group, icon, description = PRESENTATION[module.key]
         if group == "admin" and not is_admin(user):
@@ -64,8 +71,18 @@ def navigation_for(user: Principal, izinli: frozenset[str] | None = None) -> lis
             }
         )
     if is_admin(user):
-        rows.extend(
-            {"id": key, "label": label, "description": text, "group": "admin", "icon": icon, "ready": True, "children": []}
-            for key, label, text, icon in ADMIN_ITEMS
+        rows.append(
+            {
+                "id": "yonetim",
+                "label": "Yönetim",
+                "description": "Veritabanı, roller, arızalar, günlükler ve veri girişi",
+                "group": "admin",
+                "icon": "settings",
+                "ready": True,
+                "children": [
+                    {"id": f"yonetim/{key}", "label": label, "description": text, "ready": True}
+                    for key, label, text in YONETIM_BOLUMLERI
+                ],
+            }
         )
     return rows

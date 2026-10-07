@@ -34,7 +34,7 @@ Roller: `admin`, `TeamMngr`, `TeamMember`. `utilizasyon` ve `roller` yalnız adm
 
 ## 3. Dış kaynak (Oracle / Onedesk)
 
-Liste `backend/app/external.py`. Her kaynak üretimdeki anahtar adlarını taşır. DSN değeri repoda yoktur. Sürücü yüklenmez. `connect()` kapalıdır.
+Liste `backend/app/external.py`. Her kaynak üretimdeki anahtar adlarını taşır. DSN değeri repoda yoktur. Sürücü yüklenmez, bağlantı kodu yoktur: kaynaklar yalnız anahtar adı ve doluluk olarak raporlanır (`baglantilar.py`); canlı çekim ileride `tampon/` altına ayrı işçi olarak girer.
 
 Ortak: `ORACLE_CLIENT_DIR`.
 
@@ -48,40 +48,31 @@ Onent / Oracle (`ONENTDB_DB_ENABLED`): `ONENTDB_DB_ENABLED`, `ONENTDB_DB_HOST`, 
 
 Onedesk DB, canlı `.env`'deki adıyla `ORACLE_REPORTDB_*` ön ekini kullanır; eski kodun `ONEDESK_DB_*` adı kaldırıldı. `ONEDESK_BASE_URL` ve `ONEDESK_API_KEY` DB değil REST ayarıdır, adı değişmedi.
 
-Üretim ham deposunun içe alma tabloları (`ham_veri.db`): `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`. Paneldeki boş iniş tabloları `ingest_batch` ve `ingest_record`dır; bunlar eski ham deponun adı değildir. Dosya bırakma yeri `data/incoming` boş bırakılır.
+Üretim ham deposunun içe alma tabloları (`ham_veri.db`): `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`. Yeni panelde bunların karşılığı sıkıştırılmış blok tamponudur: `ingest_batch` (parti) ve `ingest_block` (satır blokları); dağıtım `distribution_rule` / `distribution_log`. Ayrıntı: `yonetim-ve-tampon-tasarimi.md`.
 
 ## 4. Panel veritabanı (PostgreSQL)
 
 Panel şeması PostgreSQL içindir. Adres `TAMLIFE_DATABASE_URL`. Boş ise varsayılan `postgresql+psycopg://localhost:5432/tamlife` (parola yok).
 
-Geçit `backend/app/gateway.py` içe aktarılırken bağlanmaz. Şema `backend/app/models.py`. Sürüm `backend/alembic` (`0001_panel_schema`).
+Geçit `backend/app/gateway.py` içe aktarılırken bağlanmaz. Şema `backend/app/models.py`. Sürüm `backend/alembic` (`0001_panel_schema` … `0007_external_source_kaldir`; 33 alan tablosu).
 
 `pin_code` ve `totp_secret` kolonları yoktur. Denetim metninde parola, pin ve çerez reddedilir.
 
 ## Kök
 
-İngilizce kök: `backend`, `web`, `data`, `docs`. React kabuğu `web` altındadır ve iş kuralı taşımaz.
+İngilizce kök: `backend`, `ekran-react`, `docs`. React arayüzü `ekran-react` altındadır ve iş kuralı taşımaz.
 
 ## 5. Yonetim
 
-Yalniz admin oturumu. `GET /api/v1/admin`. Oturum yoksa 401, admin degilse 403.
-
-Baglanti yuvalari yalniz dolu veya bos: AD (`AD_ENABLED` ile `AD_SERVER` ve `AD_DOMAIN`), `ORACLE_REPORTDB` (Onedesk DB), `ONENT`, `URUNTUTAR`. Deger donmez.
-
-Veri yonetimi tablolari: `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`, `ingest_batch`, `ingest_record`. Satirlar `TAMLIFE_DATABASE_URL` ayarliysa Postgres'e yazilir. Adres donmez.
-
-Sayfa `web` icinde bu iki bolumu gosterir. Katalog tek listedir; modul klasoru yoktur.
+Yönetim tek giriştir (yalnız admin): #/yonetim/<bölüm> — Genel Durum, Veri Girişi, Veritabanı, Roller, Arızalar, Günlükler. API `/api/v1/yonetim/**` ve `/api/v1/tampon/**`; ayrıntı ve veri modeli: `yonetim-ve-tampon-tasarimi.md`. Bağlantı yuvaları yalnız dolu/boş döner (AD: `AD_ENABLED` + `AD_SERVER` + `AD_DOMAIN`; `ORACLE_REPORTDB`, `ONENT`, `URUNTUTAR`); değer dönmez.
 
 ## CSRF (OpenAPI'de görünmez)
 
-Giriş sonrası sunucu `tamlife_csrf` çerezini (JS'in okuyabildiği) ve `tamlife_session` çerezini (HttpOnly) verir. Durum değiştiren her istek (login hariç) `x-csrf-token` başlığında çerez değerini taşır; sunucu bunu oturumdaki değerle karşılaştırır. Ayrı bir `/csrf` rotası yoktur. İstemci: `ekran-react/src/lib/http.ts`. Tipler `npm run api:uret` ile canlı `/openapi.json`'dan üretilir (yalnız dev ortamında açık).
+Giriş sonrası sunucu `tamlife_csrf` çerezini (JS'in okuyabildiği) ve `tamlife_session` çerezini (HttpOnly) verir. Durum değiştiren her istek (login hariç) `x-csrf-token` başlığında çerez değerini taşır; sunucu bunu oturumdaki değerle karşılaştırır. Ayrı bir `/csrf` rotası yoktur. İstemci: `ekran-react/src/lib/http.ts`. Tipler `npm run api:uret` ile canlı `/openapi.json`'dan üretilir (yalnız dev ortamında açık; `src/lib/api-types.ts` bugün bayat ve import edilmiyor).
 
 ## Rol görünümleri ve alt modüller
 
 - Üç ana rol: `admin`, Manager (`TeamMngr`), Member (`TeamMember`). Her rolün göreceği modül/alt modüller ve **giriş sayfası** admin tarafından belirlenir (Yönetim → Rol Yönetimi, `GET/PUT /api/v1/roller`). Kayıt `role_view` tablosundadır; kayıt yoksa admin'e özel olmayan tüm modüller ve giriş sayfası `ozet` varsayılır.
-- Kural sunucuda zorlanır (`/session/me`, `/modules`, `/home`, `/modules/{modul}/{alt}`). Admin her şeyi görür; `utilizasyon` ve `roller` de role verilebilir (varsayılan açık); Yönetim sayfaları (`admin`, `integrations`, `veri`) yalnız admin içindir. Veritabanı okunamazsa yönetici olmayan kullanıcı kapalı kalır (yalnız genel bakış ve profil).
+- Kural sunucuda zorlanır (`/session/me`, `/modules`, `/home`, `/modules/{modul}/{alt}`). Admin her şeyi görür; `utilizasyon` ve `roller` de role verilebilir (varsayılan açık); Yönetim (`yonetim/*`) yalnız admin içindir. Veritabanı okunamazsa yönetici olmayan kullanıcı kapalı kalır (yalnız genel bakış ve profil).
 - **Alt modül hazırlığı:** `catalog.Module.children` (`SubModule`) tanımlıdır, kimlik `<modul>/<alt>`; sol menüde modülün altında açılır, adres `#/<modul>/<alt>`, rol görünümünde ayrı işaretlenir. Henüz hiçbir modülde alt modül tanımlı değildir; ayrıntılar verildikçe `catalog.py`'ye eklenir.
 - Kaldırılan: TAM Toptan modülü. Yeni adlar: ICT Sms & Gelir, APN Gelir ve Kurulum, Gelir Faydası Sağlanan İşler, Çeyrek Bazlı Sunum.
-
-## Üretim paneline bağlantı (`/admin/dev`)
-Yeni panel, üretim Flask panelinin arkasında `https://tamlife/admin/dev` altında çalışır; yalnız yönetici açar. Ayrı süreç (uvicorn, `127.0.0.1`), Flask yalnız ters vekildir; yönetici kimliği `X-TAM-*` başlıkları ve paylaşılan sırla iletilir (`POST /api/v1/session/sso`, yalnız loopback + sır, CSRF muaf ama Origin denetimli). Ayarlar: `TAMLIFE_BASE_PATH` (çerez yolu), `TAMLIFE_SSO_SECRET`, `TAMLIFE_STATIC_DIR` (derlenmiş arayüz), `TAMLIFE_SQLITE_IZIN` (dev/test dışında SQLite için açık onay; PostgreSQL gelene kadar). Arayüz `npm run build:prod` ile taban `/admin/dev/` olarak derlenir; API yolları `apiYolu()` ile öneklenir. Kurulum ve sorun giderme: `deploy/prod/README.md`.

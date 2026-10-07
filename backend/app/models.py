@@ -16,10 +16,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    select,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -56,9 +54,11 @@ TABLE_OWNER = {
     "presentation": "sunum",
     "income_production": "gelir_uretim",
     "role_view": "roller",
-    "external_source": "ingest",
     "ingest_batch": "ingest",
-    "ingest_record": "ingest",
+    "ingest_block": "ingest",
+    "distribution_rule": "ingest",
+    "distribution_log": "ingest",
+    "fault_event": "yonetim",
 }
 
 # Source key names live in app.external. No DSN value is stored here.
@@ -413,49 +413,24 @@ class RoleView(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class ExternalSource(Base):
-    __tablename__ = "external_source"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    source_key: Mapped[str] = mapped_column(String(40), unique=True)
-    kind: Mapped[str] = mapped_column(String(40))
-    dsn_env: Mapped[str] = mapped_column(String(80))
-    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-
-
 class IngestBatch(Base):
+    """Tampon partisi: bir kaynaktan gelen ham verinin tek kopyasi (satirlar ingest_block'ta). Durum: receiving | ready | failed | rejected."""
+
     __tablename__ = "ingest_batch"
     id: Mapped[int] = mapped_column(primary_key=True)
     source_key: Mapped[str] = mapped_column(String(40))
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(40), default="staged")
     note: Mapped[str] = mapped_column(String(300), default="")
+    label: Mapped[str] = mapped_column(String(200), default="")
+    row_count: Mapped[int] = mapped_column(Integer, default=0)
+    columns: Mapped[list] = mapped_column(JSON, default=list)
+    profile: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[str] = mapped_column(String(300), default="")
 
 
-class IngestRecord(Base):
-    __tablename__ = "ingest_record"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    batch_id: Mapped[int] = mapped_column(ForeignKey("ingest_batch.id"))
-    source_key: Mapped[str] = mapped_column(String(40))
-    external_key: Mapped[str] = mapped_column(String(120), default="")
-    payload: Mapped[dict] = mapped_column(JSONB)
-    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-def seed_source_slots(connection) -> None:
-    """Insert production source slots. The row stores the env key name, never a DSN value."""
-    from sqlalchemy import insert
-
-    from app.external import SOURCE_SLOTS
-
-    present = {row[0] for row in connection.execute(select(ExternalSource.source_key))}
-    for key, kind, env_name in SOURCE_SLOTS:
-        if key in present:
-            continue
-        connection.execute(
-            insert(ExternalSource).values(
-                source_key=key,
-                kind=kind,
-                dsn_env=env_name,
-                enabled=False,
-            )
-        )
+# Ozellik paketlerinin tablolari ayni Base'e baglanir (alembic ve create_all hepsini gorur). Dosyanin SONUNDA kalmali.
+from app.tampon import models as _tampon_models  # noqa: F401
+from app.yonetim import models as _yonetim_models  # noqa: F401

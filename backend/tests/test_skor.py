@@ -10,7 +10,7 @@ import pathlib
 
 import pytest
 
-from app import skor
+from app.skor import motor as skor
 
 GOLD = json.loads((pathlib.Path(__file__).with_name("skor_golden.json")).read_text(encoding="utf-8"))
 PROD = pathlib.Path(r"D:\Project\TAM_Life\TAMLIFE\backend\app\kutucuklar\utilizasyon\skor_motoru.py")

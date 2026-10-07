@@ -23,8 +23,6 @@ AD_LDAP_KEYS: tuple[str, ...] = (
     "AD_OTOMATIK_AC",
 )
 
-AD_REQUIRED_KEYS: tuple[str, ...] = ("AD_ENABLED", "AD_SERVER", "AD_DOMAIN")
-
 
 def _slot(alias: str):
     secret = alias.endswith(("PASSWORD", "API_KEY"))
@@ -40,7 +38,7 @@ class Settings(BaseSettings):
 
     env: str = "dev"
     database_url: str = "postgresql+psycopg://localhost:5432/tamlife"
-    sqlite_izin: bool = False  # dev/test disinda SQLite icin acik onay; yalniz /admin/dev on yayin asamasi (PostgreSQL gelene kadar)
+    sqlite_izin: bool = False  # dev/test disinda SQLite icin acik onay (PostgreSQL gelene kadar)
 
     cookie_name: str = "tamlife_session"
     cookie_secure: bool | None = None  # bos: dev disinda otomatik true
@@ -53,10 +51,18 @@ class Settings(BaseSettings):
     allowed_hosts: str = "127.0.0.1,localhost,testserver"
     trusted_proxies: str = ""  # virgulle ayrilmis proxy IP'leri; X-Forwarded-For yalniz bunlardan kabul
 
-    # Uretim paneli (Flask) arkasinda /admin/dev altinda calisma. Bos = kendi basina (taban yol "/").
-    base_path: str = "/"  # cerez yolu; ornek "/admin/dev"
-    sso_secret: str = Field(default="", repr=False)  # Flask vekili ile paylasilan sir (>=32 karakter); bos = SSO kapali
+    base_path: str = "/"  # cerez yolu; arayuz bir alt yolda sunulacaksa (orn. "/panel") oraya kisitlanir
     static_dir: str = ""  # derlenmis arayuz (ekran-react/dist); bos = yok, yalniz API
+
+    # Yonetim: dosya gunlugu ve yedek klasorleri. Bos = backend/var/logs ve veritabani klasorunun yanindaki yedek/.
+    # Yedek, veri ile AYNI diskte durmasin diye (tek disk ikisini birlikte kaybeder) uretimde ayri bir yola ayarlanmali.
+    log_dir: str = ""
+    backup_dir: str = ""
+    backup_keep: int = 30
+    # Tampon (Veri Girisi) sinirlari.
+    ingest_max_rows: int = 300_000
+    ingest_max_mb: int = 20
+    ingest_keep_batches: int = 3  # kaynak basina saklanan hazir parti
 
     # Panel session only. Not a directory bind.
     local_user: str = ""

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -29,9 +31,18 @@ def guard(detail: str) -> str:
     return detail[:500]
 
 
+_log = logging.getLogger("tamlife.denetim")
+
+
 class AuditLog:
+    """Bellek halkasi (son 1000 olay) + istege bagli KALICI yazici (sink).
+
+    sink uygulama kurulurken verilir (yonetim.gunlukler.kalici_yaz); yazilamazsa istegi dusurmez.
+    """
+
     def __init__(self) -> None:
         self.events: deque[dict[str, str]] = deque(maxlen=1000)
+        self.sink: Callable[[dict[str, str]], None] | None = None
 
     def remember(
         self,
@@ -51,6 +62,11 @@ class AuditLog:
             "detail": guard(detail),
         }
         self.events.append(row)
+        if db is None and self.sink is not None:
+            try:
+                self.sink(row)
+            except Exception:  # noqa: BLE001 - denetim yazilamasa da istek dusmemeli
+                _log.warning("denetim olayi kalici yazilamadi", exc_info=True)
         if db is not None:
             from app.models import AuditEvent
 

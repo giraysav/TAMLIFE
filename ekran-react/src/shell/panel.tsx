@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, lazy, useEffect, useMemo, useState } from "react"
 import { ArrowLeft, ChevronDown, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,24 +14,32 @@ import {
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
-} from "@/components/ui/app-1-utils/sidebar"
+} from "@/components/ui/sidebar"
 import { OzetOrbit } from "@/components/ui/ozet-orbit"
 import type { Kullanici, MenuOgesi } from "@/lib/oturum"
-import { AdminSayfasi } from "@/shell/admin-sayfasi"
 import { Arama } from "@/shell/arama"
-import { EntegrasyonSayfasi } from "@/shell/entegrasyon-sayfasi"
 import { IKON } from "@/shell/ikon"
 import { KullaniciMenu } from "@/shell/kullanici-menu"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { ModulSayfasi } from "@/shell/modul-sayfasi"
-import { MusteriSayfasi } from "@/shell/musteri-sayfasi"
+import { MusteriSayfasi } from "@/musteri/musteri-sayfasi"
 import { ProfilSayfasi } from "@/shell/profil-sayfasi"
-import { RaporSayfasi } from "@/shell/rapor-sayfasi"
+import { RaporSayfasi } from "@/musteri/rapor-sayfasi"
 import { RollerSayfasi } from "@/shell/roller-sayfasi"
 import { hashParcala } from "@/shell/rota"
-import { VeriSayfasi } from "@/shell/veri-sayfasi"
-import { YonetimSayfasi } from "@/shell/yonetim-sayfasi"
+
+/** Yonetim yalniz admin icin: ayri JS parcasi (diger kullanicilar indirmez). */
+const YonetimSayfasi = lazy(() => import("@/yonetim/yonetim-sayfasi"))
+
+/** Eski yonetim adresleri (yer imleri, gecmis) tek Yonetim alaninin bolumlerine yonlenir. */
+const ESKI_ADRESLER: Record<string, string> = {
+  admin: "yonetim/durum",
+  integrations: "yonetim/durum",
+  veri: "yonetim/veritabani",
+  roller: "yonetim/roller",
+  yonetim: "yonetim/durum",
+}
 
 /** Yan menu sirasi: Genel, Calisma alanim, Raporlar ve gorunumler. Yonetim yalniz sag ustteki kullanici menusunde. */
 const GRUPLAR = ["genel", "work", "insights"] as const
@@ -187,22 +195,42 @@ type Props = { kullanici: Kullanici; dil: Dil; onDil: (dil: Dil) => void; onCiki
 export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
   const t = metin(dil)
   const [secili, setSecili] = useState(() => hashId() || "ozet")
-  const yonetimOgeleri = useMemo(() => kullanici.navigation.filter((o) => o.group === "admin"), [kullanici.navigation])
+  /** Yonetim disindaki admin alanlari (orn. TAM Utilizasyon): Yonetim sayfasinin altinda baglanti olarak gorunur. */
+  const digerYonetim = useMemo(() => kullanici.navigation.filter((o) => o.group === "admin" && o.id !== "yonetim"), [kullanici.navigation])
   const izinli = useMemo(() => {
     const kume = new Set(["ozet", "profil"])
     for (const o of kullanici.navigation) {
       kume.add(o.id)
       for (const c of o.children ?? []) kume.add(c.id)
     }
-    if (kullanici.is_admin) kume.add("yonetim")
     return kume
-  }, [kullanici.navigation, kullanici.is_admin])
-  const aktif = izinli.has(secili) ? secili : "ozet"
+  }, [kullanici.navigation])
+  // Admin icin eski adresler (admin, veri, integrations, roller) yeni Yonetim bolumune cevrilir.
+  const normal = kullanici.is_admin ? (ESKI_ADRESLER[secili] ?? secili) : secili
+  const aktif = izinli.has(normal) ? normal : "ozet"
   const [ustId, altId] = aktif.split("/")
   const oge = kullanici.navigation.find((o) => o.id === ustId)
   const alt = altId ? oge?.children?.find((c) => c.id === aktif) : undefined
   const baslik =
-    aktif === "ozet" ? t.hosgeldin(kullanici.username) : aktif === "profil" ? t.profil : aktif === "yonetim" ? t.yonetim : (alt?.label ?? oge?.label)
+    aktif === "ozet"
+      ? t.hosgeldin(kullanici.username)
+      : aktif === "profil"
+        ? t.profil
+        : ustId === "yonetim"
+          ? `${t.yonetim}${alt ? ` › ${alt.label}` : ""}`
+          : (alt?.label ?? oge?.label)
+  const aramaOgeleri = useMemo(
+    () => kullanici.navigation.flatMap((o) => [o, ...(o.children ?? []).map((c) => ({ ...o, id: c.id, label: `${o.label} › ${c.label}`, description: c.description, children: [] }))]),
+    [kullanici.navigation],
+  )
+
+  // Eski adresten gelindiyse adres cubugunu da yeni adrese cevir (gecmise kayit eklemeden).
+  useEffect(() => {
+    if (kullanici.is_admin && ESKI_ADRESLER[secili]) {
+      window.location.replace(`#/${ESKI_ADRESLER[secili]}`)
+      setSecili(ESKI_ADRESLER[secili])
+    }
+  }, [kullanici.is_admin, secili])
 
   // Rol bazli giris sayfasi: adres bos acildiysa rolun giris sayfasina git (gecmise yeni kayit eklemeden).
   useEffect(() => {
@@ -247,7 +275,7 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
           ) : null}
           <h1 className="truncate text-lg font-semibold">{baslik}</h1>
           <div className="ml-auto flex items-center gap-2">
-            <Arama ogeler={kullanici.navigation} dil={dil} onGit={sec} />
+            <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} />
             <KullaniciMenu
               kullanici={kullanici}
               dil={dil}
@@ -263,14 +291,10 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
             <OzetOrbit dil={dil} />
           ) : aktif === "profil" ? (
             <ProfilSayfasi kullanici={kullanici} dil={dil} />
-          ) : aktif === "yonetim" ? (
-            <YonetimSayfasi ogeler={yonetimOgeleri} dil={dil} onGit={sec} />
-          ) : aktif === "admin" ? (
-            <AdminSayfasi dil={dil} />
-          ) : aktif === "integrations" ? (
-            <EntegrasyonSayfasi dil={dil} />
-          ) : aktif === "veri" ? (
-            <VeriSayfasi dil={dil} />
+          ) : ustId === "yonetim" && kullanici.is_admin ? (
+            <Suspense fallback={<p className="text-sm text-muted-foreground">{t.yukleniyor}</p>}>
+              <YonetimSayfasi dil={dil} bolum={altId ?? ""} digerleri={digerYonetim} />
+            </Suspense>
           ) : aktif === "musteri" ? (
             <MusteriSayfasi dil={dil} />
           ) : aktif === "rapor" ? (

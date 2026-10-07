@@ -115,6 +115,32 @@ def logout(request: Request, response: Response) -> None:
     response.delete_cookie(CSRF_COOKIE, path=settings.cookie_path)
 
 
+def aktif_oturumlar() -> list[dict[str, object]]:
+    """Suresi dolmamis oturumlar (kimlik bilgisi/belirteç DONMEZ): kullanici, rol, yas ve bosta sure (sn)."""
+    simdi = _now()
+    with _LOCK:
+        return [
+            {
+                "username": e.principal.username,
+                "role": e.principal.role,
+                "is_admin": e.principal.is_admin,
+                "age_s": int(simdi - e.created),
+                "idle_s": int(simdi - e.last_seen),
+            }
+            for e in _STORE.values()
+            if not _expired(e, simdi)
+        ]
+
+
+def kullanici_oturumlarini_kapat(username: str) -> int:
+    """Kullanicinin tum oturumlarini sunucuda dusurur (rol degisikligi / supheli etkinlik). Donus: kapatilan adet."""
+    with _LOCK:
+        kapanacak = [t for t, e in _STORE.items() if e.principal.username == username]
+        for t in kapanacak:
+            _STORE.pop(t, None)
+    return len(kapanacak)
+
+
 def reset_for_tests() -> None:
     with _LOCK:
         _STORE.clear()

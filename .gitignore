@@ -12,14 +12,9 @@ dist/
 *.db
 *.db-shm
 *.db-wal
-data/incoming/*
-!data/incoming/.gitkeep
 
 # aylik rapor PDF arsivi (yerel)
 data/reports/
 
-# calisma verisi: panel loglari, SQLite, uretim geri alma yedekleri (.env kopyasi sir icerir)
+# calisma verisi: panel loglari, yedekler, SQLite, eski uretim geri alma kopyalari (sir icerebilir)
 backend/var/
-
-# sunucuya ozel yeni panel ortami (sir icerir)
-deploy/prod/dev-panel.env.bat

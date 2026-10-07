@@ -1,50 +1,33 @@
-"""FastAPI shell for directory slots, the panel schema, and ingest slots."""
+"""FastAPI uygulamasi: ara katmanlar, hata isleyiciler, router'lar ve (varsa) derlenmis arayuz. Is kurali burada degil, ilgili paketlerde."""
 
 from __future__ import annotations
 
-import re
-import secrets
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.ad import directory
-from app.admin import integrations as admin_integrations
-from app.admin import overview as admin_overview
-from app.admin import veri_durumu as admin_veri_durumu
-from app.audit import SecretAuditError, audit_log
-from app.authz import ROLES, can_open, is_admin
-from app.catalog import HOME_CARDS, MODULES, get
+from app.audit import audit_log
 from app.config import get_settings
-from app.deps import get_db
-from app.ingest import status as ingest_status
-from app.models import TABLE_OWNER
-from app.musteri_api import router as musteri_router
-from app.navigation import navigation_for
-from app.rolgorunum import RolHata, etkin, gorunumler, katalog, kaydet
-from app.security import client_ip, limiter
+from app.katalog_api import router as katalog_router
+from app.musteri.api import router as musteri_router
+from app.ortak import UygulamaHatasi, ok
+from app.oturum_api import router as oturum_router
+from app.rol_api import router as rol_router
 from app.security import install as install_security
-from app.session import Principal, current_user, login, logout
-from app.skor_api import router as skor_router
+from app.skor.api import router as skor_router
+from app.tampon.router import router as tampon_router
+from app.yonetim import dosya_gunlugu
+from app.yonetim.gunlukler import kalici_yaz
+from app.yonetim.router import router as yonetim_router
+from app.yonetim.yakalayici import genel_istisna
 
 
-class RolGovde(BaseModel):
-    modules: list[str] = Field(max_length=500)
-    landing: str = Field(max_length=80)
-
-
-LOOPBACK = {"127.0.0.1", "::1"}
-SSO_KULLANICI = re.compile(r"^[A-Za-z0-9._@\-]{1,64}$")
-
-
-class LoginBody(BaseModel):
-    username: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=1, max_length=256)
+async def uygulama_hatasi(_: Request, exc: UygulamaHatasi) -> JSONResponse:
+    """Servis katmaninin bilinen hatalari (kod = HTTP durumu); RaporHata gibi ek alan tasiyanlar govdeye eklenir."""
+    return JSONResponse({"detail": exc.mesaj, **getattr(exc, "ek", {})}, status_code=exc.kod)
 
 
 def create_app() -> FastAPI:
@@ -59,222 +42,26 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
     install_security(app)
-    app.include_router(skor_router)
-    app.include_router(musteri_router)
+    app.add_exception_handler(UygulamaHatasi, uygulama_hatasi)  # bilinen is hatasi: kod + mesaj
+    app.add_exception_handler(Exception, genel_istisna)  # beklenmeyen hata: kod + kayit no, ham metin yok
+    audit_log.sink = kalici_yaz  # denetim olaylari audit_event'e KALICI yazilir
+    if settings.env != "test":
+        dosya_gunlugu.kur()
+    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, yonetim_router, tampon_router):
+        app.include_router(router)
 
     @app.get("/api/v1/health")
     def health() -> dict:
-        settings = get_settings()
-        return {
-            "status": "success",
-            "data": {
-                "service": "tamlife",
-                "database": settings.database_url.split(":", 1)[0].split("+", 1)[0],
-                "database_configured": bool(settings.database_url),
-            },
-        }
-
-    @app.get("/api/v1/directory")
-    def directory_slot(request: Request) -> dict:
-        _require_admin(request)
-        return {"status": "success", "data": directory.slot()}
-
-    @app.post("/api/v1/session/login", response_model=None)
-    def open_session(body: LoginBody, request: Request, response: Response) -> Response | dict:
-        ip = client_ip(request)
-        name = body.username.strip()
-        wait = limiter.retry_after(ip, name)
-        if wait:
-            audit_log.remember(actor=name, action="login", outcome="deny", detail="locked")
-            return JSONResponse(
-                {"detail": "Cok fazla deneme"}, status_code=429, headers={"Retry-After": str(wait)}
-            )
-        found = directory.authenticate(name, body.password)
-        if found is None:
-            limiter.failed(ip, name)
-            audit_log.remember(actor=name, action="login", outcome="deny", detail="bad credentials")
-            raise HTTPException(status_code=401, detail="Giris reddedildi")
-        limiter.succeeded(ip, name)
-        login(request, response, Principal(found.username, found.role, found.is_admin))
-        try:
-            audit_log.remember(actor=found.username, action="login", outcome="allow", detail="local")
-        except SecretAuditError:
-            pass
-        return {"status": "success", "data": {"username": found.username, "role": found.role}}
-
-    @app.post("/api/v1/session/sso", response_model=None)
-    def sso_oturum(request: Request, response: Response) -> dict:
-        """Uretim paneli (Flask) vekili girisli yoneticiyi iletir. Yalniz loopback + paylasilan sir."""
         ayar = get_settings()
-        sir = ayar.sso_secret
-        kullanici = request.headers.get("x-tam-user", "").strip()
-        rol = request.headers.get("x-tam-role", "").strip()
-        verilen = request.headers.get("x-tam-proxy-secret", "")
-        eslesme = len(sir) >= 32 and secrets.compare_digest(verilen.encode(), sir.encode())
-        ag = (request.client.host if request.client else "") in LOOPBACK
-        if not (eslesme and ag and SSO_KULLANICI.match(kullanici) and rol in ROLES):
-            audit_log.remember(
-                actor=kullanici if SSO_KULLANICI.match(kullanici) else "-",
-                action="sso",
-                outcome="deny",
-                detail=f"sir={'ok' if eslesme else 'yok'} ag={'ok' if ag else 'yok'}",
-            )
-            raise HTTPException(status_code=401, detail="SSO reddedildi")
-        login(request, response, Principal(kullanici, rol, rol == "admin"))
-        audit_log.remember(actor=kullanici, action="login", outcome="allow", detail="sso")
-        return {"status": "success", "data": {"username": kullanici, "role": rol}}
-
-    @app.post("/api/v1/session/logout")
-    def close_session(request: Request, response: Response) -> dict:
-        user = current_user(request)
-        logout(request, response)
-        if user is not None:
-            audit_log.remember(actor=user.username, action="logout", outcome="allow")
-        return {"status": "success", "data": {}}
-
-    @app.get("/api/v1/session/me")
-    def whoami(request: Request, db: Session = Depends(get_db)) -> dict:
-        user = _require_user(request)
-        gorunum = etkin(db, user)
-        nav = navigation_for(user, gorunum.izinli)
-        return {
-            "status": "success",
-            "data": {
-                "username": user.username,
-                "role": user.role,
-                "is_admin": user.is_admin,
-                "idle_timeout_minutes": get_settings().session_idle_minutes,
-                "navigation": nav,
-                "landing": gorunum.landing,
-                "permissions": {"modules": [item["id"] for item in nav]},
-            },
-        }
-
-    @app.get("/api/v1/modules")
-    def list_modules(request: Request, db: Session = Depends(get_db)) -> dict:
-        user = _require_user(request)
-        izinli = etkin(db, user).izinli
-        data = [
+        return ok(
             {
-                "key": item.key,
-                "title": item.title,
-                "kind": item.kind,
-                "admin_only": item.admin_only,
-                "public": item.public,
-                "in_nav": item.in_nav,
-                "permission": item.permission,
-                "i18n": item.i18n,
-                "card_id": item.card_id,
-                "box_id": item.box_id,
-                "permission_group": item.permission_group,
-                "ready": item.ready,
-                "registry_id": item.registry_id,
-                "registry_status": item.registry_status,
-                "modal_id": item.modal_id,
-                "table": item.table,
+                "service": "tamlife",
+                "database": ayar.database_url.split(":", 1)[0].split("+", 1)[0],
+                "database_configured": bool(ayar.database_url),
             }
-            for item in MODULES
-            if can_open(user, item, get, izinli)
-        ]
-        return {"status": "success", "data": data}
-
-    @app.get("/api/v1/home")
-    def home(request: Request, db: Session = Depends(get_db)) -> dict:
-        user = _require_user(request)
-        izinli = etkin(db, user).izinli
-        data = [
-            {"key": card.key, "title": card.title, "i18n": card.i18n, "card_id": card.card_id}
-            for card in HOME_CARDS
-            if can_open(user, card, get, izinli)
-        ]
-        return {"status": "success", "data": data}
-
-    @app.get("/api/v1/modules/{key:path}")
-    def open_module(key: str, request: Request, db: Session = Depends(get_db)) -> dict:
-        user = _require_user(request)
-        izinli = etkin(db, user).izinli
-        ana, _, alt = key.partition("/")
-        try:
-            module = get(ana)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="Modul yok") from exc
-        if alt and alt not in {c.key for c in module.children}:
-            raise HTTPException(status_code=404, detail="Modul yok")
-        if not can_open(user, module, get, izinli) or (alt and izinli is not None and key not in izinli):
-            audit_log.remember(
-                actor=user.username,
-                action="open",
-                outcome="deny",
-                module_key=key,
-                detail="forbidden",
-            )
-            raise HTTPException(status_code=403, detail="Yetki yok")
-        return {"status": "success", "data": {"module": key}}
-
-    @app.get("/api/v1/summary")
-    def summary(request: Request, db: Session = Depends(get_db)) -> dict:
-        user = _require_user(request)
-        izinli = etkin(db, user).izinli
-        data = {
-            "modules": sum(1 for item in MODULES if can_open(user, item, get, izinli)),
-            "home_cards": sum(1 for card in HOME_CARDS if can_open(user, card, get, izinli)),
-            "tables": len(TABLE_OWNER),
-            "external_sources": len(ingest_status()["sources"]),
-        }
-        return {"status": "success", "data": data}
-
-    @app.get("/api/v1/sources")
-    def sources(request: Request) -> dict:
-        _require_admin(request)
-        return {"status": "success", "data": ingest_status()}
-
-    @app.get("/api/v1/schema")
-    def schema(request: Request) -> dict:
-        _require_user(request)
-        rows = [{"table": name, "owner": owner} for name, owner in sorted(TABLE_OWNER.items())]
-        return {"status": "success", "data": rows}
-
-    @app.get("/api/v1/roller")
-    def roller(request: Request, db: Session = Depends(get_db)) -> dict:
-        user = _require_user(request)
-        izinli = etkin(db, user).izinli
-        if not is_admin(user) and (izinli is None or "roller" not in izinli):
-            raise HTTPException(status_code=403, detail="Yetki yok")  # salt okunur gorunum: yalniz rol ekrani verilenlere
-        return {"status": "success", "data": {"roles": gorunumler(db), "catalog": katalog()}}
-
-    @app.put("/api/v1/roller/{rol}")
-    def roller_kaydet(rol: str, body: RolGovde, request: Request, db: Session = Depends(get_db)) -> dict:
-        admin = _require_admin(request)
-        try:
-            sonuc = kaydet(db, rol, body.modules, body.landing, admin.username)
-            db.commit()
-        except RolHata as exc:
-            raise HTTPException(status_code=exc.kod, detail=exc.mesaj) from exc
-        audit_log.remember(
-            actor=admin.username,
-            action="roller.kaydet",
-            outcome="allow",
-            module_key="roller",
-            detail=f"rol={rol} adet={len(sonuc['modules'])} giris={sonuc['landing']}",
         )
-        return {"status": "success", "data": sonuc}
 
-    @app.get("/api/v1/veri")
-    def veri(request: Request) -> dict:
-        _require_admin(request)
-        return {"status": "success", "data": admin_veri_durumu()}
-
-    @app.get("/api/v1/integrations")
-    def integrations(request: Request) -> dict:
-        _require_admin(request)
-        return {"status": "success", "data": admin_integrations()}
-
-    @app.get("/api/v1/admin")
-    def admin_area(request: Request) -> dict:
-        _require_admin(request)
-        return {"status": "success", "data": admin_overview()}
-
-    _arayuz_bagla(app, get_settings().static_dir)
+    _arayuz_bagla(app, settings.static_dir)
     return app
 
 
@@ -296,20 +83,6 @@ def _arayuz_bagla(app: FastAPI, dizin: str) -> None:
         if yol.parent != kok or not yol.is_file():
             raise HTTPException(status_code=404, detail="Yok")
         return FileResponse(yol)
-
-
-def _require_admin(request: Request) -> Principal:
-    user = _require_user(request)
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="Yetki yok")
-    return user
-
-
-def _require_user(request: Request) -> Principal:
-    user = current_user(request)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Oturum gerekli")
-    return user
 
 
 app = create_app()

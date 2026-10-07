@@ -1,4 +1,4 @@
-"""Dis kaynaklar. Uretim anahtar adlari ve ice alma tablolari.
+"""Dis kaynaklar: uretimdeki anahtar adlari (ORACLE_REPORTDB_*, ONENTDB_DB_*, URUNTUTAR_DB_*).
 
 Deger okunmaz, surucu yuklenmez, baglanti acilmaz.
 Onedesk DB, canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski
@@ -75,37 +75,6 @@ SOURCES: tuple[Source, ...] = (
         _oracle("ONENTDB_DB", "ONENT_DB_URL"),
     ),
 )
-
-SOURCE_SLOTS: tuple[tuple[str, str, str], ...] = tuple(
-    (item.id, item.kind, item.enabled_key) for item in SOURCES
-)
-
-# ham_veri.db semasi (kutucuklar/veri/ham_depo.py). Satir yok.
-INGEST_TABLES: dict[str, tuple[str, ...]] = {
-    "veri_setleri": (
-        "id",
-        "kaynak",
-        "dosya",
-        "sayfa",
-        "basliklar",
-        "satir_sayisi",
-        "yukleyen",
-        "zaman",
-        "durum",
-        "ilerleme",
-        "hata",
-        "profil",
-        "guncel",
-    ),
-    "ham_bloklar": ("set_id", "blok", "adet", "veri"),
-    "kurallar": ("id", "tanim", "guncelleyen", "zaman"),
-    "metrikler": ("customer_id", "hedef", "deger", "kural_id", "set_id", "zaman"),
-    "uygulama_gunlugu": ("id", "kural_id", "set_id", "musteri", "uygulayan", "zaman"),
-}
-
-# Panel PostgreSQL inis tablolari. Uretim ham deposunun adi bunlar degildir.
-PANEL_INGEST_TABLES: tuple[str, ...] = ("ingest_batch", "ingest_record")
-
 
 def source_key_names() -> tuple[str, ...]:
     names: list[str] = list(SHARED_ORACLE_KEYS)

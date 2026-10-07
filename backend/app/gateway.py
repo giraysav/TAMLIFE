@@ -21,7 +21,9 @@ def make_engine(url: str | None = None) -> Engine:
     sqlite_ok = target.startswith("sqlite") and (ayar.env in {"dev", "test"} or ayar.sqlite_izin)
     if not (target.startswith("postgresql") or sqlite_ok):
         raise RuntimeError("panel database must be PostgreSQL (sqlite only in dev/test or TAMLIFE_SQLITE_IZIN=true)")
-    return create_engine(target, pool_pre_ping=True)
+    # PostgreSQL erisilemezse istek dakikalarca beklemesin: 3 sn'de hata (arka plan yazicilar ve saglik kontrolu de buna guvenir).
+    argumanlar = {"connect_timeout": 3} if target.startswith("postgresql") else {}
+    return create_engine(target, pool_pre_ping=True, connect_args=argumanlar)
 
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:

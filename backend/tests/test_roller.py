@@ -42,7 +42,7 @@ def test_varsayilan_gorunum_ve_giris(client, monkeypatch):
     assert data["landing"] == "ozet"
     ids = {i["id"] for i in data["navigation"]}
     assert {"musteri", "talep", "utilizasyon", "roller"} <= ids  # TAM Utilizasyon ve Rol Yonetimi varsayilan olarak acik
-    assert not ids & {"admin", "integrations", "veri"}
+    assert not ids & {"admin", "integrations", "veri", "yonetim"}
 
 
 def test_admin_rolu_kisitlar_ve_giris_sayfasi_belirler(client, monkeypatch):
@@ -103,7 +103,7 @@ def test_alt_modul_hazirligi(client, monkeypatch):
     yeni = tuple(dataclasses.replace(m, children=alt) if m.key == "musteri" else m for m in catalog.MODULES)
     for yer in (catalog, navigation, rolgorunum):
         monkeypatch.setattr(yer, "MODULES", yeni)
-    import app.main as ana
+    import app.katalog_api as ana
 
     monkeypatch.setattr(ana, "MODULES", yeni)
     monkeypatch.setattr(catalog, "BY_KEY", {m.key: m for m in yeni})
@@ -139,7 +139,7 @@ def test_yonetim_modulleri_role_verilebilir_ama_tam_yetki_admin_de(client, monke
     # Rol ekrani salt okunur: goruntuler, degistiremez
     assert client.get("/api/v1/roller").status_code == 200
     assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri"], "landing": "ozet"}, headers=hdr2).status_code == 403
-    assert client.get("/api/v1/admin").status_code == 403
+    assert client.get("/api/v1/yonetim/ozet").status_code == 403
     # Member'a admin acikca vermedi: gormez, rol ekranina da giremez
     _cikis(client, hdr2)
     hdr3 = _rol_ile_giris(client, monkeypatch, "admin")

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.authz import is_admin
 from app.catalog import MODULES
 from app.models import RoleView
+from app.ortak import UygulamaHatasi
 from app.session import Principal
 
 DUZENLENEBILIR = ("TeamMngr", "TeamMember")
@@ -24,11 +25,8 @@ ROL_ETIKET = {"admin": "Admin", "TeamMngr": "Manager", "TeamMember": "Member"}
 GIRIS_VARSAYILAN = "ozet"
 
 
-class RolHata(Exception):
-    def __init__(self, kod: int, mesaj: str) -> None:
-        super().__init__(mesaj)
-        self.kod = kod
-        self.mesaj = mesaj
+class RolHata(UygulamaHatasi):
+    """kod = HTTP durumu."""
 
 
 @dataclass(frozen=True)

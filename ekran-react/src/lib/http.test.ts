@@ -6,17 +6,24 @@ afterEach(() => {
 })
 
 describe("apiYolu", () => {
-  it("kok yolda yolu degistirmez ve gomulu degildir", async () => {
+  it("kok yolda yolu degistirmez", async () => {
     vi.stubEnv("BASE_URL", "/")
-    const { GOMULU, apiYolu } = await import("@/lib/http")
-    expect(GOMULU).toBe(false)
+    const { apiYolu } = await import("@/lib/http")
     expect(apiYolu("/api/v1/session/me")).toBe("/api/v1/session/me")
   })
 
-  it("uretim panelinin arkasinda taban yolu on ek yapar", async () => {
-    vi.stubEnv("BASE_URL", "/admin/dev/")
-    const { GOMULU, apiYolu } = await import("@/lib/http")
-    expect(GOMULU).toBe(true)
-    expect(apiYolu("/api/v1/musteri?page=1")).toBe("/admin/dev/api/v1/musteri?page=1")
+  it("arayuz alt yolda sunuluyorsa taban yolu on ek yapar", async () => {
+    vi.stubEnv("BASE_URL", "/panel/")
+    const { apiYolu } = await import("@/lib/http")
+    expect(apiYolu("/api/v1/musteri?page=1")).toBe("/panel/api/v1/musteri?page=1")
+  })
+})
+
+describe("oturumYok", () => {
+  it("yalniz 401 oturum yok sayilir", async () => {
+    const { oturumYok } = await import("@/lib/http")
+    expect(oturumYok(new Response(null, { status: 401 }))).toBe(true)
+    expect(oturumYok(new Response(null, { status: 403 }))).toBe(false)
+    expect(oturumYok(new Response("{}", { status: 200 }))).toBe(false)
   })
 })
