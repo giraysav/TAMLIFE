@@ -1,6 +1,7 @@
 # TAMLIFE v3.5 — topoloji ve dizin yapısı (mevcut durum)
 
-> Güncellendi (2026-10-07, temizlik ve sadeleştirme sonrası): özellik paketleri, tek hata sözleşmesi, ince `main.py`, `web/`/`contract.py`/`ingest.py`/`trmetin.py`/`external_source` kaldırıldı. Ayrıntı: `yonetim-ve-tampon-tasarimi.md` §7–8.
+> Güncellendi (2026-10-08): Onedesk, ICT SMS/APN, İzin&Takvim + TAM Takvim, Çeyrek Bazlı Sunum, rol eylem yetkileri, müşteri portföyü, sol alt hesap kartı ve yeni genel bakış yayı eklendi (`modul-onedesk-gelir-takvim.md`).
+> Önceki güncelleme (2026-10-07, temizlik ve sadeleştirme sonrası): özellik paketleri, tek hata sözleşmesi, ince `main.py`, `web/`/`contract.py`/`ingest.py`/`trmetin.py`/`external_source` kaldırıldı. Ayrıntı: `yonetim-ve-tampon-tasarimi.md` §7–8.
 
 Kaynak: kodun kendisi (import grafiği, `catalog.py`, `models.py`, `alembic/`, `ekran-react/src`). Bu belge **mevcut durumu** anlatır; hedef tasarım ayrı yazılacak. `E:\TAMLIFE` (eski üretim) kapsam dışıdır.
 
@@ -42,7 +43,7 @@ Durum işaretleri: **[canlı]** çalışan ve testli · **[iskelet]** tablo/kata
 
 ## 2. Backend katman topolojisi
 
-`backend/app` = **çekirdek** (21 dosya, ~1.750 satır) + **5 özellik paketi** (30 dosya). Toplam 51 dosya, ~5.300 satır. Oklar `import` satırlarından çıkarıldı.
+`backend/app` = **çekirdek** (24 dosya, ~2.500 satır) + **8 özellik paketi** (42 dosya). Toplam 66 dosya, ~8.400 satır. Oklar `import` satırlarından çıkarıldı.
 
 ```
 main.py ──┬─ oturum_api · katalog_api · rol_api      çekirdek uçlar (giriş/çıkış, modüller/ana sayfa, /roller)
@@ -52,6 +53,9 @@ main.py ──┬─ oturum_api · katalog_api · rol_api      çekirdek uçlar 
           │                └─► rapor.servis ──┬─► musteri.servis, skor.servis
           │                                   └─► rapor.metin
           ├─ skor.api ───────► skor.servis
+          ├─ onedesk.api ────► onedesk.servis ─► rca (saf) · yz (isteğe bağlı LLM) · ice_al ─► tampon.depo (yalnız okuma)
+          ├─ gelir.api ──────► gelir.servis (SMS, APN kurulum, müşteri çalışmaları)
+          ├─ takvim.api ─────► takvim.servis (kişinin günleri, TAM Takvim, sunuma gönder)
           └─ security ───────► session ─► config
 çekirdek: rolgorunum ─► catalog, authz, models · navigation ─► catalog, authz · deps ─► authz, gateway, session, config
           authz ─► catalog, session · baglantilar ─► ad, external, config · audit ─► models (tembel)
@@ -62,9 +66,14 @@ bağımsızlık: yonetim ↔ tampon birbirini import etmez; müşteri alanı tek
 |---|---|---|
 | Kimlik/oturum | `session.py`, `security.py`, `authz.py`, `deps.py` | bellek içi oturum, CSRF, hız sınırı, `can_open` |
 | Katalog/görünüm | `catalog.py` (17 modül), `rolgorunum.py`, `navigation.py` | tek kaynak; yetki sunucuda |
-| Çekirdek uçlar | `oturum_api.py`, `katalog_api.py`, `rol_api.py` | `main.py` yalnız kurar ve bağlar (~80 satır) |
+| Çekirdek uçlar | `oturum_api.py`, `katalog_api.py`, `rol_api.py` | `main.py` yalnız kurar ve bağlar (~90 satır) |
+| Erişim ve kullanıcı | `erisim.py` (`modul_erisim`, eylem yetkileri), `kullanicilar.py` (giriş kaydı, `last_login_at`) | her yeni uç `modul_erisim` kullanır |
+| Onedesk (paket) | `onedesk/{api,servis,rca,yz,ice_al}.py` | aktif/kapanan A/T/Ş, top10, RCA ortak noktaları, tavsiyeler; LLM varsayılan kapalı |
+| Gelir (paket) | `gelir/{api,servis}.py` | ICT SMS; APN kurulum ve müşteri çalışmaları; Member yalnız kendi kayıtları |
+| Takvim (paket) | `takvim/{api,servis}.py` | gün durumu, toplu atama, TAM Takvim özeti, sunuma gönder (+ `/sunum/ogeler`) |
+| Dev aracı | `ornek_veri.py` | `python -m app.ornek_veri` — işaretli uydurma veri, yalnız `TAMLIFE_ENV=dev` |
 | Müşteri alanı | `musteri/{api,servis}.py`, `rapor/{servis,metin}.py`, `skor/{api,servis,motor}.py` | `skor/motor.py` üretimden birebir; golden test |
-| Veri | `models.py` (33 alan tablosu), `gateway.py`, `alembic/` | senkron `Session`, istek başına; PostgreSQL bağlantısı 3 sn zaman aşımlı |
+| Veri | `models.py` (34 alan tablosu), `gateway.py`, `alembic/` | senkron `Session`, istek başına; PostgreSQL bağlantısı 3 sn zaman aşımlı |
 | Yönetim (paket) | `yonetim/*` (11 dosya) | yalnız admin; tek `ozet` isteği, yedek, arıza durumu, denetim sorgusu |
 | Tampon (paket) | `tampon/*` (9 dosya) | kaynak → tampon → analiz → dağıtım; geri alınabilir |
 | Ortak | `ariza.py` (kod + kayıt no), `ortak.py` (`UygulamaHatasi`, `ok()`, zaman, sayfalama, TR metin) | paketlerin tek ortak noktası |
@@ -81,16 +90,20 @@ bağımsızlık: yonetim ↔ tampon birbirini import etmez; müşteri alanı tek
 | Modül | Tablolar | Servis | API | Arayüz |
 |---|---|---|---|---|
 | core | `app_user`, `audit_event` | — | `/session/*` | giriş, profil — **[canlı]** |
-| musteri | `customer`, `customer_team`, `matrix_config` | `musteri/` | `/musteri/**` | `src/musteri/` — **[canlı]** |
+| musteri | `customer`, `customer_team`, `matrix_config` | `musteri/` | `/musteri/**` (+ `/portfoy`, `/secenekler`) | `src/musteri/` portföy kartları + ekleme çekmecesi — **[canlı]** |
 | rapor | `report`, `report_draft`, `report_dispatch`, `report_recipient` | `rapor/` | `/rapor/**`, `/musteri/{id}/rapor/**` | `aylik-rapor.tsx`, `rapor-sayfasi.tsx` — **[canlı]** |
 | utilizasyon | `util_criteria_set`, `score_detail`, `score_history`, `score_approval_request`, `scoring_exclusion`, `affiliate_final_flag` | `skor/` | `/skor/**` | **yok** (kriter/dağıtım ekranı bekliyor) |
-| roller | `role_view` | `rolgorunum.py` | `/roller` | `shell/roller-sayfasi.tsx` + Yönetim › Roller — **[canlı]** |
+| roller | `role_view` (+ `permissions`) | `rolgorunum.py` | `/roller` | `shell/roller-sayfasi.tsx` + Yönetim › Roller (sayfalar + ek yetkiler) — **[canlı]** |
+| onedesk | `onedesk_record` | `onedesk/` | `/onedesk/**` | `src/onedesk/` — **[canlı]** (Veri Girişi'nden beslenir) |
+| tamsms, tamapn | `sms_revenue`, `apn_revenue`, `apn_work` | `gelir/` | `/gelir/**` | `src/gelir/` — **[canlı]** |
+| takvim, takvim_ozet | `calendar_day`, `app_user.last_login_at` | `takvim/` | `/takvim/**` | `src/takvim/` — **[canlı]** |
+| sunum | `presentation` | `takvim/` | `/sunum/ogeler` | `src/sunum/` (şimdilik TAM Takvim'den gelenler) — **[canlı]** |
 | yonetim | `fault_event` (+ `audit_event`) | `yonetim/` | `/yonetim/**` | `src/yonetim/` 6 bölüm — **[canlı]** |
 | ingest (Veri Girişi) | `ingest_batch`, `ingest_block`, `distribution_rule`, `distribution_log` | `tampon/` | `/tampon/**` | `src/yonetim/tampon/` — **[canlı]** (CSV + örnek; Oracle kapalı) |
-| takvim, proje, onedesk, talep, tamsms, tamapn, radar, sunum, gelir_uretim | `calendar_entry`, `project*`, `onedesk_record`, `demand*`, `sms_revenue`, `apn_revenue`, `radar_prospect`, `presentation`, `income_production` | yok | yok | genel `ModulSayfasi` **[iskelet]** |
+| proje, talep, radar, gelir_uretim | `project*`, `demand*`, `radar_prospect`, `income_production` | yok | yok | genel `ModulSayfasi` **[iskelet]** |
 | baglantili, topoloji | — | yok | yok | `ready=False` / müşteri iznine bağlı **[iskelet]** |
 
-**Alembic zinciri:** `0001_panel_schema` → `0002_final_skor` → `0003_rol_gorunumu` → `0004_musteri_karti_rapor` → `0005_yonetim_tampon` → `0006_ingest_record_kaldir` → `0007_external_source_kaldir`. Dikkat: `0001` `Base.metadata.create_all()` çağırır, yani **canlı model**den tablo üretir; sonraki adımlar `checkfirst`/`batch_alter_table` ile tamamlar. Revizyonlar dondurulmuş şema değildir (bkz. §6).
+**Alembic zinciri:** `0001_panel_schema` → `0002_final_skor` → `0003_rol_gorunumu` → `0004_musteri_karti_rapor` → `0005_yonetim_tampon` → `0006_ingest_record_kaldir` → `0007_external_source_kaldir` → `0008_ozellik_modulleri`. Dikkat: `0001` `Base.metadata.create_all()` çağırır, yani **canlı model**den tablo üretir; sonraki adımlar `checkfirst`/`batch_alter_table` ile tamamlar. Revizyonlar dondurulmuş şema değildir (bkz. §6).
 
 ## 4. Frontend topolojisi (`ekran-react`)
 
@@ -103,16 +116,19 @@ main.tsx → App.tsx ──useOturum()──► durum: yukleniyor | yok | var
                              ozet → components/ui/ozet-orbit.tsx
                              musteri → musteri/musteri-sayfasi → musteri-listesi + musteri-karti (+ musteri-rapor, aylik-rapor)
                              rapor → musteri/rapor-sayfasi · roller → shell/roller-sayfasi
+                             onedesk → onedesk/onedesk-sayfasi (+ analiz, kaynak) · tamsms/tamapn → gelir/{sms,apn}-sayfasi
+                             takvim → takvim/izin-takvim · takvim_ozet → takvim/tam-takvim · sunum → sunum/sunum-sayfasi
                              yonetim/<bolum> → yonetim/yonetim-sayfasi (lazy; durum, tampon, veritabani, roller, arizalar, gunlukler; yalnız admin)
                              eski #/admin, #/veri, #/integrations, #/roller → admin için yeni bölümlere yönlenir
                              diğer modüller → shell/modul-sayfasi.tsx (yer tutucu)
 
-components/  kart-ui.tsx (ortak görsel dil: Bolum, Rozet, DUGME, GIRDI) · ui/ (button, card, badge, input, label, sheet, sidebar, skeleton, orbit)
-lib/         http.ts (taban yol, CSRF başlığı, 401) · oturum.ts (oturum, boşta süre) · api-yaz.ts (gonder/iste/apiYukle)
+components/  kart-ui.tsx (eski kart dili) · sayfa-ui.tsx (SayfaKabi, Sekmeler, Kpi, Panel, Alan) · grafik.tsx (Halka, YatayCubuklar, Sutunlar: SVG) · cekmece.tsx · duzenlenebilir-tablo.tsx
+             ui/ (button, card, badge, input, label, sheet, sidebar, skeleton, ozet-orbit, modul-yayi: 3B eğimli genel bakış yayı)
+lib/         http.ts (taban yol, CSRF başlığı, 401) · oturum.ts (oturum, boşta süre) · api-yaz.ts (gonder/iste/apiYukle) · sorgu.ts (oku/yaz/yukle) · bicim.ts
              api-types.ts (üretilen: `npm run api:uret`; elle düzenlenmez) · utils.ts
 ```
 
-Gerçek arayüz kodu `src/shell` (13 dosya, ~1.100 satır), `src/musteri`, `src/yonetim`, `src/components`. TanStack Query yalnız `src/yonetim`de kullanılıyor; çalışma zamanı bağımlılıkları 11 pakettir (React, TanStack Query, Radix dialog/label/slot, framer-motion, lucide, tailwind-merge, clsx, cva).
+Gerçek arayüz kodu `src/shell` (13 dosya), `src/musteri`, `src/yonetim`, `src/onedesk`, `src/gelir`, `src/takvim`, `src/sunum`, `src/components`. Hesap kartı sol altta (`shell/kullanici-karti.tsx`). TanStack Query yönetim ve yeni modüllerde kullanılıyor; çalışma zamanı bağımlılıkları 11 pakettir (React, TanStack Query, Radix dialog/label/slot, framer-motion, lucide, tailwind-merge, clsx, cva).
 
 ## 5. Dizin yapısı
 
@@ -126,18 +142,21 @@ E:\TAMLIFE_Dev\
    │  │  ├─ main.py  config.py  catalog.py  models.py  gateway.py  audit.py
    │  │  ├─ session.py security.py authz.py deps.py  rolgorunum.py navigation.py
    │  │  ├─ oturum_api.py katalog_api.py rol_api.py
-   │  │  ├─ ad.py external.py baglantilar.py  ariza.py ortak.py
+   │  │  ├─ ad.py external.py baglantilar.py  ariza.py ortak.py  erisim.py kullanicilar.py ornek_veri.py
    │  │  ├─ yonetim\                 router · ozet · saglik · veritabani · arizalar · gunlukler · kalici_yazici · dosya_gunlugu · yakalayici · models
    │  │  ├─ tampon\                  router · depo · analiz · dagitim · kaynak · eslestirme · profil · models
    │  │  ├─ musteri\                 api · servis
+   │  │  ├─ onedesk\                 api · servis · rca · yz · ice_al
+   │  │  ├─ gelir\                   api · servis
+   │  │  ├─ takvim\                  api · servis
    │  │  ├─ rapor\                   servis · metin
    │  │  └─ skor\                    api · servis · motor
-   │  ├─ alembic\{env.py, versions\0001..0007}    alembic.ini
-   │  ├─ tests\                    test_{yonetim,tampon,auth_security,kimlik_siniri,roller,musteri,skor,skor_api,arayuz_sunumu}.py · conftest.py · skor_golden.json
+   │  ├─ alembic\{env.py, versions\0001..0008}    alembic.ini
+   │  ├─ tests\                    test_{yonetim,tampon,ozellikler,auth_security,kimlik_siniri,roller,musteri,skor,skor_api,arayuz_sunumu}.py · conftest.py · skor_golden.json
    │  ├─ dev.ps1  pytest.ini  ruff.toml
    │  └─ var\                      [üretilen, git'te yok]  dev.db · logs\ · prod_geri_al\
    ├─ ekran-react\                 TS arayüzü (Vite 8, React 19, Tailwind 4, oxlint, vitest, Playwright)
-   │  ├─ src\{shell, musteri, yonetim\{bolumler,tampon}, components\{kart-ui.tsx, ui}, lib, app\providers.tsx, test}
+   │  ├─ src\{shell, musteri, onedesk, gelir, takvim, sunum, yonetim\{bolumler,tampon}, components\{kart-ui, sayfa-ui, grafik, cekmece, duzenlenebilir-tablo, ui}, lib, app\providers.tsx, test}
    │  ├─ e2e\{giris,musteri}.spec.ts
    │  ├─ public\ · index.html · vite.config.ts · vitest.config.ts · playwright.config.ts · tsconfig*.json · package.json
    │  └─ dist\ node_modules\   [üretilen]
@@ -151,6 +170,6 @@ E:\TAMLIFE_Dev\
 1. **Senkron vs async:** v3.5 senkron `Session`, `tamlife-api` async. Hedef için tek yol seçilmeli.
 2. **Migration zinciri deterministik değil:** `0001` `create_all` ile canlı modele bağlı; model değişince "eski" revizyon farklı şema üretir. Hedef şema için dondurulmuş (açık `op.create_table`) başlangıç revizyonu gerekir.
 3. **Kalıcılık:** denetim kalıcı (kuyruklu yazıcı → `audit_event`); **oturumlar hâlâ bellekte** (yeniden başlatmada herkes düşer; `--workers 1` şartı buradan).
-4. **Kapsam boşluğu:** 17 modülün 3'ü canlı (musteri, rapor, roller) + Yönetim/Veri Girişi; 9'unun yalnız tablosu, 2'sinin hiçbir şeyi yok. Utilizasyon API'si hazır, arayüzü yok (skor kriter/dağıtım ekranı Veri Girişi ile birleşebilir).
+4. **Kapsam boşluğu:** 17 modülün 9'u canlı (musteri, rapor, roller, onedesk, tamsms, tamapn, takvim, takvim_ozet, sunum) + Yönetim/Veri Girişi; proje, talep, radar, gelir_uretim yalnız tablo; 2'sinin hiçbir şeyi yok. Utilizasyon API'si hazır, arayüzü yok (skor kriter/dağıtım ekranı Veri Girişi ile birleşebilir).
 5. **Bilerek kalan artıklar:** `backend/var/prod_geri_al/` (git dışı; üretim dosyalarının geri alma kopyaları, silme kullanıcıya bırakıldı), `lib/api-types.ts` (OpenAPI akışının parçası, bayat olabilir; `npm run api:uret`).
 6. **Açık kararlar:** Excel yükleme (`openpyxl` yeni bağımlılık), yedekten geri yükleme, günlük saklama süresi, canlı Oracle adaptörleri (kaynak sorguları sözleşmesi + ayrı işçi süreç).
