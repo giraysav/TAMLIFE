@@ -56,6 +56,13 @@ const TR = {
   rolKaydedilemedi: "Kaydedilemedi.",
   altModuller: "Alt modüller",
   altModulYok: "Bu modülün alt modülleri henüz tanımlanmadı.",
+  yonetimKonsolu: "Yönetim konsolu",
+  cevrimici: "Çevrimiçi",
+  hesapMenusu: "Hesap menüsü",
+  animasyonlar: "Animasyonlar",
+  rolEtiket: { admin: "Admin", TeamMngr: "Manager", TeamMember: "Member" } as Record<string, string>,
+  rolEkYetkiler: "Ek yetkiler",
+  rolEkYetkiAciklama: "Sayfa görünümünün dışında, role verilen işlem yetkileri. Admin hepsine sahiptir.",
 }
 
 const EN: typeof TR = {
@@ -114,6 +121,13 @@ const EN: typeof TR = {
   rolKaydedilemedi: "Could not save.",
   altModuller: "Sub-modules",
   altModulYok: "This module's sub-modules are not defined yet.",
+  yonetimKonsolu: "Admin console",
+  cevrimici: "Online",
+  hesapMenusu: "Account menu",
+  animasyonlar: "Animations",
+  rolEtiket: { admin: "Admin", TeamMngr: "Manager", TeamMember: "Member" } as Record<string, string>,
+  rolEkYetkiler: "Extra permissions",
+  rolEkYetkiAciklama: "Action permissions granted to the role beyond page visibility. Admin has all of them.",
 }
 
 export function metin(dil: Dil) {

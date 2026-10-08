@@ -92,7 +92,7 @@ test("yan menu: grup sirasi, ok ile ac/kapat, Onedesk adi", async ({ page }) => 
   await expect(page.locator("nav a", { hasText: "Müşteri Yönetimi" })).toHaveCount(1)
 })
 
-test("kullanici menusu sag ustte: profil, yonetim, talepler, dil, cikis", async ({ page }) => {
+test("kullanici karti sol altta: profil, yonetim, talepler, dil, cikis", async ({ page }) => {
   test.skip(!PAROLA, "E2E_PASS tanimli degil")
   await girisYap(page)
   await expect(page.locator("nav").getByText("Çıkış")).toHaveCount(0) // yan menude eski cikis cubugu yok

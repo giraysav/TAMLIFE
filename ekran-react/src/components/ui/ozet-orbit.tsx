@@ -1,27 +1,14 @@
 import { useEffect, useState } from "react"
 import type { LucideIcon } from "lucide-react"
-import {
-  Briefcase,
-  CalendarDays,
-  Circle,
-  FileText,
-  FolderKanban,
-  LifeBuoy,
-  Link2,
-  MessageSquare,
-  Presentation,
-  Radar,
-  TrendingUp,
-  Wifi,
-} from "lucide-react"
+import { Briefcase, CalendarCheck, CalendarDays, Circle, FileText, FolderKanban, LifeBuoy, Link2, MessageSquare, Presentation, Radar, TrendingUp, Wifi } from "lucide-react"
 import { apiGet } from "@/lib/oturum"
-import CommunityOrbit from "@/components/ui/community-orbit"
-import type { OrbitItem } from "@/components/ui/community-orbit"
+import { ModulYayi } from "@/components/ui/modul-yayi"
+import type { YayOgesi } from "@/components/ui/modul-yayi"
 
 type Kart = { key: string; title: string }
 
 const IKON: Record<string, LucideIcon> = {
-  takvim_ozet: CalendarDays,
+  takvim_ozet: CalendarCheck,
   takvim: CalendarDays,
   sunum: Presentation,
   radar: Radar,
@@ -35,30 +22,25 @@ const IKON: Record<string, LucideIcon> = {
   baglantili: Link2,
 }
 
-const DIS = [
-  { ring: "outer", angle: 156 },
-  { ring: "outer", angle: 138 },
-  { ring: "outer", angle: 120 },
-  { ring: "outer", angle: 102 },
-  { ring: "outer", angle: 84 },
-  { ring: "outer", angle: 66 },
-  { ring: "outer", angle: 48 },
-  { ring: "outer", angle: 30 },
-] as const
+/** Modul rengi: [acik, koyu] gradyan. Renk tek basina anlam tasimaz (etiket her zaman gorunur). */
+const RENK: Record<string, readonly [string, string]> = {
+  takvim_ozet: ["#34d399", "#059669"],
+  takvim: ["#2dd4bf", "#0d9488"],
+  sunum: ["#818cf8", "#4f46e5"],
+  radar: ["#a78bfa", "#7c3aed"],
+  musteri: ["#3b82f6", "#0055a5"],
+  rapor: ["#38bdf8", "#0284c7"],
+  proje: ["#5eead4", "#0f766e"],
+  onedesk: ["#fb7185", "#e11d48"],
+  tamsms: ["#fbbf24", "#d97706"],
+  tamapn: ["#22d3ee", "#0891b2"],
+  gelir_uretim: ["#facc15", "#ca8a04"],
+  baglantili: ["#94a3b8", "#475569"],
+}
+const VARSAYILAN_RENK: readonly [string, string] = ["#64748b", "#334155"]
 
-const IC = [
-  { ring: "inner", angle: 148 },
-  { ring: "inner", angle: 124 },
-  { ring: "inner", angle: 100 },
-  { ring: "inner", angle: 76 },
-  { ring: "inner", angle: 52 },
-  { ring: "inner", angle: 32 },
-] as const
-
-const YER = [...DIS, ...IC]
-
-/** Genel Bakis: tek parca. Yaydaki modul adlari rolun gorebildigi ana sayfa kartlaridir (/home). */
-export function OzetOrbit({ dil }: { dil: "tr" | "en" }) {
+/** Genel Bakis: yaydaki kartlar rolun gorebildigi ana sayfa kartlaridir (/home); kart tiklaninca ilgili module gider. */
+export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string) => void }) {
   const [kartlar, setKartlar] = useState<Kart[]>([])
 
   useEffect(() => {
@@ -72,16 +54,16 @@ export function OzetOrbit({ dil }: { dil: "tr" | "en" }) {
   }, [])
 
   const tr = dil === "tr"
-  const items: OrbitItem[] = kartlar.slice(0, YER.length).map((kart, i) => {
+  const ogeler: YayOgesi[] = kartlar.slice(0, 12).map((kart) => {
     const Ikon = IKON[kart.key] ?? Circle
-    return { kind: "pill", icon: <Ikon aria-hidden />, label: kart.title, ...YER[i] }
+    return { anahtar: kart.key, etiket: kart.title, ikon: <Ikon aria-hidden />, renk: RENK[kart.key] ?? VARSAYILAN_RENK, onClick: () => onGit(kart.key) }
   })
 
   return (
-    <CommunityOrbit
-      items={items}
-      stats={[]}
-      headline={tr ? "TAM Life tek panelde, tüm modüller bir arada." : "TAM Life in one panel, every module together."}
+    <ModulYayi
+      ogeler={ogeler}
+      baslik={tr ? "TAM Life tek panelde, tüm modüller bir arada." : "TAM Life in one panel, every module together."}
+      altBaslik={tr ? "Bir karta tıklayarak ilgili modüle geçin." : "Click a card to jump to its module."}
     />
   )
 }

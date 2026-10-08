@@ -152,14 +152,13 @@ def tohumla(db: Session) -> dict[str, int]:
             )
         )
 
-    # --- takvim gunleri ------------------------------------------------------------------------------
-    gun_adedi = 0
+    # --- takvim gunleri (kisi, gun) cifti benzersiz: bellekte tutulur, oturum autoflush'a guvenilmez ------------------
+    gunler: dict[tuple[int, date], CalendarDay] = {}
     for k in kisiler:
         gun = yil_basi
         while gun <= bugun + timedelta(days=20):
             if gun.weekday() < 5 and rng.random() < 0.35:
-                db.add(CalendarDay(user_id=k.id, day=gun, status="calisiyor", online_count=rng.randint(0, 3), face_count=rng.randint(0, 2)))
-                gun_adedi += 1
+                gunler[(k.id, gun)] = CalendarDay(user_id=k.id, day=gun, status="calisiyor", online_count=rng.randint(0, 3), face_count=rng.randint(0, 2))
             gun += timedelta(days=1)
         for durum, blok, adet in (("yillik_izin", 4, 2), ("sirket_izni", 1, 2), ("raporlu", 2, 1)):
             for _ in range(adet):
@@ -168,12 +167,10 @@ def tohumla(db: Session) -> dict[str, int]:
                     g = bas + timedelta(days=d)
                     if g.weekday() >= 5:
                         continue
-                    mevcut = db.scalar(select(CalendarDay).where(CalendarDay.user_id == k.id, CalendarDay.day == g))
-                    if mevcut is None:
-                        db.add(CalendarDay(user_id=k.id, day=g, status=durum))
-                    else:
-                        mevcut.status = durum
-                    gun_adedi += 1
+                    kayit = gunler.setdefault((k.id, g), CalendarDay(user_id=k.id, day=g))
+                    kayit.status = durum
+    db.add_all(gunler.values())
+    gun_adedi = len(gunler)
     db.commit()
     return {"musteri": len(musteriler), "kisi": len(kisiler), "onedesk": kayit_adedi, "takvim_gunu": gun_adedi}
 

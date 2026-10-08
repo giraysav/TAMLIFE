@@ -495,3 +495,13 @@ def test_ornek_veri_tohumla_ve_yalniz_isaretlileri_temizle(client, monkeypatch):
     assert ornek_veri.main([]) == 2  # dev disinda reddedilir
     monkeypatch.setenv("TAMLIFE_ENV", "test")
     assert ornek_veri.main([]) == 2
+
+
+def test_tutar_bicimleri(veri):
+    hdr = login_ok(veri)
+    for ham, beklenen in (("1.250", 1250.0), ("1.250.000", 1250000.0), ("1250.5", 1250.5), ("1.250,75", 1250.75), ("12,5", 12.5), (7, 7.0), ("  ", 0.0)):
+        r = veri.post("/api/v1/gelir/sms", json={"musteri": "Alfa", "proje": "P", "tutar": ham}, headers=hdr)
+        assert r.status_code == 200, (ham, r.text)
+        assert r.json()["data"]["tutar"] == beklenen, ham
+    assert veri.post("/api/v1/gelir/sms", json={"musteri": "Alfa", "proje": "P", "tutar": "nan"}, headers=hdr).status_code == 400
+    assert veri.post("/api/v1/gelir/sms", json={"musteri": "Alfa", "proje": "P", "tutar": True}, headers=hdr).status_code == 400

@@ -1,181 +1,165 @@
-import { useCallback, useEffect, useState } from "react"
-import type { FormEvent } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { apiOku, apiYaz } from "@/lib/api-yaz"
-import { musteriMetin } from "@/musteri/musteri-metin"
+import { useEffect, useState } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { Briefcase, Building2, ChevronLeft, ChevronRight, CircleAlert, MessageSquareWarning, Plus, Search, SearchX, Siren, Sparkles, X } from "lucide-react"
+import { Cekmece } from "@/components/cekmece"
+import { DUGME, DUGME_SARI, GIRDI } from "@/components/kart-ui"
+import { BosKutu, HataKutu, Kpi, SayfaKabi } from "@/components/sayfa-ui"
+import { Skeleton } from "@/components/ui/skeleton"
+import { oku, sorguMetni } from "@/lib/sorgu"
+import { MusteriEkleFormu } from "@/musteri/musteri-ekle-formu"
+import { MusteriKarti } from "@/musteri/portfoy-kart"
+import type { PortfoyKart, Secenekler } from "@/musteri/portfoy-kart"
+import { portfoyMetin } from "@/musteri/portfoy-metin"
 import type { Dil } from "@/shell/metin"
-import { sorguAyarla } from "@/shell/rota"
 
-type Satir = { id: number; name: string; segment: string; owner: string | null; score: number | null; parent_id: number | null }
-type Sayfa = { items: Satir[]; total: number; page: number; per_page: number; pages: number }
+type Portfoy = {
+  items: PortfoyKart[]
+  ozet: { cati: number; istirak: number; alarm: number; sikayet: number; talep: number; ortalama_skor: number | null; skorlu: number }
+  total: number
+  page: number
+  pages: number
+}
 
-const SEGMENTLER = ["SMB", "SA", "MA", "PA", "WHOLESALE"]
-
-/** Musteri listesi: kapsama gore sunucu filtreler (Member yalniz kendi musterileri). */
-export function MusteriListesi({ dil }: { dil: Dil }) {
-  const t = musteriMetin(dil)
-  const [arama, setArama] = useState("")
-  const [sorgu, setSorgu] = useState("")
-  const [sayfa, setSayfa] = useState(1)
-  const [veri, setVeri] = useState<Sayfa | null | undefined>(undefined)
-  const [yeniAcik, setYeniAcik] = useState(false)
-  const [yeniAd, setYeniAd] = useState("")
-  const [yeniSegment, setYeniSegment] = useState("")
-  const [hata, setHata] = useState("")
-
-  const yukle = useCallback(async () => {
-    const q = new URLSearchParams({ page: String(sayfa), per_page: "20" })
-    if (sorgu) q.set("q", sorgu)
-    const sonuc = await apiOku<Sayfa>(`/api/v1/musteri?${q.toString()}`)
-    setVeri(sonuc.ok ? sonuc.veri : null)
-  }, [sayfa, sorgu])
-
+const SAYFA_ADEDI = 24
+function useGecikmeli<T>(deger: T, ms = 300): T {
+  const [g, setG] = useState(deger)
   useEffect(() => {
-    void yukle()
-  }, [yukle])
+    const z = setTimeout(() => setG(deger), ms)
+    return () => clearTimeout(z)
+  }, [deger, ms])
+  return g
+}
 
-  function ara(olay: FormEvent) {
-    olay.preventDefault()
-    setSayfa(1)
-    setSorgu(arama.trim())
-  }
+/** Musteri Yonetimi portfoyu: cati musteri kartlari, KPI seridi, segment/TAM/arama filtreleri, sagdan acilan "Musteri ekle" formu. */
+export function MusteriListesi({ dil }: { dil: Dil }) {
+  const t = portfoyMetin(dil)
+  const [arama, setArama] = useState("")
+  const [segment, setSegment] = useState("")
+  const [tam, setTam] = useState("")
+  const [sayfa, setSayfa] = useState(1)
+  const [formAcik, setFormAcik] = useState(false)
+  const q = useGecikmeli(arama.trim())
 
-  async function ekle(olay: FormEvent) {
-    olay.preventDefault()
-    setHata("")
-    const sonuc = await apiYaz<{ id: number }>("POST", "/api/v1/musteri", { name: yeniAd, ...(yeniSegment ? { segment: yeniSegment } : {}) })
-    if (!sonuc.ok || !sonuc.veri) {
-      setHata(sonuc.hata || t.kaydedilemedi)
-      return
-    }
-    setYeniAcik(false)
-    setYeniAd("")
-    setYeniSegment("")
-    sorguAyarla("musteri", { m: String(sonuc.veri.id) })
-  }
+  useEffect(() => setSayfa(1), [q, segment, tam])
+
+  const sorgu = { q, segment, tam, page: sayfa, per_page: SAYFA_ADEDI }
+  const portfoy = useQuery({
+    queryKey: ["musteri", "portfoy", sorgu],
+    queryFn: () => oku<Portfoy>(`/api/v1/musteri/portfoy${sorguMetni(sorgu)}`),
+    placeholderData: keepPreviousData,
+  })
+  const secenek = useQuery({ queryKey: ["musteri", "secenekler"], queryFn: () => oku<Secenekler>("/api/v1/musteri/secenekler") })
+
+  const veri = portfoy.data
+  const filtreVar = Boolean(q || segment || tam)
+  const ozet = veri?.ozet
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <form onSubmit={ara} className="flex flex-1 items-center gap-2" role="search">
-          <Input value={arama} onChange={(e) => setArama(e.target.value)} placeholder={t.ara} aria-label={t.ara} maxLength={100} className="max-w-sm" />
-          <Button type="submit" variant="outline">
-            {t.aramaDugmesi}
-          </Button>
-        </form>
-        <Button type="button" onClick={() => setYeniAcik((a) => !a)} aria-expanded={yeniAcik}>
-          {t.ekle}
-        </Button>
+    <div className="grid grid-cols-1 gap-4">
+      <SayfaKabi ikon={Briefcase} baslik={t.baslik} aciklama={t.aciklama}>
+        <button type="button" className={DUGME_SARI} onClick={() => setFormAcik(true)} disabled={!secenek.data}>
+          <Plus aria-hidden className="size-4" />
+          {t.musteriEkle}
+        </button>
+      </SayfaKabi>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Kpi etiket={t.kpiCati} deger={ozet ? ozet.cati.toLocaleString("tr-TR") : "—"} ikon={Building2} ton="mavi" />
+        <Kpi etiket={t.kpiIstirak} deger={ozet ? ozet.istirak.toLocaleString("tr-TR") : "—"} ikon={Sparkles} ton="sari" />
+        <Kpi etiket={t.kpiAlarm} deger={ozet ? ozet.alarm.toLocaleString("tr-TR") : "—"} ikon={Siren} ton="kirmizi" />
+        <Kpi etiket={t.kpiSikayet} deger={ozet ? ozet.sikayet.toLocaleString("tr-TR") : "—"} ikon={MessageSquareWarning} ton="amber" />
+        <Kpi etiket={t.kpiTalep} deger={ozet ? ozet.talep.toLocaleString("tr-TR") : "—"} ikon={CircleAlert} ton="mavi" />
+        <Kpi etiket={t.kpiSkor} deger={ozet?.ortalama_skor != null ? `%${ozet.ortalama_skor}` : "—"} alt={ozet ? t.kpiSkorAlt(ozet.skorlu) : undefined} ton="yesil" />
       </div>
 
-      {yeniAcik ? (
-        <Card>
-          <CardContent className="pt-6">
-            <form onSubmit={ekle} className="grid gap-3 sm:grid-cols-[1fr_12rem_auto] sm:items-end" aria-label={t.yeniMusteri}>
-              <div className="grid gap-1.5">
-                <Label htmlFor="yeni-unvan">{t.unvan}</Label>
-                <Input id="yeni-unvan" value={yeniAd} onChange={(e) => setYeniAd(e.target.value)} required maxLength={150} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="yeni-segment">{t.segment}</Label>
-                <select id="yeni-segment" value={yeniSegment} onChange={(e) => setYeniSegment(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm">
-                  <option value="">{t.seciniz}</option>
-                  {SEGMENTLER.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Button type="submit">{t.kaydet}</Button>
-            </form>
-            {hata ? (
-              <p role="alert" className="mt-2 text-sm text-destructive">
-                {hata}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative min-w-56 flex-1">
+            <span className="sr-only">{t.ara}</span>
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <input type="search" value={arama} onChange={(e) => setArama(e.target.value)} placeholder={t.ara} maxLength={100} className={`${GIRDI} !py-2.5 pl-9`} />
+          </label>
+          {secenek.data?.yonetici && secenek.data.tam.length > 1 ? (
+            <label className="grid gap-0.5">
+              <span className="sr-only">{t.tam}</span>
+              <select value={tam} onChange={(e) => setTam(e.target.value)} className={`${GIRDI} !w-auto min-w-44 !py-2.5`}>
+                <option value="">{t.tumTam}</option>
+                {secenek.data.tam.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.ad}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {filtreVar ? (
+            <button
+              type="button"
+              className={DUGME}
+              onClick={() => {
+                setArama("")
+                setSegment("")
+                setTam("")
+              }}
+            >
+              <X aria-hidden className="size-3.5" />
+              {t.temizle}
+            </button>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t.segment}>
+          {["", ...(secenek.data?.segmentler ?? ["SMB", "SA", "MA", "PA", "WHOLESALE"])].map((s) => (
+            <button
+              key={s || "tumu"}
+              type="button"
+              aria-pressed={segment === s}
+              onClick={() => setSegment(s)}
+              className={`rounded-full border px-3.5 py-1.5 text-xs font-black transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
+                segment === s ? "border-tl-navy bg-tl-navy text-tl-yellow" : "border-slate-200 bg-white text-slate-600 hover:border-tl-blue/40 hover:bg-slate-50"
+              }`}
+            >
+              {s || t.tumu}
+            </button>
+          ))}
+          {veri ? <span className="ml-auto text-xs font-bold text-slate-400">{t.toplam(veri.total)}</span> : null}
+        </div>
+      </div>
 
-      {veri === undefined ? <p className="text-sm text-muted-foreground">…</p> : null}
-      {veri === null ? (
-        <p role="alert" className="text-sm text-destructive">
-          {t.yuklenemedi}
-        </p>
-      ) : null}
-      {veri ? (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <caption className="sr-only">{t.liste}</caption>
-                <thead>
-                  <tr className="bg-tl-navy text-left text-xs text-white">
-                    <th scope="col" className="px-4 py-3 font-black">
-                      {t.unvan}
-                    </th>
-                    <th scope="col" className="px-4 py-3 font-black">
-                      {t.segment}
-                    </th>
-                    <th scope="col" className="px-4 py-3 font-black">
-                      {t.sorumlu}
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right font-black">
-                      {t.skor}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {veri.items.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
-                        {t.sonucYok}
-                      </td>
-                    </tr>
-                  ) : (
-                    veri.items.map((m) => (
-                      <tr key={m.id} className="border-b border-slate-100 last:border-0 hover:bg-tl-yellow/10">
-                        <td className="px-4 py-3">
-                          <a
-                            href={`#/musteri?m=${m.id}`}
-                            className="font-bold text-tl-navy underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
-                          >
-                            {m.parent_id ? "↳ " : ""}
-                            {m.name}
-                          </a>
-                        </td>
-                        <td className="px-4 py-3">{m.segment || "—"}</td>
-                        <td className="px-4 py-3">{m.owner ?? "—"}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{m.score ?? "—"}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {veri && veri.pages > 0 ? (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {veri.total} {t.toplam} · {t.sayfa} {veri.page}/{veri.pages}
-          </span>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={veri.page <= 1} onClick={() => setSayfa((s) => s - 1)}>
-              {t.onceki}
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={veri.page >= veri.pages} onClick={() => setSayfa((s) => s + 1)}>
-              {t.sonraki}
-            </Button>
-          </div>
+      {portfoy.isPending ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" aria-hidden>
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} className="h-52 rounded-2xl" />
+          ))}
+        </div>
+      ) : portfoy.isError ? (
+        <HataKutu metin={t.yuklenemedi} tekrar={() => void portfoy.refetch()} tekrarEtiket={t.tekrar} />
+      ) : veri && veri.items.length === 0 ? (
+        <BosKutu ikon={filtreVar ? SearchX : Briefcase} baslik={filtreVar ? t.sonucYok : t.hicMusteri} aciklama={filtreVar ? t.sonucYokAlt : t.hicMusteriAlt} />
+      ) : veri ? (
+        <div className={`grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 ${portfoy.isPlaceholderData ? "opacity-60" : ""}`}>
+          {veri.items.map((m) => (
+            <MusteriKarti key={m.id} m={m} dil={dil} />
+          ))}
         </div>
       ) : null}
+
+      {veri && veri.pages > 1 ? (
+        <nav aria-label="Sayfalama" className="flex items-center justify-center gap-3">
+          <button type="button" className={DUGME} disabled={veri.page <= 1} onClick={() => setSayfa((s) => s - 1)}>
+            <ChevronLeft aria-hidden className="size-4" />
+            {t.onceki}
+          </button>
+          <span className="text-xs font-bold text-slate-500">{t.sayfa(veri.page, veri.pages)}</span>
+          <button type="button" className={DUGME} disabled={veri.page >= veri.pages} onClick={() => setSayfa((s) => s + 1)}>
+            {t.sonraki}
+            <ChevronRight aria-hidden className="size-4" />
+          </button>
+        </nav>
+      ) : null}
+
+      <Cekmece acik={formAcik} onKapat={() => setFormAcik(false)} baslik={t.formBaslik} aciklama={t.formAciklama} kapatEtiketi={t.kapat}>
+        {secenek.data ? <MusteriEkleFormu dil={dil} secenek={secenek.data} onBitti={() => setFormAcik(false)} /> : null}
+      </Cekmece>
     </div>
   )
 }

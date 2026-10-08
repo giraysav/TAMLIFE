@@ -24,6 +24,7 @@ PARA_BIRIMLERI = ("TRY", "USD", "EUR")
 EN_COK_KAYIT = 2000
 EN_BUYUK_TUTAR = 1e13
 _TARIH_TR = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
+_BIN_AYRACLI = re.compile(r"^\d{1,3}(\.\d{3})+$")
 
 
 class GelirHata(UygulamaHatasi):
@@ -52,6 +53,8 @@ def _tutar(govde: dict, alan: str = "tutar", etiket: str = "Gelir") -> float:
         t = ham.replace(" ", "").replace("₺", "").replace("TL", "")
         if "," in t:
             t = t.replace(".", "").replace(",", ".")
+        elif _BIN_AYRACLI.match(t):
+            t = t.replace(".", "")  # "1.250" Turkce'de bin ayracidir (1250); "1250.5" ondalik kalir
         ham = t or "0"
     try:
         deger = float(ham)

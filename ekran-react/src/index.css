@@ -110,3 +110,48 @@ body {
   color: var(--foreground);
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
 }
+
+/* --- Hareket (hepsi `prefers-reduced-motion` ile kapanir) -------------------------------------------------- */
+@keyframes tl-donus {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes tl-parilti {
+  0% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  55%,
+  100% {
+    transform: translateX(330%) skewX(-18deg);
+  }
+}
+@keyframes tl-nabiz {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+@keyframes tl-yuz {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes tl-akis {
+  to {
+    stroke-dashoffset: -64;
+  }
+}
+/* Tercih src/lib/hareket.ts: sistem ayari izlenir, kullanici hesap menusunden acip kapatabilir. */
+html[data-hareket="kapat"] .tl-hareket {
+  animation: none !important;
+}

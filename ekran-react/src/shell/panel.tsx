@@ -1,9 +1,10 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react"
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, ChevronDown, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -19,18 +20,24 @@ import { OzetOrbit } from "@/components/ui/ozet-orbit"
 import type { Kullanici, MenuOgesi } from "@/lib/oturum"
 import { Arama } from "@/shell/arama"
 import { IKON } from "@/shell/ikon"
-import { KullaniciMenu } from "@/shell/kullanici-menu"
+import { KullaniciKarti } from "@/shell/kullanici-karti"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { ModulSayfasi } from "@/shell/modul-sayfasi"
-import { MusteriSayfasi } from "@/musteri/musteri-sayfasi"
 import { ProfilSayfasi } from "@/shell/profil-sayfasi"
-import { RaporSayfasi } from "@/musteri/rapor-sayfasi"
 import { RollerSayfasi } from "@/shell/roller-sayfasi"
 import { hashParcala } from "@/shell/rota"
 
-/** Yonetim yalniz admin icin: ayri JS parcasi (diger kullanicilar indirmez). */
+/** Modul sayfalari ayri JS parcalaridir: yalniz acildiginda indirilir (Yonetim yalniz admin icin). */
 const YonetimSayfasi = lazy(() => import("@/yonetim/yonetim-sayfasi"))
+const MusteriSayfasi = lazy(() => import("@/musteri/musteri-sayfasi").then((m) => ({ default: m.MusteriSayfasi })))
+const RaporSayfasi = lazy(() => import("@/musteri/rapor-sayfasi").then((m) => ({ default: m.RaporSayfasi })))
+const OnedeskSayfasi = lazy(() => import("@/onedesk/onedesk-sayfasi").then((m) => ({ default: m.OnedeskSayfasi })))
+const SmsSayfasi = lazy(() => import("@/gelir/sms-sayfasi").then((m) => ({ default: m.SmsSayfasi })))
+const ApnSayfasi = lazy(() => import("@/gelir/apn-sayfasi").then((m) => ({ default: m.ApnSayfasi })))
+const IzinTakvim = lazy(() => import("@/takvim/izin-takvim").then((m) => ({ default: m.IzinTakvim })))
+const TamTakvim = lazy(() => import("@/takvim/tam-takvim").then((m) => ({ default: m.TamTakvim })))
+const SunumSayfasi = lazy(() => import("@/sunum/sunum-sayfasi").then((m) => ({ default: m.SunumSayfasi })))
 
 /** Eski yonetim adresleri (yer imleri, gecmis) tek Yonetim alaninin bolumlerine yonlenir. */
 const ESKI_ADRESLER: Record<string, string> = {
@@ -41,10 +48,10 @@ const ESKI_ADRESLER: Record<string, string> = {
   yonetim: "yonetim/durum",
 }
 
-/** Yan menu sirasi: Genel, Calisma alanim, Raporlar ve gorunumler. Yonetim yalniz sag ustteki kullanici menusunde. */
+/** Yan menu sirasi: Genel, Calisma alanim, Raporlar ve gorunumler. Yonetim kisayolu sol alttaki hesap kartinin menusunde. */
 const GRUPLAR = ["genel", "work", "insights"] as const
 type Grup = (typeof GRUPLAR)[number]
-/** Sag ustteki kullanici menusunde duran, yan menude gosterilmeyen ogeler. */
+/** Sol alttaki hesap kartinin menusunde duran, yan menude gosterilmeyen ogeler. */
 const YAN_MENU_DISI = new Set(["talep"])
 const ANAHTAR = "tamlife.menu"
 
@@ -61,9 +68,9 @@ function kapaliOku(): Record<string, boolean> {
   }
 }
 
-type MenuProps = { kullanici: Kullanici; dil: Dil; secili: string; onSec: (id: string) => void }
+type MenuProps = { kullanici: Kullanici; dil: Dil; secili: string; onSec: (id: string) => void; onDil: (dil: Dil) => void; onCikis: () => void; talepVar: boolean }
 
-function Menu({ kullanici, dil, secili, onSec }: MenuProps) {
+function Menu({ kullanici, dil, secili, onSec, onDil, onCikis, talepVar }: MenuProps) {
   const t = metin(dil)
   const { setOpenMobile } = useSidebar()
   const [kapali, setKapali] = useState<Record<string, boolean>>(kapaliOku)
@@ -186,6 +193,9 @@ function Menu({ kullanici, dil, secili, onSec }: MenuProps) {
           })}
         </nav>
       </SidebarContent>
+      <SidebarFooter className="border-t-0 p-3">
+        <KullaniciKarti kullanici={kullanici} dil={dil} onDil={onDil} onGit={git} onCikis={onCikis} talepVar={talepVar} />
+      </SidebarFooter>
     </Sidebar>
   )
 }
@@ -195,6 +205,7 @@ type Props = { kullanici: Kullanici; dil: Dil; onDil: (dil: Dil) => void; onCiki
 export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
   const t = metin(dil)
   const [secili, setSecili] = useState(() => hashId() || "ozet")
+  const icerik = useRef<HTMLElement>(null)
   /** Yonetim disindaki admin alanlari (orn. TAM Utilizasyon): Yonetim sayfasinin altinda baglanti olarak gorunur. */
   const digerYonetim = useMemo(() => kullanici.navigation.filter((o) => o.group === "admin" && o.id !== "yonetim"), [kullanici.navigation])
   const izinli = useMemo(() => {
@@ -246,6 +257,11 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
     return () => window.removeEventListener("hashchange", degisti)
   }, [])
 
+  // Sayfa degisince icerik alani basa doner (onceki sayfanin kaydirma konumu tasinmasin).
+  useEffect(() => {
+    icerik.current?.scrollTo(0, 0)
+  }, [aktif])
+
   useEffect(() => {
     document.documentElement.lang = dil
     document.title = `${aktif === "ozet" ? t.genelBakis : (baslik ?? "")} · TAM Life`
@@ -264,8 +280,8 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
 
   return (
     <SidebarProvider>
-      <Menu kullanici={kullanici} dil={dil} secili={aktif} onSec={sec} />
-      <SidebarInset className="min-w-0">
+      <Menu kullanici={kullanici} dil={dil} secili={aktif} onSec={sec} onDil={onDil} onCikis={onCikis} talepVar={kullanici.navigation.some((o) => o.id === "talep")} />
+      <SidebarInset ref={icerik} className="min-w-0">
         <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b bg-background px-4 sm:px-6">
           <SidebarTrigger aria-label={t.menu} />
           {aktif !== "ozet" ? (
@@ -276,27 +292,30 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
           <h1 className="truncate text-lg font-semibold">{baslik}</h1>
           <div className="ml-auto flex items-center gap-2">
             <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} />
-            <KullaniciMenu
-              kullanici={kullanici}
-              dil={dil}
-              onDil={onDil}
-              onGit={sec}
-              onCikis={onCikis}
-              talepVar={kullanici.navigation.some((o) => o.id === "talep")}
-            />
           </div>
         </header>
         <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+          <Suspense fallback={<p className="text-sm text-muted-foreground">{t.yukleniyor}</p>}>
           {aktif === "ozet" ? (
-            <OzetOrbit dil={dil} />
+            <OzetOrbit dil={dil} onGit={sec} />
           ) : aktif === "profil" ? (
             <ProfilSayfasi kullanici={kullanici} dil={dil} />
           ) : ustId === "yonetim" && kullanici.is_admin ? (
-            <Suspense fallback={<p className="text-sm text-muted-foreground">{t.yukleniyor}</p>}>
-              <YonetimSayfasi dil={dil} bolum={altId ?? ""} digerleri={digerYonetim} />
-            </Suspense>
+            <YonetimSayfasi dil={dil} bolum={altId ?? ""} digerleri={digerYonetim} />
           ) : aktif === "musteri" ? (
             <MusteriSayfasi dil={dil} />
+          ) : aktif === "onedesk" ? (
+            <OnedeskSayfasi dil={dil} admin={kullanici.is_admin} />
+          ) : aktif === "takvim" ? (
+            <IzinTakvim dil={dil} />
+          ) : aktif === "takvim_ozet" ? (
+            <TamTakvim dil={dil} />
+          ) : aktif === "sunum" ? (
+            <SunumSayfasi dil={dil} />
+          ) : aktif === "tamsms" ? (
+            <SmsSayfasi dil={dil} />
+          ) : aktif === "tamapn" ? (
+            <ApnSayfasi dil={dil} />
           ) : aktif === "rapor" ? (
             <RaporSayfasi dil={dil} />
           ) : aktif === "roller" ? (
@@ -306,6 +325,7 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
           ) : oge ? (
             <ModulSayfasi baslik={oge.label} aciklama={oge.description} hazir={oge.ready} altlar={oge.children ?? []} dil={dil} onGit={sec} />
           ) : null}
+          </Suspense>
         </main>
       </SidebarInset>
     </SidebarProvider>
