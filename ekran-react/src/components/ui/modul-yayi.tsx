@@ -1,12 +1,18 @@
 import { useLayoutEffect, useRef, useState } from "react"
-import type { CSSProperties, ReactNode } from "react"
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react"
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion"
 import { useHareket } from "@/lib/hareket"
 
 /**
- * Genel Bakis yarim yayi: modul kartlari iki eş merkezli yay uzerinde, cam goruntulu ve derinlikli.
- * 3B: sahne `perspective` icinde imlece gore +-5 derece egilir; ic yay kartlari one (translateZ) alinir, boylece paralaks olusur.
- * Hareket: giris, hafif yuzme, yay uzerinde akan isik. Animasyon tercihi kapaliyken (sistem ayari ya da hesap menusu) ve dokunmatik ekranda egilme/animasyon yoktur.
+ * Genel Bakis yarim yayi: modul kartlari iki es merkezli yay uzerinde, derinlikli.
+ *
+ * Netlik ilkeleri (bulaniklik yasanmasin diye):
+ *  - Sahne `scale()` ile kucultulmez; olcek yalniz yaricap/kart/yazi boyutlarina uygulanir, her sey gercek piksel ve TAM SAYI konumdadir.
+ *  - Kartlar `translate(-50%)` ile ortalanmaz (yarim piksel kaymasi); sabit boyutlu kutular tam sayi left/top alir.
+ *  - `backdrop-filter` yok; yuzme animasyonu yalniz simgeye uygulanir, etiket metni hep sabit ve keskin kalir.
+ *  - 3B egim yalniz imlec sahne uzerindeyken vardir; durgunken donus ve derinlik (translateZ) tam sifirdir (katman olceklenmez).
+ * Hareket: giris, simge yuzmesi, yayda akan isik, imlece gore +-5 derece egim ve ic yayda paralaks. Animasyon tercihi kapaliyken ve
+ * dokunmatik/dar ekranda egim ve animasyon yoktur.
  */
 
 export type YayOgesi = {
@@ -18,11 +24,12 @@ export type YayOgesi = {
   onClick?: () => void
 }
 
-const SAHNE_G = 1200
-const SAHNE_Y = 470
-const MERKEZ = { x: 600, y: 640 }
+const TASARIM_G = 1200
+const TASARIM_Y = 470
+const MERKEZ_Y = 640
 const YARICAP = { dis: 520, ic: 385 } as const
-const DAR_ESIK = 640
+const EN_KUCUK_OLCEK = 0.7
+const DAR_ESIK = 840
 const EASE = [0.22, 1, 0.36, 1] as const
 
 /** Halka uzerindeki adet kadar kartin acisi: 90 derece etrafinda simetrik, adet arttikca genisler. */
@@ -32,55 +39,76 @@ function acilar(adet: number, adim: number): number[] {
   return Array.from({ length: adet }, (_, i) => 90 + yayi / 2 - i * adim)
 }
 
-function konum(yaricap: number, aci: number): CSSProperties {
-  const rad = (aci * Math.PI) / 180
-  return { left: MERKEZ.x + yaricap * Math.cos(rad), top: MERKEZ.y - yaricap * Math.sin(rad) }
+/** Olceklenmis kart olculeri (px, tam sayi). Yazi boyutu yarim piksel adimlidir. */
+function olculer(s: number) {
+  return {
+    g: Math.round(118 * s),
+    y: Math.round(108 * s),
+    ikon: Math.round(44 * s),
+    glif: Math.round(22 * s),
+    yazi: Math.max(10, Math.round(12 * s * 2) / 2),
+    bosluk: Math.round(8 * s),
+    dolgu: Math.round(10 * s),
+  }
 }
 
-function yayYolu(yaricap: number, alt: number) {
-  const dy = MERKEZ.y - alt
-  const dx = Math.sqrt(yaricap * yaricap - dy * dy)
-  return `M ${MERKEZ.x - dx} ${alt} A ${yaricap} ${yaricap} 0 0 1 ${MERKEZ.x + dx} ${alt}`
+function yayYolu(cx: number, cy: number, r: number, alt: number) {
+  const dx = Math.sqrt(r * r - (cy - alt) * (cy - alt))
+  return `M ${cx - dx} ${alt} A ${r} ${r} 0 0 1 ${cx + dx} ${alt}`
 }
 
-function Kart({ oge, sira, azHareket }: { oge: YayOgesi; sira: number; azHareket: boolean }) {
+type Boyut = ReturnType<typeof olculer>
+
+function Kart({ oge, sira, azHareket, b, stil }: { oge: YayOgesi; sira: number; azHareket: boolean; b: Boyut; stil: CSSProperties }) {
   const icerik = (
     <>
       <span
-        className="flex size-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg ring-2 ring-white/70 transition-transform duration-300 group-hover:scale-110 [&>svg]:size-[22px]"
-        style={{ background: `linear-gradient(135deg, ${oge.renk[0]}, ${oge.renk[1]})`, boxShadow: `0 8px 18px -6px ${oge.renk[1]}` }}
+        className="tl-hareket flex shrink-0 items-center justify-center text-white ring-2 ring-white transition-transform duration-300 group-hover:scale-110"
+        style={{
+          width: b.ikon,
+          height: b.ikon,
+          borderRadius: Math.round(b.ikon * 0.32),
+          background: `linear-gradient(145deg, ${oge.renk[0]}, ${oge.renk[1]})`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,.5), inset 0 -8px 12px -6px rgba(0,0,0,.28), 0 10px 18px -8px ${oge.renk[1]}`,
+          animation: azHareket ? undefined : `tl-yuz ${5 + (sira % 4) * 0.7}s ease-in-out ${(sira * 0.37) % 2}s infinite`,
+        }}
       >
-        {oge.ikon}
+        <span style={{ width: b.glif, height: b.glif, display: "flex" }} className="[&>svg]:size-full">
+          {oge.ikon}
+        </span>
       </span>
-      <span className="line-clamp-2 text-center text-[12px] font-bold leading-[1.15] text-slate-700 transition-colors group-hover:text-tl-navy">{oge.etiket}</span>
+      <span className="line-clamp-2 text-center font-bold text-slate-700 transition-colors group-hover:text-tl-navy" style={{ fontSize: b.yazi, lineHeight: 1.15 }}>
+        {oge.etiket}
+      </span>
     </>
   )
   const sinif =
-    "group flex w-[118px] flex-col items-center gap-2 rounded-[20px] border border-white/80 bg-white/75 px-2.5 py-3 shadow-[0_14px_30px_-14px_rgba(0,40,85,0.45)] backdrop-blur-md transition-all duration-300 hover:-translate-y-1.5 hover:bg-white hover:shadow-[0_22px_40px_-14px_rgba(0,40,85,0.55)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+    "group pointer-events-auto flex flex-col items-center justify-center rounded-[18px] border border-white bg-white/90 antialiased shadow-[0_12px_28px_-14px_rgba(0,40,85,0.5)] transition-[box-shadow,background-color,translate] duration-300 hover:-translate-y-1.5 hover:bg-white hover:shadow-[0_20px_36px_-14px_rgba(0,40,85,0.6)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+  const kutu: CSSProperties = { width: b.g, height: b.y, gap: b.bosluk, padding: `${b.dolgu}px ${Math.round(b.dolgu * 0.7)}px` }
   return (
     <motion.div
-      className="absolute -translate-x-1/2 -translate-y-1/2"
-      initial={azHareket ? false : { opacity: 0, scale: 0.6, y: 24 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: 0.35 + sira * 0.06, ease: EASE }}
+      className="absolute"
+      style={stil}
+      initial={azHareket ? false : { opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, delay: 0.3 + sira * 0.06, ease: EASE }}
     >
-      <div className="tl-hareket" style={azHareket ? undefined : { animation: `tl-yuz ${5 + (sira % 4) * 0.7}s ease-in-out ${(sira * 0.37) % 2}s infinite` }}>
-        {oge.onClick ? (
-          <button type="button" onClick={oge.onClick} className={`${sinif} cursor-pointer`}>
-            {icerik}
-          </button>
-        ) : (
-          <div className={sinif}>{icerik}</div>
-        )}
-      </div>
+      {oge.onClick ? (
+        <button type="button" onClick={oge.onClick} className={`${sinif} cursor-pointer`} style={kutu}>
+          {icerik}
+        </button>
+      ) : (
+        <div className={sinif} style={kutu}>
+          {icerik}
+        </div>
+      )}
     </motion.div>
   )
 }
 
 export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; baslik: ReactNode; altBaslik?: ReactNode }) {
   const cerceve = useRef<HTMLDivElement>(null)
-  const [olcek, setOlcek] = useState(1)
-  const [dar, setDar] = useState(false)
+  const [genislik, setGenislik] = useState(TASARIM_G)
   const azHareket = !useHareket()
 
   const px = useMotionValue(0)
@@ -89,21 +117,20 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
   const y = useSpring(py, { stiffness: 90, damping: 18, mass: 0.6 })
   const donusY = useTransform(x, [-1, 1], [-5, 5])
   const donusX = useTransform(y, [-1, 1], [4, -4])
+  // Ic yay one gelir (paralaks) yalniz egim varken; durgunken 0 => katman olceklenmez, metin keskin kalir.
+  const icDerinlik = useTransform([x, y], ([a, b]: number[]) => Math.round(34 * Math.min(1, Math.hypot(a ?? 0, b ?? 0))))
 
   useLayoutEffect(() => {
     const el = cerceve.current
     if (!el) return
-    const olc = () => {
-      setDar(el.clientWidth < DAR_ESIK)
-      setOlcek(Math.min(1, Math.max(0.55, el.clientWidth / SAHNE_G)))
-    }
+    const olc = () => setGenislik(Math.round(el.clientWidth))
     olc()
     const ro = new ResizeObserver(olc)
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
-  function imlec(olay: React.PointerEvent<HTMLElement>) {
+  function imlec(olay: ReactPointerEvent<HTMLElement>) {
     if (azHareket || olay.pointerType !== "mouse") return
     const k = olay.currentTarget.getBoundingClientRect()
     px.set(((olay.clientX - k.left) / k.width - 0.5) * 2)
@@ -114,11 +141,28 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
     py.set(0)
   }
 
+  const dar = genislik < DAR_ESIK
+  const s = Math.min(1, Math.max(EN_KUCUK_OLCEK, genislik / TASARIM_G))
+  const b = olculer(s)
+  const G = Math.round(genislik)
+  const Y = Math.round(TASARIM_Y * s)
+  const cx = G / 2
+  const cy = MERKEZ_Y * s
+
   const disAdet = Math.min(7, Math.ceil((ogeler.length + 0.5) / 2))
   const dis = ogeler.slice(0, disAdet)
   const ic = ogeler.slice(disAdet)
   const disAci = acilar(dis.length, 20)
   const icAci = acilar(ic.length, 24)
+
+  /** Kartin sol-ust kosesi (tam sayi): merkezden yaricap/aci ile bulunur. */
+  function yer(yaricap: number, aci: number): CSSProperties {
+    const rad = (aci * Math.PI) / 180
+    return { left: Math.round(cx + yaricap * s * Math.cos(rad) - b.g / 2), top: Math.round(cy - yaricap * s * Math.sin(rad) - b.y / 2) }
+  }
+
+  const disYol = yayYolu(cx, cy, YARICAP.dis * s, Y)
+  const icYol = yayYolu(cx, cy, YARICAP.ic * s, Y)
 
   return (
     <section
@@ -128,11 +172,7 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
     >
       <span aria-hidden className="pointer-events-none absolute left-1/2 top-24 size-[520px] -translate-x-1/2 rounded-full bg-tl-blue/10 blur-3xl" />
       <span aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-tl-yellow/20 blur-3xl" />
-      <div
-        ref={cerceve}
-        className="relative mx-auto w-full max-w-[1200px] overflow-hidden"
-        style={{ height: dar ? "auto" : SAHNE_Y * olcek, perspective: dar ? undefined : 1300 }}
-      >
+      <div ref={cerceve} className="relative mx-auto w-full max-w-[1200px] overflow-hidden" style={{ height: dar ? "auto" : Y, perspective: dar ? undefined : 1300 }}>
         {dar ? (
           <ul className="grid grid-cols-2 gap-3 py-2 sm:grid-cols-3">
             {ogeler.map((o) => (
@@ -140,9 +180,9 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
                 <button
                   type="button"
                   onClick={o.onClick}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-white/80 bg-white/80 p-3 text-left shadow-sm backdrop-blur focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-white bg-white/90 p-3 text-left antialiased shadow-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white [&>svg]:size-5" style={{ background: `linear-gradient(135deg, ${o.renk[0]}, ${o.renk[1]})` }}>
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white [&>svg]:size-5" style={{ background: `linear-gradient(145deg, ${o.renk[0]}, ${o.renk[1]})` }}>
                     {o.ikon}
                   </span>
                   <span className="text-[12px] font-bold leading-tight text-slate-700">{o.etiket}</span>
@@ -151,11 +191,8 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
             ))}
           </ul>
         ) : (
-          <motion.div
-            className="absolute left-1/2 top-0"
-            style={{ width: SAHNE_G, height: SAHNE_Y, marginLeft: -SAHNE_G / 2, scale: olcek, transformOrigin: "top center", rotateX: azHareket ? 0 : donusX, rotateY: azHareket ? 0 : donusY, transformStyle: "preserve-3d" }}
-          >
-            <svg className="pointer-events-none absolute inset-0" width={SAHNE_G} height={SAHNE_Y} viewBox={`0 0 ${SAHNE_G} ${SAHNE_Y}`} fill="none" aria-hidden>
+          <motion.div className="pointer-events-none absolute inset-0" style={{ rotateX: azHareket ? 0 : donusX, rotateY: azHareket ? 0 : donusY, transformStyle: "preserve-3d" }}>
+            <svg className="absolute inset-0" width={G} height={Y} viewBox={`0 0 ${G} ${Y}`} fill="none" aria-hidden shapeRendering="geometricPrecision">
               <defs>
                 <linearGradient id="yay-dis" x1="0" x2="1" y1="0" y2="0">
                   <stop offset="0" stopColor="#00a3e0" stopOpacity="0.15" />
@@ -175,10 +212,10 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
                   <feGaussianBlur stdDeviation="5" />
                 </filter>
               </defs>
-              <motion.path d={yayYolu(YARICAP.dis, SAHNE_Y)} stroke="url(#yay-dis)" strokeWidth={14} opacity={0.25} filter="url(#yay-parilti)" initial={{ pathLength: azHareket ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.6, ease: "easeOut" }} />
-              <motion.path d={yayYolu(YARICAP.dis, SAHNE_Y)} stroke="url(#yay-dis)" strokeWidth={3} strokeLinecap="round" initial={{ pathLength: azHareket ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.6, ease: "easeOut" }} />
+              <motion.path d={disYol} stroke="url(#yay-dis)" strokeWidth={14} opacity={0.25} filter="url(#yay-parilti)" initial={{ pathLength: azHareket ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.6, ease: "easeOut" }} />
+              <motion.path d={disYol} stroke="url(#yay-dis)" strokeWidth={3} strokeLinecap="round" initial={{ pathLength: azHareket ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.6, ease: "easeOut" }} />
               <motion.path
-                d={yayYolu(YARICAP.ic, SAHNE_Y)}
+                d={icYol}
                 stroke="url(#yay-ic)"
                 strokeWidth={2.5}
                 strokeLinecap="round"
@@ -192,25 +229,23 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
               {azHareket ? null : (
                 <g>
                   <circle r={16} fill="url(#yay-isik)" opacity={0.85}>
-                    <animateMotion dur="11s" repeatCount="indefinite" path={yayYolu(YARICAP.dis, SAHNE_Y)} />
+                    <animateMotion dur="11s" repeatCount="indefinite" path={disYol} />
                   </circle>
                   <circle r={4} fill="#fff">
-                    <animateMotion dur="11s" repeatCount="indefinite" path={yayYolu(YARICAP.dis, SAHNE_Y)} />
+                    <animateMotion dur="11s" repeatCount="indefinite" path={disYol} />
                   </circle>
                 </g>
               )}
             </svg>
 
             {dis.map((o, i) => (
-              <div key={o.anahtar} className="absolute" style={{ ...konum(YARICAP.dis, disAci[i] ?? 90), transformStyle: "preserve-3d" }}>
-                <Kart oge={o} sira={i} azHareket={azHareket} />
-              </div>
+              <Kart key={o.anahtar} oge={o} sira={i} azHareket={azHareket} b={b} stil={yer(YARICAP.dis, disAci[i] ?? 90)} />
             ))}
-            {ic.map((o, i) => (
-              <div key={o.anahtar} className="absolute" style={{ ...konum(YARICAP.ic, icAci[i] ?? 90), transform: "translateZ(34px)", transformStyle: "preserve-3d" }}>
-                <Kart oge={o} sira={disAdet + i} azHareket={azHareket} />
-              </div>
-            ))}
+            <motion.div className="pointer-events-none absolute inset-0" style={{ z: azHareket ? 0 : icDerinlik, transformStyle: "preserve-3d" }}>
+              {ic.map((o, i) => (
+                <Kart key={o.anahtar} oge={o} sira={disAdet + i} azHareket={azHareket} b={b} stil={yer(YARICAP.ic, icAci[i] ?? 90)} />
+              ))}
+            </motion.div>
           </motion.div>
         )}
       </div>

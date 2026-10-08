@@ -32,6 +32,7 @@ Kaynak (yalnız okundu): `kutucuklar/onedesk`, `kutucuklar/ictapn`, `kutucuklar/
 
 - **Hesap kartı sol altta** (`shell/kullanici-karti.tsx`): dönen halkalı avatar, rol rozeti, çevrimiçi noktası; admin için sarı parıltı ve *Yönetim konsolu* kısayolu. Menü yukarı açılır; Esc/dışarı tık kapatır.
 - **Genel bakış yayı** (`components/ui/modul-yayi.tsx`): iki eş merkezli yay, cam kartlar, imlece göre ±5° 3B eğim ve iç yayda paralaks, yayda akan ışık; kartlar ilgili modüle götürür. `prefers-reduced-motion` ve dokunmatik/dar ekranda hareket/eğim yok, kart listesi.
+  Netlik ilkeleri: sahne `scale()` ile küçültülmez (ölçek yalnız yarıçap, kart ve yazı boyutuna uygulanır), kartlar tam sayı piksel konumunda ve sabit boyutlu kutulardır (`translate(-50%)` yok), `backdrop-filter` yok, yüzme yalnız simgeye uygulanır, 3B eğim ve derinlik durgunken tam sıfırdır (katman ölçeklenmez, metin keskin kalır).
 - Grafikler yeni bağımlılık olmadan SVG/CSS (`components/grafik.tsx`).
 
 ## 6. Dev örnek verisi
