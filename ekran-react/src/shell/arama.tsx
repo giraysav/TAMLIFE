@@ -11,7 +11,7 @@ function tr(s: string) {
 }
 
 /** Ctrl/Cmd+K ile acilan menu aramasi. Yalniz yetkili ogeler listelenir. */
-export function Arama({ ogeler, dil, onGit }: { ogeler: MenuOgesi[]; dil: Dil; onGit: (id: string) => void }) {
+export function Arama({ ogeler, dil, onGit, dugmeSinifi }: { ogeler: MenuOgesi[]; dil: Dil; onGit: (id: string) => void; dugmeSinifi?: string }) {
   const t = metin(dil)
   const [acik, setAcik] = useState(false)
   const [sorgu, setSorgu] = useState("")
@@ -41,7 +41,7 @@ export function Arama({ ogeler, dil, onGit }: { ogeler: MenuOgesi[]; dil: Dil; o
 
   return (
     <>
-      <Button type="button" variant="ghost" size="icon" aria-label={t.ara} onClick={() => setAcik(true)}>
+      <Button type="button" variant="ghost" size="icon" aria-label={t.ara} onClick={() => setAcik(true)} className={dugmeSinifi}>
         <Search aria-hidden />
       </Button>
       <dialog

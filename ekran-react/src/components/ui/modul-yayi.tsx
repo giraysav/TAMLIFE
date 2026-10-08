@@ -106,7 +106,7 @@ function Kart({ oge, sira, azHareket, b, stil }: { oge: YayOgesi; sira: number; 
   )
 }
 
-export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; baslik: ReactNode; altBaslik?: ReactNode }) {
+export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; baslik?: ReactNode; altBaslik?: ReactNode }) {
   const cerceve = useRef<HTMLDivElement>(null)
   const [genislik, setGenislik] = useState(TASARIM_G)
   const azHareket = !useHareket()
@@ -256,8 +256,8 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, delay: 1.0, ease: EASE }}
       >
-        <h2 className="text-[26px] font-black leading-[1.15] tracking-tight text-tl-navy sm:text-[34px]">{baslik}</h2>
-        {altBaslik ? <p className="mt-2 text-sm font-bold text-slate-500">{altBaslik}</p> : null}
+        {baslik ? <h2 className="text-[26px] font-black leading-[1.15] tracking-tight text-tl-navy sm:text-[34px]">{baslik}</h2> : null}
+        {altBaslik ? <p className={`${baslik ? "mt-2" : ""} text-sm font-bold text-slate-500`}>{altBaslik}</p> : null}
         <span aria-hidden className="mx-auto mt-4 block h-1 w-16 rounded-full bg-gradient-to-r from-tl-yellow to-tl-accent" />
       </motion.div>
     </section>

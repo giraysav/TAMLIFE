@@ -172,6 +172,20 @@ describe("ModulYayi", () => {
     expect(onClick).toHaveBeenCalledTimes(1)
     expect(screen.getByRole("heading", { name: "Başlık" })).toBeInTheDocument()
   })
+
+  it("baslik verilmezse buyuk baslik cizilmez (yalniz ipucu)", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+      },
+    )
+    render(<ModulYayi ogeler={[{ anahtar: "onedesk", etiket: "Onedesk", ikon: <span />, renk: ["#fb7185", "#e11d48"] }]} altBaslik="Bir karta tıklayın" />)
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument()
+    expect(screen.getByText("Bir karta tıklayın")).toBeInTheDocument()
+  })
 })
 
 describe("animasyon tercihi", () => {

@@ -61,7 +61,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: var(--border);
   }
 }
 
@@ -92,10 +92,6 @@
   --sidebar-accent: hsl(240 4.8% 95.9%);
   --sidebar-accent-foreground: hsl(240 5.9% 10%);
   --sidebar-ring: hsl(240 5.9% 10%);
-}
-
-* {
-  border-color: var(--border);
 }
 
 html,

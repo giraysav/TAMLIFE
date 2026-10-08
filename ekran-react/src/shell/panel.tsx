@@ -16,6 +16,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
+import logo from "@/assets/tam_life_logo.png"
 import { OzetOrbit } from "@/components/ui/ozet-orbit"
 import type { Kullanici, MenuOgesi } from "@/lib/oturum"
 import { Arama } from "@/shell/arama"
@@ -54,6 +55,8 @@ type Grup = (typeof GRUPLAR)[number]
 /** Sol alttaki hesap kartinin menusunde duran, yan menude gosterilmeyen ogeler. */
 const YAN_MENU_DISI = new Set(["talep"])
 const ANAHTAR = "tamlife.menu"
+/** Mavi ust barda (Turkcell mavisi) simge dugmeleri: beyaz, sari odak halkasi. */
+const UST_BAR_DUGME = "text-white hover:bg-white/15 hover:text-white focus-visible:ring-tl-yellow"
 
 function hashId(): string {
   return hashParcala().yol
@@ -157,9 +160,8 @@ function Menu({ kullanici, dil, secili, onSec, onDil, onCikis, talepVar }: MenuP
   return (
     <Sidebar>
       <SidebarHeader>
-        <a href="#/ozet" className="flex min-h-11 items-center gap-2 rounded-lg px-2 font-semibold" onClick={() => git("ozet")}>
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm text-primary-foreground">T</span>
-          TAM Life
+        <a href="#/ozet" aria-label="TAM Life" className="flex min-h-11 items-center rounded-lg px-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring" onClick={() => git("ozet")}>
+          <img src={logo} alt="TAM Life" width={459} height={105} className="h-9 w-auto" />
         </a>
       </SidebarHeader>
       <SidebarContent>
@@ -282,16 +284,16 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
     <SidebarProvider>
       <Menu kullanici={kullanici} dil={dil} secili={aktif} onSec={sec} onDil={onDil} onCikis={onCikis} talepVar={kullanici.navigation.some((o) => o.id === "talep")} />
       <SidebarInset ref={icerik} className="min-w-0">
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b bg-background px-4 sm:px-6">
-          <SidebarTrigger aria-label={t.menu} />
+        <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b-[3px] border-tl-yellow bg-gradient-to-r from-tl-navy via-[#003a7a] to-tl-blue px-4 text-white shadow-md sm:px-6">
+          <SidebarTrigger aria-label={t.menu} className={UST_BAR_DUGME} />
           {aktif !== "ozet" ? (
-            <Button type="button" variant="ghost" size="icon" aria-label={t.geri} title={t.geri} onClick={geri}>
+            <Button type="button" variant="ghost" size="icon" aria-label={t.geri} title={t.geri} onClick={geri} className={UST_BAR_DUGME}>
               <ArrowLeft aria-hidden />
             </Button>
           ) : null}
-          <h1 className="truncate text-lg font-semibold">{baslik}</h1>
+          <h1 className="truncate text-lg font-black tracking-tight">{baslik}</h1>
           <div className="ml-auto flex items-center gap-2">
-            <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} />
+            <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} dugmeSinifi={UST_BAR_DUGME} />
           </div>
         </header>
         <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">

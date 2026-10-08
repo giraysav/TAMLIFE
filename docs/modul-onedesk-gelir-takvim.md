@@ -34,6 +34,7 @@ Kaynak (yalnız okundu): `kutucuklar/onedesk`, `kutucuklar/ictapn`, `kutucuklar/
 - **Genel bakış yayı** (`components/ui/modul-yayi.tsx`): iki eş merkezli yay, cam kartlar, imlece göre ±5° 3B eğim ve iç yayda paralaks, yayda akan ışık; kartlar ilgili modüle götürür. `prefers-reduced-motion` ve dokunmatik/dar ekranda hareket/eğim yok, kart listesi.
   Netlik ilkeleri: sahne `scale()` ile küçültülmez (ölçek yalnız yarıçap, kart ve yazı boyutuna uygulanır), kartlar tam sayı piksel konumunda ve sabit boyutlu kutulardır (`translate(-50%)` yok), `backdrop-filter` yok, yüzme yalnız simgeye uygulanır, 3B eğim ve derinlik durgunken tam sıfırdır (katman ölçeklenmez, metin keskin kalır).
 - Grafikler yeni bağımlılık olmadan SVG/CSS (`components/grafik.tsx`).
+- **Üst bar** Turkcell mavi paletinde (lacivert → mavi gradyan, beyaz başlık/simge, sarı alt çizgi); **sol üstte TAM Life logosu** (`src/assets/tam_life_logo.png`, üretim login ekranındaki logo). Genel bakışta büyük başlık cümlesi yoktur; yayın altında yalnız küçük ipucu satırı durur.
 
 ## 6. Dev örnek verisi
 

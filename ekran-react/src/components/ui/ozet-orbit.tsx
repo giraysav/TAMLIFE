@@ -62,7 +62,6 @@ export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string
   return (
     <ModulYayi
       ogeler={ogeler}
-      baslik={tr ? "TAM Life tek panelde, tüm modüller bir arada." : "TAM Life in one panel, every module together."}
       altBaslik={tr ? "Bir karta tıklayarak ilgili modüle geçin." : "Click a card to jump to its module."}
     />
   )

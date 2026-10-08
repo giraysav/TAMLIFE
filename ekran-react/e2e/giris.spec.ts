@@ -130,7 +130,9 @@ test("genel bakis tek parca, yeni adlar, Toptan yok", async ({ page }) => {
     await expect(main.getByText(kaldirilan, { exact: true })).toHaveCount(0)
   }
   await expect(main.getByRole("button", { name: "Yönetim" })).toHaveCount(0)
-  await expect(main.getByText("TAM Life tek panelde, tüm modüller bir arada.")).toBeVisible()
+  await expect(main.getByText("TAM Life tek panelde, tüm modüller bir arada.")).toHaveCount(0) // baslik cumlesi kaldirildi
+  await expect(page.getByRole("img", { name: "TAM Life" }).first()).toBeVisible() // sol ustte logo
+  await expect(main.getByRole("button", { name: "Onedesk" })).toBeVisible() // yaydaki kart
   const nav = page.locator("nav[aria-label='TAM Life']")
   for (const ad of ["ICT Sms & Gelir", "APN Gelir ve Kurulum", "Gelir Faydası Sağlanan İşler", "Çeyrek Bazlı Sunum", "Onedesk"]) {
     await expect(nav.getByRole("link", { name: ad })).toBeVisible()
