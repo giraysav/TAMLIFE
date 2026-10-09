@@ -25,11 +25,9 @@ Durum işaretleri: **[canlı]** çalışan ve testli · **[iskelet]** tablo/kata
 │                                                       └─ oturumlar + denetim halkası: BELLEK│
 │                                                              │ SQLAlchemy (senkron)         │
 │                                                              ▼                              │
-│                                            backend/var/dev.db  (SQLite, Alembic ile kurulur)│
-│                                                                                             │
-│  ┌─ ayrı proje, birbirinden habersiz ───────────────────────────────────────────────────┐   │
-│  │ tamlife-api  127.0.0.1:8000  FastAPI async + SQLite data/tamlife.db  (servis.ps1)    │   │
-│  └──────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                            backend/var/dev.db  (ortak panel DB, Alembic)    │
+│                                            backend/var/kullanicilar/<kullanici>.db          │
+│                                              (kişisel: takvim, gelir; ilk açılışta kurulur) │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
  Kapalı / yok: canlı AD bind, Oracle (Onedesk/Onent/Ürün-Tutar), PostgreSQL, dış ağ, E:\TAMLIFE
 ```
@@ -39,7 +37,6 @@ Durum işaretleri: **[canlı]** çalışan ve testli · **[iskelet]** tablo/kata
 | 8117 | API (+ derlenmiş arayüz) | `backend\dev.ps1` · arayüzle: `-Arayuz` |
 | 5173 | Vite dev | `cd ekran-react; npm run dev` |
 | 5174 | Playwright `baseURL` | `npm run e2e` (sunucuyu önceden siz açarsınız) |
-| 8000 | `tamlife-api` | `tamlife-api\scripts\calistir.ps1` |
 
 ## 2. Backend katman topolojisi
 
@@ -125,7 +122,7 @@ main.tsx → App.tsx ──useOturum()──► durum: yukleniyor | yok | var
 components/  kart-ui.tsx (eski kart dili) · sayfa-ui.tsx (SayfaKabi, Sekmeler, Kpi, Panel, Alan) · grafik.tsx (Halka, YatayCubuklar, Sutunlar: SVG) · cekmece.tsx · duzenlenebilir-tablo.tsx
              ui/ (button, card, badge, input, label, sheet, sidebar, skeleton, ozet-orbit, modul-yayi: 3B eğimli genel bakış yayı)
 lib/         http.ts (taban yol, CSRF başlığı, 401) · oturum.ts (oturum, boşta süre) · api-yaz.ts (gonder/iste/apiYukle) · sorgu.ts (oku/yaz/yukle) · bicim.ts
-             api-types.ts (üretilen: `npm run api:uret`; elle düzenlenmez) · utils.ts
+             kanca.ts · utils.ts
 ```
 
 Gerçek arayüz kodu `src/shell` (13 dosya), `src/musteri`, `src/yonetim`, `src/onedesk`, `src/gelir`, `src/takvim`, `src/sunum`, `src/components`. Hesap kartı sol altta (`shell/kullanici-karti.tsx`). TanStack Query yönetim ve yeni modüllerde kullanılıyor; çalışma zamanı bağımlılıkları 11 pakettir (React, TanStack Query, Radix dialog/label/slot, framer-motion, lucide, tailwind-merge, clsx, cva).
@@ -133,13 +130,13 @@ Gerçek arayüz kodu `src/shell` (13 dosya), `src/musteri`, `src/yonetim`, `src/
 ## 5. Dizin yapısı
 
 ```
-E:\TAMLIFE_Dev\
-├─ tamlife-api\                    ayrı proje: feature-first FastAPI iskeleti (git yok; bu depo ona dokunmaz)
+E:\TAMLIFE_Dev\   (lokal geliştirme: D:\TAMLIFE_Dev)
+├─ wheels\                         offline kurulum paketleri (cp312 win_amd64; requirements + pytest/httpx/ruff)
 └─ TAMLIFE_v3.5\                   ◄── bu depo (git: main, uzak yok)
    ├─ CLAUDE.md · .gitignore · requirements.txt (yalnız çalışma zamanı)
    ├─ backend\
    │  ├─ app\                      çekirdek (21) + 5 paket, bkz. §2
-   │  │  ├─ main.py  config.py  catalog.py  models.py  gateway.py  audit.py
+   │  │  ├─ main.py  config.py  catalog.py  models.py  db.py  audit.py
    │  │  ├─ session.py security.py authz.py deps.py  rolgorunum.py navigation.py
    │  │  ├─ oturum_api.py katalog_api.py rol_api.py
    │  │  ├─ ad.py external.py baglantilar.py  ariza.py ortak.py  erisim.py kullanicilar.py ornek_veri.py
@@ -151,12 +148,12 @@ E:\TAMLIFE_Dev\
    │  │  ├─ takvim\                  api · servis
    │  │  ├─ rapor\                   servis · metin
    │  │  └─ skor\                    api · servis · motor
-   │  ├─ alembic\{env.py, versions\0001..0008}    alembic.ini
+   │  ├─ alembic\{env.py, versions\0001..0009}    alembic.ini
    │  ├─ tests\                    test_{yonetim,tampon,ozellikler,auth_security,kimlik_siniri,roller,musteri,skor,skor_api,arayuz_sunumu}.py · conftest.py · skor_golden.json
    │  ├─ dev.ps1  pytest.ini  ruff.toml
-   │  └─ var\                      [üretilen, git'te yok]  dev.db · logs\ · prod_geri_al\
+   │  └─ var\                      [üretilen, git'te yok]  dev.db · kullanicilar\*.db · logs\ · yedek\
    ├─ ekran-react\                 TS arayüzü (Vite 8, React 19, Tailwind 4, oxlint, vitest, Playwright)
-   │  ├─ src\{shell, musteri, onedesk, gelir, takvim, sunum, yonetim\{bolumler,tampon}, components\{kart-ui, sayfa-ui, grafik, cekmece, duzenlenebilir-tablo, ui}, lib, app\providers.tsx, test}
+   │  ├─ src\{shell, musteri, onedesk, gelir, takvim, sunum, yonetim\{bolumler,tampon}, components\{sayfa-ui, grafik, cekmece, duzenlenebilir-tablo, ui}, lib, app\providers.tsx, test}
    │  ├─ e2e\{giris,musteri}.spec.ts
    │  ├─ public\ · index.html · vite.config.ts · vitest.config.ts · playwright.config.ts · tsconfig*.json · package.json
    │  └─ dist\ node_modules\   [üretilen]
@@ -167,9 +164,9 @@ E:\TAMLIFE_Dev\
 
 ## 6. Tasarıma girdi olacak gözlemler
 
-1. **Senkron vs async:** v3.5 senkron `Session`, `tamlife-api` async. Hedef için tek yol seçilmeli.
+1. **DB düzeni:** ortak panel DB + kullanıcı başına SQLite dosyası (`app/db.py`). Kişisel tablolar (`KullaniciBase`) Alembic dışında; yönetici görünümleri kullanıcı dosyalarını sırayla okur (≤20 kişi).
 2. **Migration zinciri deterministik değil:** `0001` `create_all` ile canlı modele bağlı; model değişince "eski" revizyon farklı şema üretir. Hedef şema için dondurulmuş (açık `op.create_table`) başlangıç revizyonu gerekir.
 3. **Kalıcılık:** denetim kalıcı (kuyruklu yazıcı → `audit_event`); **oturumlar hâlâ bellekte** (yeniden başlatmada herkes düşer; `--workers 1` şartı buradan).
 4. **Kapsam boşluğu:** 17 modülün 9'u canlı (musteri, rapor, roller, onedesk, tamsms, tamapn, takvim, takvim_ozet, sunum) + Yönetim/Veri Girişi; proje, talep, radar, gelir_uretim yalnız tablo; 2'sinin hiçbir şeyi yok. Utilizasyon API'si hazır, arayüzü yok (skor kriter/dağıtım ekranı Veri Girişi ile birleşebilir).
-5. **Bilerek kalan artıklar:** `backend/var/prod_geri_al/` (git dışı; üretim dosyalarının geri alma kopyaları, silme kullanıcıya bırakıldı), `lib/api-types.ts` (OpenAPI akışının parçası, bayat olabilir; `npm run api:uret`).
+5. **İskeletler (bilerek duruyor, sırayla doldurulacak):** proje/talep/radar/gelir_uretim tabloları, skor API'si (arayüzü yok), e2e (Playwright kurulu değil).
 6. **Açık kararlar:** Excel yükleme (`openpyxl` yeni bağımlılık), yedekten geri yükleme, günlük saklama süresi, canlı Oracle adaptörleri (kaynak sorguları sözleşmesi + ayrı işçi süreç).
