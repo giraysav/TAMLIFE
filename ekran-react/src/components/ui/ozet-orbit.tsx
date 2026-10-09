@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import type { LucideIcon } from "lucide-react"
 import { Briefcase, CalendarCheck, CalendarDays, Circle, FileText, FolderKanban, LifeBuoy, Link2, MessageSquare, Presentation, Radar, TrendingUp, Wifi } from "lucide-react"
-import { apiGet } from "@/lib/oturum"
+import { oku } from "@/lib/sorgu"
 import { ModulYayi } from "@/components/ui/modul-yayi"
 import type { YayOgesi } from "@/components/ui/modul-yayi"
 
@@ -41,17 +41,7 @@ const VARSAYILAN_RENK: readonly [string, string] = ["#64748b", "#334155"]
 
 /** Genel Bakis: yaydaki kartlar rolun gorebildigi ana sayfa kartlaridir (/home); kart tiklaninca ilgili module gider. */
 export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string) => void }) {
-  const [kartlar, setKartlar] = useState<Kart[]>([])
-
-  useEffect(() => {
-    let iptal = false
-    void apiGet<Kart[]>("/api/v1/home").then((home) => {
-      if (!iptal) setKartlar(home ?? [])
-    })
-    return () => {
-      iptal = true
-    }
-  }, [])
+  const { data: kartlar = [] } = useQuery({ queryKey: ["home"], queryFn: () => oku<Kart[]>("/api/v1/home") })
 
   const tr = dil === "tr"
   const ogeler: YayOgesi[] = kartlar.slice(0, 12).map((kart) => {

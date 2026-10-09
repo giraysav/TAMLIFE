@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
-import { apiOku, apiYaz } from "@/lib/api-yaz"
-import { Bos, DUGME, DUGME_ANA, DUGME_SARI, GIRDI, Rozet } from "@/components/kart-ui"
+import { ApiHata, oku, yaz } from "@/lib/sorgu"
+import { Bos, DUGME, DUGME_ANA, DUGME_SARI, GIRDI, Rozet } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
 
@@ -56,31 +57,37 @@ function dosyaOku(dosya: File): Promise<string> {
 export function AylikRapor({ musteriId, dil, geriAlabilir }: { musteriId: number; dil: Dil; geriAlabilir: boolean }) {
   const t = musteriMetin(dil)
   const taban = `/api/v1/musteri/${musteriId}/rapor`
-  const [taslak, setTaslak] = useState<Taslak | null | undefined>(undefined)
+  const taslakQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "taslak"], queryFn: () => oku<Taslak>(`${taban}/taslak`) })
+  const gecmisQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "gecmis"], queryFn: () => oku<Gonderim[]>(`${taban}/gecmis`) })
+  const taslak = taslakQ.data
+  const gecmis = gecmisQ.data ?? []
   const [alanlar, setAlanlar] = useState<Record<string, string>>({})
   const [alici, setAlici] = useState({ kime: "", bilgi: "" })
-  const [gecmis, setGecmis] = useState<Gonderim[]>([])
   const [pdf, setPdf] = useState<File | null>(null)
   const [mesaj, setMesaj] = useState<Record<string, string>>({})
 
-  const yukle = useCallback(async () => {
-    const [t1, g1] = await Promise.all([apiOku<Taslak>(`${taban}/taslak`), apiOku<Gonderim[]>(`${taban}/gecmis`)])
-    setTaslak(t1.ok ? t1.veri : null)
-    if (t1.veri) {
-      setAlanlar(t1.veri.alanlar)
-      setAlici({ kime: t1.veri.alicilar.kime, bilgi: t1.veri.alicilar.bilgi })
-    }
-    setGecmis(g1.ok && g1.veri ? g1.veri : [])
-  }, [taban])
-
   useEffect(() => {
-    void yukle()
-  }, [yukle])
+    if (!taslak) return
+    setAlanlar(taslak.alanlar)
+    setAlici({ kime: taslak.alicilar.kime, bilgi: taslak.alicilar.bilgi })
+  }, [taslak])
 
+  const yukle = () => Promise.all([taslakQ.refetch(), gecmisQ.refetch()])
   const bildir = (anahtar: string, metin: string) => setMesaj((m) => ({ ...m, [anahtar]: metin }))
+  /** Sonucu ilgili alana yazar; `kilit`: 409 (gonderilmis donem) icin ozel mesaj. */
+  async function dene(anahtar: string, istek: () => Promise<unknown>, basari: string, kilit = false): Promise<boolean> {
+    try {
+      await istek()
+      bildir(anahtar, basari)
+      return true
+    } catch (h) {
+      bildir(anahtar, kilit && h instanceof ApiHata && h.durum === 409 ? t.gonderimKilitli : `${t.kaydedilemedi}: ${(h as Error).message}`)
+      return false
+    }
+  }
 
-  if (taslak === undefined) return <p className="text-sm text-muted-foreground">…</p>
-  if (taslak === null) {
+  if (taslakQ.isPending) return <p className="text-sm text-muted-foreground">…</p>
+  if (!taslak) {
     return (
       <p role="alert" className="text-sm text-destructive">
         {t.yuklenemedi}
@@ -91,15 +98,12 @@ export function AylikRapor({ musteriId, dil, geriAlabilir }: { musteriId: number
 
   async function taslagiKaydet(olay?: FormEvent) {
     olay?.preventDefault()
-    const sonuc = await apiYaz("PUT", `${taban}/taslak`, { alanlar })
-    bildir("taslak", sonuc.ok ? t.kaydedildi : sonuc.durum === 409 ? t.gonderimKilitli : `${t.kaydedilemedi}: ${sonuc.hata}`)
-    if (sonuc.ok) await yukle()
+    if (await dene("taslak", () => yaz("PUT", `${taban}/taslak`, { alanlar }), t.kaydedildi, true)) await yukle()
   }
 
   async function alicilariKaydet(olay: FormEvent) {
     olay.preventDefault()
-    const sonuc = await apiYaz("PUT", `${taban}/alicilar`, alici)
-    bildir("alici", sonuc.ok ? t.kaydedildi : `${t.kaydedilemedi}: ${sonuc.hata}`)
+    await dene("alici", () => yaz("PUT", `${taban}/alicilar`, alici), t.kaydedildi)
   }
 
   async function gonder() {
@@ -113,20 +117,18 @@ export function AylikRapor({ musteriId, dil, geriAlabilir }: { musteriId: number
         return
       }
     }
-    const sonuc = await apiYaz("POST", `${taban}/gonder`, { onay: true, subject: alanlar.konu, ...(pdfVeri ? { pdf_base64: pdfVeri } : {}) })
-    bildir("gonder", sonuc.ok ? t.gonderildi : sonuc.durum === 409 ? t.gonderimKilitli : `${t.kaydedilemedi}: ${sonuc.hata}`)
+    await dene("gonder", () => yaz("POST", `${taban}/gonder`, { onay: true, subject: alanlar.konu, ...(pdfVeri ? { pdf_base64: pdfVeri } : {}) }), t.gonderildi, true)
     setPdf(null)
     await yukle()
   }
 
   async function geriAl(id: number) {
     if (!window.confirm(t.geriAlOnay)) return
-    const sonuc = await apiYaz("POST", `/api/v1/rapor/gonderim/${id}/geri-al`)
-    bildir("gecmis", sonuc.ok ? "" : `${t.kaydedilemedi}: ${sonuc.hata}`)
+    await dene("gecmis", () => yaz("POST", `/api/v1/rapor/gonderim/${id}/geri-al`), "")
     await yukle()
   }
 
-  const yaz = (anahtar: string, deger: string) => setAlanlar((a) => ({ ...a, [anahtar]: deger }))
+  const alanYaz = (anahtar: string, deger: string) => setAlanlar((a) => ({ ...a, [anahtar]: deger }))
   const g = taslak.gonderim
 
   return (
@@ -147,7 +149,7 @@ export function AylikRapor({ musteriId, dil, geriAlabilir }: { musteriId: number
             {!taslak.birim ? <p className="rounded-xl border bg-slate-50 p-3 text-xs text-slate-600">{t.rapordaBirimDegil}</p> : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <label className="flex cursor-pointer select-none items-center gap-2">
-                <input type="checkbox" className="size-4 accent-tl-navy" disabled={!!g} checked={ingilizce} onChange={(ev) => yaz("dil", ev.target.checked ? "en" : "tr")} />
+                <input type="checkbox" className="size-4 accent-tl-navy" disabled={!!g} checked={ingilizce} onChange={(ev) => alanYaz("dil", ev.target.checked ? "en" : "tr")} />
                 <span className="text-xs font-black text-tl-navy">{t.ingilizceRapor}</span>
               </label>
               <div className="ml-auto flex items-center gap-2">
@@ -174,19 +176,19 @@ export function AylikRapor({ musteriId, dil, geriAlabilir }: { musteriId: number
                 <label htmlFor="r-konu" className="text-[10px] font-extrabold uppercase tracking-wider text-tl-navy">
                   {t.konu}
                 </label>
-                <input id="r-konu" disabled={!!g} maxLength={200} value={alanlar.konu ?? ""} onChange={(ev) => yaz("konu", ev.target.value)} className={GIRDI} />
+                <input id="r-konu" disabled={!!g} maxLength={200} value={alanlar.konu ?? ""} onChange={(ev) => alanYaz("konu", ev.target.value)} className={GIRDI} />
               </div>
               <div className="grid gap-1.5">
                 <label htmlFor="r-govde" className="text-[10px] font-extrabold uppercase tracking-wider text-tl-navy">
                   {t.govde}
                 </label>
-                <textarea id="r-govde" rows={8} maxLength={10000} disabled={!!g} value={alanlar.govde ?? ""} onChange={(ev) => yaz("govde", ev.target.value)} className={GIRDI} />
+                <textarea id="r-govde" rows={8} maxLength={10000} disabled={!!g} value={alanlar.govde ?? ""} onChange={(ev) => alanYaz("govde", ev.target.value)} className={GIRDI} />
               </div>
               <div className="grid gap-1.5">
                 <label htmlFor="r-imza" className="text-[10px] font-extrabold uppercase tracking-wider text-tl-navy">
                   {t.imza}
                 </label>
-                <textarea id="r-imza" rows={3} maxLength={2000} disabled={!!g} value={alanlar.imza ?? ""} onChange={(ev) => yaz("imza", ev.target.value)} className={GIRDI} />
+                <textarea id="r-imza" rows={3} maxLength={2000} disabled={!!g} value={alanlar.imza ?? ""} onChange={(ev) => alanYaz("imza", ev.target.value)} className={GIRDI} />
               </div>
             </div>
 
@@ -196,7 +198,7 @@ export function AylikRapor({ musteriId, dil, geriAlabilir }: { musteriId: number
                   <span aria-hidden className="size-1.5 rounded-full bg-current" />
                   {t[m.alan]}
                 </label>
-                <textarea id={`r-${m.alan}`} rows={m.satir} maxLength={m.uzun} disabled={!!g} value={alanlar[m.alan] ?? ""} onChange={(ev) => yaz(m.alan, ev.target.value)} className={GIRDI} />
+                <textarea id={`r-${m.alan}`} rows={m.satir} maxLength={m.uzun} disabled={!!g} value={alanlar[m.alan] ?? ""} onChange={(ev) => alanYaz(m.alan, ev.target.value)} className={GIRDI} />
               </div>
             ))}
           </form>

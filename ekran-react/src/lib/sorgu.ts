@@ -1,4 +1,4 @@
-import { apiOku, apiYaz, apiYukle } from "@/lib/api-yaz"
+import { apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
 
 /** Sunucu yaniti basarisizsa firlatilir; TanStack Query hata durumuna duser. durum 0 = ag. */
 export class ApiHata extends Error {
@@ -9,29 +9,36 @@ export class ApiHata extends Error {
   }
 }
 
-export async function oku<T>(yol: string): Promise<T> {
-  const s = await apiOku<T>(yol)
-  if (!s.ok || s.veri === null) throw new ApiHata(s.durum, s.hata || "Yüklenemedi.")
-  return s.veri
+/** Tek API cagrisi: 401 oturumu kapatir; basari govdesi {data}, hata govdesi {detail}. */
+async function gonder<T>(yontem: string, yol: string, yedek: string, basliklar?: Record<string, string>, govde?: BodyInit): Promise<T> {
+  let cevap: Response
+  try {
+    cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: basliklar, body: govde })
+  } catch {
+    throw new ApiHata(0, "ağ")
+  }
+  if (oturumYok(cevap)) window.dispatchEvent(new Event("tamlife:oturum-bitti"))
+  const json = (await cevap.json().catch(() => null)) as { data?: T; detail?: unknown } | null
+  const veri = cevap.ok ? (json?.data ?? null) : null
+  if (veri !== null) return veri
+  const ayrinti = json?.detail
+  throw new ApiHata(cevap.status, (!cevap.ok && (typeof ayrinti === "string" ? ayrinti : ayrinti ? "Geçersiz istek." : "")) || yedek)
 }
 
-export async function yaz<T>(yontem: "POST" | "PUT" | "DELETE", yol: string, govde?: unknown): Promise<T> {
-  const s = await apiYaz<T>(yontem, yol, govde)
-  if (!s.ok || s.veri === null) throw new ApiHata(s.durum, s.hata || "İşlem tamamlanamadı.")
-  return s.veri
+export const oku = <T>(yol: string) => gonder<T>("GET", yol, "Yüklenemedi.")
+
+export function yaz<T>(yontem: "POST" | "PUT" | "DELETE", yol: string, govde?: unknown): Promise<T> {
+  const json = govde !== undefined
+  return gonder<T>(yontem, yol, "İşlem tamamlanamadı.", csrfBasliklari(json ? { "Content-Type": "application/json" } : {}), json ? JSON.stringify(govde) : undefined)
 }
 
-export async function yukle<T>(yol: string, dosya: Blob): Promise<T> {
-  const s = await apiYukle<T>(yol, dosya)
-  if (!s.ok || s.veri === null) throw new ApiHata(s.durum, s.hata || "Yükleme tamamlanamadı.")
-  return s.veri
-}
+/** Ham dosya govdesi (cok parcali form degil): sunucu tarafinda yeni bagimlilik gerektirmez. */
+export const yukle = <T>(yol: string, dosya: Blob, tur = "text/csv") => gonder<T>("PUT", yol, "Yükleme tamamlanamadı.", csrfBasliklari({ "Content-Type": tur }), dosya)
 
 export function hataMesaji(hata: unknown, yedek: string): string {
   if (hata instanceof ApiHata && hata.durum !== 0 && hata.message && hata.message !== "ağ") return hata.message
   return yedek
 }
-
 
 export function sorguMetni(degerler: Record<string, string | number | null | undefined>): string {
   const p = new URLSearchParams()

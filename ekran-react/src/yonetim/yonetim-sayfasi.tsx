@@ -1,13 +1,15 @@
-import { Suspense, lazy } from "react"
+import { lazy, Suspense } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Activity, ArrowDownToLine, Database, ScrollText, ShieldCheck, TriangleAlert } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { MenuOgesi } from "@/lib/oturum"
 import type { Dil } from "@/shell/metin"
-import { ANAHTAR, oku } from "@/yonetim/api"
+import { ANAHTAR } from "@/yonetim/api"
+import { oku } from "@/lib/sorgu"
 import type { Ozet } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { HataSiniri, SayfaBasligi, Yukleniyor } from "@/yonetim/ui"
+import { HataSiniri } from "@/yonetim/ui"
+import { Yukleniyor } from "@/components/sayfa-ui"
 
 /** Her bolum ayri JS parcasidir: Yonetim yalniz admin acinca indirilir, diger kullanicilarin ilk yuklemesini sismirmez. */
 const BOLUMLER = {
@@ -65,10 +67,13 @@ export default function YonetimSayfasi({ dil, bolum, digerleri }: { dil: Dil; bo
         </ul>
       </nav>
 
-      <SayfaBasligi baslik={t.bolumler[aktif]} aciklama={t.bolumAciklama[aktif]} />
+      <div className="min-w-0">
+        <h2 className="text-base font-black text-tl-navy">{t.bolumler[aktif]}</h2>
+        <p className="mt-0.5 text-xs font-bold text-slate-500">{t.bolumAciklama[aktif]}</p>
+      </div>
 
       <HataSiniri key={aktif} mesaj={t.panelHatasi}>
-        <Suspense fallback={<Yukleniyor t={t} />}>
+        <Suspense fallback={<Yukleniyor metin={t.yukleniyor} iskelet />}>
           <Bilesen dil={dil} />
         </Suspense>
       </HataSiniri>

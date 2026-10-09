@@ -253,3 +253,11 @@ def test_audit_event_tablosunda_gercekten_satir_var(client):
     yazici.bosalt(zorla=True)
     with Session(engine()) as db:
         assert db.scalar(select(func.count()).select_from(AuditEvent)) >= 1
+
+
+def test_kullanici_dizini_goreli_adreste_mutlaktir(monkeypatch, tmp_path):
+    from app.db import kullanici_dizini
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TAMLIFE_DATABASE_URL", "sqlite:///./var/x.db")  # dev.ps1 goreli adres kullanir
+    assert kullanici_dizini() == (tmp_path / "var" / "kullanicilar").resolve() and kullanici_dizini().is_absolute()

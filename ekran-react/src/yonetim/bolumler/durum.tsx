@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { CircleCheck, CircleX, RefreshCw, TriangleAlert } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, Rozet } from "@/components/kart-ui"
-import { ANAHTAR, oku } from "@/yonetim/api"
+import { Bolum, DUGME, HataKutu, Rozet, Yukleniyor } from "@/components/sayfa-ui"
+import { ANAHTAR } from "@/yonetim/api"
+import { oku } from "@/lib/sorgu"
 import type { Durum3, Ozet } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { DurumRozeti, Gosterge, HataKutusu, Yukleniyor, bayt, zamanYaz } from "@/yonetim/ui"
+import { DurumRozeti, Gosterge } from "@/yonetim/ui"
+import { zaman, bayt } from "@/lib/bicim"
 
 const BANT = {
   ok: { sinif: "border-emerald-200 bg-emerald-50 text-emerald-800", ikon: CircleCheck },
@@ -18,8 +20,8 @@ export default function Durum({ dil }: { dil: Dil }) {
   const t = ym(dil)
   const q = useQuery({ queryKey: ANAHTAR.ozet, queryFn: () => oku<Ozet>("/api/v1/yonetim/ozet"), refetchInterval: 30_000 })
 
-  if (q.isPending) return <Yukleniyor t={t} />
-  if (q.isError) return <HataKutusu t={t} onTekrar={() => void q.refetch()} />
+  if (q.isPending) return <Yukleniyor metin={t.yukleniyor} iskelet />
+  if (q.isError) return <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
   const { saglik, gostergeler: g, baglantilar } = q.data
   const bant = BANT[saglik.genel as Durum3]
   const Ikon = bant.ikon
@@ -31,7 +33,7 @@ export default function Durum({ dil }: { dil: Dil }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black">{t.genel[saglik.genel]}</p>
           <p className="text-[11px] font-bold opacity-80">
-            {t.sonKontrol}: {zamanYaz(saglik.zaman)}
+            {t.sonKontrol}: {zaman(saglik.zaman)}
           </p>
         </div>
         <button type="button" className={DUGME} onClick={() => void q.refetch()} disabled={q.isFetching}>

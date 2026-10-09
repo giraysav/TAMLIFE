@@ -3,13 +3,15 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { Download } from "lucide-react"
 import { apiYolu } from "@/lib/http"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, DUGME_ANA, GIRDI, Rozet } from "@/components/kart-ui"
+import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { useHashSorgu } from "@/shell/rota"
-import { ANAHTAR, hataMesaji, oku, sorguMetni, yaz } from "@/yonetim/api"
+import { ANAHTAR } from "@/yonetim/api"
+import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { GunlukDosyasi, Olay, Oturum, Sayfali } from "@/yonetim/api"
-import { useGecikmeli } from "@/yonetim/kanca"
+import { useGecikmeli } from "@/lib/kanca"
 import { ym } from "@/yonetim/metin"
-import { Alan, Bilgi, HataKutusu, Sayfalama, VeriTablosu, Yukleniyor, sureYaz, zamanYaz } from "@/yonetim/ui"
+import { Sayfalama } from "@/yonetim/ui"
+import { zaman, sureYaz } from "@/lib/bicim"
 
 const ADET = 25
 
@@ -61,9 +63,9 @@ function Denetim({ dil }: { dil: Dil }) {
         </a>
       </div>
       {q.isPending ? (
-        <Yukleniyor t={t} />
+        <Yukleniyor metin={t.yukleniyor} iskelet />
       ) : q.isError ? (
-        <HataKutusu t={t} onTekrar={() => void q.refetch()} />
+        <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
       ) : (
         <div className={`grid gap-3 ${q.isPlaceholderData ? "opacity-70" : ""}`}>
           <VeriTablosu<Olay>
@@ -72,7 +74,7 @@ function Denetim({ dil }: { dil: Dil }) {
             anahtar={(o) => o.id}
             bos={<p className="text-xs font-bold text-slate-400">{t.kayitYok}</p>}
             kolonlar={[
-              { baslik: t.zaman, hucre: (o) => <span className="whitespace-nowrap">{zamanYaz(o.zaman)}</span> },
+              { baslik: t.zaman, hucre: (o) => <span className="whitespace-nowrap">{zaman(o.zaman)}</span> },
               { baslik: t.kullanici, hucre: (o) => o.kullanici },
               { baslik: t.olay, hucre: (o) => <code className="text-[11px]">{o.olay}</code> },
               { baslik: t.sonuc, hucre: (o) => <Rozet ton={o.sonuc === "deny" ? "kirmizi" : "yesil"}>{t.sonucEtiket[o.sonuc] ?? o.sonuc}</Rozet> },
@@ -105,8 +107,8 @@ function Oturumlar({ dil }: { dil: Dil }) {
     },
     onError: (e) => setBilgi(hataMesaji(e, t.islemBasarisiz)),
   })
-  if (q.isPending) return <Yukleniyor t={t} />
-  if (q.isError) return <HataKutusu t={t} onTekrar={() => void q.refetch()} />
+  if (q.isPending) return <Yukleniyor metin={t.yukleniyor} iskelet />
+  if (q.isError) return <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
   return (
     <div className="grid gap-3">
       <VeriTablosu<Oturum>
@@ -144,7 +146,7 @@ function Oturumlar({ dil }: { dil: Dil }) {
           },
         ]}
       />
-      {bilgi ? <Bilgi>{bilgi}</Bilgi> : null}
+      {bilgi ? <Bildirim>{bilgi}</Bildirim> : null}
     </div>
   )
 }
@@ -174,13 +176,13 @@ function UygulamaGunlugu({ dil, baslangic }: { dil: Dil; baslangic: string | nul
           {t.getir}
         </button>
       </form>
-      {q.isFetching ? <Yukleniyor t={t} /> : null}
-      {q.isError ? <HataKutusu t={t} onTekrar={() => void q.refetch()} /> : null}
+      {q.isFetching ? <Yukleniyor metin={t.yukleniyor} iskelet /> : null}
+      {q.isError ? <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} /> : null}
       {q.data && !q.isFetching ? (
         !q.data.var ? (
-          <Bilgi>{t.gunlukYok}</Bilgi>
+          <Bildirim>{t.gunlukYok}</Bildirim>
         ) : q.data.satirlar.length === 0 ? (
-          <Bilgi>{t.kayitBulunamadi}</Bilgi>
+          <Bildirim>{t.kayitBulunamadi}</Bildirim>
         ) : (
           <pre tabIndex={0} aria-label={t.uygulamaGunlugu} className="max-h-96 overflow-auto rounded-xl border border-slate-200 bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-slate-100">
             {q.data.satirlar.join("\n")}

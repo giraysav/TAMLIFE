@@ -1,11 +1,13 @@
 import { useState } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import type { Dil } from "@/shell/metin"
-import { Bolum, GIRDI, Rozet } from "@/components/kart-ui"
-import { ANAHTAR, oku, sorguMetni } from "@/yonetim/api"
+import { Alan, Bolum, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { ANAHTAR } from "@/yonetim/api"
+import { oku, sorguMetni } from "@/lib/sorgu"
 import type { Parti, Sayfali } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { Alan, HataKutusu, Sayfalama, VeriTablosu, Yukleniyor, sayi, zamanYaz } from "@/yonetim/ui"
+import { Sayfalama } from "@/yonetim/ui"
+import { zaman, sayi } from "@/lib/bicim"
 
 const ADET = 10
 export const PARTI_TON = { receiving: "amber", ready: "yesil", failed: "kirmizi", rejected: "amber" } as const
@@ -43,9 +45,9 @@ export function Partiler({ dil, seciliId, onSec }: { dil: Dil; seciliId: number 
           </select>
         </Alan>
         {q.isPending ? (
-          <Yukleniyor t={t} />
+          <Yukleniyor metin={t.yukleniyor} iskelet />
         ) : q.isError ? (
-          <HataKutusu t={t} onTekrar={() => void q.refetch()} />
+          <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
         ) : (
           <div className={`grid gap-3 ${q.isPlaceholderData ? "opacity-70" : ""}`}>
             <VeriTablosu<Parti>
@@ -73,7 +75,7 @@ export function Partiler({ dil, seciliId, onSec }: { dil: Dil; seciliId: number 
                 { baslik: t.etiket, hucre: (p) => <span className="line-clamp-1 max-w-56 break-all font-normal">{p.etiket || "—"}</span> },
                 { baslik: t.durum, hucre: (p) => <Rozet ton={PARTI_TON[p.durum]}>{t.partiDurum[p.durum]}</Rozet> },
                 { baslik: t.satir, hucre: (p) => sayi(p.satir), sinif: "text-right font-mono" },
-                { baslik: t.zaman, hucre: (p) => <span className="whitespace-nowrap">{zamanYaz(p.zaman)}</span> },
+                { baslik: t.zaman, hucre: (p) => <span className="whitespace-nowrap">{zaman(p.zaman)}</span> },
                 { baslik: t.olusturan, hucre: (p) => p.olusturan },
               ]}
             />

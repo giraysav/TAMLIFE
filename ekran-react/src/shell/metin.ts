@@ -1,6 +1,14 @@
 export type Dil = "tr" | "en"
 
+/** Ozellik metinlerinde tekrar eden ortak ifadeler; her ozellik sozlugu `...ORTAK[dil]` ile baslar. */
+const ORTAK_TR = { yukleniyor: "Yükleniyor…", yuklenemedi: "Yüklenemedi.", tekrar: "Tekrar dene", kaydet: "Kaydet", vazgec: "Vazgeç", duzenle: "Düzenle", sil: "Sil", onceki: "Önceki", sonraki: "Sonraki" }
+export const ORTAK: Record<Dil, typeof ORTAK_TR> = {
+  tr: ORTAK_TR,
+  en: { yukleniyor: "Loading…", yuklenemedi: "Could not load.", tekrar: "Try again", kaydet: "Save", vazgec: "Cancel", duzenle: "Edit", sil: "Delete", onceki: "Previous", sonraki: "Next" },
+}
+
 const TR = {
+  ...ORTAK.tr,
   giris: "Giriş",
   girisAciklama: "AD/LDAP hesabınızla giriş yapın",
   kullaniciAdi: "Kullanıcı adı (AD/LDAP)",
@@ -20,8 +28,6 @@ const TR = {
   baglantilar: "Bağlantılar",
   ayarli: "ayarlı",
   ayarsiz: "ayarlı değil",
-  yukleniyor: "Yükleniyor…",
-  yuklenemedi: "Yüklenemedi.",
   dil: "Dil",
   ara: "Ara (Ctrl+K)",
   aramaIpucu: "Modül ara…",
@@ -43,7 +49,6 @@ const TR = {
   yonetim: "Yönetim",
   gelistirmeTalepleri: "Geliştirme Talepleri",
   geri: "Geri",
-  kaydet: "Kaydet",
   saltOkunur: "Salt okunur: değişiklik yalnızca admin yetkisindedir.",
   rolAciklama: "Her rolün göreceği sayfaları ve giriş sayfasını admin belirler. Admin tüm sayfalarda tam yetkilidir; Manager ve Member yalnızca yetki verilen alanlara ulaşır.",
   rolKayitli: "Kayıtlı görünüm",
@@ -66,6 +71,7 @@ const TR = {
 }
 
 const EN: typeof TR = {
+  ...ORTAK.en,
   giris: "Sign in",
   girisAciklama: "Sign in with your AD/LDAP account",
   kullaniciAdi: "Username (AD/LDAP)",
@@ -85,8 +91,6 @@ const EN: typeof TR = {
   baglantilar: "Connections",
   ayarli: "configured",
   ayarsiz: "not configured",
-  yukleniyor: "Loading…",
-  yuklenemedi: "Could not load.",
   dil: "Language",
   ara: "Search (Ctrl+K)",
   aramaIpucu: "Search modules…",
@@ -108,7 +112,6 @@ const EN: typeof TR = {
   yonetim: "Administration",
   gelistirmeTalepleri: "Development Requests",
   geri: "Back",
-  kaydet: "Save",
   saltOkunur: "Read only: only admin can change this.",
   rolAciklama: "You decide which pages each role sees and which page it lands on. Admin sees every page.",
   rolKayitli: "Saved view",

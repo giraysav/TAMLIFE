@@ -1,6 +1,8 @@
+import { ORTAK } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
 const TR = {
+  ...ORTAK.tr,
   // gun durumlari
   durumlar: {
     calisiyor: "Çalışıyor",
@@ -11,8 +13,6 @@ const TR = {
     resmi_tatil: "Resmi Tatil",
     hafta_sonu: "Hafta Sonu",
   } as Record<string, string>,
-  yuklenemedi: "Yüklenemedi.",
-  tekrar: "Tekrar dene",
   kapat: "Kapat",
   // izin & takvim yonetimi
   izinBaslik: "İzin&Takvim Yönetimi",
@@ -32,7 +32,6 @@ const TR = {
   durum: "Gün durumu",
   online: "Online toplantı sayısı",
   yuzyuze: "Yüz yüze toplantı sayısı",
-  kaydet: "Kaydet",
   varsayilanaDon: "Varsayılana dön",
   kaydediliyor: "Kaydediliyor…",
   kaydedilemedi: "Kaydedilemedi.",
@@ -89,6 +88,7 @@ const TR = {
 }
 
 const EN: typeof TR = {
+  ...ORTAK.en,
   durumlar: {
     calisiyor: "Working",
     yillik_izin: "Annual Leave",
@@ -98,8 +98,6 @@ const EN: typeof TR = {
     resmi_tatil: "Public Holiday",
     hafta_sonu: "Weekend",
   },
-  yuklenemedi: "Could not load.",
-  tekrar: "Try again",
   kapat: "Close",
   izinBaslik: "Leave & Calendar Management",
   izinAciklama: "Enter your own day status, leave and meetings",
@@ -118,7 +116,6 @@ const EN: typeof TR = {
   durum: "Day status",
   online: "Online meeting count",
   yuzyuze: "Face-to-face meeting count",
-  kaydet: "Save",
   varsayilanaDon: "Reset to default",
   kaydediliyor: "Saving…",
   kaydedilemedi: "Could not save.",

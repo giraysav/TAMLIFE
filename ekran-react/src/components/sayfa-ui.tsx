@@ -1,9 +1,83 @@
-import type { LucideIcon } from "lucide-react"
-import { CircleAlert, CircleCheck, Inbox, LoaderCircle } from "lucide-react"
+import { useState } from "react"
 import type { ReactNode } from "react"
-import { DUGME } from "@/components/kart-ui"
+import type { LucideIcon } from "lucide-react"
+import { ChevronDown, CircleAlert, CircleCheck, Inbox, Info, LoaderCircle } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
-/** Yeni modul sayfalarinin ortak ogeleri. Gorsel dil: kart-ui ile ayni palet (lacivert, mavi, sari vurgu), daha cesur basliklar. */
+/** Ortak arayuz ogeleri (tek kaynak). Gorsel dil: lacivert baslik, mavi vurgu, sari serit; katlanir bolumler, buyuk harf basliklar. */
+
+export const GIRDI =
+  "w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-tl-blue focus-visible:ring-2 focus-visible:ring-tl-yellow/60 disabled:opacity-60"
+
+export const DUGME =
+  "inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-tl-navy shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow disabled:opacity-60"
+export const DUGME_ANA =
+  "inline-flex items-center justify-center gap-1.5 rounded-xl border border-tl-blue bg-white px-4 py-2 text-xs font-bold text-tl-blue shadow-sm transition-colors hover:bg-tl-blue/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow disabled:opacity-60"
+export const DUGME_SARI =
+  "inline-flex min-w-[12rem] items-center justify-center gap-2 rounded-xl bg-tl-yellow px-5 py-2.5 text-xs font-black text-tl-navy shadow transition-colors hover:bg-yellow-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-navy disabled:cursor-not-allowed disabled:opacity-50"
+
+const ANAHTAR = "mkBolum:"
+
+function acikMi(anahtar: string, varsayilan: boolean): boolean {
+  try {
+    const ham = window.localStorage.getItem(ANAHTAR + anahtar)
+    return ham === null ? varsayilan : ham === "1"
+  } catch {
+    return varsayilan
+  }
+}
+
+/** Katlanir bolum (yerel <details>: klavye ve ekran okuyucu hazir). Acik/kapali durumu tarayicida hatirlanir. */
+export function Bolum({ anahtar, baslik, children, ek = "", varsayilanAcik = true }: { anahtar: string; baslik: string; children: ReactNode; ek?: string; varsayilanAcik?: boolean }) {
+  const [acik, setAcik] = useState(() => acikMi(anahtar, varsayilanAcik))
+  return (
+    <details
+      open={acik}
+      onToggle={(e) => {
+        const yeni = e.currentTarget.open
+        setAcik(yeni)
+        try {
+          window.localStorage.setItem(ANAHTAR + anahtar, yeni ? "1" : "0")
+        } catch {
+          /* depolama kapali */
+        }
+      }}
+      className={`group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${ek}`}
+    >
+      <summary className="flex cursor-pointer select-none list-none items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 hover:bg-slate-100/80 [details:not([open])_&]:border-b-transparent [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-tl-yellow" />
+        <h3 className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-widest text-tl-navy">{baslik}</h3>
+        <ChevronDown aria-hidden className="size-4 shrink-0 text-tl-navy/60 transition-transform duration-200 group-open:rotate-180" />
+      </summary>
+      <div className="p-4">{children}</div>
+    </details>
+  )
+}
+
+export function Satir({ etiket, children }: { etiket: string; children: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3 border-b border-slate-100 py-1.5 text-xs last:border-0">
+      <span className="shrink-0 font-bold text-slate-400">{etiket}</span>
+      <span className="min-w-0 break-words text-right font-bold text-slate-700">{children}</span>
+    </div>
+  )
+}
+
+export function Bos({ children }: { children: ReactNode }) {
+  return <p className="text-xs font-bold text-slate-400">{children}</p>
+}
+
+/** Mavi/sari kenarlikli rozet gibi kucuk etiketler. */
+export function Rozet({ children, ton = "gri" }: { children: ReactNode; ton?: "gri" | "sari" | "yesil" | "amber" | "kirmizi" }) {
+  const sinif = {
+    gri: "bg-slate-100 text-slate-500",
+    sari: "bg-tl-yellow text-tl-navy",
+    yesil: "bg-emerald-500/10 text-emerald-600",
+    amber: "bg-amber-500/20 text-amber-800",
+    kirmizi: "bg-rose-500/10 text-rose-600",
+  }[ton]
+  return <span className={`whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-bold ${sinif}`}>{children}</span>
+}
 
 export function SayfaKabi({ ikon: Ikon, baslik, aciklama, children }: { ikon: LucideIcon; baslik: string; aciklama?: string; children?: ReactNode }) {
   return (
@@ -96,7 +170,20 @@ export function Panel({ baslik, aciklama, sag, children, sinif = "" }: { baslik?
   )
 }
 
-export function Yukleniyor({ metin }: { metin: string }) {
+/** `iskelet`: yer tutucu kutular (yonetim bolumleri); yoksa donen ikon + metin. */
+export function Yukleniyor({ metin, iskelet = false }: { metin: string; iskelet?: boolean }) {
+  if (iskelet) {
+    return (
+      <div role="status" aria-label={metin} className="grid gap-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-40 rounded-xl" />
+      </div>
+    )
+  }
   return (
     <p role="status" className="flex items-center gap-2 p-4 text-xs font-bold text-slate-500">
       <LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
@@ -132,11 +219,11 @@ export function BosKutu({ baslik, aciklama, ikon: Ikon = Inbox, children }: { ba
   )
 }
 
-export function Bildirim({ ton, children }: { ton: "yesil" | "amber" | "kirmizi"; children: ReactNode }) {
-  const sinif = { yesil: "border-emerald-200 bg-emerald-50 text-emerald-800", amber: "border-amber-200 bg-amber-50 text-amber-900", kirmizi: "border-rose-200 bg-rose-50 text-rose-700" }[ton]
-  const Ikon = ton === "yesil" ? CircleCheck : CircleAlert
+export function Bildirim({ ton = "gri", children }: { ton?: "gri" | "yesil" | "amber" | "kirmizi"; children: ReactNode }) {
+  const sinif = { gri: "border-slate-200 bg-slate-50 text-slate-600", yesil: "border-emerald-200 bg-emerald-50 text-emerald-800", amber: "border-amber-200 bg-amber-50 text-amber-900", kirmizi: "border-rose-200 bg-rose-50 text-rose-700" }[ton]
+  const Ikon = ton === "gri" ? Info : ton === "yesil" ? CircleCheck : CircleAlert
   return (
-    <p role={ton === "yesil" ? "status" : "alert"} className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${sinif}`}>
+    <p role={ton === "gri" || ton === "yesil" ? "status" : "alert"} className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${sinif}`}>
       <Ikon aria-hidden className="mt-0.5 size-4 shrink-0" />
       <span className="min-w-0">{children}</span>
     </p>
@@ -154,20 +241,49 @@ export function Alan({ etiket, children, ipucu, sinif = "" }: { etiket: string; 
   )
 }
 
-export function Tablo({ basliklar, children, sagaHizali = [] }: { basliklar: string[]; children: ReactNode; sagaHizali?: number[] }) {
+type Kolon<T> = { baslik: string; hucre: (satir: T) => ReactNode; sinif?: string }
+
+/** Basit, erisilebilir tablo (caption sr-only, th scope=col). Satir secimi icin hucreye gercek bir buton/baglanti koyun. */
+export function VeriTablosu<T>({
+  baslik,
+  kolonlar,
+  satirlar,
+  anahtar,
+  vurgulu,
+  bos,
+}: {
+  baslik: string
+  kolonlar: Kolon<T>[]
+  satirlar: T[]
+  anahtar?: (satir: T) => string | number
+  vurgulu?: (satir: T) => boolean
+  bos?: ReactNode
+}) {
+  if (satirlar.length === 0 && bos) return <>{bos}</>
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200">
       <table className="w-full text-left text-xs">
+        <caption className="sr-only">{baslik}</caption>
         <thead className="bg-tl-navy text-white">
           <tr>
-            {basliklar.map((b, i) => (
-              <th key={b + i} scope="col" className={`whitespace-nowrap px-3 py-2.5 font-black ${sagaHizali.includes(i) ? "text-right" : ""}`}>
-                {b}
+            {kolonlar.map((k, i) => (
+              <th key={i} scope="col" className={`whitespace-nowrap px-3 py-2 font-black ${k.sinif ?? ""}`}>
+                {k.baslik}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">{children}</tbody>
+        <tbody className="divide-y divide-slate-100">
+          {satirlar.map((s, i) => (
+            <tr key={anahtar ? anahtar(s) : i} className={vurgulu?.(s) ? "bg-tl-yellow/15" : "hover:bg-slate-50"}>
+              {kolonlar.map((k, i) => (
+                <td key={i} className={`px-3 py-2 font-bold text-slate-700 ${k.sinif ?? ""}`}>
+                  {k.hucre(s)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
       </table>
     </div>
   )

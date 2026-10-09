@@ -74,9 +74,9 @@ def kullanici_dizini() -> Path:
     """Ayar bos ise SQLite panel dosyasinin yanindaki kullanicilar/, PostgreSQL'de var/kullanicilar."""
     ayar = get_settings()
     if ayar.kullanici_db_dizini:
-        return Path(ayar.kullanici_db_dizini)
+        return Path(ayar.kullanici_db_dizini).resolve()
     url = ayar.database_url
-    return (Path(url.split(":///", 1)[1]).parent if url.startswith("sqlite") else Path("var")) / "kullanicilar"
+    return ((Path(url.split(":///", 1)[1]).parent if url.startswith("sqlite") else Path("var")) / "kullanicilar").resolve()
 
 
 def kullanici_dosyasi(kullanici: str) -> Path:

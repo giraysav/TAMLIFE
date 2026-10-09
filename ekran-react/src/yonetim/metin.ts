@@ -1,6 +1,8 @@
+import { ORTAK } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
 const TR = {
+  ...ORTAK.tr,
   baslik: "Yönetim",
   bolumNav: "Yönetim bölümleri",
   bolumler: { durum: "Genel Durum", tampon: "Veri Girişi", veritabani: "Veritabanı", roller: "Roller", arizalar: "Arızalar", gunlukler: "Günlükler" },
@@ -12,18 +14,9 @@ const TR = {
     arizalar: "Kod ve kayıt numaralı hata kayıtları; çözüm adımı ve durum takibi.",
     gunlukler: "Denetim olayları, aktif oturumlar ve uygulama günlüğü.",
   },
-  yukleniyor: "Yükleniyor…",
-  yuklenemedi: "Yüklenemedi.",
-  tekrarDene: "Tekrar dene",
   yenile: "Yenile",
-  iptal: "Vazgeç",
-  kaydet: "Kaydet",
-  sil: "Sil",
-  duzenle: "Düzenle",
   hepsi: "Hepsi",
   ara: "Ara",
-  onceki: "Önceki",
-  sonraki: "Sonraki",
   sayfaBilgi: (s: number, n: number, toplam: number) => `Sayfa ${s}/${n} · ${toplam} kayıt`,
   kayitYok: "Kayıt yok.",
   zaman: "Zaman",
@@ -248,6 +241,7 @@ const TR = {
 }
 
 const EN: typeof TR = {
+  ...ORTAK.en,
   baslik: "Administration",
   bolumNav: "Administration sections",
   bolumler: { durum: "Overview", tampon: "Data intake", veritabani: "Database", roller: "Roles", arizalar: "Faults", gunlukler: "Logs" },
@@ -259,18 +253,9 @@ const EN: typeof TR = {
     arizalar: "Fault records with code and record number; resolution step and status tracking.",
     gunlukler: "Audit events, active sessions and the application log.",
   },
-  yukleniyor: "Loading…",
-  yuklenemedi: "Could not load.",
-  tekrarDene: "Try again",
   yenile: "Refresh",
-  iptal: "Cancel",
-  kaydet: "Save",
-  sil: "Delete",
-  duzenle: "Edit",
   hepsi: "All",
   ara: "Search",
-  onceki: "Previous",
-  sonraki: "Next",
   sayfaBilgi: (s, n, toplam) => `Page ${s}/${n} · ${toplam} records`,
   kayitYok: "No records.",
   zaman: "Time",

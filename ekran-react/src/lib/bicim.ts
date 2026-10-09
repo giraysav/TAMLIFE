@@ -28,10 +28,24 @@ export function zaman(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
-export const AY_ADLARI = {
-  tr: ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
-  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-} as const
+export function bayt(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "—"
+  if (n < 1024) return `${n} B`
+  const birimler = ["KB", "MB", "GB", "TB"]
+  let deger = n / 1024
+  let i = 0
+  while (deger >= 1024 && i < birimler.length - 1) {
+    deger /= 1024
+    i += 1
+  }
+  return `${deger.toLocaleString("tr-TR", { maximumFractionDigits: deger < 10 ? 1 : 0 })} ${birimler[i]}`
+}
+
+export function sureYaz(sn: number): string {
+  if (sn < 90) return `${sn} sn`
+  if (sn < 5400) return `${Math.round(sn / 60)} dk`
+  return `${(sn / 3600).toLocaleString("tr-TR", { maximumFractionDigits: 1 })} sa`
+}
 
 /** Yerel bugunun "YYYY-MM-DD" hali (UTC kaymasi olmadan; form varsayilanlari icin). */
 export function bugunYerel(): string {

@@ -1,6 +1,8 @@
+import { ORTAK } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
 const TR = {
+  ...ORTAK.tr,
   baslik: "Onedesk",
   aciklama: "Alarm, talep ve şikayet takibi · kök neden analizi",
   yil: "Yıl",
@@ -70,11 +72,10 @@ const TR = {
   aktariliyor: "Aktarılıyor…",
   aktarSonuc: (e: number, g: number, a: number, em: number) => `${e} eklendi, ${g} güncellendi, ${a} atlandı, ${em} satırda müşteri eşleşmedi.`,
   aktarHata: "Aktarılamadı.",
-  yuklenemedi: "Yüklenemedi.",
-  tekrar: "Tekrar dene",
 }
 
 const EN: typeof TR = {
+  ...ORTAK.en,
   baslik: "Onedesk",
   aciklama: "Alarm, request and complaint tracking · root cause analysis",
   yil: "Year",
@@ -144,8 +145,6 @@ const EN: typeof TR = {
   aktariliyor: "Importing…",
   aktarSonuc: (e: number, g: number, a: number, em: number) => `${e} added, ${g} updated, ${a} skipped, ${em} rows without a customer match.`,
   aktarHata: "Could not import.",
-  yuklenemedi: "Could not load.",
-  tekrar: "Try again",
 }
 
 export function onedeskMetin(dil: Dil) {

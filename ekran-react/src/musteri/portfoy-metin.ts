@@ -1,6 +1,8 @@
+import { ORTAK } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
 const TR = {
+  ...ORTAK.tr,
   baslik: "Müşteri Yönetimi",
   aciklama: "Kurumsal müşteri portföyü ve operasyonel analiz konsolu",
   musteriEkle: "Müşteri ekle",
@@ -30,11 +32,8 @@ const TR = {
   hicMusteri: "Henüz müşteri yok",
   hicMusteriAlt: "İlk müşteriyi ekleyerek portföyü oluşturun.",
   yuklenemedi: "Müşteri portföyü yüklenemedi.",
-  tekrar: "Tekrar dene",
   toplam: (n: number) => `${n} müşteri`,
   sayfa: (s: number, t: number) => `Sayfa ${s} / ${t}`,
-  onceki: "Önceki",
-  sonraki: "Sonraki",
   // form
   formBaslik: "Yeni müşteri",
   formAciklama: "Ana müşteri ya da bir çatı müşterinin iştiraki ekleyin.",
@@ -53,7 +52,6 @@ const TR = {
   tamKendi: "Kendiniz",
   kaydet: "Müşteriyi ekle",
   kaydediliyor: "Ekleniyor…",
-  vazgec: "Vazgeç",
   kapat: "Kapat",
   unvanZorunlu: "Ünvan zorunlu.",
   catiZorunlu: "İştirak için çatı müşteri seçin.",
@@ -63,6 +61,7 @@ const TR = {
 }
 
 const EN: typeof TR = {
+  ...ORTAK.en,
   baslik: "Customer Management",
   aciklama: "Corporate customer portfolio and operational analysis console",
   musteriEkle: "Add customer",
@@ -92,11 +91,8 @@ const EN: typeof TR = {
   hicMusteri: "No customers yet",
   hicMusteriAlt: "Add the first customer to build the portfolio.",
   yuklenemedi: "Could not load the customer portfolio.",
-  tekrar: "Try again",
   toplam: (n: number) => `${n} customers`,
   sayfa: (s: number, t: number) => `Page ${s} / ${t}`,
-  onceki: "Previous",
-  sonraki: "Next",
   formBaslik: "New customer",
   formAciklama: "Add a main customer or a subsidiary of a parent customer.",
   tur: "Type",
@@ -114,7 +110,6 @@ const EN: typeof TR = {
   tamKendi: "Yourself",
   kaydet: "Add customer",
   kaydediliyor: "Adding…",
-  vazgec: "Cancel",
   kapat: "Close",
   unvanZorunlu: "Company name is required.",
   catiZorunlu: "Select a parent customer for a subsidiary.",

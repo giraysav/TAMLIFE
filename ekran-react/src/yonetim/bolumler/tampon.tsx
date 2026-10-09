@@ -1,9 +1,10 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { Dil } from "@/shell/metin"
-import { Bolum } from "@/components/kart-ui"
+import { Bildirim, Bolum, HataKutu } from "@/components/sayfa-ui"
 import { sorguAyarla, useHashSorgu } from "@/shell/rota"
-import { ANAHTAR, oku } from "@/yonetim/api"
+import { ANAHTAR } from "@/yonetim/api"
+import { oku } from "@/lib/sorgu"
 import type { Kaynak, PartiAyrintisi } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
 import { Analiz } from "@/yonetim/tampon/analiz"
@@ -11,7 +12,6 @@ import { Dagitim } from "@/yonetim/tampon/dagitim"
 import type { KuralOnerisi } from "@/yonetim/tampon/dagitim"
 import { Kaynaklar } from "@/yonetim/tampon/kaynaklar"
 import { Partiler } from "@/yonetim/tampon/partiler"
-import { Bilgi, HataKutusu } from "@/yonetim/ui"
 
 /** Veri Girisi: kaynak -> 1 tampon -> 2 analiz -> 3 dagitim. Secili parti adreste (#/yonetim/tampon?parti=12): geri/ileri ve baglanti paylasimi calisir. */
 export default function Tampon({ dil }: { dil: Dil }) {
@@ -46,13 +46,13 @@ export default function Tampon({ dil }: { dil: Dil }) {
       <Partiler dil={dil} seciliId={seciliId} onSec={sec} />
 
       {seciliId === null ? (
-        <Bilgi>{t.partiSecin}</Bilgi>
+        <Bildirim>{t.partiSecin}</Bildirim>
       ) : detay.isPending ? (
         <Bolum anahtar="yonetim-tampon-analiz" baslik={t.adim.analiz}>
           <p className="text-xs font-bold text-slate-400">{t.yukleniyor}</p>
         </Bolum>
       ) : detay.isError ? (
-        <HataKutusu t={t} onTekrar={() => void detay.refetch()} />
+        <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void detay.refetch()} />
       ) : (
         <Analiz
           dil={dil}

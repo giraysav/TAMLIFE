@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { ArrowLeft } from "lucide-react"
-import { apiOku } from "@/lib/api-yaz"
+import { oku } from "@/lib/sorgu"
 import { AylikRapor } from "@/musteri/aylik-rapor"
-import { Rozet } from "@/components/kart-ui"
+import { Rozet } from "@/components/sayfa-ui"
 import type { Kart } from "@/musteri/musteri-karti"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
@@ -10,19 +10,11 @@ import { musteriMetin } from "@/musteri/musteri-metin"
 /** Aylik rapor sayfasi (#/musteri?m=<id>&sekme=rapor): ustte musteri kimligi ve karta donus baglantisi. */
 export function MusteriRapor({ id, dil }: { id: number; dil: Dil }) {
   const t = musteriMetin(dil)
-  const [kart, setKart] = useState<Kart | null | undefined>(undefined)
-  useEffect(() => {
-    let iptal = false
-    void apiOku<Kart>(`/api/v1/musteri/${id}`).then((s) => {
-      if (!iptal) setKart(s.ok ? s.veri : null)
-    })
-    return () => {
-      iptal = true
-    }
-  }, [id])
+  const q = useQuery({ queryKey: ["musteri", "kart", id], queryFn: () => oku<Kart>(`/api/v1/musteri/${id}`) })
+  const kart = q.data
 
-  if (kart === undefined) return <p className="text-sm text-muted-foreground">…</p>
-  if (kart === null) {
+  if (q.isPending) return <p className="text-sm text-muted-foreground">…</p>
+  if (!kart) {
     return (
       <p role="alert" className="text-sm text-destructive">
         {t.bulunamadi}

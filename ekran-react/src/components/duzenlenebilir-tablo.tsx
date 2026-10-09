@@ -1,8 +1,7 @@
 import { useId, useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react"
-import { DUGME, GIRDI } from "@/components/kart-ui"
-import { Bildirim } from "@/components/sayfa-ui"
+import { Bildirim, DUGME, GIRDI } from "@/components/sayfa-ui"
 import { para, tarih } from "@/lib/bicim"
 
 /**

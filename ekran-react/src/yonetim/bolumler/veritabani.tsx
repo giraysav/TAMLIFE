@@ -2,11 +2,13 @@ import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { DatabaseBackup, ShieldCheck } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, DUGME_ANA, GIRDI, Rozet } from "@/components/kart-ui"
-import { ANAHTAR, hataMesaji, oku, yaz } from "@/yonetim/api"
+import { Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { ANAHTAR } from "@/yonetim/api"
+import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Veritabani as VeritabaniTipi, Yedek } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { Bilgi, Gosterge, HataKutusu, VeriTablosu, Yukleniyor, bayt, sayi, zamanYaz } from "@/yonetim/ui"
+import { Gosterge } from "@/yonetim/ui"
+import { zaman, bayt, sayi } from "@/lib/bicim"
 
 type Dogrulama = { tamam: boolean; butunluk: string }
 
@@ -39,8 +41,8 @@ export default function Veritabani({ dil }: { dil: Dil }) {
     return (q.data?.tablolar ?? []).filter((x) => !aranan || x.ad.includes(aranan) || x.modul.includes(aranan))
   }, [q.data, ara])
 
-  if (q.isPending) return <Yukleniyor t={t} />
-  if (q.isError) return <HataKutusu t={t} onTekrar={() => void q.refetch()} />
+  if (q.isPending) return <Yukleniyor metin={t.yukleniyor} iskelet />
+  if (q.isError) return <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
   const d = q.data
   const butunlukTamam = d.butunluk === null || d.butunluk === "ok"
 
@@ -58,7 +60,7 @@ export default function Veritabani({ dil }: { dil: Dil }) {
         <Gosterge etiket={t.butunluk} deger={d.butunluk ?? "—"} ton={butunlukTamam ? "ok" : "hata"} />
       </div>
 
-      {d.eksik_tablolar.length > 0 ? <Bilgi ton="amber">{t.eksikTablo(d.eksik_tablolar.length)}</Bilgi> : null}
+      {d.eksik_tablolar.length > 0 ? <Bildirim ton="amber">{t.eksikTablo(d.eksik_tablolar.length)}</Bildirim> : null}
 
       <Bolum anahtar="yonetim-db-yedek" baslik={t.yedek}>
         <div className="grid gap-3">
@@ -71,9 +73,9 @@ export default function Veritabani({ dil }: { dil: Dil }) {
               <span className="text-[11px] font-bold text-slate-500">{t.yedekSaklanan(d.yedek.saklanan)}</span>
             </div>
           ) : (
-            <Bilgi>{t.yedekDesteklenmiyor}</Bilgi>
+            <Bildirim>{t.yedekDesteklenmiyor}</Bildirim>
           )}
-          {bilgi ? <Bilgi ton={bilgi.ton}>{bilgi.metin}</Bilgi> : null}
+          {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
           <VeriTablosu<Yedek>
             baslik={t.yedek}
             satirlar={d.yedek.liste}
@@ -81,7 +83,7 @@ export default function Veritabani({ dil }: { dil: Dil }) {
             bos={<p className="text-xs font-bold text-slate-400">{t.yedekYok}</p>}
             kolonlar={[
               { baslik: t.yedek, hucre: (y) => <code className="text-[11px]">{y.ad}</code> },
-              { baslik: t.zaman, hucre: (y) => zamanYaz(y.zaman) },
+              { baslik: t.zaman, hucre: (y) => zaman(y.zaman) },
               { baslik: t.boyut, hucre: (y) => bayt(y.boyut_bayt), sinif: "text-right" },
               {
                 baslik: t.durum,

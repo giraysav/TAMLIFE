@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ScanSearch, Trash2 } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, DUGME_ANA, Rozet } from "@/components/kart-ui"
-import { ANAHTAR, hataMesaji, oku, sorguMetni, yaz } from "@/yonetim/api"
+import { Bildirim, Bolum, DUGME, DUGME_ANA, Rozet, VeriTablosu } from "@/components/sayfa-ui"
+import { ANAHTAR } from "@/yonetim/api"
+import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Analiz as AnalizTipi, Oneri, PartiAyrintisi, PartiSatirlari, SutunProfili } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { Bilgi, VeriTablosu, sayi, zamanYaz } from "@/yonetim/ui"
+import { sayi, zaman } from "@/lib/bicim"
 import { PARTI_TON } from "@/yonetim/tampon/partiler"
 
 export type OneriSecimi = { kolon: string; alan: string }
@@ -73,7 +74,7 @@ export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti
           <Rozet ton={PARTI_TON[parti.durum]}>{t.partiDurum[parti.durum]}</Rozet>
           <span className="text-xs font-black text-tl-navy">{parti.etiket || `#${parti.id}`}</span>
           <span className="text-[11px] font-bold text-slate-500">
-            {sayi(parti.satir)} {t.satir.toLowerCase()} · {parti.sutun_sayisi} {t.sutun.toLowerCase()} · {zamanYaz(parti.zaman)}
+            {sayi(parti.satir)} {t.satir.toLowerCase()} · {parti.sutun_sayisi} {t.sutun.toLowerCase()} · {zaman(parti.zaman)}
           </span>
           <span className="ml-auto flex flex-wrap gap-2">
             {parti.durum === "rejected" ? (
@@ -99,20 +100,20 @@ export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti
             </button>
           </span>
         </div>
-        {parti.hata ? <Bilgi ton="amber">{parti.hata}</Bilgi> : null}
-        {parti.kullanimda ? <Bilgi>{t.kullanimda}</Bilgi> : null}
-        {bilgi ? <Bilgi ton={bilgi.ton}>{bilgi.metin}</Bilgi> : null}
+        {parti.hata ? <Bildirim ton="amber">{parti.hata}</Bildirim> : null}
+        {parti.kullanimda ? <Bildirim>{t.kullanimda}</Bildirim> : null}
+        {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
         <p className="text-[11px] font-bold text-slate-400">{t.adimAciklama.analiz}</p>
 
         <div className="grid gap-2">
           <h4 className="text-[11px] font-black uppercase tracking-widest text-tl-navy">{t.oneriler}</h4>
           {analiz === null || analiz.oneriler.length === 0 ? (
             <>
-              <Bilgi>{t.oneriYok}</Bilgi>
+              <Bildirim>{t.oneriYok}</Bildirim>
               {analiz?.uyarilar.map((u) => (
-                <Bilgi key={u} ton="amber">
+                <Bildirim key={u} ton="amber">
                   {u}
-                </Bilgi>
+                </Bildirim>
               ))}
             </>
           ) : (

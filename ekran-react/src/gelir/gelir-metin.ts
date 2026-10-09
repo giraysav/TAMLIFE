@@ -1,13 +1,12 @@
 import type { Metinler } from "@/components/duzenlenebilir-tablo"
+import { ORTAK } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
 const TR = {
+  ...ORTAK.tr,
   tablo: {
+    ...ORTAK.tr,
     ekle: "Satır ekle",
-    kaydet: "Kaydet",
-    vazgec: "Vazgeç",
-    duzenle: "Düzenle",
-    sil: "Sil",
     silOnay: "Bu kayıt silinsin mi?",
     islemSutunu: "İşlemler",
     hata: "İşlem tamamlanamadı.",
@@ -15,8 +14,6 @@ const TR = {
   } satisfies Metinler,
   yil: "Yıl",
   tumYillar: "Tüm yıllar",
-  yuklenemedi: "Yüklenemedi.",
-  tekrar: "Tekrar dene",
   musteri: "Müşteri adı",
   musteriKisa: "Müşteri",
   // sms
@@ -56,12 +53,10 @@ const TR = {
 }
 
 const EN: typeof TR = {
+  ...ORTAK.en,
   tablo: {
+    ...ORTAK.en,
     ekle: "Add row",
-    kaydet: "Save",
-    vazgec: "Cancel",
-    duzenle: "Edit",
-    sil: "Delete",
     silOnay: "Delete this record?",
     islemSutunu: "Actions",
     hata: "Could not complete the action.",
@@ -69,8 +64,6 @@ const EN: typeof TR = {
   },
   yil: "Year",
   tumYillar: "All years",
-  yuklenemedi: "Could not load.",
-  tekrar: "Try again",
   musteri: "Customer name",
   musteriKisa: "Customer",
   smsBaslik: "ICT SMS & Revenue",

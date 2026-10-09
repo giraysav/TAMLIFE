@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
 import { Building2, FileText, Pencil } from "lucide-react"
-import { apiOku, apiYaz } from "@/lib/api-yaz"
-import { Bolum, Bos, DUGME, DUGME_ANA, Etiket, GIRDI, KartTablo, Metrik, Rozet, Satir } from "@/components/kart-ui"
+import { ApiHata, oku, yaz } from "@/lib/sorgu"
+import { Alan, Bolum, Bos, DUGME, DUGME_ANA, GIRDI, Rozet, Satir, VeriTablosu } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
 import { sorguAyarla } from "@/shell/rota"
@@ -48,11 +49,15 @@ type Metin = ReturnType<typeof musteriMetin>
 
 function Girdi({ id, etiket, ad, deger, onChange, uzun = 150, tip = "text", kapali = false }: { id: string; etiket: string; ad?: string; deger: string; onChange: (v: string) => void; uzun?: number; tip?: string; kapali?: boolean }) {
   return (
-    <label className="block min-w-0" htmlFor={id}>
-      <Etiket>{etiket}</Etiket>
+    <Alan etiket={etiket} sinif="min-w-0">
       <input id={id} aria-label={ad ?? etiket} type={tip} value={deger} maxLength={uzun} disabled={kapali} onChange={(e) => onChange(e.target.value)} className={GIRDI} />
-    </label>
+    </Alan>
   )
+}
+
+function MatrisTablo({ baslik, m, bos }: { baslik: string; m: Matris; bos: string }) {
+  const kolonlar = m.basliklar.map((b, i) => ({ baslik: b, hucre: (s: string[]) => s[i], sinif: "whitespace-nowrap" }))
+  return <VeriTablosu baslik={baslik} kolonlar={kolonlar} satirlar={m.satirlar} bos={<Bos>{bos}</Bos>} />
 }
 
 function Kutu({ children, ek = "" }: { children: ReactNode; ek?: string }) {
@@ -90,9 +95,13 @@ function Operasyon({ kart, t }: { kart: Kart; t: Metin }) {
   return (
     <Bolum anahtar="operasyon" baslik={t.operasyon}>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <Metrik etiket={t.alarm} deger={s.alarm_kapanan} alt={t.yilIciKapanan} zemin="bg-rose-500/5" yazi="text-rose-600" />
-        <Metrik etiket={t.sikayet} deger={s.sikayet_kapanan} alt={t.yilIciKapanan} zemin="bg-amber-500/5" yazi="text-amber-600" />
-        <Metrik etiket={t.talep} deger={s.talep_kapanan} alt={t.yilIciKapanan} zemin="bg-blue-500/5" yazi="text-blue-600" />
+        {([[t.alarm, s.alarm_kapanan, "bg-rose-500/5", "text-rose-600"], [t.sikayet, s.sikayet_kapanan, "bg-amber-500/5", "text-amber-600"], [t.talep, s.talep_kapanan, "bg-blue-500/5", "text-blue-600"]] as const).map(([etiket, deger, zemin, yazi]) => (
+          <div key={etiket} className={`w-full rounded-xl border border-slate-200/80 p-3 text-left ${zemin}`}>
+            <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{etiket}</div>
+            <div className={`mt-0.5 font-mono text-2xl font-black leading-tight ${yazi}`}>{deger.toLocaleString("tr-TR")}</div>
+            <div className="mt-1 text-[10px] font-bold text-slate-500">{t.yilIciKapanan}</div>
+          </div>
+        ))}
       </div>
       {d ? (
         <p className="mt-3 text-xs font-bold text-slate-500">
@@ -110,8 +119,8 @@ function Operasyon({ kart, t }: { kart: Kart; t: Metin }) {
 
 export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const t = musteriMetin(dil)
-  const [kart, setKart] = useState<Kart | null | undefined>(undefined)
-  const [durum, setDurum] = useState(0)
+  const q = useQuery({ queryKey: ["musteri", "kart", id], queryFn: () => oku<Kart>(`/api/v1/musteri/${id}`) })
+  const kart = q.data
   const [duzenle, setDuzenle] = useState(false)
   const [kim, setKim] = useState<Record<string, string>>({})
   const [ilet, setIlet] = useState<Record<string, string>>({})
@@ -119,85 +128,78 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const [mesaj, setMesaj] = useState<Record<string, string>>({})
   const [yeniIstirak, setYeniIstirak] = useState<string | null>(null)
 
-  const yukle = useCallback(async () => {
-    const sonuc = await apiOku<Kart>(`/api/v1/musteri/${id}`)
-    setDurum(sonuc.durum)
-    const k = sonuc.ok ? sonuc.veri : null
-    setKart(k)
-    if (k) {
-      setKim({
-        name: k.kimlik.unvan,
-        customer_no: k.kimlik.musteri_no ?? "",
-        ncst: k.kimlik.ncst,
-        segment: k.kimlik.segment,
-        sector: k.kimlik.sektor ?? "",
-        ft_volume: k.operasyon.ft_hacim,
-        tam_ft: k.operasyon.tam_ft,
-        inventory: String(k.kimlik.envanter),
-      })
-      setIlet({ ...k.iletisim })
-      setTam(k.kimlik.tam_id ? String(k.kimlik.tam_id) : "")
-    }
-  }, [id])
-
+  useEffect(() => setDuzenle(false), [id])
   useEffect(() => {
-    setKart(undefined)
-    setDuzenle(false)
-    void yukle()
-  }, [yukle])
+    if (!kart) return
+    setKim({
+      name: kart.kimlik.unvan,
+      customer_no: kart.kimlik.musteri_no ?? "",
+      ncst: kart.kimlik.ncst,
+      segment: kart.kimlik.segment,
+      sector: kart.kimlik.sektor ?? "",
+      ft_volume: kart.operasyon.ft_hacim,
+      tam_ft: kart.operasyon.tam_ft,
+      inventory: String(kart.kimlik.envanter),
+    })
+    setIlet({ ...kart.iletisim })
+    setTam(kart.kimlik.tam_id ? String(kart.kimlik.tam_id) : "")
+  }, [kart])
 
   const bildir = (anahtar: string, metin: string) => setMesaj((m) => ({ ...m, [anahtar]: metin }))
+  /** Istek basarisizsa hatayi ilgili alana yazar; basariyi dondurur. */
+  async function dene(anahtar: string, istek: () => Promise<unknown>): Promise<boolean> {
+    try {
+      await istek()
+      return true
+    } catch (h) {
+      bildir(anahtar, `${t.kaydedilemedi}: ${(h as Error).message}`)
+      return false
+    }
+  }
 
   async function kimligiKaydet(olay: FormEvent) {
     olay.preventDefault()
-    const sonuc = await apiYaz("PUT", `/api/v1/musteri/${id}/kimlik`, { ...kim, inventory: kim.inventory === "" ? 0 : Number(kim.inventory) })
-    if (!sonuc.ok) {
-      bildir("kimlik", `${t.kaydedilemedi}: ${sonuc.hata}`)
-      return
-    }
-    if (kart?.erisim.tam_degistir && tam && Number(tam) !== kart.kimlik.tam_id) {
-      const t2 = await apiYaz("PUT", `/api/v1/musteri/${id}/sorumlu`, { owner_id: Number(tam) })
-      if (!t2.ok) {
-        bildir("kimlik", `${t.kaydedilemedi}: ${t2.hata}`)
-        return
-      }
-    }
+    const tamDegisti = kart?.erisim.tam_degistir && tam && Number(tam) !== kart.kimlik.tam_id
+    const tamam = await dene("kimlik", async () => {
+      await yaz("PUT", `/api/v1/musteri/${id}/kimlik`, { ...kim, inventory: kim.inventory === "" ? 0 : Number(kim.inventory) })
+      if (tamDegisti) await yaz("PUT", `/api/v1/musteri/${id}/sorumlu`, { owner_id: Number(tam) })
+    })
+    if (!tamam) return
     bildir("kimlik", t.kaydedildi)
     setDuzenle(false)
-    await yukle()
+    await q.refetch()
   }
 
   async function iletisimiKaydet(olay: FormEvent) {
     olay.preventDefault()
-    const sonuc = await apiYaz("PUT", `/api/v1/musteri/${id}/iletisim`, ilet)
-    bildir("iletisim", sonuc.ok ? t.kaydedildi : `${t.kaydedilemedi}: ${sonuc.hata}`)
-    if (sonuc.ok) await yukle()
+    if (!(await dene("iletisim", () => yaz("PUT", `/api/v1/musteri/${id}/iletisim`, ilet)))) return
+    bildir("iletisim", t.kaydedildi)
+    await q.refetch()
   }
 
   async function ayriRapor(deger: boolean) {
-    const sonuc = await apiYaz("PUT", `/api/v1/musteri/${id}/ayri-rapor`, { ayri_rapor: deger })
-    if (sonuc.ok) await yukle()
-    else bildir("ayri", `${t.kaydedilemedi}: ${sonuc.hata}`)
+    if (await dene("ayri", () => yaz("PUT", `/api/v1/musteri/${id}/ayri-rapor`, { ayri_rapor: deger }))) await q.refetch()
   }
 
   async function sil() {
     if (!window.confirm(t.silOnay)) return
-    const sonuc = await apiYaz("DELETE", `/api/v1/musteri/${id}`)
-    if (sonuc.ok) sorguAyarla("musteri", {})
-    else bildir("sil", `${t.kaydedilemedi}: ${sonuc.hata}`)
+    if (await dene("sil", () => yaz("DELETE", `/api/v1/musteri/${id}`))) sorguAyarla("musteri", {})
   }
 
   async function istirakEkle(olay: FormEvent) {
     olay.preventDefault()
-    const sonuc = await apiYaz<{ id: number }>("POST", "/api/v1/musteri", { name: yeniIstirak ?? "", parent_id: id })
-    if (sonuc.ok && sonuc.veri) {
-      setYeniIstirak(null)
-      sorguAyarla("musteri", { m: String(sonuc.veri.id) })
-    } else bildir("istirak", `${t.kaydedilemedi}: ${sonuc.hata}`)
+    let yeni = 0
+    const tamam = await dene("istirak", async () => {
+      yeni = (await yaz<{ id: number }>("POST", "/api/v1/musteri", { name: yeniIstirak ?? "", parent_id: id })).id
+    })
+    if (!tamam) return
+    setYeniIstirak(null)
+    sorguAyarla("musteri", { m: String(yeni) })
   }
 
-  if (kart === undefined) return <p className="text-sm text-muted-foreground">…</p>
-  if (kart === null) {
+  if (q.isPending) return <p className="text-sm text-muted-foreground">…</p>
+  if (!kart) {
+    const durum = q.error instanceof ApiHata ? q.error.durum : 0
     return (
       <p role="alert" className="text-sm text-destructive">
         {durum === 404 || durum === 403 ? t.bulunamadi : t.yuklenemedi}
@@ -272,8 +274,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
           {duzenle ? (
             <form onSubmit={kimligiKaydet} aria-label={t.duzenle} className="grid gap-3 rounded-xl bg-white/95 p-4 text-tl-navy sm:grid-cols-2 lg:grid-cols-4">
               <Girdi id="k-name" etiket={t.unvan} deger={kim.name ?? ""} onChange={(v) => setKim({ ...kim, name: v })} />
-              <label className="block min-w-0" htmlFor="k-segment">
-                <Etiket>{t.segment}</Etiket>
+              <Alan etiket={t.segment} sinif="min-w-0">
                 <select id="k-segment" value={kim.segment ?? ""} onChange={(ev) => setKim({ ...kim, segment: ev.target.value })} className={GIRDI}>
                   <option value="">{t.seciniz}</option>
                   {[...new Set([...SEGMENTLER, kim.segment ?? ""])]
@@ -284,7 +285,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                       </option>
                     ))}
                 </select>
-              </label>
+              </Alan>
               <Girdi id="k-customer_no" etiket={t.musteriNo} deger={kim.customer_no ?? ""} uzun={50} onChange={(v) => setKim({ ...kim, customer_no: v })} />
               <Girdi id="k-ncst" etiket={t.ncst} deger={kim.ncst ?? ""} uzun={50} onChange={(v) => setKim({ ...kim, ncst: v })} />
               <Girdi id="k-sector" etiket={t.sektor} deger={kim.sector ?? ""} uzun={100} onChange={(v) => setKim({ ...kim, sector: v })} />
@@ -292,8 +293,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
               <Girdi id="k-ft_volume" etiket={t.ftHacim} deger={kim.ft_volume ?? ""} uzun={100} onChange={(v) => setKim({ ...kim, ft_volume: v })} />
               <Girdi id="k-tam_ft" etiket={t.tamFt} deger={kim.tam_ft ?? ""} uzun={100} onChange={(v) => setKim({ ...kim, tam_ft: v })} />
               {e.tam_degistir && kart.tam_secenekleri ? (
-                <label className="block min-w-0" htmlFor="k-tam">
-                  <Etiket>{t.sorumluTam}</Etiket>
+                <Alan etiket={t.sorumluTam} sinif="min-w-0">
                   <select id="k-tam" value={tam} onChange={(ev) => setTam(ev.target.value)} className={GIRDI}>
                     {kart.tam_secenekleri.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -301,7 +301,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                       </option>
                     ))}
                   </select>
-                </label>
+                </Alan>
               ) : null}
               <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-4">
                 <button type="submit" className={DUGME_ANA}>
@@ -425,10 +425,9 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
               </div>
             ))}
           </div>
-          <label className="block" htmlFor="i-mobil_kmt_detail">
-            <Etiket>{`${t.mobilKmt} · ${t.not}`}</Etiket>
+          <Alan etiket={`${t.mobilKmt} · ${t.not}`}>
             <textarea id="i-mobil_kmt_detail" rows={2} maxLength={2000} value={ilet.mobil_kmt_detail ?? ""} onChange={(ev) => setIlet({ ...ilet, mobil_kmt_detail: ev.target.value })} className={GIRDI} />
-          </label>
+          </Alan>
           <div className="flex flex-wrap items-center gap-2">
             <button type="submit" className={DUGME_ANA}>
               {t.kaydet}
@@ -442,10 +441,10 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
         <div className="space-y-4 lg:col-span-2">
           <Operasyon kart={kart} t={t} />
           <Bolum anahtar="ekip_destech" baslik={t.ekip}>
-            {kart.ekip.satirlar.length ? <KartTablo basliklar={kart.ekip.basliklar} satirlar={kart.ekip.satirlar} /> : <Bos>{t.satirYok}</Bos>}
+            <MatrisTablo baslik={t.ekip} m={kart.ekip} bos={t.satirYok} />
           </Bolum>
           <Bolum anahtar="kritik_ci" baslik={t.kritikCi}>
-            {kart.kritik_ci.satirlar.length ? <KartTablo basliklar={kart.kritik_ci.basliklar} satirlar={kart.kritik_ci.satirlar} /> : <Bos>{t.satirYok}</Bos>}
+            <MatrisTablo baslik={t.kritikCi} m={kart.kritik_ci} bos={t.satirYok} />
           </Bolum>
         </div>
         <div className="space-y-4">

@@ -2,11 +2,13 @@ import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Eye, Pencil, Plus, Power, Trash2, Undo2 } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, DUGME_ANA, Rozet } from "@/components/kart-ui"
-import { ANAHTAR, hataMesaji, oku, yaz } from "@/yonetim/api"
+import { Bildirim, Bolum, DUGME, DUGME_ANA, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { ANAHTAR } from "@/yonetim/api"
+import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Katalog, Kural, KuralGovdesi, Onizleme, PartiAyrintisi, Uygulama } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { Bilgi, Gosterge, HataKutusu, VeriTablosu, Yukleniyor, sayi, zamanYaz } from "@/yonetim/ui"
+import { Gosterge } from "@/yonetim/ui"
+import { zaman, sayi } from "@/lib/bicim"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
 
 export type KuralOnerisi = { kolon: string; alan: string; sayac: number }
@@ -120,8 +122,8 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
     onError: hata,
   })
 
-  if (kurallar.isPending || katalog.isPending) return <Yukleniyor t={t} />
-  if (kurallar.isError || katalog.isError) return <HataKutusu t={t} onTekrar={() => void kurallar.refetch()} />
+  if (kurallar.isPending || katalog.isPending) return <Yukleniyor metin={t.yukleniyor} iskelet />
+  if (kurallar.isError || katalog.isError) return <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void kurallar.refetch()} />
   const kat = katalog.data
   // Onizleme anindaki kural kopyasi eskiyebilir (arada etkinlestirilmis olabilir): etkinlik her zaman guncel listeden okunur.
   const onizlemeKuralEtkin = kurallar.data.find((k) => k.id === onizleme?.kural.id)?.etkin ?? false
@@ -168,7 +170,7 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
             onVazgec={() => setForm(null)}
           />
         ) : null}
-        {bilgi ? <Bilgi ton={bilgi.ton}>{bilgi.metin}</Bilgi> : null}
+        {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
 
         <VeriTablosu<Kural>
           baslik={t.dagitimKurallari}
@@ -251,9 +253,9 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
               <Gosterge etiket={t.ozetKart.eslesmeyen} deger={sayi(onizleme.veri.eslesmeyen_satir)} alt={`${t.ozetKart.belirsiz}: ${onizleme.veri.belirsiz_satir} · ${t.ozetKart.kosulDisi}: ${onizleme.veri.kosul_disi}`} />
             </div>
             {onizleme.veri.uyarilar.map((u) => (
-              <Bilgi key={u} ton="amber">
+              <Bildirim key={u} ton="amber">
                 {u}
-              </Bilgi>
+              </Bildirim>
             ))}
             <VeriTablosu<Onizleme["ornek"][number]>
               baslik={t.onizlemeBaslik}
@@ -269,7 +271,7 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
             />
             {onizleme.veri.degisecek > 0 ? (
               <div className="grid gap-2 border-t border-slate-100 pt-3">
-                {!onizlemeKuralEtkin ? <Bilgi ton="amber">{t.kuralKapaliIpucu}</Bilgi> : null}
+                {!onizlemeKuralEtkin ? <Bildirim ton="amber">{t.kuralKapaliIpucu}</Bildirim> : null}
                 <label className="flex items-start gap-2 text-xs font-bold text-slate-700">
                   <input type="checkbox" className="mt-0.5" checked={onay} onChange={(e) => setOnay(e.target.checked)} />
                   {t.uygulamaOnay}
@@ -285,9 +287,9 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
         <div className="grid gap-2">
           <h4 className="text-[11px] font-black uppercase tracking-widest text-tl-navy">{t.uygulamaGecmisi}</h4>
           {gecmis.isPending ? (
-            <Yukleniyor t={t} />
+            <Yukleniyor metin={t.yukleniyor} iskelet />
           ) : gecmis.isError ? (
-            <HataKutusu t={t} onTekrar={() => void gecmis.refetch()} />
+            <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void gecmis.refetch()} />
           ) : (
             <VeriTablosu<Uygulama>
               baslik={t.uygulamaGecmisi}
@@ -295,7 +297,7 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
               anahtar={(u) => u.run_id}
               bos={<p className="text-xs font-bold text-slate-400">{t.gecmisYok}</p>}
               kolonlar={[
-                { baslik: t.zaman, hucre: (u) => <span className="whitespace-nowrap">{zamanYaz(u.zaman)}</span> },
+                { baslik: t.zaman, hucre: (u) => <span className="whitespace-nowrap">{zaman(u.zaman)}</span> },
                 { baslik: t.kuralAdi, hucre: (u) => u.kural },
                 { baslik: t.hedef, hucre: (u) => u.hedef_adi },
                 { baslik: "#", hucre: (u) => `#${u.parti_id}`, sinif: "font-mono" },

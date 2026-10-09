@@ -126,10 +126,6 @@ export function SidebarGroup({ className, ...props }: HTMLAttributes<HTMLDivElem
   return <div className={cn("flex flex-col gap-1", className)} {...props} />
 }
 
-export function SidebarGroupLabel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-2 py-1 text-xs font-medium text-muted-foreground", className)} {...props} />
-}
-
 export function SidebarGroupContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("flex flex-col", className)} {...props} />
 }

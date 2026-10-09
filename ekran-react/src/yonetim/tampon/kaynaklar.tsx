@@ -2,11 +2,12 @@ import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { FlaskConical, Upload } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, DUGME_ANA, GIRDI, Rozet } from "@/components/kart-ui"
-import { ANAHTAR, hataMesaji, oku, sorguMetni, yaz, yukle } from "@/yonetim/api"
+import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { ANAHTAR } from "@/yonetim/api"
+import { hataMesaji, oku, sorguMetni, yaz, yukle } from "@/lib/sorgu"
 import type { Kaynak, Parti } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { Alan, Bilgi, HataKutusu, VeriTablosu, Yukleniyor, zamanYaz } from "@/yonetim/ui"
+import { zaman } from "@/lib/bicim"
 
 /** Dosya adindan onerilen kaynak adi: 'alarm-ozeti_2026-10.csv' -> 'alarm-ozeti'. */
 export function kaynakAdiOner(dosya: string): string {
@@ -91,12 +92,12 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
             </span>
           ) : null}
         </form>
-        {bilgi ? <Bilgi ton={bilgi.ton}>{bilgi.metin}</Bilgi> : null}
+        {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
 
         {q.isPending ? (
-          <Yukleniyor t={t} />
+          <Yukleniyor metin={t.yukleniyor} iskelet />
         ) : q.isError ? (
-          <HataKutusu t={t} onTekrar={() => void q.refetch()} />
+          <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
         ) : (
           <VeriTablosu<Kaynak>
             baslik={t.kaynaklar}
@@ -133,7 +134,7 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
                 hucre: (k) =>
                   k.son ? (
                     <span className="whitespace-nowrap">
-                      #{k.son.id} · {t.partiDurum[k.son.durum] ?? k.son.durum} · {zamanYaz(k.son.zaman)}
+                      #{k.son.id} · {t.partiDurum[k.son.durum] ?? k.son.durum} · {zaman(k.son.zaman)}
                     </span>
                   ) : (
                     "—"

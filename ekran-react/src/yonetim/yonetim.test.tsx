@@ -2,14 +2,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { sorguMetni } from "@/yonetim/api"
+import { sorguMetni } from "@/lib/sorgu"
 import type { Katalog, KuralGovdesi, Ozet } from "@/yonetim/api"
 import Arizalar from "@/yonetim/bolumler/arizalar"
 import Durum from "@/yonetim/bolumler/durum"
 import { ym } from "@/yonetim/metin"
 import { kaynakAdiOner } from "@/yonetim/tampon/kaynaklar"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
-import { bayt, sureYaz, zamanYaz } from "@/yonetim/ui"
+import { bayt, sureYaz, zaman } from "@/lib/bicim"
 
 afterEach(() => {
   cleanup()
@@ -50,9 +50,9 @@ describe("bicimleyiciler ve yardimcilar", () => {
     expect(sureYaz(7200)).toMatch(/^2 sa$/)
   })
   it("zaman: gecersiz/bos tire doner, ISO yerel bicime gider", () => {
-    expect(zamanYaz(null)).toBe("—")
-    expect(zamanYaz("bozuk")).toBe("—")
-    expect(zamanYaz("2026-10-07T12:30:00Z")).toMatch(/2026/)
+    expect(zaman(null)).toBe("—")
+    expect(zaman("bozuk")).toBe("—")
+    expect(zaman("2026-10-07T12:30:00Z")).toMatch(/2026/)
   })
   it("sorguMetni bos degerleri atar ve kodlar", () => {
     expect(sorguMetni({ a: "x y", b: "", c: null, d: undefined, e: 0 })).toBe("?a=x+y&e=0")

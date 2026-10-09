@@ -1,6 +1,8 @@
+import { ORTAK } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
 const TR = {
+  ...ORTAK.tr,
   // liste
   ara: "Müşteri ara…",
   aramaDugmesi: "Ara",
@@ -11,18 +13,12 @@ const TR = {
   sorumlu: "Sorumlu TAM",
   skor: "Final skor",
   sonucYok: "Kayıt yok.",
-  onceki: "Önceki",
-  sonraki: "Sonraki",
   sayfa: "Sayfa",
   toplam: "toplam",
   liste: "Müşteri listesi",
-  yuklenemedi: "Yüklenemedi.",
   bulunamadi: "Müşteri bulunamadı ya da bu müşteriye erişiminiz yok.",
-  kaydet: "Kaydet",
   kaydedildi: "Kaydedildi.",
   kaydedilemedi: "Kaydedilemedi",
-  vazgec: "Vazgeç",
-  duzenle: "Düzenle",
   seciniz: "Seçiniz",
   // kart
   musteriKarti: "Müşteri Kartı",
@@ -125,6 +121,7 @@ const TR = {
 }
 
 const EN: typeof TR = {
+  ...ORTAK.en,
   ara: "Search customers…",
   aramaDugmesi: "Search",
   ekle: "Add customer",
@@ -134,18 +131,12 @@ const EN: typeof TR = {
   sorumlu: "Responsible TAM",
   skor: "Final score",
   sonucYok: "No records.",
-  onceki: "Previous",
-  sonraki: "Next",
   sayfa: "Page",
   toplam: "total",
   liste: "Customer list",
-  yuklenemedi: "Could not load.",
   bulunamadi: "Customer not found or you have no access to it.",
-  kaydet: "Save",
   kaydedildi: "Saved.",
   kaydedilemedi: "Could not save",
-  vazgec: "Cancel",
-  duzenle: "Edit",
   seciniz: "Select",
   musteriKarti: "Customer Card",
   musteriNo: "Customer No",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
+import { apiYolu, csrfBasliklari } from "@/lib/http"
 
 export type AltOge = {
   id: string
@@ -31,21 +31,6 @@ export type OturumDurumu = "yukleniyor" | "yok" | "var"
 
 const YENILE_ARALIK_MS = 2 * 60 * 1000
 const OLAYLAR = ["pointerdown", "keydown", "scroll"] as const
-
-/** Her API cagrisi: 401 gelirse oturum kapanmis demektir. */
-export async function apiGet<T>(yol: string): Promise<T | null> {
-  try {
-    const cevap = await fetch(apiYolu(yol), { credentials: "same-origin" })
-    if (oturumYok(cevap)) {
-      window.dispatchEvent(new Event("tamlife:oturum-bitti"))
-      return null
-    }
-    if (!cevap.ok) return null
-    return ((await cevap.json()) as { data: T }).data
-  } catch {
-    return null
-  }
-}
 
 export type GirisSonucu = "ok" | "red" | "kilit" | "ag"
 

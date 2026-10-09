@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge"
+import { Rozet } from "@/components/sayfa-ui"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { AltOge } from "@/lib/oturum"
 import { metin } from "@/shell/metin"
@@ -24,7 +24,7 @@ export function ModulSayfasi({ baslik, aciklama, hazir, ust, altlar, dil, onGit 
           {ust ? <p className="text-xs text-muted-foreground">{ust}</p> : null}
           <CardTitle className="flex items-center gap-2">
             {baslik}
-            {!hazir ? <Badge variant="secondary">{t.hazirlaniyor}</Badge> : null}
+            {!hazir ? <Rozet>{t.hazirlaniyor}</Rozet> : null}
           </CardTitle>
           <CardDescription>{aciklama}</CardDescription>
         </CardHeader>
@@ -50,7 +50,7 @@ export function ModulSayfasi({ baslik, aciklama, hazir, ust, altlar, dil, onGit 
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
                         {a.label}
-                        {!a.ready ? <Badge variant="secondary">{t.hazirlaniyor}</Badge> : null}
+                        {!a.ready ? <Rozet>{t.hazirlaniyor}</Rozet> : null}
                       </CardTitle>
                       {a.description ? <CardDescription>{a.description}</CardDescription> : null}
                     </CardHeader>

@@ -1,10 +1,9 @@
 import { useState } from "react"
 import { Plus, X } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { DUGME, DUGME_ANA, GIRDI } from "@/components/kart-ui"
+import { Alan, Bildirim, DUGME, DUGME_ANA, GIRDI } from "@/components/sayfa-ui"
 import type { Katalog, Kosul, KuralGovdesi } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { Alan, Bilgi } from "@/yonetim/ui"
 
 export const BOS_KURAL: KuralGovdesi = {
   name: "",
@@ -178,13 +177,13 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
         </Alan>
       </div>
 
-      {hata ? <Bilgi ton="amber">{hata}</Bilgi> : null}
+      {hata ? <Bildirim ton="amber">{hata}</Bildirim> : null}
       <div className="flex gap-2">
         <button type="submit" className={DUGME_ANA} disabled={kaydediliyor}>
           {t.kaydet}
         </button>
         <button type="button" className={DUGME} onClick={onVazgec}>
-          {t.iptal}
+          {t.vazgec}
         </button>
       </div>
     </form>

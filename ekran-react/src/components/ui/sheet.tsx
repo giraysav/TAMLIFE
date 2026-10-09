@@ -8,14 +8,6 @@ export function Sheet({ ...props }: ComponentProps<typeof SheetPrimitive.Root>) 
   return <SheetPrimitive.Root {...props} />
 }
 
-export function SheetTrigger({ ...props }: ComponentProps<typeof SheetPrimitive.Trigger>) {
-  return <SheetPrimitive.Trigger {...props} />
-}
-
-export function SheetClose({ ...props }: ComponentProps<typeof SheetPrimitive.Close>) {
-  return <SheetPrimitive.Close {...props} />
-}
-
 export function SheetContent({
   className,
   children,

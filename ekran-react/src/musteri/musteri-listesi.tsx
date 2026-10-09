@@ -2,14 +2,14 @@ import { useEffect, useState } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Briefcase, Building2, ChevronLeft, ChevronRight, CircleAlert, MessageSquareWarning, Plus, Search, SearchX, Siren, Sparkles, X } from "lucide-react"
 import { Cekmece } from "@/components/cekmece"
-import { DUGME, DUGME_SARI, GIRDI } from "@/components/kart-ui"
-import { BosKutu, HataKutu, Kpi, SayfaKabi } from "@/components/sayfa-ui"
+import { BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, SayfaKabi } from "@/components/sayfa-ui"
 import { Skeleton } from "@/components/ui/skeleton"
 import { oku, sorguMetni } from "@/lib/sorgu"
 import { MusteriEkleFormu } from "@/musteri/musteri-ekle-formu"
 import { MusteriKarti } from "@/musteri/portfoy-kart"
 import type { PortfoyKart, Secenekler } from "@/musteri/portfoy-kart"
 import { portfoyMetin } from "@/musteri/portfoy-metin"
+import { useGecikmeli } from "@/lib/kanca"
 import type { Dil } from "@/shell/metin"
 
 type Portfoy = {
@@ -21,14 +21,6 @@ type Portfoy = {
 }
 
 const SAYFA_ADEDI = 24
-function useGecikmeli<T>(deger: T, ms = 300): T {
-  const [g, setG] = useState(deger)
-  useEffect(() => {
-    const z = setTimeout(() => setG(deger), ms)
-    return () => clearTimeout(z)
-  }, [deger, ms])
-  return g
-}
 
 /** Musteri Yonetimi portfoyu: cati musteri kartlari, KPI seridi, segment/TAM/arama filtreleri, sagdan acilan "Musteri ekle" formu. */
 export function MusteriListesi({ dil }: { dil: Dil }) {

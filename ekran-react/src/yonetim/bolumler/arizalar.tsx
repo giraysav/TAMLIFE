@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react"
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, DUGME_ANA, GIRDI, Rozet } from "@/components/kart-ui"
-import { ANAHTAR, hataMesaji, oku, sorguMetni, yaz } from "@/yonetim/api"
+import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { ANAHTAR } from "@/yonetim/api"
+import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Ariza, ArizaKodu, Sayfali } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
-import { Alan, Bilgi, HataKutusu, Sayfalama, VeriTablosu, Yukleniyor, zamanYaz } from "@/yonetim/ui"
+import { Sayfalama } from "@/yonetim/ui"
+import { zaman } from "@/lib/bicim"
 
 const ADET = 15
 const DURUM_TON = { open: "kirmizi", ack: "amber", closed: "yesil" } as const
@@ -38,11 +40,11 @@ function Ayrinti({ dil, ariza, onGuncel }: { dil: Dil; ariza: Ariza; onGuncel: (
       <dl className="grid gap-1.5 text-xs">
         {[
           [t.kayitNo, <code key="k">{ariza.kayit_no}</code>],
-          [t.zaman, zamanYaz(ariza.zaman)],
+          [t.zaman, zaman(ariza.zaman)],
           [t.kaynakSutunu, ariza.kaynak || "—"],
           [t.kullanici, ariza.kullanici || "—"],
           [t.istisna, ariza.istisna || "—"],
-          ...(ariza.kapanis ? [[t.kapatan, `${ariza.kapatan} · ${zamanYaz(ariza.kapanis)}`]] : []),
+          ...(ariza.kapanis ? [[t.kapatan, `${ariza.kapatan} · ${zaman(ariza.kapanis)}`]] : []),
         ].map(([e, d]) => (
           <div key={String(e)} className="flex justify-between gap-3 border-b border-slate-100 pb-1 last:border-0">
             <dt className="shrink-0 font-bold text-slate-400">{e}</dt>
@@ -84,7 +86,7 @@ function Ayrinti({ dil, ariza, onGuncel }: { dil: Dil; ariza: Ariza; onGuncel: (
         <button type="submit" className={`${DUGME_ANA} justify-self-start`} disabled={guncelle.isPending}>
           {t.durumuGuncelle}
         </button>
-        {bilgi ? <Bilgi ton={bilgi.ton}>{bilgi.metin}</Bilgi> : null}
+        {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
       </form>
     </div>
   )
@@ -116,8 +118,8 @@ export default function Arizalar({ dil }: { dil: Dil }) {
   })
   const kodlar = useQuery({ queryKey: ANAHTAR.arizaKodlari, queryFn: () => oku<ArizaKodu[]>("/api/v1/yonetim/ariza-kodlari"), staleTime: Infinity })
 
-  if (liste.isPending) return <Yukleniyor t={t} />
-  if (liste.isError) return <HataKutusu t={t} onTekrar={() => void liste.refetch()} />
+  if (liste.isPending) return <Yukleniyor metin={t.yukleniyor} iskelet />
+  if (liste.isError) return <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void liste.refetch()} />
   const d = liste.data
 
   return (
@@ -181,14 +183,14 @@ export default function Arizalar({ dil }: { dil: Dil }) {
               },
               { baslik: t.kod, hucre: (a) => <code className="text-[11px]">{a.kod}</code> },
               { baslik: t.durum, hucre: (a) => <Rozet ton={DURUM_TON[a.durum]}>{t.durumlar[a.durum]}</Rozet> },
-              { baslik: t.zaman, hucre: (a) => zamanYaz(a.zaman) },
+              { baslik: t.zaman, hucre: (a) => zaman(a.zaman) },
               { baslik: t.kaynakSutunu, hucre: (a) => <span className="line-clamp-1 max-w-56 break-all">{a.kaynak || "—"}</span> },
             ]}
           />
           <Sayfalama t={t} sayfa={d.sayfa} adet={d.adet} toplam={d.toplam} onSayfa={setSayfa} />
         </div>
         <div className="lg:sticky lg:top-20 lg:self-start">
-          {secili ? <Ayrinti key={secili.id} dil={dil} ariza={secili} onGuncel={setSecili} /> : <Bilgi>{t.arizaSec}</Bilgi>}
+          {secili ? <Ayrinti key={secili.id} dil={dil} ariza={secili} onGuncel={setSecili} /> : <Bildirim>{t.arizaSec}</Bildirim>}
         </div>
       </div>
 

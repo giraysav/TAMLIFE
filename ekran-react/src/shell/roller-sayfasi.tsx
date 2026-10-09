@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { apiGet } from "@/lib/oturum"
-import { apiYolu, csrfBasliklari } from "@/lib/http"
+import { oku, yaz } from "@/lib/sorgu"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
@@ -19,7 +18,7 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
   const [bilgi, setBilgi] = useState<Record<string, string>>({})
 
   const yukle = useCallback(async () => {
-    const govde = await apiGet<Veri>("/api/v1/roller")
+    const govde = await oku<Veri>("/api/v1/roller").catch(() => null)
     setVeri(govde)
     if (govde) {
       setTaslak(Object.fromEntries(govde.roles.map((r) => [r.role, { modules: new Set(r.modules), landing: r.landing, permissions: new Set(r.permissions) }])))
@@ -48,14 +47,9 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
     const t1 = taslak[rol]
     setBilgi((b) => ({ ...b, [rol]: "" }))
     try {
-      const cevap = await fetch(apiYolu(`/api/v1/roller/${rol}`), {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: csrfBasliklari({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ modules: [...t1.modules], landing: t1.landing, permissions: [...t1.permissions] }),
-      })
-      setBilgi((b) => ({ ...b, [rol]: cevap.ok ? t.rolKaydedildi : t.rolKaydedilemedi }))
-      if (cevap.ok) await yukle()
+      await yaz("PUT", `/api/v1/roller/${rol}`, { modules: [...t1.modules], landing: t1.landing, permissions: [...t1.permissions] })
+      setBilgi((b) => ({ ...b, [rol]: t.rolKaydedildi }))
+      await yukle()
     } catch {
       setBilgi((b) => ({ ...b, [rol]: t.rolKaydedilemedi }))
     }

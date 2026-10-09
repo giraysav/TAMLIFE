@@ -1,6 +1,4 @@
-export { ApiHata, hataMesaji, oku, sorguMetni, yaz, yukle } from "@/lib/sorgu"
-
-// --- Tipler (sunucu yanitlari; api-types.ts yeniden uretilince bunlara baglanabilir) ------------------------------------
+// --- Tipler (sunucu yanitlari) ------------------------------------
 export type Durum3 = "ok" | "uyari" | "hata"
 
 export type Kontrol = { id: string; durum: Durum3; ayrinti: string; veri: Record<string, unknown> }

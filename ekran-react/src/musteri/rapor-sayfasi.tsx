@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react"
-import { Badge } from "@/components/ui/badge"
+import { useQuery } from "@tanstack/react-query"
+import { Rozet } from "@/components/sayfa-ui"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { apiOku } from "@/lib/api-yaz"
+import { oku } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
 
@@ -16,21 +16,13 @@ type Durum = {
 /** Gonderilen Aylik Rapor: bu ayin TAM basina atilan/bekleyen ozeti ve gorebildigi gonderimler. */
 export function RaporSayfasi({ dil }: { dil: Dil }) {
   const t = musteriMetin(dil)
-  const [durum, setDurum] = useState<Durum | null | undefined>(undefined)
-  const [liste, setListe] = useState<Gonderim[]>([])
+  const durumQ = useQuery({ queryKey: ["rapor", "durum"], queryFn: () => oku<Durum>("/api/v1/rapor/durum") })
+  const listeQ = useQuery({ queryKey: ["rapor", "gonderilenler"], queryFn: () => oku<Gonderim[]>("/api/v1/rapor/gonderilenler") })
+  const durum = durumQ.data
+  const liste = listeQ.data ?? []
 
-  const yukle = useCallback(async () => {
-    const [d, g] = await Promise.all([apiOku<Durum>("/api/v1/rapor/durum"), apiOku<Gonderim[]>("/api/v1/rapor/gonderilenler")])
-    setDurum(d.ok ? d.veri : null)
-    setListe(g.ok && g.veri ? g.veri : [])
-  }, [])
-
-  useEffect(() => {
-    void yukle()
-  }, [yukle])
-
-  if (durum === undefined) return <p className="text-sm text-muted-foreground">…</p>
-  if (durum === null) {
+  if (durumQ.isPending) return <p className="text-sm text-muted-foreground">…</p>
+  if (!durum) {
     return (
       <p role="alert" className="text-sm text-destructive">
         {t.yuklenemedi}
@@ -103,7 +95,7 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
                 </a>
                 <span className="flex-1 text-muted-foreground">{g.konu}</span>
                 <span className="text-muted-foreground">{g.gonderen}</span>
-                {g.durum === "reverted" ? <Badge variant="secondary">{t.geriAlindi}</Badge> : null}
+                {g.durum === "reverted" ? <Rozet>{t.geriAlindi}</Rozet> : null}
               </li>
             ))}
           </ul>
