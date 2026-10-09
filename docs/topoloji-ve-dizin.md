@@ -148,7 +148,7 @@ E:\TAMLIFE_Dev\   (lokal geliştirme: D:\TAMLIFE_Dev)
    │  │  ├─ takvim\                  api · servis
    │  │  ├─ rapor\                   servis · metin
    │  │  └─ skor\                    api · servis · motor
-   │  ├─ alembic\{env.py, versions\0001..0009}    alembic.ini
+   │  ├─ alembic\{env.py, versions\0001_baslangic}    alembic.ini
    │  ├─ tests\                    test_{yonetim,tampon,ozellikler,auth_security,kimlik_siniri,roller,musteri,skor,skor_api,arayuz_sunumu}.py · conftest.py · skor_golden.json
    │  ├─ dev.ps1  pytest.ini  ruff.toml
    │  └─ var\                      [üretilen, git'te yok]  dev.db · kullanicilar\*.db · logs\ · yedek\
@@ -165,7 +165,7 @@ E:\TAMLIFE_Dev\   (lokal geliştirme: D:\TAMLIFE_Dev)
 ## 6. Tasarıma girdi olacak gözlemler
 
 1. **DB düzeni:** ortak panel DB + kullanıcı başına SQLite dosyası (`app/db.py`). Kişisel tablolar (`KullaniciBase`) Alembic dışında; yönetici görünümleri kullanıcı dosyalarını sırayla okur (≤20 kişi).
-2. **Migration zinciri deterministik değil:** `0001` `create_all` ile canlı modele bağlı; model değişince "eski" revizyon farklı şema üretir. Hedef şema için dondurulmuş (açık `op.create_table`) başlangıç revizyonu gerekir.
+2. **Migration:** zincir 2026-10-09'da tek başlangıç revizyonuna (`0001_baslangic`, `create_all`) indirildi. Hedef şema dondurulurken açık `op.create_table` revizyonuna çevrilmeli.
 3. **Kalıcılık:** denetim kalıcı (kuyruklu yazıcı → `audit_event`); **oturumlar hâlâ bellekte** (yeniden başlatmada herkes düşer; `--workers 1` şartı buradan).
 4. **Kapsam boşluğu:** 17 modülün 9'u canlı (musteri, rapor, roller, onedesk, tamsms, tamapn, takvim, takvim_ozet, sunum) + Yönetim/Veri Girişi; proje, talep, radar, gelir_uretim yalnız tablo; 2'sinin hiçbir şeyi yok. Utilizasyon API'si hazır, arayüzü yok (skor kriter/dağıtım ekranı Veri Girişi ile birleşebilir).
 5. **İskeletler (bilerek duruyor, sırayla doldurulacak):** proje/talep/radar/gelir_uretim tabloları, skor API'si (arayüzü yok), e2e (Playwright kurulu değil).
