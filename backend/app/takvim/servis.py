@@ -1,17 +1,18 @@
 """Takvim servisi. Gun durumu kodlari uretimle ayni (kutucuklar/takvim/servis.py CALENDAR_STATUS_LABELS).
 
+Gunler kisinin kendi DB dosyasindadir (app.db.kullanici_oturumu); TAM Takvim her kisinin dosyasini okur.
 Izin gunu sayilanlar: yillik_izin, sirket_izni, raporlu. 'arife_tatili' yarim gundur (0,5). Hafta sonu ve bos gun kayitsizdir.
 """
 
 from __future__ import annotations
 
 from calendar import monthrange
-from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.db import kullanici_oturumu, mevcut_oturumlar
 from app.kullanicilar import giris_yapmislar, kullanici_kaydi
 from app.models import AppUser, CalendarDay, Presentation
 from app.ortak import UygulamaHatasi, iso, simdi
@@ -91,33 +92,41 @@ def _gun(r: CalendarDay) -> dict:
     return {"tarih": r.day.isoformat(), "durum": r.status, "online": r.online_count, "yuzyuze": r.face_count}
 
 
-def ay_oku(db: Session, user: Principal, yil: int, ay: int) -> dict:
+def _gunler(kullanici: str, bas: date, son: date) -> list[CalendarDay]:
+    """Kisinin dosyasindaki aralik (dosya yoksa bos; okuma dosya olusturmaz)."""
+    for _, k in mevcut_oturumlar([kullanici]):
+        satirlar = list(k.scalars(select(CalendarDay).where(CalendarDay.day >= bas, CalendarDay.day <= son).order_by(CalendarDay.day)))
+        k.expunge_all()
+        return satirlar
+    return []
+
+
+def ay_oku(user: Principal, yil: int, ay: int) -> dict:
     if not 1 <= ay <= 12:
         raise TakvimHata(400, "Ay 1-12 arasında olmalı.")
-    bas, son = date(yil, ay, 1), date(yil, ay, monthrange(yil, ay)[1])
-    uid = kullanici_kaydi(db, user).id
-    gunler = db.scalars(select(CalendarDay).where(CalendarDay.user_id == uid, CalendarDay.day >= bas, CalendarDay.day <= son).order_by(CalendarDay.day)).all()
+    gunler = _gunler(user.username, date(yil, ay, 1), date(yil, ay, monthrange(yil, ay)[1]))
     return {"yil": yil, "ay": ay, "gunler": [_gun(g) for g in gunler], "ozet": _ozet_olustur(gunler), "durumlar": [{"kod": k, "ad": v} for k, v in DURUMLAR.items()]}
 
 
-def gun_kaydet(db: Session, user: Principal, govde: dict) -> dict:
+def gun_kaydet(user: Principal, govde: dict) -> dict:
     gun = _tarih(govde.get("tarih"))
     durum, online, yuzyuze = _durum(govde.get("durum")), _sayi(govde.get("online"), "Online toplantı"), _sayi(govde.get("yuzyuze"), "Yüz yüze toplantı")
-    uid = kullanici_kaydi(db, user).id
-    kayit = db.scalar(select(CalendarDay).where(CalendarDay.user_id == uid, CalendarDay.day == gun))
-    if durum == "calisiyor" and online == 0 and yuzyuze == 0:
-        if kayit is not None:
-            db.delete(kayit)  # varsayilan gun kayit tutmaz
-        return {"tarih": gun.isoformat(), "durum": "calisiyor", "online": 0, "yuzyuze": 0}
-    if kayit is None:
-        kayit = CalendarDay(user_id=uid, day=gun)
-        db.add(kayit)
-    kayit.status, kayit.online_count, kayit.face_count = durum, online, yuzyuze
-    db.flush()
-    return _gun(kayit)
+    with kullanici_oturumu(user.username) as k:
+        kayit = k.scalar(select(CalendarDay).where(CalendarDay.day == gun))
+        if durum == "calisiyor" and online == 0 and yuzyuze == 0:
+            if kayit is not None:
+                k.delete(kayit)  # varsayilan gun kayit tutmaz
+                k.commit()
+            return {"tarih": gun.isoformat(), "durum": "calisiyor", "online": 0, "yuzyuze": 0}
+        if kayit is None:
+            kayit = CalendarDay(day=gun)
+            k.add(kayit)
+        kayit.status, kayit.online_count, kayit.face_count = durum, online, yuzyuze
+        k.commit()
+        return _gun(kayit)
 
 
-def toplu_kaydet(db: Session, user: Principal, govde: dict) -> dict:
+def toplu_kaydet(user: Principal, govde: dict) -> dict:
     """Tarih araligina ayni durumu atar (hafta sonlari istege bagli atlanir). Toplanti sayilari korunur."""
     bas, son = _tarih(govde.get("baslangic"), "Başlangıç"), _tarih(govde.get("bitis"), "Bitiş")
     if son < bas:
@@ -125,26 +134,26 @@ def toplu_kaydet(db: Session, user: Principal, govde: dict) -> dict:
     if (son - bas).days + 1 > EN_COK_TOPLU_GUN:
         raise TakvimHata(400, f"En fazla {EN_COK_TOPLU_GUN} gün atanabilir.")
     durum, atla = _durum(govde.get("durum")), bool(govde.get("hafta_sonu_atla", True))
-    uid = kullanici_kaydi(db, user).id
-    mevcut = {r.day: r for r in db.scalars(select(CalendarDay).where(CalendarDay.user_id == uid, CalendarDay.day >= bas, CalendarDay.day <= son))}
     atanan = 0
-    gun = bas
-    while gun <= son:
-        if not (atla and gun.weekday() >= 5):
-            kayit = mevcut.get(gun)
-            if durum == "calisiyor":
-                if kayit is not None and kayit.online_count == 0 and kayit.face_count == 0:
-                    db.delete(kayit)  # varsayilan gun kayit tutmaz
-                elif kayit is not None:
+    with kullanici_oturumu(user.username) as k:
+        mevcut = {r.day: r for r in k.scalars(select(CalendarDay).where(CalendarDay.day >= bas, CalendarDay.day <= son))}
+        gun = bas
+        while gun <= son:
+            if not (atla and gun.weekday() >= 5):
+                kayit = mevcut.get(gun)
+                if durum == "calisiyor":
+                    if kayit is not None and kayit.online_count == 0 and kayit.face_count == 0:
+                        k.delete(kayit)  # varsayilan gun kayit tutmaz
+                    elif kayit is not None:
+                        kayit.status = durum
+                else:
+                    if kayit is None:
+                        kayit = CalendarDay(day=gun)
+                        k.add(kayit)
                     kayit.status = durum
-            else:
-                if kayit is None:
-                    kayit = CalendarDay(user_id=uid, day=gun)
-                    db.add(kayit)
-                kayit.status = durum
-            atanan += 1
-        gun += timedelta(days=1)
-    db.flush()
+                atanan += 1
+            gun += timedelta(days=1)
+        k.commit()
     return {"atanan": atanan}
 
 
@@ -184,17 +193,7 @@ def _uye(u: AppUser, o: dict) -> dict:
 def ekip(db: Session, user: Principal, yil: int, ceyrek: int) -> dict:
     """Panele giris yapmis herkes; her kisi icin izin/gun durumu ve toplanti toplamlari (TAM Takvim)."""
     bas, son = donem_araligi(yil, ceyrek)
-    uyeler = giris_yapmislar(db)
-    ozetler: dict[int, dict] = defaultdict(_bos_ozet)
-    kimlikler = [u.id for u in uyeler]
-    if kimlikler:
-        for r in db.scalars(select(CalendarDay).where(CalendarDay.user_id.in_(kimlikler), CalendarDay.day >= bas, CalendarDay.day <= son)):
-            o = ozetler[r.user_id]
-            o["kayitli_gun"] += 1
-            o["durumlar"][r.status] = o["durumlar"].get(r.status, 0) + 1
-            o["online"] += r.online_count
-            o["yuzyuze"] += r.face_count
-    liste = [_uye(u, _bitir(ozetler[u.id] if u.id in ozetler else _bos_ozet())) for u in uyeler]
+    liste = [_uye(u, _ozet_olustur(_gunler(u.username, bas, son))) for u in giris_yapmislar(db)]
     genel = _bos_ozet()
     for u in liste:
         genel["kayitli_gun"] += u["kayitli_gun"]
@@ -220,7 +219,7 @@ def uye_gunleri(db: Session, yil: int, ceyrek: int, uye_id: int) -> dict:
     uye = db.get(AppUser, uye_id)
     if uye is None or uye.last_login_at is None:
         raise TakvimHata(404, "Kişi bulunamadı.")
-    gunler = db.scalars(select(CalendarDay).where(CalendarDay.user_id == uye_id, CalendarDay.day >= bas, CalendarDay.day <= son).order_by(CalendarDay.day)).all()
+    gunler = _gunler(uye.username, bas, son)
     return {"uye": uye.display_name or uye.username, "gunler": [_gun(g) for g in gunler]}
 
 

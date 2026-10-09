@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.audit import audit_log
-from app.models import TABLE_OWNER, AuditEvent
+from app.models import TABLE_OWNER, AuditEvent, Base
 from app.yonetim import dosya_gunlugu
 from app.yonetim.kalici_yazici import yazici
 from tests.conftest import login_ok
@@ -78,7 +78,7 @@ def test_denetim_db_kapaliyken_istek_dusmez(client, monkeypatch):
         raise RuntimeError("db yok")
 
     with monkeypatch.context() as m:  # yalniz bu blokta; client fixture'inin ortam degiskenleri geri alinmasin
-        m.setattr("app.deps.engine", _yok)
+        m.setattr("app.db.engine", _yok)
         audit_log.remember(actor="x", action="kuyrukta", outcome="allow")
         assert yazici.bekleyen() == 1
     assert yazici.bosalt(zorla=True) == 1 and yazici.bekleyen() == 0
@@ -137,7 +137,7 @@ def test_veritabani_bilgisi_ve_tablo_sahipligi(client):
     d = _uc(client, "veritabani").json()["data"]
     assert d["motor"] == "sqlite" and d["butunluk"] == "ok" and d["dosya"] == "test.db"
     adlar = {t["ad"]: t for t in d["tablolar"]}
-    assert set(adlar) == set(TABLE_OWNER)
+    assert set(adlar) == set(Base.metadata.tables) and set(adlar) <= set(TABLE_OWNER)
     assert adlar["fault_event"]["modul"] == "yonetim" and adlar["ingest_block"]["modul"] == "ingest"
     assert all(t["var"] for t in d["tablolar"]) and d["eksik_tablolar"] == []
     assert d["yedek"]["desteklenir"] is True and d["boyut_bayt"] > 0
@@ -145,15 +145,16 @@ def test_veritabani_bilgisi_ve_tablo_sahipligi(client):
 
 
 def test_tablo_sahipligi_metadata_ile_ayni():
-    from app.models import Base
+    from app.models import KullaniciBase
 
-    assert set(Base.metadata.tables) == set(TABLE_OWNER)
+    assert set(Base.metadata.tables) | set(KullaniciBase.metadata.tables) == set(TABLE_OWNER)
 
 
 def test_yedek_al_dogrula_ve_koruma(client, tmp_path, monkeypatch):
     from datetime import UTC, datetime, timedelta
 
     hdr = login_ok(client)
+    client.put("/api/v1/takvim/gun", json={"tarih": "2026-02-02", "durum": "raporlu"}, headers=hdr)  # admin'in kullanici dosyasi olusur
     monkeypatch.setenv("TAMLIFE_BACKUP_KEEP", "2")
     sayac = iter(range(1, 100))
     # ad saniye cozunurlugunde: ard arda alinan yedeklerin adi cakismasin diye saat ilerletilir
@@ -166,6 +167,11 @@ def test_yedek_al_dogrula_ve_koruma(client, tmp_path, monkeypatch):
         assert r.status_code == 200 and r.json()["data"]["butunluk"] == "ok" and r.json()["data"]["boyut_bayt"] > 0
         adlar.append(r.json()["data"]["ad"])
     assert len(set(adlar)) == 4
+    kisiler = sorted((tmp_path / "yedek").glob("*_kullanicilar"))
+    assert [p.name for p in kisiler] == [a.removesuffix(".db") + "_kullanicilar" for a in sorted(adlar)[-2:]]  # budanan yedegin klasoru da gider
+    assert (kisiler[-1] / "admin.db").is_file()
+    dosyalar = client.get("/api/v1/yonetim/veritabani").json()["data"]["kullanici_dosyalari"]
+    assert dosyalar == [{"kullanici": "admin", "boyut_bayt": dosyalar[0]["boyut_bayt"], "butunluk": "ok", "satirlar": {"calendar_day": 1, "sms_revenue": 0, "apn_revenue": 0, "apn_work": 0}}]
     yedek = client.get("/api/v1/yonetim/veritabani").json()["data"]["yedek"]
     assert yedek["saklanan"] == 2 and [y["ad"] for y in yedek["liste"]] == sorted(adlar, reverse=True)[:2]  # en yeni 2 kalir
     d = client.post(f"/api/v1/yonetim/veritabani/yedek/{adlar[-1]}/dogrula", headers=hdr).json()["data"]
@@ -241,7 +247,7 @@ def test_audit_event_tablosunda_gercekten_satir_var(client):
     from sqlalchemy import func, select
     from sqlalchemy.orm import Session
 
-    from app.deps import engine
+    from app.db import engine
 
     login_ok(client)
     yazici.bosalt(zorla=True)

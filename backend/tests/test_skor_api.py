@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.deps import engine
+from app.db import engine
 from app.models import AppUser, Customer, ScoreHistory
 from tests.conftest import login_ok
 

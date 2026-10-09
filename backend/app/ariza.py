@@ -93,12 +93,11 @@ def kaydet(
             db.add(satir)
             db.flush()
         else:
-            from app.deps import engine
-            from app.gateway import session_factory
+            from app.db import oturum
 
-            with session_factory(engine())() as oturum:
-                oturum.add(satir)
-                oturum.commit()
+            with oturum() as yeni:
+                yeni.add(satir)
+                yeni.commit()
     except Exception:  # noqa: BLE001 - ariza kaydi yazilamasa da yanit donmeli
         _log.warning("ariza kaydi veritabanina yazilamadi (kayit %s)", kayit_no[:8], exc_info=True)
     return kayit_no

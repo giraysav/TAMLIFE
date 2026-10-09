@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     env: str = "dev"
     database_url: str = "postgresql+psycopg://localhost:5432/tamlife"
     sqlite_izin: bool = False  # dev/test disinda SQLite icin acik onay (PostgreSQL gelene kadar)
+    kullanici_db_dizini: str = ""  # kullanici basina SQLite dosyalari; bos = panel DB'sinin yaninda kullanicilar/
 
     cookie_name: str = "tamlife_session"
     cookie_secure: bool | None = None  # bos: dev disinda otomatik true

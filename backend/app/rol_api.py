@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.audit import audit_log
 from app.authz import is_admin
-from app.deps import get_db, require_admin, require_user
+from app.db import get_db
+from app.deps import require_admin, require_user
 from app.ortak import ok
 from app.rolgorunum import etkin, gorunumler, katalog, kaydet, yetki_katalogu
 from app.session import Principal

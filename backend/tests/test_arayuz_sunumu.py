@@ -52,11 +52,11 @@ def test_cerez_yolu_alt_yola_kisitlanir_ve_cikista_ayni_yoldan_silinir(client, m
 
 
 def test_sqlite_dev_test_disinda_yalniz_acik_izinle(monkeypatch, tmp_path):
-    from app.gateway import make_engine
+    from app.db import panel_url
 
-    url = f"sqlite:///{(tmp_path / 'x.db').as_posix()}"
+    monkeypatch.setenv("TAMLIFE_DATABASE_URL", f"sqlite:///{(tmp_path / 'x.db').as_posix()}")
     monkeypatch.setenv("TAMLIFE_ENV", "production")
     with pytest.raises(RuntimeError, match="PostgreSQL"):
-        make_engine(url)
+        panel_url()
     monkeypatch.setenv("TAMLIFE_SQLITE_IZIN", "true")
-    make_engine(url).dispose()
+    panel_url()

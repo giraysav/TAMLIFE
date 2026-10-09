@@ -23,7 +23,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    """Ortak panel DB'si (Alembic)."""
+
+
+class KullaniciBase(DeclarativeBase):
+    """Kullanici basina SQLite dosyasi (app.db.kullanici_oturumu): kisinin kendi takvim ve gelir kayitlari."""
 
 
 TABLE_OWNER = {
@@ -222,14 +226,12 @@ class ReportRecipient(Base):
     to_addrs: Mapped[str] = mapped_column(Text, default="")
     cc_addrs: Mapped[str] = mapped_column(Text, default="")
 
-class CalendarDay(Base):
-    """Izin&Takvim Yonetimi: kisi basina gun durumu ve toplanti sayilari (uretim calendar_records, tarih gercek DATE)."""
+class CalendarDay(KullaniciBase):
+    """Izin&Takvim Yonetimi: gun durumu ve toplanti sayilari (uretim calendar_records). Dosya kisinin kendisidir."""
 
     __tablename__ = "calendar_day"
-    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_calendar_day_user_day"), Index("ix_calendar_day_day", "day"))
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
-    day: Mapped[date] = mapped_column(Date)
+    day: Mapped[date] = mapped_column(Date, unique=True)
     status: Mapped[str] = mapped_column(String(30), default="calisiyor")
     online_count: Mapped[int] = mapped_column(Integer, default=0)
     face_count: Mapped[int] = mapped_column(Integer, default=0)  # yuz yuze toplanti
@@ -372,7 +374,7 @@ class DemandLog(Base):
     note: Mapped[str] = mapped_column(String(500), default="")
 
 
-class SmsRevenue(Base):
+class SmsRevenue(KullaniciBase):
     """ICT SMS gelir kaydi (uretim ict_revenues). Musteriye unvan eslesmesiyle baglanir."""
 
     __tablename__ = "sms_revenue"
@@ -387,7 +389,7 @@ class SmsRevenue(Base):
     created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-class ApnRevenue(Base):
+class ApnRevenue(KullaniciBase):
     """APN gelir ve kurulum kaydi (uretim apn_revenues)."""
 
     __tablename__ = "apn_revenue"
@@ -406,7 +408,7 @@ class ApnRevenue(Base):
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class ApnWork(Base):
+class ApnWork(KullaniciBase):
     """APN > Musteri Calismalari: toplanti konusu, tarihi, planli calisma tarihi, APN adi, musteri."""
 
     __tablename__ = "apn_work"

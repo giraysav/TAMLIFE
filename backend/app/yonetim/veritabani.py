@@ -18,7 +18,8 @@ from sqlalchemy.engine import Connection, Engine, make_url
 
 from app import ariza
 from app.config import get_settings
-from app.models import TABLE_OWNER, Base
+from app.db import kullanici_dosyalari
+from app.models import TABLE_OWNER, Base, KullaniciBase
 from app.ortak import UygulamaHatasi, iso, simdi
 
 YEDEK_AD = re.compile(r"^tamlife_\d{8}_\d{6}\.db$")
@@ -66,6 +67,21 @@ def tablolar(baglanti: Connection) -> tuple[list[dict[str, Any]], list[str]]:
     return satirlar, eksik
 
 
+def kullanici_ozeti() -> list[dict[str, Any]]:
+    """Kullanici basina dosyalar: ad, boyut, butunluk ve tablo satir sayilari."""
+    cikti = []
+    for yol in kullanici_dosyalari():
+        baglanti = sqlite3.connect(f"{yol.as_uri()}?mode=ro", uri=True)
+        try:
+            mevcut = {r[0] for r in baglanti.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            satir = {t: baglanti.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in KullaniciBase.metadata.tables if t in mevcut}
+            sonuc = str(baglanti.execute("PRAGMA quick_check").fetchone()[0])
+        finally:
+            baglanti.close()
+        cikti.append({"kullanici": yol.stem, "boyut_bayt": boyut_bayt(yol), "butunluk": sonuc, "satirlar": satir})
+    return cikti
+
+
 def butunluk(baglanti: Connection) -> str | None:
     """SQLite quick_check sonucu ('ok' ya da ilk bulgu); diger motorlarda None."""
     if baglanti.dialect.name != "sqlite":
@@ -98,6 +114,18 @@ def yedekler() -> list[dict[str, Any]]:
     return cikti
 
 
+def _kopyala(kaynak: Path, hedef: Path) -> str:
+    """SQLite cevrimici yedek (calisirken guvenli) + butunluk sonucu."""
+    src = sqlite3.connect(f"{kaynak.as_uri()}?mode=ro", uri=True)
+    dst = sqlite3.connect(str(hedef))
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    return _sqlite_kontrol(hedef)
+
+
 def _sqlite_kontrol(yol: Path) -> str:
     baglanti = sqlite3.connect(f"{yol.as_uri()}?mode=ro", uri=True)
     try:
@@ -107,7 +135,7 @@ def _sqlite_kontrol(yol: Path) -> str:
 
 
 def yedek_al(kullanici: str) -> dict[str, Any]:
-    """SQLite cevrimici yedek (calisirken guvenli): ayri dosyaya kopyalar, butunlugunu dogrular, eskileri budar."""
+    """Panel DB'si ve kullanici dosyalari: <ad>.db + <ad>_kullanicilar/ klasoru; butunluk dogrulanir, eskiler budanir."""
     kaynak = sqlite_yolu()
     if kaynak is None:
         raise UygulamaHatasi(501, "Yedek yalnız dosya tabanlı SQLite için; PostgreSQL'de pg_dump kullanılır.")
@@ -118,26 +146,33 @@ def yedek_al(kullanici: str) -> dict[str, Any]:
     hedef = yer / ad
     try:
         yer.mkdir(parents=True, exist_ok=True)
-        src = sqlite3.connect(f"{kaynak.as_uri()}?mode=ro", uri=True)
-        dst = sqlite3.connect(str(hedef))
-        try:
-            src.backup(dst)
-        finally:
-            dst.close()
-            src.close()
-        sonuc = _sqlite_kontrol(hedef)
+        sonuc = _kopyala(kaynak, hedef)
+        kisiler = _kisi_dizini(hedef)
+        for dosya in kullanici_dosyalari():
+            kisiler.mkdir(exist_ok=True)
+            if _kopyala(dosya, kisiler / dosya.name) != "ok":
+                sonuc = f"{dosya.stem}: bozuk"
         if sonuc != "ok":
-            hedef.unlink(missing_ok=True)
+            _yedek_sil(hedef)
             raise UygulamaHatasi(500, "Yedek bütünlük kontrolünden geçemedi; dosya silindi.")
     except UygulamaHatasi:
         raise
     except (OSError, sqlite3.Error) as hata:
-        hedef.unlink(missing_ok=True)
+        _yedek_sil(hedef)
         kayit = ariza.kaydet("TL-YDK-01", exc=hata, kaynak="yedek", kullanici=kullanici)
         raise UygulamaHatasi(500, ariza.mesaj("TL-YDK-01", kayit)) from hata
     for eski in yedekler()[get_settings().backup_keep :]:
-        (yer / eski["ad"]).unlink(missing_ok=True)
-    return {"ad": ad, "boyut_bayt": hedef.stat().st_size, "butunluk": sonuc}
+        _yedek_sil(yer / eski["ad"])
+    return {"ad": ad, "boyut_bayt": hedef.stat().st_size, "butunluk": sonuc, "kullanici_dosyasi": len(kullanici_dosyalari())}
+
+
+def _kisi_dizini(yedek: Path) -> Path:
+    return yedek.with_name(f"{yedek.stem}_kullanicilar")
+
+
+def _yedek_sil(yedek: Path) -> None:
+    yedek.unlink(missing_ok=True)
+    shutil.rmtree(_kisi_dizini(yedek), ignore_errors=True)
 
 
 def yedek_dogrula(ad: str) -> dict[str, Any]:
@@ -175,6 +210,7 @@ def bilgi(motor: Engine) -> dict[str, Any]:
         "tablolar": satirlar,
         "toplam_satir": sum(int(t["satir"] or 0) for t in satirlar),
         "butunluk": sonuc,
+        "kullanici_dosyalari": kullanici_ozeti(),
         "yedek": {
             "dizin": str(yedek_dizini()),
             "desteklenir": yol is not None,

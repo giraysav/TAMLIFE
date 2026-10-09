@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.ad import directory
 from app.audit import SecretAuditError, audit_log
 from app.config import get_settings
-from app.deps import get_db, require_user
+from app.db import get_db
+from app.deps import require_user
 from app.kullanicilar import giris_isle
 from app.navigation import navigation_for
 from app.ortak import ok

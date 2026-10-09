@@ -17,6 +17,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.authz import is_admin
+from app.gelir.servis import tum_gelirler, unvan_tasi
 from app.kullanicilar import kullanici_kaydi
 from app.models import (
     AffiliateFinalFlag,
@@ -390,7 +391,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
 
 
 def _gelirler(db: Session, model: Any, adlar: set[str], ek: tuple[str, ...] = ()) -> dict:
-    tumu: list[Any] = list(db.scalars(select(model).order_by(model.year.desc(), model.month.desc())))
+    tumu: list[Any] = sorted(tum_gelirler(db, model), key=lambda k: (k.year, k.month), reverse=True)
     kayitlar = [k for k in tumu if eslestirme_anahtari(k.customer_name) in adlar]
     toplam: dict[str, float] = {}
     for k in kayitlar:
@@ -483,12 +484,7 @@ def _unvan_baglantilarini_tasi(db: Session, eski_anahtar: str, yeni_ad: str, kim
     """Gelirler ve Destech/CI/RACI matrisleri musteriye UNVAN METNIYLE baglidir; yeniden adlandirmada tasinir."""
     if not eski_anahtar:
         return
-    gelir_modelleri: tuple[Any, ...] = (SmsRevenue, ApnRevenue)
-    for model in gelir_modelleri:
-        gelirler: list[Any] = list(db.scalars(select(model)))
-        for gelir in gelirler:
-            if eslestirme_anahtari(gelir.customer_name or "") == eski_anahtar:
-                gelir.customer_name = yeni_ad
+    unvan_tasi(db, eski_anahtar, yeni_ad)
     for anahtar in MATRIS_ANAHTARLARI:
         matris = db.get(MatrixConfig, anahtar)
         if not matris or not isinstance(matris.headers, list) or not isinstance(matris.rows, list):

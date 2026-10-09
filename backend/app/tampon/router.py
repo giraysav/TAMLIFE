@@ -14,8 +14,8 @@ from starlette.concurrency import run_in_threadpool
 from app import ariza
 from app.audit import audit_log
 from app.config import get_settings
-from app.deps import engine, get_db, require_admin
-from app.gateway import session_factory
+from app.db import get_db, oturum
+from app.deps import require_admin
 from app.models import IngestBatch
 from app.ortak import KimlikTipi, UygulamaHatasi, iso, ok, sayfa_bilgisi
 from app.session import Principal
@@ -93,7 +93,7 @@ def hedefler(admin: Principal = Depends(require_admin)) -> dict[str, Any]:
 # --- 1. Tampon: parti yukleme ve okuma ------------------------------------------------------------------------------
 def _yukle(veri: bytes, kaynak_adi: str, dosya: str, kullanici: str) -> dict[str, Any]:
     """Kendi oturumunda calisir (threadpool): her blok kisa islemle yazilir."""
-    with session_factory(engine())() as db:
+    with oturum() as db:
         basliklar, satirlar = kaynak.csv_oku(veri)
         parti = depo.parti_olustur(
             db, kaynak.kaynak_anahtari(kaynak_adi or re.sub(r"\.[A-Za-z0-9]+$", "", dosya)), dosya or "yukleme.csv", kullanici

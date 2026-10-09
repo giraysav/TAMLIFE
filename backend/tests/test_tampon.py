@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.deps import engine
+from app.db import engine
 from app.models import Customer, IngestBatch
 from app.ortak import UygulamaHatasi
 from app.tampon import kaynak as kaynak_modulu

@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.audit import audit_log
 from app.baglantilar import connections
-from app.deps import get_db, require_admin
+from app.db import get_db
+from app.deps import require_admin
 from app.erisim import Erisim, modul_erisim
 from app.models import IngestBatch
 from app.onedesk import ice_al, servis

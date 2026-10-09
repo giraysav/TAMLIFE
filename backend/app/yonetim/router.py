@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app import session as oturum
 from app.audit import audit_log
-from app.deps import engine, get_db, require_admin
+from app.db import engine, get_db
+from app.deps import require_admin
 from app.ortak import KimlikTipi, ok
 from app.session import Principal
 from app.yonetim import arizalar, dosya_gunlugu, gunlukler, ozet, veritabani

@@ -65,10 +65,9 @@ class KaliciYazici:
             if not toplu:
                 return 0
             try:
-                from app.deps import engine
-                from app.gateway import session_factory
+                from app.db import oturum
 
-                with session_factory(engine())() as db:
+                with oturum() as db:
                     db.add_all(AuditEvent(at=o["_at"], **{k: v for k, v in o.items() if k != "_at"}) for o in toplu)
                     db.commit()
             except Exception:  # noqa: BLE001 - DB kapali/kilitli: olaylar kuyrukta kalir, istek etkilenmez

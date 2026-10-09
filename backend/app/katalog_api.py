@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.audit import audit_log
 from app.authz import can_open
 from app.catalog import HOME_CARDS, MODULES, get
-from app.deps import get_db, require_user
+from app.db import get_db
+from app.deps import require_user
 from app.ortak import ok
 from app.rolgorunum import etkin
 from app.session import Principal

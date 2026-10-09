@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.orm import Session
 
-from app.deps import engine
+from app.db import engine, kullanici_oturumu
 from app.models import ApnRevenue, AppUser, Customer, MatrixConfig, Report, ReportDispatch, SmsRevenue
 from app.rapor import servis as rapor_servis
 from tests.conftest import login_ok
@@ -28,10 +28,12 @@ def veri(client):
             ]
         )
         db.add(MatrixConfig(key="destech", headers=["Müşteri Ünvanı", "Rol"], rows=[["ALFA TEST A.S.", "TAC"], ["Beta Test Ltd", "KMT"]]))
-        db.add(SmsRevenue(tam_name="Admin Kisi", customer_name="alfa test a.s.", amount=100, currency="TRY", year=2026, month=9))
-        db.add(SmsRevenue(tam_name="Admin Kisi", customer_name="Alfa Istirak", amount=50.5, currency="TRY", year=2026, month=8))
-        db.add(ApnRevenue(tam_name="Admin Kisi", customer_name="Alfa Test A.S.", amount=10, currency="USD", installation_pct=40, year=2026, month=9))
         db.commit()
+    with kullanici_oturumu("admin") as k:  # gelirler TAM'in kendi dosyasinda
+        k.add(SmsRevenue(tam_name="Admin Kisi", customer_name="alfa test a.s.", amount=100, currency="TRY", year=2026, month=9))
+        k.add(SmsRevenue(tam_name="Admin Kisi", customer_name="Alfa Istirak", amount=50.5, currency="TRY", year=2026, month=8))
+        k.add(ApnRevenue(tam_name="Admin Kisi", customer_name="Alfa Test A.S.", amount=10, currency="USD", installation_pct=40, year=2026, month=9))
+        k.commit()
     return client
 
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.audit import audit_log
-from app.deps import get_db
+from app.db import get_db
 from app.erisim import Erisim, modul_erisim
 from app.musteri import servis as ms
 from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, ok

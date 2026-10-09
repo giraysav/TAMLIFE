@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.audit import audit_log
-from app.deps import get_db
+from app.db import get_db
 from app.erisim import Erisim, modul_erisim
 from app.ortak import KimlikTipi, ok
 from app.takvim import servis
@@ -39,21 +39,18 @@ class SunumaGovde(BaseModel):
 
 
 @router.get("/takvim/ben")
-def ben(yil: int = Yil, ay: int = Query(ge=1, le=12), e: Erisim = Depends(kendi_erisim), db: Session = Depends(get_db)):
-    return ok(servis.ay_oku(db, e.user, yil, ay))
+def ben(yil: int = Yil, ay: int = Query(ge=1, le=12), e: Erisim = Depends(kendi_erisim)):
+    return ok(servis.ay_oku(e.user, yil, ay))
 
 
 @router.put("/takvim/gun")
-def gun(body: Serbest, e: Erisim = Depends(kendi_erisim), db: Session = Depends(get_db)):
-    sonuc = servis.gun_kaydet(db, e.user, body.model_dump())
-    db.commit()
-    return ok(sonuc)
+def gun(body: Serbest, e: Erisim = Depends(kendi_erisim)):
+    return ok(servis.gun_kaydet(e.user, body.model_dump()))
 
 
 @router.put("/takvim/toplu")
-def toplu(body: Serbest, e: Erisim = Depends(kendi_erisim), db: Session = Depends(get_db)):
-    sonuc = servis.toplu_kaydet(db, e.user, body.model_dump())
-    db.commit()
+def toplu(body: Serbest, e: Erisim = Depends(kendi_erisim)):
+    sonuc = servis.toplu_kaydet(e.user, body.model_dump())
     audit_log.remember(actor=e.user.username, action="takvim.toplu", outcome="allow", module_key="takvim", detail=f"gun={sonuc['atanan']}")
     return ok(sonuc)
 

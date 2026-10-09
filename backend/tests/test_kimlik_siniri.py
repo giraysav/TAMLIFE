@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.deps import engine
+from app.db import engine
 from app.models import AppUser, Customer
 from app.ortak import EN_BUYUK_KIMLIK
 from tests.conftest import login_ok

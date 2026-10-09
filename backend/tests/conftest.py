@@ -14,8 +14,9 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
-from app.deps import dispose_engines, engine
+from app.db import dispose_engines, engine, kullanici_dosyalari, kullanici_oturumu
 from app.main import create_app
 from app.models import Base
 from app.security import limiter
@@ -36,6 +37,15 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     with TestClient(create_app(), base_url="http://testserver") as c:
         yield c
     dispose_engines()
+
+
+def kisi_say(model) -> int:
+    """Tum kullanici dosyalarindaki satir sayisi."""
+    toplam = 0
+    for dosya in kullanici_dosyalari():
+        with kullanici_oturumu(dosya.stem) as k:
+            toplam += k.scalar(select(func.count()).select_from(model)) or 0
+    return toplam
 
 
 def login_ok(c: TestClient) -> dict[str, str]:

@@ -11,11 +11,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import ornek_veri
-from app.deps import engine
+from app.db import dis_kimlik, engine, kimlik_coz, kullanici_oturumu
 from app.models import ApnRevenue, ApnWork, AppUser, CalendarDay, Customer, OnedeskRecord, Presentation, SmsRevenue
 from app.onedesk import yz
 from app.tampon import depo
-from tests.conftest import login_ok
+from tests.conftest import kisi_say, login_ok
 
 YIL = datetime.now(UTC).year
 SIMDI = datetime.now(UTC)
@@ -287,17 +287,29 @@ def test_sms_gelirleri_ekle_duzenle_sil_ve_dogrulama(veri):
 
 def test_gelir_member_baskasinin_kaydini_goremez(veri, monkeypatch):
     hdr = login_ok(veri)
-    with Session(engine()) as db:
-        db.add(SmsRevenue(tam_name="Ayse Test", customer_name="Beta", project="X", amount=5, currency="TRY", year=YIL, month=1, created_by="ayse"))
-        db.add(SmsRevenue(tam_name="Admin Kisi", customer_name="Alfa", project="Y", amount=7, currency="TRY", year=YIL, month=1, created_by="admin"))
-        db.commit()
-        diger = db.scalar(select(SmsRevenue.id).where(SmsRevenue.created_by == "ayse"))
+    with kullanici_oturumu("ayse") as k:
+        k.add(SmsRevenue(tam_name="Ayse Test", customer_name="Beta", project="X", amount=5, currency="TRY", year=YIL, month=1, created_by="ayse"))
+        k.commit()
+        diger = dis_kimlik(2, k.scalar(select(SmsRevenue.id)))
+    with kullanici_oturumu("admin") as k:
+        k.add(SmsRevenue(tam_name="Admin Kisi", customer_name="Alfa", project="Y", amount=7, currency="TRY", year=YIL, month=1, created_by="admin"))
+        k.commit()
     assert len(veri.get("/api/v1/gelir/sms").json()["data"]["items"]) == 2  # yonetici hepsi
     _cikis(veri, hdr)
     hdr = _giris(veri, monkeypatch, "TeamMember")
     assert [i["proje"] for i in veri.get("/api/v1/gelir/sms").json()["data"]["items"]] == ["Y"]
     assert veri.put(f"/api/v1/gelir/sms/{diger}", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 404
     assert veri.delete(f"/api/v1/gelir/sms/{diger}", headers=hdr).status_code == 404
+
+
+def test_gelir_tam_dosyasina_yazilir_ve_tam_degisince_tasinir(veri):
+    hdr = login_ok(veri)
+    r = veri.post("/api/v1/gelir/sms", json={"musteri": "Beta", "proje": "P", "tutar": 10, "tam": "Ayse Test"}, headers=hdr).json()["data"]
+    assert kimlik_coz(r["id"])[0] == 2 and kisi_say(SmsRevenue) == 1  # ayse'nin dosyasi
+    t = veri.put(f"/api/v1/gelir/sms/{r['id']}", json={"musteri": "Beta", "proje": "P", "tutar": 10, "tam": "Admin Kisi"}, headers=hdr).json()["data"]
+    assert kimlik_coz(t["id"])[0] == 1 and t["tam"] == "Admin Kisi" and kisi_say(SmsRevenue) == 1
+    with kullanici_oturumu("ayse") as k:
+        assert k.scalar(select(func.count()).select_from(SmsRevenue)) == 0
 
 
 def test_apn_kurulum_alanlari_ve_tarih_kurallari(veri):
@@ -315,8 +327,8 @@ def test_apn_kurulum_alanlari_ve_tarih_kurallari(veri):
     assert liste["toplam"] == 13000.0 and liste["teslim_edilen"] == 1 and liste["bekleyen"] == 1
     assert [i["talep_tarihi"] for i in liste["items"]] == ["2026-04-10", "2026-03-10"]  # en yeni ustte
     assert len(veri.get("/api/v1/gelir/apn/kurulum", params={"yil": 2025}).json()["data"]["items"]) == 0
-    with Session(engine()) as db:
-        a = db.scalar(select(ApnRevenue).where(ApnRevenue.id == d["id"]))
+    with kullanici_oturumu("admin") as k:
+        a = k.get(ApnRevenue, kimlik_coz(d["id"])[1])
         assert (a.year, a.month, a.currency) == (2026, 3, "TRY")  # donem teslim tarihinden
 
 
@@ -335,8 +347,7 @@ def test_apn_musteri_calismalari(veri):
     kid = r.json()["data"]["id"]
     assert veri.put(f"/api/v1/gelir/apn/calisma/{kid}", json={**govde, "toplanti_konusu": "Yeni"}, headers=hdr).json()["data"]["toplanti_konusu"] == "Yeni"
     assert veri.delete(f"/api/v1/gelir/apn/calisma/{kid}", headers=hdr).status_code == 200
-    with Session(engine()) as db:
-        assert db.scalar(select(func.count()).select_from(ApnWork)) == 1
+    assert kisi_say(ApnWork) == 1
 
 
 # --- Takvim ---------------------------------------------------------------------------------------------
@@ -350,11 +361,11 @@ def test_giris_yapan_kisi_takvim_listesine_dusar(client):
 
 def test_gun_ve_toplu_kayit_ile_ekip_ozeti(veri):
     hdr = login_ok(veri)  # 'admin' kisisi (id 1) kendi takvimini yazar
-    with Session(engine()) as db:
-        db.add(CalendarDay(user_id=2, day=date(YIL, 2, 3), status="yillik_izin"))
-        db.add(CalendarDay(user_id=2, day=date(YIL, 2, 4), status="arife_tatili"))
-        db.add(CalendarDay(user_id=2, day=date(YIL, 5, 5), status="raporlu"))  # farkli ceyrek
-        db.commit()
+    with kullanici_oturumu("ayse") as k:  # gunler kisinin kendi dosyasinda
+        k.add(CalendarDay(day=date(YIL, 2, 3), status="yillik_izin"))
+        k.add(CalendarDay(day=date(YIL, 2, 4), status="arife_tatili"))
+        k.add(CalendarDay(day=date(YIL, 5, 5), status="raporlu"))  # farkli ceyrek
+        k.commit()
     assert veri.put("/api/v1/takvim/gun", json={"tarih": f"{YIL}-02-02", "durum": "calisiyor", "online": 2, "yuzyuze": 1}, headers=hdr).status_code == 200
     assert veri.put("/api/v1/takvim/gun", json={"tarih": f"{YIL}-02-02", "durum": "yok"}, headers=hdr).status_code == 400
     assert veri.put("/api/v1/takvim/gun", json={"tarih": "bozuk", "durum": "calisiyor"}, headers=hdr).status_code == 400
@@ -380,15 +391,15 @@ def test_gun_ve_toplu_kayit_ile_ekip_ozeti(veri):
     assert veri.get("/api/v1/takvim/ekip/999", params={"yil": YIL, "ceyrek": 1}).status_code == 404
     # varsayilan gune geri donus kaydi siler
     veri.put("/api/v1/takvim/gun", json={"tarih": f"{YIL}-02-02", "durum": "calisiyor"}, headers=hdr)
-    with Session(engine()) as db:
-        assert db.scalar(select(CalendarDay).where(CalendarDay.user_id == 1, CalendarDay.day == date(YIL, 2, 2))) is None
+    with kullanici_oturumu("admin") as k:
+        assert k.scalar(select(CalendarDay).where(CalendarDay.day == date(YIL, 2, 2))) is None
 
 
 def test_sunuma_gonder_yalniz_yetkili_rol_ve_admin(veri, monkeypatch):
     hdr = login_ok(veri)
-    with Session(engine()) as db:
-        db.add(CalendarDay(user_id=2, day=date(YIL, 2, 3), status="yillik_izin"))
-        db.commit()
+    with kullanici_oturumu("ayse") as k:
+        k.add(CalendarDay(day=date(YIL, 2, 3), status="yillik_izin"))
+        k.commit()
     govde = {"yil": YIL, "ceyrek": 1, "gonder": True}
     _rol_ver(veri, hdr, yetkiler=[])
     # admin her zaman gonderebilir
@@ -419,9 +430,9 @@ def login_ok_admin(client, monkeypatch):
 
 def test_sunuma_gonderilen_ogeler_ceyrek_basina_tek_kayit(veri):
     hdr = login_ok(veri)
-    with Session(engine()) as db:
-        db.add(CalendarDay(user_id=2, day=date(YIL, 8, 3), status="raporlu"))
-        db.commit()
+    with kullanici_oturumu("ayse") as k:
+        k.add(CalendarDay(day=date(YIL, 8, 3), status="raporlu"))
+        k.commit()
     for _ in range(2):  # tekrar gonderim gunceller
         assert veri.post("/api/v1/takvim/sunuma-gonder", json={"yil": YIL, "ceyrek": 3, "gonder": True}, headers=hdr).status_code == 200
     ogeler = veri.get("/api/v1/sunum/ogeler").json()["data"]
@@ -485,12 +496,12 @@ def test_ornek_veri_tohumla_ve_yalniz_isaretlileri_temizle(client, monkeypatch):
         # sayaclar kayitlardan hesaplanir; top10'a yetecek cesitlilik
         assert db.scalar(select(func.count()).select_from(OnedeskRecord).where(OnedeskRecord.source == "ornek", OnedeskRecord.status == "closed")) > 250
         assert db.scalar(select(func.count(Customer.id)).where(Customer.alarm_count > 0)) >= 5
-        assert db.scalar(select(func.count()).select_from(SmsRevenue)) == 12 and db.scalar(select(func.count()).select_from(ApnWork)) == 10
+        assert kisi_say(SmsRevenue) == 12 and kisi_say(ApnWork) == 10 and kisi_say(CalendarDay) == sayilar["takvim_gunu"]
         silinen = ornek_veri.temizle(db)
         assert silinen["musteri"] == 15 and silinen["kisi"] == 6
         assert db.scalar(select(func.count()).select_from(Customer)) == 1  # gercek kayit dokunulmaz
         assert db.scalar(select(func.count()).select_from(OnedeskRecord)) == 1
-        assert db.scalar(select(func.count()).select_from(CalendarDay)) == 0 and not ornek_veri.var_mi(db)
+        assert kisi_say(CalendarDay) == 0 and kisi_say(SmsRevenue) == 0 and not ornek_veri.var_mi(db)
     monkeypatch.setenv("TAMLIFE_ENV", "uretim")
     assert ornek_veri.main([]) == 2  # dev disinda reddedilir
     monkeypatch.setenv("TAMLIFE_ENV", "test")

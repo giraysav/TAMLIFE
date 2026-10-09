@@ -2,6 +2,7 @@
 
 Yeni ekranlari (Musteri, Onedesk, ICT SMS, APN, TAM Takvim) bos veritabaninda gorebilmek icindir.
 - Yalniz TAMLIFE_ENV=dev iken calisir; uretim verisi kopyalanmaz, her sey tohumla (deterministik) uretilir.
+- Takvim ve gelir satirlari ilgili ornek kisinin kendi DB dosyasina yazilir.
 - Her satir isaretlidir: musteri external_key 'ORNEK-*', kullanici 'ornek.*', Onedesk source='ornek', gelir/calisma created_by='ornek'.
 - --temizle yalniz bu isaretli satirlari siler; baska hicbir kayda dokunmaz.
 """
@@ -16,8 +17,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.deps import engine
-from app.gateway import session_factory
+from app.db import kullanici_oturumu, mevcut_oturumlar, oturum
 from app.models import ApnRevenue, ApnWork, AppUser, CalendarDay, Customer, CustomerTeam, OnedeskRecord, Presentation, SmsRevenue
 from app.onedesk.ice_al import sayaclari_yenile
 
@@ -122,10 +122,11 @@ def tohumla(db: Session) -> dict[str, int]:
     db.flush()
     sayaclari_yenile(db, {c.id for c in musteriler})
 
-    # --- gelirler -----------------------------------------------------------------------------------
+    # --- gelirler (TAM'in kendi dosyasina) ------------------------------------------------------------
+    dosya: dict[str, list] = {k.username: [] for k in kisiler}
     for i in range(12):
         c = rng.choice(catilar)
-        db.add(
+        dosya[kisiler[i % len(kisiler)].username].append(
             SmsRevenue(
                 tam_name=kisiler[i % len(kisiler)].display_name, customer_name=c.name, project=rng.choice(SMS_PROJELERI), amount=float(rng.randint(8, 250) * 1000), currency="TRY",
                 year=bugun.year, month=rng.randint(1, bugun.month), created_by=ISARET, created_at=simdi,
@@ -136,29 +137,30 @@ def tohumla(db: Session) -> dict[str, int]:
         talep = _gun_ekle(rng, bugun - timedelta(days=150), bugun - timedelta(days=10))
         teslim = talep + timedelta(days=rng.randint(7, 40)) if rng.random() < 0.7 else None
         teslim = teslim if teslim and teslim <= bugun else None
-        db.add(
+        dosya[kisiler[i % len(kisiler)].username].append(
             ApnRevenue(
                 tam_name=kisiler[i % len(kisiler)].display_name, customer_name=c.name, amount=float(rng.randint(4, 90) * 1000), currency="TRY", apn_name=rng.choice(APN_ADLARI),
                 request_date=talep, delivery_date=teslim, year=(teslim or talep).year, month=(teslim or talep).month, created_by=ISARET, created_at=simdi,
             )
         )
-    for _ in range(10):
+    for i in range(10):
         c = rng.choice(catilar)
         toplanti = _gun_ekle(rng, bugun - timedelta(days=60), bugun)
-        db.add(
+        dosya[kisiler[i % len(kisiler)].username].append(
             ApnWork(
                 customer_name=c.name, meeting_subject=rng.choice(TOPLANTI_KONULARI), meeting_date=toplanti,
                 planned_date=toplanti + timedelta(days=rng.randint(5, 45)) if rng.random() < 0.8 else None, apn_name=rng.choice(APN_ADLARI), created_by=ISARET, created_at=simdi,
             )
         )
 
-    # --- takvim gunleri (kisi, gun) cifti benzersiz: bellekte tutulur, oturum autoflush'a guvenilmez ------------------
-    gunler: dict[tuple[int, date], CalendarDay] = {}
+    # --- takvim gunleri (gun kisi dosyasinda benzersiz: bellekte tutulur, oturum autoflush'a guvenilmez) ------------
+    gun_adedi = 0
     for k in kisiler:
+        gunler: dict[date, CalendarDay] = {}
         gun = yil_basi
         while gun <= bugun + timedelta(days=20):
             if gun.weekday() < 5 and rng.random() < 0.35:
-                gunler[(k.id, gun)] = CalendarDay(user_id=k.id, day=gun, status="calisiyor", online_count=rng.randint(0, 3), face_count=rng.randint(0, 2))
+                gunler[gun] = CalendarDay(day=gun, status="calisiyor", online_count=rng.randint(0, 3), face_count=rng.randint(0, 2))
             gun += timedelta(days=1)
         for durum, blok, adet in (("yillik_izin", 4, 2), ("sirket_izni", 1, 2), ("raporlu", 2, 1)):
             for _ in range(adet):
@@ -167,11 +169,15 @@ def tohumla(db: Session) -> dict[str, int]:
                     g = bas + timedelta(days=d)
                     if g.weekday() >= 5:
                         continue
-                    kayit = gunler.setdefault((k.id, g), CalendarDay(user_id=k.id, day=g))
+                    kayit = gunler.setdefault(g, CalendarDay(day=g))
                     kayit.status = durum
-    db.add_all(gunler.values())
-    gun_adedi = len(gunler)
+        dosya[k.username] += gunler.values()
+        gun_adedi += len(gunler)
     db.commit()
+    for ad, satirlar in dosya.items():
+        with kullanici_oturumu(ad) as kd:
+            kd.add_all(satirlar)
+            kd.commit()
     return {"musteri": len(musteriler), "kisi": len(kisiler), "onedesk": kayit_adedi, "takvim_gunu": gun_adedi}
 
 
@@ -180,10 +186,13 @@ def temizle(db: Session) -> dict[str, int]:
     sonuc: dict[str, int] = {}
     kisi_idleri = list(db.scalars(select(AppUser.id).where(AppUser.username.like(f"{ISARET}.%"))))
     musteri_idleri = list(db.scalars(select(Customer.id).where(Customer.external_key.like("ORNEK-%"))))
-    sonuc["takvim_gunu"] = db.execute(delete(CalendarDay).where(CalendarDay.user_id.in_(kisi_idleri or [-1]))).rowcount
+    sonuc["takvim_gunu"] = 0
+    for _, kd in mevcut_oturumlar(list(db.scalars(select(AppUser.username).where(AppUser.id.in_(kisi_idleri or [-1]))))):
+        sonuc["takvim_gunu"] += kd.execute(delete(CalendarDay)).rowcount
+        for model in (SmsRevenue, ApnRevenue, ApnWork):
+            kd.execute(delete(model).where(model.created_by == ISARET))
+        kd.commit()
     sonuc["onedesk"] = db.execute(delete(OnedeskRecord).where(OnedeskRecord.source == ISARET)).rowcount
-    for model in (SmsRevenue, ApnRevenue, ApnWork):
-        db.execute(delete(model).where(model.created_by == ISARET))
     db.execute(delete(Presentation).where(Presentation.sent_by.in_(KISILER)))
     db.execute(delete(CustomerTeam).where(CustomerTeam.customer_id.in_(musteri_idleri or [-1])))
     istirak = db.execute(delete(Customer).where(Customer.parent_id.in_(musteri_idleri or [-1]), Customer.external_key.like("ORNEK-%"))).rowcount  # once istirakler
@@ -201,7 +210,7 @@ def main(argv: list[str]) -> int:
     if os.environ.get("TAMLIFE_ENV", "") != "dev":
         print("Reddedildi: ornek veri yalniz TAMLIFE_ENV=dev ile yuklenir.")
         return 2
-    with session_factory(engine())() as db:
+    with oturum() as db:
         if "--temizle" in argv:
             print("Temizlendi:", temizle(db))
             return 0

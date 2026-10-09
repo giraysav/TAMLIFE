@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.authz import can_open
 from app.catalog import get
-from app.deps import get_db, require_user
+from app.db import get_db
+from app.deps import require_user
 from app.rolgorunum import etkin
 from app.session import Principal
 

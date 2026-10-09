@@ -5,7 +5,7 @@ import dataclasses
 from sqlalchemy import text
 
 from app import catalog, navigation, rolgorunum
-from app.deps import engine
+from app.db import engine
 from tests.conftest import login_ok
 
 
