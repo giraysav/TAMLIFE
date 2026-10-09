@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.authz import yonetici_mi
 from app.db import dis_kimlik, kimlik_coz, kullanici_dosyasi, kullanici_oturumu, mevcut_oturumlar
 from app.kullanicilar import kullanici_kaydi
 from app.models import ApnRevenue, ApnWork, AppUser, Customer, SmsRevenue
@@ -32,10 +33,6 @@ _BIN_AYRACLI = re.compile(r"^\d{1,3}(\.\d{3})+$")
 
 class GelirHata(UygulamaHatasi):
     """kod = HTTP durumu."""
-
-
-def yonetici_mi(user: Principal) -> bool:
-    return bool(user.is_admin or user.role in {"admin", "TeamMngr"})
 
 
 # --- dogrulama -------------------------------------------------------------------------------------

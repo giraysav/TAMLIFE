@@ -11,7 +11,6 @@ import re
 import uuid
 
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
-from sqlalchemy.orm import Session
 
 from app.ortak import simdi
 from app.yonetim.models import FaultEvent
@@ -61,7 +60,6 @@ def kaydet(
     kaynak: str = "",
     kullanici: str = "",
     seviye: str = "error",
-    db: Session | None = None,
 ) -> str:
     """Arizayi dosya gunlugune ve fault_event'e yazar; kayit numarasini doner. ASLA istisna firlatmaz."""
     kayit_no = uuid.uuid4().hex
@@ -89,15 +87,11 @@ def kaydet(
         status="open",
     )
     try:
-        if db is not None:
-            db.add(satir)
-            db.flush()
-        else:
-            from app.db import oturum
+        from app.db import oturum
 
-            with oturum() as yeni:
-                yeni.add(satir)
-                yeni.commit()
+        with oturum() as db:
+            db.add(satir)
+            db.commit()
     except Exception:  # noqa: BLE001 - ariza kaydi yazilamasa da yanit donmeli
         _log.warning("ariza kaydi veritabanina yazilamadi (kayit %s)", kayit_no[:8], exc_info=True)
     return kayit_no

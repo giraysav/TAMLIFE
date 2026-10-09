@@ -5,8 +5,6 @@ Bu modulden cikan JSON yalniz boolean ve ad icerir; gizli deger asla kopyalanmaz
 
 from __future__ import annotations
 
-import os
-
 from app.ad import directory
 from app.config import get_settings
 from app.external import SOURCES
@@ -58,13 +56,9 @@ def integrations() -> dict[str, object]:
             continue
         prefix = source.enabled_key.rsplit("_ENABLED", 1)[0]
         enabled = settings.present(source.enabled_key)
-        missing = [f"{prefix}_{s}" for s in _REQUIRED_SUFFIXES if not _present_name(f"{prefix}_{s}")] if enabled else []
+        missing = [f"{prefix}_{s}" for s in _REQUIRED_SUFFIXES if not settings.present(f"{prefix}_{s}")] if enabled else []
         state = "disabled" if not enabled else ("incomplete" if missing else "ready")
         items.append(
             {"id": source.id, "label": source.label, "state": state, "description": "Salt okunur dis kaynak", "missing": missing}
         )
     return {"items": items, "runtime": {"network": "kapali (canli baglanti yok)", "assets": "yerel"}}
-
-
-def _present_name(key: str) -> bool:
-    return bool(os.environ.get(key, "").strip())

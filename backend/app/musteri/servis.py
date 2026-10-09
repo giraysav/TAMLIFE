@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
-from app.authz import is_admin
+from app.authz import is_admin, yonetici_mi
 from app.gelir.servis import tum_gelirler, unvan_tasi
 from app.kullanicilar import kullanici_kaydi
 from app.models import (
@@ -74,11 +74,6 @@ def simdi() -> datetime:
 
 
 # --- yetki ve kapsam -------------------------------------------------------------------------
-def yonetici_mi(user: Principal) -> bool:
-    """Uretim yonetici_mi: admin ve TeamMngr tum portfoyu gorur ve silme/devir/final skor yetkisine sahiptir."""
-    return bool(is_admin(user) or user.role == "TeamMngr")
-
-
 def eylem_yetkisi(user: Principal, eylem: str) -> bool:
     """Uretim eylem_yetkisi: add/duzenle/sync modul erisimiyle gelir; delete, final_skor_atama, talep_yonetimi
     yalniz yonetici. (Moduli gorme kurali cagiranda: erisim kapisi.)"""

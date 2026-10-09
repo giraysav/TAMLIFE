@@ -34,3 +34,8 @@ def can_open(
 
 def is_admin(user: Principal) -> bool:
     return bool(user.is_admin or user.role == "admin")
+
+
+def yonetici_mi(user: Principal) -> bool:
+    """Uretim yonetici_mi: admin ve TeamMngr tum kayitlari gorur; silme/devir/final skor yetkisi."""
+    return bool(is_admin(user) or user.role == "TeamMngr")

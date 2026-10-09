@@ -37,10 +37,6 @@ class TakvimHata(UygulamaHatasi):
     """kod = HTTP durumu."""
 
 
-def yonetici_mi(user: Principal) -> bool:
-    return bool(user.is_admin or user.role in {"admin", "TeamMngr"})
-
-
 # --- donem -----------------------------------------------------------------------------------------
 def donem_araligi(yil: int, ceyrek: int) -> tuple[date, date]:
     """ceyrek 0 = tum yil; 1..4 = ceyrek. (baslangic, bitis dahil)"""

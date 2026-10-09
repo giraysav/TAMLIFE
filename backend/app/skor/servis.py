@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.authz import yonetici_mi
 from app.kullanicilar import kullanici_kaydi
 from app.models import (
     AffiliateFinalFlag,
@@ -44,9 +45,7 @@ def simdi() -> datetime:
     return datetime.now(UTC)
 
 
-def final_skor_yetkisi(user: Principal) -> bool:
-    """Uretim eylem_yetkisi('final_skor_atama'): yalniz admin ve TeamMngr."""
-    return bool(user.is_admin or user.role in {"admin", "TeamMngr"})
+final_skor_yetkisi = yonetici_mi  # uretim eylem_yetkisi('final_skor_atama'): yalniz admin ve TeamMngr
 
 
 # --- kriterler -------------------------------------------------------------------------------

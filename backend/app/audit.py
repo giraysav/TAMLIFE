@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections import deque
 from collections.abc import Callable
-from datetime import datetime, timezone
-
-from sqlalchemy.orm import Session
 
 FORBIDDEN = (
     "pin_code",
@@ -35,13 +31,12 @@ _log = logging.getLogger("tamlife.denetim")
 
 
 class AuditLog:
-    """Bellek halkasi (son 1000 olay) + istege bagli KALICI yazici (sink).
+    """Denetim olayini dogrular ve KALICI yaziciya (sink) verir.
 
     sink uygulama kurulurken verilir (yonetim.gunlukler.kalici_yaz); yazilamazsa istegi dusurmez.
     """
 
     def __init__(self) -> None:
-        self.events: deque[dict[str, str]] = deque(maxlen=1000)
         self.sink: Callable[[dict[str, str]], None] | None = None
 
     def remember(
@@ -52,7 +47,6 @@ class AuditLog:
         outcome: str,
         module_key: str = "",
         detail: str = "",
-        db: Session | None = None,
     ) -> dict[str, str]:
         row = {
             "actor": actor[:120],
@@ -61,25 +55,11 @@ class AuditLog:
             "module_key": module_key[:80],
             "detail": guard(detail),
         }
-        self.events.append(row)
-        if db is None and self.sink is not None:
+        if self.sink is not None:
             try:
                 self.sink(row)
             except Exception:  # noqa: BLE001 - denetim yazilamasa da istek dusmemeli
                 _log.warning("denetim olayi kalici yazilamadi", exc_info=True)
-        if db is not None:
-            from app.models import AuditEvent
-
-            db.add(
-                AuditEvent(
-                    at=datetime.now(timezone.utc),
-                    actor=row["actor"],
-                    action=row["action"],
-                    outcome=row["outcome"],
-                    module_key=row["module_key"],
-                    detail=row["detail"],
-                )
-            )
         return row
 
 

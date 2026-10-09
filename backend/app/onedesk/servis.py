@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, case, extract, func, literal, or_, select
 from sqlalchemy.orm import Session
 
+from app.authz import yonetici_mi
 from app.kullanicilar import kullanici_kaydi
 from app.models import Customer, OnedeskRecord
 from app.onedesk import rca, yz
@@ -27,10 +28,6 @@ RCA_ORNEKLEM = 20_000  # RCA analizi icin okunacak en fazla kapanan kayit
 
 class OnedeskHata(UygulamaHatasi):
     """kod = HTTP durumu."""
-
-
-def yonetici_mi(user: Principal) -> bool:
-    return bool(user.is_admin or user.role in {"admin", "TeamMngr"})
 
 
 def _yil(yil: int | None) -> int:
