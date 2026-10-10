@@ -213,6 +213,9 @@ def tani(bind: bool = False) -> int:
 
     from app.config import env_dosyasi_yukle
 
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")  # Windows konsol kod sayfasi
+
     env_dosyasi_yukle()
     try:
         ayar_dogrula()

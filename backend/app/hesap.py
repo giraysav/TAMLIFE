@@ -24,6 +24,8 @@ ROLLER = ("admin", "TeamMngr", "TeamMember")
 
 
 def main(argv: list[str]) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")  # Windows konsol kod sayfasinda olmayan harf (orn. ı) cokertmesin
     env_dosyasi_yukle()
     if not argv or argv[0] not in {"liste", "rol", "aktif", "pasif", "parola"}:
         print(__doc__)
