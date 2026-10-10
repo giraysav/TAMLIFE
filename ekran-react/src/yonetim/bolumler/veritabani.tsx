@@ -5,14 +5,58 @@ import type { Dil } from "@/shell/metin"
 import { Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
-import type { Veritabani as VeritabaniTipi, Yedek } from "@/yonetim/api"
+import type { Kaynak, Veritabani as VeritabaniTipi, Yedek } from "@/yonetim/api"
+import { OracleDurum, useBaglantiTesti } from "@/yonetim/tampon/kaynaklar"
 import { ym } from "@/yonetim/metin"
+import type { YM } from "@/yonetim/metin"
 import { Gosterge } from "@/yonetim/ui"
 import { zaman, bayt, sayi } from "@/lib/bicim"
 
 type Dogrulama = { tamam: boolean; butunluk: string }
 
-/** Veritabani: motor, sema surumu, butunluk, tablolar, yedek (al / dogrula). Geri yukleme bu surumde yok. */
+/** Dis veritabanlari (Oracle REPORTDB / ONENT / Urun-Tutar): yapilandirma, ReportDB tazeligi, son cekim, baglanti testi. */
+function DisVeritabanlari({ t }: { t: YM }) {
+  const q = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
+  const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
+  const test = useBaglantiTesti(t, setBilgi)
+  return (
+    <Bolum anahtar="yonetim-db-dis" baslik={t.disVeritabanlari}>
+      <div className="grid gap-3">
+        <p className="text-[11px] font-bold text-slate-500">{t.disVeritabaniNotu}</p>
+        {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
+        {q.isPending ? (
+          <Yukleniyor metin={t.yukleniyor} iskelet />
+        ) : q.isError ? (
+          <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
+        ) : (
+          <VeriTablosu<Kaynak>
+            baslik={t.disVeritabanlari}
+            satirlar={q.data.filter((k) => k.tur === "oracle")}
+            anahtar={(k) => k.anahtar}
+            kolonlar={[
+              {
+                baslik: t.disVeritabanlari,
+                hucre: (k) => (
+                  <span className="grid">
+                    <span className="font-black text-tl-navy">{k.ad}</span>
+                    <code className="text-[10px] text-slate-400">{k.anahtar}</code>
+                  </span>
+                ),
+              },
+              { baslik: t.durum, hucre: (k) => <OracleDurum k={k} t={t} test={test} /> },
+              {
+                baslik: t.sonParti,
+                hucre: (k) => (k.son ? <span className="whitespace-nowrap">#{k.son.id} · {t.partiDurum[k.son.durum] ?? k.son.durum} · {zaman(k.son.zaman)}</span> : "—"),
+              },
+            ]}
+          />
+        )}
+      </div>
+    </Bolum>
+  )
+}
+
+/** Veritabani: motor, sema surumu, butunluk, tablolar, yedek (al / dogrula), dis veritabanlari. Geri yukleme bu surumde yok. */
 export default function Veritabani({ dil }: { dil: Dil }) {
   const t = ym(dil)
   const qc = useQueryClient()
@@ -61,6 +105,8 @@ export default function Veritabani({ dil }: { dil: Dil }) {
       </div>
 
       {d.eksik_tablolar.length > 0 ? <Bildirim ton="amber">{t.eksikTablo(d.eksik_tablolar.length)}</Bildirim> : null}
+
+      <DisVeritabanlari t={t} />
 
       <Bolum anahtar="yonetim-db-yedek" baslik={t.yedek}>
         <div className="grid gap-3">

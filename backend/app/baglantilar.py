@@ -13,10 +13,10 @@ from app.external import SOURCES, acik_mi, oracle_eksikleri
 def connections() -> list[dict[str, object]]:
     """AD, ORACLE_REPORTDB (Onedesk DB), ONENT, URUNTUTAR. configured = *_ENABLED=true (uretimle ayni kural)."""
     return [
-        {"id": "ad", "slot": "AD", "configured": directory.configured()},
-        {"id": "oracle_reportdb", "slot": "ORACLE_REPORTDB", "configured": acik_mi("ORACLE_REPORTDB_ENABLED")},
-        {"id": "onent", "slot": "ONENT", "configured": acik_mi("ONENTDB_DB_ENABLED")},
-        {"id": "uruntutar", "slot": "URUNTUTAR", "configured": acik_mi("URUNTUTAR_DB_ENABLED")},
+        {"id": "ad", "slot": "AD", "tur": "dizin", "configured": directory.configured()},
+        {"id": "oracle_reportdb", "slot": "ORACLE_REPORTDB", "tur": "veritabani", "configured": acik_mi("ORACLE_REPORTDB_ENABLED")},
+        {"id": "onent", "slot": "ONENT", "tur": "veritabani", "configured": acik_mi("ONENTDB_DB_ENABLED")},
+        {"id": "uruntutar", "slot": "URUNTUTAR", "tur": "veritabani", "configured": acik_mi("URUNTUTAR_DB_ENABLED")},
     ]
 
 
@@ -31,7 +31,7 @@ def integrations() -> dict[str, object]:
             "id": "ad",
             "label": "AD / LDAP",
             "state": "ready" if ad_on else ("incomplete" if ad_missing and settings.present("AD_ENABLED") else "disabled"),
-            "description": "Kullanici dogrulama (bind bu surumde kapali)",
+            "description": "Kullanici dogrulama (LDAPS, kullanicinin kendi bind'i)",
             "missing": ad_missing if settings.present("AD_ENABLED") else [],
         }
     )

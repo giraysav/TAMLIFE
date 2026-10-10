@@ -2,7 +2,7 @@
 export type Durum3 = "ok" | "uyari" | "hata"
 
 export type Kontrol = { id: string; durum: Durum3; ayrinti: string; veri: Record<string, unknown> }
-export type Baglanti = { id: string; slot: string; configured: boolean }
+export type Baglanti = { id: string; slot: string; tur: "dizin" | "veritabani"; configured: boolean }
 export type Ozet = {
   saglik: { genel: Durum3; zaman: string; kontroller: Kontrol[] }
   gostergeler: {

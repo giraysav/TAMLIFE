@@ -56,7 +56,9 @@ const TR = {
   baglantilar: "Kurum bağlantıları",
   ayarli: "ayarlı",
   ayarsiz: "ayarlı değil",
-  baglantiNotu: "Canlı bağlantılar bu sürümde kapalıdır; yalnız yapılandırma durumu gösterilir.",
+  baglantiNotu: "Dış veritabanları (Oracle) Veritabanı sekmesinde.",
+  disVeritabanlari: "Dış veritabanları",
+  disVeritabaniNotu: "Canlı Oracle bağlantısı yalnız offline sunucuda, oradaki .env ile açılır; çekimi işçi süreç yapar (panel bağlanmaz).",
 
   // Veritabanı
   motor: "Motor",
@@ -294,7 +296,9 @@ const EN: typeof TR = {
   baglantilar: "Corporate connections",
   ayarli: "configured",
   ayarsiz: "not configured",
-  baglantiNotu: "Live connections are off in this version; only configuration status is shown.",
+  baglantiNotu: "External databases (Oracle) are on the Database tab.",
+  disVeritabanlari: "External databases",
+  disVeritabaniNotu: "Live Oracle connections are enabled only on the offline server via its .env; a worker process pulls the data (the panel never connects).",
 
   motor: "Engine",
   dosya: "File",

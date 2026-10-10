@@ -6,6 +6,7 @@ import { sorguMetni } from "@/lib/sorgu"
 import type { Katalog, KuralGovdesi, Ozet } from "@/yonetim/api"
 import Arizalar from "@/yonetim/bolumler/arizalar"
 import Durum from "@/yonetim/bolumler/durum"
+import Veritabani from "@/yonetim/bolumler/veritabani"
 import { ym } from "@/yonetim/metin"
 import { Kaynaklar, kaynakAdiOner } from "@/yonetim/tampon/kaynaklar"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
@@ -88,8 +89,8 @@ const OZET: Ozet = {
     tampon: { hazir_parti: 1, kural: 2, kural_etkin: 1, son: null },
   },
   baglantilar: [
-    { id: "ad", slot: "AD", configured: false },
-    { id: "oracle_reportdb", slot: "ORACLE_REPORTDB", configured: true },
+    { id: "ad", slot: "AD", tur: "dizin", configured: false },
+    { id: "oracle_reportdb", slot: "ORACLE_REPORTDB", tur: "veritabani", configured: true },
   ],
 }
 
@@ -104,7 +105,7 @@ describe("Genel Durum", () => {
     expect(screen.getAllByText("Tamam").length).toBe(2)
     expect(screen.getByText("Uyarı")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /Açık arıza/ })).toHaveAttribute("href", "#/yonetim/arizalar")
-    expect(screen.getByText("ORACLE_REPORTDB · ayarlı")).toBeInTheDocument()
+    expect(screen.queryByText("ORACLE_REPORTDB · ayarlı")).not.toBeInTheDocument() // dis veritabanlari Veritabani sekmesinde
     expect(screen.getByText("AD · ayarlı değil")).toBeInTheDocument()
   })
 
@@ -272,5 +273,28 @@ describe("Veri Girisi kaynaklari", () => {
     fireEvent.click(dugmeler[0])
     expect(await screen.findByText(/ORA-12541: \*\*\* — Dinleyiciye/)).toBeTruthy()
     expect(cagrilar.some((c) => c.endsWith("/api/v1/tampon/kaynaklar/oracle_reportdb/test"))).toBe(true)
+  })
+})
+
+describe("Veritabani", () => {
+  it("dis veritabanlari (yalniz Oracle) Veritabani sekmesinde listelenir", async () => {
+    const t = ym("tr")
+    const kaynak = { neden: "", eksik: [], parti_sayisi: 0, son: null }
+    sahteSunucu({
+      "/api/v1/yonetim/veritabani": {
+        motor: "sqlite", dosya: "dev.db", boyut_bayt: 1024, disk_serbest_bayt: 2048, surum: "0002_ad_kimlik", hedef_surum: "0002_ad_kimlik",
+        surum_uyumlu: true, eksik_tablolar: [], tablolar: [], toplam_satir: 0, butunluk: "ok",
+        yedek: { dizin: "yedek", desteklenir: true, saklanan: 30, adet: 0, liste: [] },
+      },
+      "/api/v1/tampon/kaynaklar": [
+        { ...kaynak, anahtar: "csv", ad: "CSV yükleme", tur: "dosya", hazir: true, yapilandirma: "tamam" },
+        { ...kaynak, anahtar: "oracle_reportdb", ad: "Onedesk / REPORTDB", tur: "oracle", hazir: false, yapilandirma: "kapalı", eksik: ["ORACLE_REPORTDB_PASSWORD"] },
+      ],
+    })
+    sarmala(<Veritabani dil="tr" />)
+    expect(await screen.findByText("Onedesk / REPORTDB")).toBeInTheDocument()
+    expect(screen.getAllByText(t.disVeritabanlari).length).toBeGreaterThan(0)
+    expect(screen.queryByText("CSV yükleme")).not.toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`${t.eksikAnahtar}: ORACLE_REPORTDB_PASSWORD`))).toBeInTheDocument()
   })
 })

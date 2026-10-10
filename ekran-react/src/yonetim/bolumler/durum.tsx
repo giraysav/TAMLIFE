@@ -88,7 +88,7 @@ export default function Durum({ dil }: { dil: Dil }) {
 
       <Bolum anahtar="yonetim-durum-baglantilar" baslik={t.baglantilar}>
         <ul className="flex flex-wrap gap-2">
-          {baglantilar.map((b) => (
+          {baglantilar.filter((b) => b.tur !== "veritabani").map((b) => (
             <li key={b.id}>
               <Rozet ton={b.configured ? "yesil" : "gri"}>
                 {b.slot} · {b.configured ? t.ayarli : t.ayarsiz}

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import type { UseMutationResult } from "@tanstack/react-query"
 import { FlaskConical, PlugZap, Upload } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
@@ -7,11 +8,48 @@ import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, sorguMetni, yaz, yukle } from "@/lib/sorgu"
 import type { BaglantiTesti, Kaynak, Parti } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
+import type { YM } from "@/yonetim/metin"
 import { zaman } from "@/lib/bicim"
 
 /** Dosya adindan onerilen kaynak adi: 'alarm-ozeti_2026-10.csv' -> 'alarm-ozeti'. */
 export function kaynakAdiOner(dosya: string): string {
   return dosya.replace(/\.[A-Za-z0-9]+$/, "").replace(/[_-]?\d{4}[-_.]?\d{0,2}[-_.]?\d{0,2}$/, "")
+}
+
+type Bilgi = { ton: "yesil" | "amber"; metin: string }
+
+/** Oracle baglanti testi (alt surecte, sonuc maskeli); sonuc bildirime yazilir. */
+export function useBaglantiTesti(t: YM, setBilgi: (b: Bilgi) => void) {
+  return useMutation({
+    mutationFn: (anahtar: string) => yaz<BaglantiTesti>("POST", `/api/v1/tampon/kaynaklar/${encodeURIComponent(anahtar)}/test`),
+    onSuccess: (s) => setBilgi({ ton: s.ok ? "yesil" : "amber", metin: [s.mesaj, s.ipucu].filter(Boolean).join(" — ") }),
+    onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
+  })
+}
+
+/** Oracle kaynagi durumu: hazir/kapali, eksik anahtar, ReportDB tazeligi, baglanti testi (Veri Girisi ve Veritabani ortak). */
+export function OracleDurum({ k, t, test }: { k: Kaynak; t: YM; test: UseMutationResult<BaglantiTesti, Error, string> }) {
+  return (
+    <span className="grid justify-items-start gap-0.5">
+      <Rozet ton={k.hazir ? "yesil" : "gri"}>{k.hazir ? t.canliHazir : t.canliKapali}</Rozet>
+      <span className="text-[10px] text-slate-400">
+        {t.yapilandirma[k.yapilandirma]}
+        {k.eksik.length ? ` · ${t.eksikAnahtar}: ${k.eksik.join(", ")}` : ""}
+      </span>
+      {k.reportdb ? (
+        <span className="text-[10px] text-slate-400">
+          {t.kartlaraYaz(k.reportdb.kartlara_yaz)}
+          {k.reportdb.yas_dk !== null ? ` · ${t.sonVeriYasi(k.reportdb.yas_dk, k.reportdb.taze)}` : ""}
+        </span>
+      ) : null}
+      {k.hazir ? (
+        <button type="button" className={DUGME} disabled={test.isPending} onClick={() => test.mutate(k.anahtar)}>
+          <PlugZap aria-hidden className="size-3.5" />
+          {test.isPending && test.variables === k.anahtar ? t.testEdiliyor : t.baglantiTesti}
+        </button>
+      ) : null}
+    </span>
+  )
 }
 
 export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti: Parti) => void }) {
@@ -20,7 +58,7 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
   const dosyaGirdisi = useRef<HTMLInputElement>(null)
   const [dosya, setDosya] = useState<File | null>(null)
   const [ad, setAd] = useState("")
-  const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
+  const [bilgi, setBilgi] = useState<Bilgi | null>(null)
   const q = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
 
   const yenile = () => {
@@ -50,11 +88,7 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
     onSuccess: partiSonucu,
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
   })
-  const test = useMutation({
-    mutationFn: (anahtar: string) => yaz<BaglantiTesti>("POST", `/api/v1/tampon/kaynaklar/${encodeURIComponent(anahtar)}/test`),
-    onSuccess: (s) => setBilgi({ ton: s.ok ? "yesil" : "amber", metin: [s.mesaj, s.ipucu].filter(Boolean).join(" — ") }),
-    onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
-  })
+  const test = useBaglantiTesti(t, setBilgi)
 
   return (
     <Bolum anahtar="yonetim-tampon-kaynaklar" baslik={t.kaynaklar}>
@@ -122,25 +156,7 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
                 baslik: t.durum,
                 hucre: (k) =>
                   k.tur === "oracle" ? (
-                    <span className="grid justify-items-start gap-0.5">
-                      <Rozet ton={k.hazir ? "yesil" : "gri"}>{k.hazir ? t.canliHazir : t.canliKapali}</Rozet>
-                      <span className="text-[10px] text-slate-400">
-                        {t.yapilandirma[k.yapilandirma]}
-                        {k.eksik.length ? ` · ${t.eksikAnahtar}: ${k.eksik.join(", ")}` : ""}
-                      </span>
-                      {k.reportdb ? (
-                        <span className="text-[10px] text-slate-400">
-                          {t.kartlaraYaz(k.reportdb.kartlara_yaz)}
-                          {k.reportdb.yas_dk !== null ? ` · ${t.sonVeriYasi(k.reportdb.yas_dk, k.reportdb.taze)}` : ""}
-                        </span>
-                      ) : null}
-                      {k.hazir ? (
-                        <button type="button" className={DUGME} disabled={test.isPending} onClick={() => test.mutate(k.anahtar)}>
-                          <PlugZap aria-hidden className="size-3.5" />
-                          {test.isPending && test.variables === k.anahtar ? t.testEdiliyor : t.baglantiTesti}
-                        </button>
-                      ) : null}
-                    </span>
+                    <OracleDurum k={k} t={t} test={test} />
                   ) : (
                     <Rozet ton="yesil">{t.yapilandirma.tamam}</Rozet>
                   ),
