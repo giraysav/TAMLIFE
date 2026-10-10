@@ -7,7 +7,10 @@ import os
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from app.config import env_dosyasi_yukle
 from app.models import Base
+
+env_dosyasi_yukle()  # backend/.env: TAMLIFE_DATABASE_URL orada olabilir (ortami ezmez)
 
 target_metadata = Base.metadata
 

@@ -79,6 +79,9 @@ class AppUser(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # panele son giris; TAM Takvim listesi
+    is_ad_user: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))  # giris yalniz AD'den; yerel parolaya dusmez
+    ad_domain: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)  # yalniz yerel acil hesap (scrypt); AD kullanicisinda bos
 
 
 class AuditEvent(Base):

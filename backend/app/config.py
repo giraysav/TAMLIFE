@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,11 +23,6 @@ AD_LDAP_KEYS: tuple[str, ...] = (
     "AD_ARAMA_KOKU",
     "AD_OTOMATIK_AC",
 )
-
-
-def _slot(alias: str):
-    secret = alias.endswith(("PASSWORD", "API_KEY"))
-    return Field(default="", validation_alias=alias, repr=not secret)
 
 
 class Settings(BaseSettings):
@@ -70,7 +66,18 @@ class Settings(BaseSettings):
     local_password: str = Field(default="", repr=False)
     local_role: str = "TeamMember"
 
-    ad_enabled: str = _slot("AD_ENABLED")  # diger AD/Oracle anahtarlari yalniz doluluk icin okunur: present()
+    # AD/LDAPS (eski servisle ayni AD_* adlari; degerler backend/.env). Bind kullanicinin kendi hesabiyla: servis hesabi ve sir yok.
+    ad_enabled: str = Field(default="false", validation_alias="AD_ENABLED")
+    ad_server: str = Field(default="", validation_alias="AD_SERVER")  # ldaps://dc.alan:636
+    ad_domain: str = Field(default="", validation_alias="AD_DOMAIN")  # UPN alani: kisa ad -> kisa@AD_DOMAIN
+    ad_use_ssl: str = Field(default="true", validation_alias="AD_USE_SSL")
+    ad_ca_cert_file: str = Field(default="", validation_alias="AD_CA_CERT_FILE")  # kurum ara+kok CA (.pem); bos = Windows kok deposu
+    ad_izinli_alanlar: str = Field(default="", validation_alias="AD_IZINLI_ALANLAR")  # virgullu; AD_DOMAIN her zaman dahil
+    ad_alan_kontrolu: str = Field(default="zorunlu", validation_alias="AD_ALAN_KONTROLU")  # izle | zorunlu
+    ad_kimlik_kontrolu: str = Field(default="izle", validation_alias="AD_KIMLIK_KONTROLU")  # izle | zorunlu (Who-Am-I eslesmesi)
+    ad_izinli_gruplar: str = Field(default="", validation_alias="AD_IZINLI_GRUPLAR")  # noktali virgulle ayrilmis grup DN; doluysa AD_ARAMA_KOKU zorunlu
+    ad_arama_koku: str = Field(default="", validation_alias="AD_ARAMA_KOKU")
+    ad_otomatik_ac: str = Field(default="true", validation_alias="AD_OTOMATIK_AC")  # AD'de dogrulanan, panelde olmayan kisi TeamMember acilir
 
     @property
     def cookie_secure_effective(self) -> bool:
@@ -100,6 +107,29 @@ class Settings(BaseSettings):
         if key not in allowed:
             raise KeyError(key)
         return bool(os.environ.get(key, "").strip())
+
+
+ENV_DOSYASI = Path(__file__).resolve().parents[1] / ".env"  # backend/.env (git disi; sir burada durur, kodda degil)
+
+
+def env_dosyasi_yukle(yol: Path | None = None) -> None:
+    """backend/.env (ya da TAMLIFE_ENV_DOSYASI) satirlarini ortama ekler; var olan ortam degiskenini EZMEZ. Degerler hic yazdirilmaz.
+
+    Testte (TAMLIFE_ENV=test) yol verilmedikce okunmaz: yerel .env test sonucunu degistirmesin.
+    """
+    if yol is None and os.environ.get("TAMLIFE_ENV") == "test":
+        return
+    dosya = Path(yol or os.environ.get("TAMLIFE_ENV_DOSYASI") or ENV_DOSYASI)
+    if not dosya.is_file():
+        return
+    for satir in dosya.read_text(encoding="utf-8-sig").splitlines():
+        satir = satir.strip()
+        if not satir or satir.startswith("#") or "=" not in satir:
+            continue
+        ad, deger = (p.strip() for p in satir.split("=", 1))
+        if len(deger) >= 2 and deger[0] == deger[-1] and deger[0] in "\"'":
+            deger = deger[1:-1]
+        os.environ.setdefault(ad, deger)
 
 
 def get_settings() -> Settings:

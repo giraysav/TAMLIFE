@@ -18,3 +18,4 @@ data/reports/
 
 # calisma verisi: panel loglari, yedekler, SQLite, eski uretim geri alma kopyalari (sir icerebilir)
 backend/var/
+!backend/.env.example

@@ -1,0 +1,61 @@
+; TAM Life - sertifika istegi (CSR) sablonu
+;
+; NEDEN VAR: 2026-09-22'de alinan sertifikanin ozel anahtari DISA
+; AKTARILAMAZ uretilmisti (certreq -new varsayilani). Export-PfxCertificate
+; "Cannot export non-exportable private key" veriyor ve dagitici.py anahtarin
+; kendisine ihtiyac duyuyor (Python ssl modulu Windows deposundaki kilitli
+; anahtari kullanamaz). Asagidaki "Exportable = TRUE" satiri bunu cozer.
+;
+; KULLANIMI (offline sunucuda, yukseltilmis PowerShell):
+;   certreq -new E:\TAM_Life\kurulum\sertifika\yeni_istek.inf C:\Secure_DB\sertifika\tamlife_yeni.csr
+; Cikan .csr dosyasini kurumsal CA'ya verin. Gelen sertifikayi:
+;   certreq -accept C:\Secure_DB\sertifika\tamlife_yeni.cer
+; Sonra PFX olarak disa aktarin (bu kez calisir):
+;   Export-PfxCertificate -Cert Cert:\LocalMachine\My\<PARMAKIZI> `
+;       -FilePath C:\Secure_DB\sertifika\tamlife.pfx -Password $sifre -ChainOption BuildChain
+;
+; Subject ve SAN, 2026-09'da alinan sertifikayla BIREBIR AYNI tutuldu:
+; tamlife.csr dosyasindaki degerler. 172.28.100.7 listeden cikarilirsa
+; IP ile baglanan istemciler sertifika hatasi alir.
+
+[Version]
+Signature = "$Windows NT$"
+
+[NewRequest]
+Subject = "CN=tamlife.turkcell.entp.tgc, O=Turkcell, L=Istanbul, C=TR"
+
+; ASIL FARK: anahtar disa aktarilabilir uretilir. Bu satir olmadan
+; certreq anahtari kilitli olusturur ve PFX'e hic cikmaz.
+Exportable = TRUE
+
+KeyAlgorithm = RSA
+KeyLength = 2048
+HashAlgorithm = SHA256
+
+; Anahtar bilgisayar deposunda (servis hesabi okuyabilsin), kullanici
+; deposunda degil.
+MachineKeySet = TRUE
+
+; Eski CSP bilerek secildi: Exportable = TRUE ile en sorunsuz calisan
+; saglayici bu. CNG saglayicilarinda disa aktarim politikasi ayrica
+; kisitlanabiliyor.
+ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
+ProviderType = 12
+KeySpec = 1
+
+; Digital Signature + Key Encipherment (TLS sunucusu icin gereken ikili)
+KeyUsage = 0xA0
+
+RequestType = PKCS10
+FriendlyName = "TAM Life - tamlife.turkcell.entp.tgc"
+
+[EnhancedKeyUsageExtension]
+; serverAuth
+OID = 1.3.6.1.5.5.7.3.1
+
+[Extensions]
+; subjectAltName - ALLOWED_HOSTS ile ayni uclu
+2.5.29.17 = "{text}"
+_continue_ = "dns=tamlife.turkcell.entp.tgc&"
+_continue_ = "dns=tamlife&"
+_continue_ = "ipaddress=172.28.100.7&"

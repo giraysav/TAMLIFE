@@ -9,8 +9,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app import ad
 from app.audit import audit_log
-from app.config import get_settings
+from app.config import env_dosyasi_yukle, get_settings
 from app.gelir.api import router as gelir_router
 from app.katalog_api import router as katalog_router
 from app.musteri.api import router as musteri_router
@@ -34,6 +35,8 @@ async def uygulama_hatasi(_: Request, exc: UygulamaHatasi) -> JSONResponse:
 
 
 def create_app() -> FastAPI:
+    env_dosyasi_yukle()  # backend/.env (git disi): AD_* ve diger baglanti ayarlari; var olan ortami ezmez
+    ad.ayar_dogrula()  # AD acik ama ayar guvensiz/eksikse panel ACILMAZ
     settings = get_settings()
     dev = settings.env in {"dev", "test"}
     app = FastAPI(
