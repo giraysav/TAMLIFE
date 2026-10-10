@@ -22,7 +22,7 @@ import type { Kullanici, MenuOgesi } from "@/lib/oturum"
 import { Arama } from "@/shell/arama"
 import { IKON } from "@/shell/ikon"
 import { KullaniciKarti } from "@/shell/kullanici-karti"
-import { metin } from "@/shell/metin"
+import { metin, yerelMenu } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { ModulSayfasi } from "@/shell/modul-sayfasi"
 import { ProfilSayfasi } from "@/shell/profil-sayfasi"
@@ -204,8 +204,10 @@ function Menu({ kullanici, dil, secili, onSec, onDil, onCikis, talepVar }: MenuP
 
 type Props = { kullanici: Kullanici; dil: Dil; onDil: (dil: Dil) => void; onCikis: () => void }
 
-export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
+export function Panel({ kullanici: oturum, dil, onDil, onCikis }: Props) {
   const t = metin(dil)
+  /** Sunucu etiketleri (modul adi, aciklama) bir kez dile cevrilir; asagidaki her kullanim bu listeyi gorur. */
+  const kullanici = useMemo(() => ({ ...oturum, navigation: yerelMenu(oturum.navigation, dil) }), [oturum, dil])
   const [secili, setSecili] = useState(() => hashId() || "ozet")
   const icerik = useRef<HTMLElement>(null)
   /** Yonetim disindaki admin alanlari (orn. TAM Utilizasyon): Yonetim sayfasinin altinda baglanti olarak gorunur. */
@@ -265,9 +267,8 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
   }, [aktif])
 
   useEffect(() => {
-    document.documentElement.lang = dil
     document.title = `${aktif === "ozet" ? t.genelBakis : (baslik ?? "")} · TAM Life`
-  }, [dil, aktif, baslik, t.genelBakis])
+  }, [aktif, baslik, t.genelBakis])
 
   function sec(id: string) {
     window.location.hash = `#/${id}`
@@ -296,7 +297,7 @@ export function Panel({ kullanici, dil, onDil, onCikis }: Props) {
             <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} dugmeSinifi={UST_BAR_DUGME} />
           </div>
         </header>
-        <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+        <main className={`flex flex-1 flex-col gap-6 p-4 sm:p-6 ${aktif === "ozet" ? "!pb-3" : ""}`}>
           <Suspense fallback={<p className="text-sm text-muted-foreground">{t.yukleniyor}</p>}>
           {aktif === "ozet" ? (
             <OzetOrbit dil={dil} onGit={sec} />

@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { apiYolu, csrfBasliklari } from "@/lib/http"
 
+/** `*_en`: arayuz English iken gosterilen ad/aciklama (catalog.py); eski sunucuda yoksa TR kullanilir. */
 export type AltOge = {
   id: string
   label: string
+  label_en?: string
   description: string
+  description_en?: string
   ready: boolean
 }
 
-export type MenuOgesi = {
-  id: string
-  label: string
-  description: string
+export type MenuOgesi = AltOge & {
   group: "work" | "insights" | "admin"
   icon: string
-  ready: boolean
   children: AltOge[]
 }
 

@@ -6,10 +6,6 @@ import type { MenuOgesi } from "@/lib/oturum"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
-function tr(s: string) {
-  return s.toLocaleLowerCase("tr-TR")
-}
-
 /** Ctrl/Cmd+K ile acilan menu aramasi. Yalniz yetkili ogeler listelenir. */
 export function Arama({ ogeler, dil, onGit, dugmeSinifi }: { ogeler: MenuOgesi[]; dil: Dil; onGit: (id: string) => void; dugmeSinifi?: string }) {
   const t = metin(dil)
@@ -37,7 +33,8 @@ export function Arama({ ogeler, dil, onGit, dugmeSinifi }: { ogeler: MenuOgesi[]
     } else if (d.open) d.close()
   }, [acik])
 
-  const sonuc = ogeler.filter((o) => tr(`${o.label} ${o.description}`).includes(tr(sorgu)))
+  const kucuk = (s: string) => s.toLocaleLowerCase(dil === "en" ? "en-US" : "tr-TR")
+  const sonuc = ogeler.filter((o) => kucuk(`${o.label} ${o.description}`).includes(kucuk(sorgu)))
 
   return (
     <>

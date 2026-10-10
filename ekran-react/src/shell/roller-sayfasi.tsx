@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { oku, yaz } from "@/lib/sorgu"
-import { metin } from "@/shell/metin"
+import { metin, yerel } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
 type Rol = { role: string; label: string; editable: boolean; modules: string[]; landing: string; permissions: string[]; saved: boolean }
-type Katalog = { id: string; label: string; admin_only: boolean; children: { id: string; label: string }[] }
-type Yetki = { id: string; label: string }
-type Veri = { roles: Rol[]; catalog: Katalog[]; permission_catalog: Yetki[] }
+type Etiket = { id: string; label: string; label_en?: string }
+type Katalog = Etiket & { admin_only: boolean; children: Etiket[] }
+type Veri = { roles: Rol[]; catalog: Katalog[]; permission_catalog: Etiket[] }
 
 /** Rol Yonetimi: admin her rolun gorecegi sayfalari ve giris sayfasini belirler. Sunucu da ayni kurali zorlar. */
 export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boolean }) {
@@ -67,11 +67,12 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
   }
 
   const kimlikler = veri.catalog.flatMap((m) => [m.id, ...m.children.map((c) => c.id)])
+  const ad = (o: Etiket) => yerel(dil, o.label, o.label_en)
   const etiket = (kimlik: string) => {
     for (const m of veri.catalog) {
-      if (m.id === kimlik) return m.label
+      if (m.id === kimlik) return ad(m)
       const c = m.children.find((x) => x.id === kimlik)
-      if (c) return `${m.label} › ${c.label}`
+      if (c) return `${ad(m)} › ${ad(c)}`
     }
     return kimlik
   }
@@ -103,7 +104,7 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
                               checked={!!tas?.modules.has(m.id)}
                               onChange={(e) => degistir(r.role, m.id, e.target.checked)}
                             />
-                            {m.label}
+                            {ad(m)}
                           </label>
                           {m.children.map((c) => (
                             <label key={c.id} className="ml-6 flex items-center gap-2 text-sm">
@@ -113,7 +114,7 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
                                 checked={!!tas?.modules.has(c.id)}
                                 onChange={(e) => degistir(r.role, c.id, e.target.checked)}
                               />
-                              {c.label}
+                              {ad(c)}
                             </label>
                           ))}
                         </div>
@@ -132,7 +133,7 @@ export function RollerSayfasi({ dil, saltOkunur }: { dil: Dil; saltOkunur: boole
                               checked={!!tas?.permissions.has(y.id)}
                               onChange={(e) => yetkiDegistir(r.role, y.id, e.target.checked)}
                             />
-                            {y.label}
+                            {ad(y)}
                           </label>
                         ))}
                       </fieldset>

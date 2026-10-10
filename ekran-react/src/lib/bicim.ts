@@ -1,7 +1,14 @@
-/** Gosterim bicimleri (tr-TR). Sunucu ISO tarih/zaman verir; ekranda yerel bicim kullanilir. */
+/** Gosterim bicimleri. Sunucu ISO tarih/zaman verir; ekranda arayuz dilinin bicimi kullanilir (varsayilan tr-TR). */
+
+let yerel = "tr-TR"
+
+/** Arayuz dili degisince App cagirir: sayi, para, tarih ve sure bicimleri dile uyar. */
+export function bicimDili(dil: "tr" | "en") {
+  yerel = dil === "en" ? "en-GB" : "tr-TR"
+}
 
 export function sayi(n: number | null | undefined): string {
-  return n === null || n === undefined ? "—" : n.toLocaleString("tr-TR")
+  return n === null || n === undefined ? "—" : n.toLocaleString(yerel)
 }
 
 const SEMBOL: Record<string, string> = { TRY: "₺", USD: "$", EUR: "€" }
@@ -9,7 +16,7 @@ const SEMBOL: Record<string, string> = { TRY: "₺", USD: "$", EUR: "€" }
 /** 12500.5 -> "12.500,50 ₺" (para birimi kodu bilinmiyorsa kod yazilir). */
 export function para(n: number | null | undefined, birim = "TRY"): string {
   if (n === null || n === undefined) return "—"
-  const tutar = n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const tutar = n.toLocaleString(yerel, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const s = SEMBOL[birim]
   return s ? `${tutar} ${s}` : `${tutar} ${birim}`
 }
@@ -18,14 +25,14 @@ export function para(n: number | null | undefined, birim = "TRY"): string {
 export function tarih(iso: string | null | undefined): string {
   if (!iso) return "—"
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
-  return m ? `${m[3]}.${m[2]}.${m[1]}` : "—"
+  return m ? [m[3], m[2], m[1]].join(yerel === "tr-TR" ? "." : "/") : "—"
 }
 
 /** ISO zaman damgasi -> yerel "10.03.2026 14:05". */
 export function zaman(iso: string | null | undefined): string {
   if (!iso) return "—"
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(yerel, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
 export function bayt(n: number | null | undefined): string {
@@ -38,13 +45,14 @@ export function bayt(n: number | null | undefined): string {
     deger /= 1024
     i += 1
   }
-  return `${deger.toLocaleString("tr-TR", { maximumFractionDigits: deger < 10 ? 1 : 0 })} ${birimler[i]}`
+  return `${deger.toLocaleString(yerel, { maximumFractionDigits: deger < 10 ? 1 : 0 })} ${birimler[i]}`
 }
 
 export function sureYaz(sn: number): string {
-  if (sn < 90) return `${sn} sn`
-  if (sn < 5400) return `${Math.round(sn / 60)} dk`
-  return `${(sn / 3600).toLocaleString("tr-TR", { maximumFractionDigits: 1 })} sa`
+  const [s, dk, sa] = yerel === "tr-TR" ? ["sn", "dk", "sa"] : ["s", "min", "h"]
+  if (sn < 90) return `${sn} ${s}`
+  if (sn < 5400) return `${Math.round(sn / 60)} ${dk}`
+  return `${(sn / 3600).toLocaleString(yerel, { maximumFractionDigits: 1 })} ${sa}`
 }
 
 /** Yerel bugunun "YYYY-MM-DD" hali (UTC kaymasi olmadan; form varsayilanlari icin). */

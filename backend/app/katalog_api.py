@@ -25,6 +25,7 @@ def list_modules(user: Principal = Depends(require_user), db: Session = Depends(
             {
                 "key": item.key,
                 "title": item.title,
+                "title_en": item.title_en,
                 "kind": item.kind,
                 "admin_only": item.admin_only,
                 "public": item.public,
@@ -51,7 +52,7 @@ def home(user: Principal = Depends(require_user), db: Session = Depends(get_db))
     izinli = etkin(db, user).izinli
     return ok(
         [
-            {"key": card.key, "title": card.title, "i18n": card.i18n, "card_id": card.card_id}
+            {"key": card.key, "title": card.title, "title_en": card.title_en, "i18n": card.i18n, "card_id": card.card_id}
             for card in HOME_CARDS
             if can_open(user, card, get, izinli)
         ]

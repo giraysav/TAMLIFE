@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
-import { ApiHata, oku, yaz } from "@/lib/sorgu"
+import { ApiHata, hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { Bos, DUGME, DUGME_ANA, DUGME_SARI, GIRDI, Rozet } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
@@ -81,7 +81,7 @@ export function AylikRapor({ musteriId, dil, geriAlabilir }: { musteriId: number
       bildir(anahtar, basari)
       return true
     } catch (h) {
-      bildir(anahtar, kilit && h instanceof ApiHata && h.durum === 409 ? t.gonderimKilitli : `${t.kaydedilemedi}: ${(h as Error).message}`)
+      bildir(anahtar, kilit && h instanceof ApiHata && h.durum === 409 ? t.gonderimKilitli : hataMesaji(h, t.kaydedilemedi))
       return false
     }
   }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
+import { sayi } from "@/lib/bicim"
 
 /** Hafif SVG/CSS grafikleri (yeni bagimlilik yok). Animasyon yalniz ilk cizimde; `prefers-reduced-motion` ise gecis kapali. */
 
@@ -22,7 +23,7 @@ export function Lejant({ seriler, sayilar }: { seriler: Seri[]; sayilar?: Record
         <li key={s.anahtar} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
           <span aria-hidden className="size-2.5 rounded-sm" style={{ background: s.renk }} />
           {s.ad}
-          {sayilar ? <span className="font-mono text-slate-400">{(sayilar[s.anahtar] ?? 0).toLocaleString("tr-TR")}</span> : null}
+          {sayilar ? <span className="font-mono text-slate-400">{sayi(sayilar[s.anahtar] ?? 0)}</span> : null}
         </li>
       ))}
     </ul>
@@ -89,7 +90,7 @@ export function YatayCubuklar({ satirlar, seriler, yukseklik = 10 }: { satirlar:
         <li key={s.anahtar} className="grid gap-1">
           <div className="flex items-baseline justify-between gap-3 text-xs">
             <span className="min-w-0 truncate font-bold text-slate-700">{s.etiket}</span>
-            <span className="shrink-0 font-mono font-black text-tl-navy">{s.sag ?? (toplamlar[i] ?? 0).toLocaleString("tr-TR")}</span>
+            <span className="shrink-0 font-mono font-black text-tl-navy">{s.sag ?? sayi(toplamlar[i] ?? 0)}</span>
           </div>
           <div className="flex overflow-hidden rounded-full bg-slate-100" style={{ height: yukseklik }} role="img" aria-label={seriler.map((x) => `${x.ad}: ${s.degerler[x.anahtar] ?? 0}`).join(", ")}>
             {seriler.map((x) => {

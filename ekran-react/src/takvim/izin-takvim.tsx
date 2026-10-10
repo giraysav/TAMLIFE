@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Presentation, Umbrella, Users, Video } from "lucide-react"
 import { Cekmece } from "@/components/cekmece"
 import { Alan, Bildirim, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, SayfaKabi, Yukleniyor } from "@/components/sayfa-ui"
-import { bugunYerel } from "@/lib/bicim"
+import { bugunYerel, sayi } from "@/lib/bicim"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
 import type { Ozet } from "@/takvim/takvim-grafigi"
@@ -163,7 +163,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
       </SayfaKabi>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi etiket={t.izinGunu} deger={o ? o.izin_gun.toLocaleString("tr-TR") : "—"} ikon={Umbrella} ton="sari" />
+        <Kpi etiket={t.izinGunu} deger={sayi(o?.izin_gun)} ikon={Umbrella} ton="sari" />
         <Kpi etiket={t.toplantiOnline} deger={o?.online ?? "—"} ikon={Video} ton="mavi" />
         <Kpi etiket={t.toplantiYuzYuze} deger={o?.yuzyuze ?? "—"} ikon={Users} ton="yesil" />
         <Kpi etiket={t.kayitliGun} deger={o?.kayitli_gun ?? "—"} ikon={Presentation} ton="gri" />

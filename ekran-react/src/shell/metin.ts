@@ -1,4 +1,15 @@
+import type { AltOge, MenuOgesi } from "@/lib/oturum"
+
 export type Dil = "tr" | "en"
+
+/** Sunucudan gelen TR/EN ad cifti: English iken EN (bossa TR). */
+export const yerel = (dil: Dil, tr: string, en?: string) => (dil === "en" && en) || tr
+
+/** Oturum menusunu (alt ogeler dahil) secili dile cevirir; menu, baslik, arama ve modul sayfasi bu listeyi kullanir. */
+export function yerelMenu(ogeler: MenuOgesi[], dil: Dil): MenuOgesi[] {
+  const cevir = <T extends AltOge>(o: T): T => ({ ...o, label: yerel(dil, o.label, o.label_en), description: yerel(dil, o.description, o.description_en) })
+  return dil === "en" ? ogeler.map((o) => ({ ...cevir(o), children: (o.children ?? []).map(cevir) })) : ogeler
+}
 
 /** Ozellik metinlerinde tekrar eden ortak ifadeler; her ozellik sozlugu `...ORTAK[dil]` ile baslar. */
 const ORTAK_TR = { yukleniyor: "Yükleniyor…", yuklenemedi: "Yüklenemedi.", tekrar: "Tekrar dene", kaydet: "Kaydet", vazgec: "Vazgeç", duzenle: "Düzenle", sil: "Sil", onceki: "Önceki", sonraki: "Sonraki" }

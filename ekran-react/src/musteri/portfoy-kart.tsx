@@ -1,5 +1,5 @@
 import { Building2 } from "lucide-react"
-import { baslangicHarfleri } from "@/lib/bicim"
+import { baslangicHarfleri, sayi } from "@/lib/bicim"
 import { kisaUnvan, portfoyMetin } from "@/musteri/portfoy-metin"
 import type { Dil } from "@/shell/metin"
 
@@ -43,7 +43,7 @@ function Olcu({ ad, deger, ton }: { ad: string; deger: number; ton: "kirmizi" | 
   return (
     <div className={`rounded-xl px-2 py-1.5 text-center ${sinif}`}>
       <div className="text-[9px] font-black uppercase tracking-wide text-slate-400">{ad}</div>
-      <div className="font-mono text-base font-black leading-tight">{deger.toLocaleString("tr-TR")}</div>
+      <div className="font-mono text-base font-black leading-tight">{sayi(deger)}</div>
     </div>
   )
 }

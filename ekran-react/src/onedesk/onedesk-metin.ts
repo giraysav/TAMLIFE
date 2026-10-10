@@ -23,6 +23,8 @@ const TR = {
   aylik: "Aylara göre kapanan",
   aylikAlt: "Kapanış ayına göre dağılım",
   aylar: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"],
+  /** Sunucunun yaslanma kovasi etiketi (onedesk/servis.py YASLANMA) -> ekran metni; Turkcede sunucu etiketi aynen kalir. */
+  kovalar: {} as Record<string, string>,
   veriYok: "Kayıt yok",
   veriYokAlt: "Bu görünümde gösterilecek Onedesk kaydı bulunmuyor. Veri, yönetici tarafından Veri Girişi hattıyla yüklenir.",
   top10: "En çok kayıt oluşan 10 müşteri",
@@ -96,6 +98,7 @@ const EN: typeof TR = {
   aylik: "Closed by month",
   aylikAlt: "Distribution by closing month",
   aylar: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  kovalar: { "0-24 saat": "0-24 h", "1-7 gün": "1-7 days", "7-30 gün": "7-30 days", "30 gün+": "30+ days" },
   veriYok: "No records",
   veriYokAlt: "There are no Onedesk records to show in this view. Data is loaded by an administrator through the Data Intake pipeline.",
   top10: "Top 10 customers by records",

@@ -4,6 +4,7 @@ import { Briefcase, Building2, ChevronLeft, ChevronRight, CircleAlert, MessageSq
 import { Cekmece } from "@/components/cekmece"
 import { BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, SayfaKabi } from "@/components/sayfa-ui"
 import { Skeleton } from "@/components/ui/skeleton"
+import { sayi } from "@/lib/bicim"
 import { oku, sorguMetni } from "@/lib/sorgu"
 import { MusteriEkleFormu } from "@/musteri/musteri-ekle-formu"
 import { MusteriKarti } from "@/musteri/portfoy-kart"
@@ -56,11 +57,11 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
       </SayfaKabi>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi etiket={t.kpiCati} deger={ozet ? ozet.cati.toLocaleString("tr-TR") : "—"} ikon={Building2} ton="mavi" />
-        <Kpi etiket={t.kpiIstirak} deger={ozet ? ozet.istirak.toLocaleString("tr-TR") : "—"} ikon={Sparkles} ton="sari" />
-        <Kpi etiket={t.kpiAlarm} deger={ozet ? ozet.alarm.toLocaleString("tr-TR") : "—"} ikon={Siren} ton="kirmizi" />
-        <Kpi etiket={t.kpiSikayet} deger={ozet ? ozet.sikayet.toLocaleString("tr-TR") : "—"} ikon={MessageSquareWarning} ton="amber" />
-        <Kpi etiket={t.kpiTalep} deger={ozet ? ozet.talep.toLocaleString("tr-TR") : "—"} ikon={CircleAlert} ton="mavi" />
+        <Kpi etiket={t.kpiCati} deger={sayi(ozet?.cati)} ikon={Building2} ton="mavi" />
+        <Kpi etiket={t.kpiIstirak} deger={sayi(ozet?.istirak)} ikon={Sparkles} ton="sari" />
+        <Kpi etiket={t.kpiAlarm} deger={sayi(ozet?.alarm)} ikon={Siren} ton="kirmizi" />
+        <Kpi etiket={t.kpiSikayet} deger={sayi(ozet?.sikayet)} ikon={MessageSquareWarning} ton="amber" />
+        <Kpi etiket={t.kpiTalep} deger={sayi(ozet?.talep)} ikon={CircleAlert} ton="mavi" />
         <Kpi etiket={t.kpiSkor} deger={ozet?.ortalama_skor != null ? `%${ozet.ortalama_skor}` : "—"} alt={ozet ? t.kpiSkorAlt(ozet.skorlu) : undefined} ton="yesil" />
       </div>
 
@@ -136,7 +137,7 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
       ) : null}
 
       {veri && veri.pages > 1 ? (
-        <nav aria-label="Sayfalama" className="flex items-center justify-center gap-3">
+        <nav aria-label={t.sayfalama} className="flex items-center justify-center gap-3">
           <button type="button" className={DUGME} disabled={veri.page <= 1} onClick={() => setSayfa((s) => s - 1)}>
             <ChevronLeft aria-hidden className="size-4" />
             {t.onceki}

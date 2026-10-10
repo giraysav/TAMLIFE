@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { istemci } from "@/app/providers"
+import { bicimDili } from "@/lib/bicim"
 import { useOturum } from "@/lib/oturum"
 import { Giris } from "@/shell/giris"
 import type { Dil } from "@/shell/metin"
@@ -16,6 +17,9 @@ function dilOku(): Dil {
 export default function App() {
   const { durum, kullanici, giris, cikis } = useOturum()
   const [dil, setDil] = useState<Dil>(dilOku)
+  // Alt bilesenler cizilmeden once: sayi/tarih bicimi ve sayfa dili (CSS buyuk harf: ADMIN/ADMİN, ekran okuyucu) dile uyar.
+  bicimDili(dil)
+  document.documentElement.lang = dil
 
   // Oturum kapaninca onbellekteki yonetim verisi bellekte kalmasin (ayni sekmede baska kullanici girebilir).
   useEffect(() => {

@@ -4,12 +4,12 @@ import { DuzenlenebilirTablo } from "@/components/duzenlenebilir-tablo"
 import type { Kolon } from "@/components/duzenlenebilir-tablo"
 import { Sekmeler } from "@/components/sayfa-ui"
 import { ModulYayi } from "@/components/ui/modul-yayi"
-import { baslangicHarfleri, para, tarih } from "@/lib/bicim"
+import { baslangicHarfleri, bicimDili, para, tarih } from "@/lib/bicim"
 import { hareketDegistir, hareketUygula, hareketVarMi } from "@/lib/hareket"
 import type { Kullanici } from "@/lib/oturum"
 import { kisaUnvan } from "@/musteri/portfoy-metin"
 import { KullaniciKarti } from "@/shell/kullanici-karti"
-import { metin } from "@/shell/metin"
+import { metin, yerelMenu } from "@/shell/metin"
 
 afterEach(() => {
   cleanup()
@@ -33,6 +33,20 @@ describe("bicimleyiciler", () => {
     expect(baslangicHarfleri("Elif Kaya")).toBe("EK")
     expect(baslangicHarfleri("admin")).toBe("AD")
     expect(baslangicHarfleri("")).toBe("?")
+  })
+  it("English iken sayi ve tarih ingilizce bicimde", () => {
+    bicimDili("en")
+    expect([para(12500.5), tarih("2026-03-10")]).toEqual(["12,500.50 ₺", "10/03/2026"])
+    bicimDili("tr")
+  })
+})
+
+describe("yerelMenu", () => {
+  const menu = [{ id: "musteri", label: "Müşteri Yönetimi", label_en: "Customer Management", description: "Portföy", description_en: "Portfolio", group: "work" as const, icon: "customers", ready: true, children: [{ id: "musteri/liste", label: "Liste", description: "", ready: true }] }]
+  it("English iken EN ad/aciklama, EN yoksa TR; Turkcede liste aynen", () => {
+    const [m] = yerelMenu(menu, "en")
+    expect([m?.label, m?.description, m?.children[0]?.label]).toEqual(["Customer Management", "Portfolio", "Liste"])
+    expect(yerelMenu(menu, "tr")).toBe(menu)
   })
 })
 
@@ -167,13 +181,13 @@ describe("ModulYayi", () => {
       },
     )
     const onClick = vi.fn()
-    render(<ModulYayi ogeler={[{ anahtar: "onedesk", etiket: "Onedesk", ikon: <span />, renk: ["#fb7185", "#e11d48"], onClick }]} baslik="Başlık" altBaslik="Alt" />)
+    render(<ModulYayi ogeler={[{ anahtar: "onedesk", etiket: "Onedesk", ikon: <span />, renk: ["#fb7185", "#e11d48"], onClick }]} alt={<img alt="Teknocan" />} />)
     fireEvent.click(screen.getByRole("button", { name: "Onedesk" }))
     expect(onClick).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole("heading", { name: "Başlık" })).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "Teknocan" })).toBeInTheDocument()
   })
 
-  it("baslik verilmezse buyuk baslik cizilmez (yalniz ipucu)", () => {
+  it("alt verilmezse yayin altinda ek alan cizilmez", () => {
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -182,9 +196,9 @@ describe("ModulYayi", () => {
         unobserve() {}
       },
     )
-    render(<ModulYayi ogeler={[{ anahtar: "onedesk", etiket: "Onedesk", ikon: <span />, renk: ["#fb7185", "#e11d48"] }]} altBaslik="Bir karta tıklayın" />)
+    render(<ModulYayi ogeler={[{ anahtar: "onedesk", etiket: "Onedesk", ikon: <span />, renk: ["#fb7185", "#e11d48"] }]} />)
+    expect(screen.queryByRole("img")).not.toBeInTheDocument()
     expect(screen.queryByRole("heading")).not.toBeInTheDocument()
-    expect(screen.getByText("Bir karta tıklayın")).toBeInTheDocument()
   })
 })
 

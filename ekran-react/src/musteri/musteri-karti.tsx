@@ -2,7 +2,8 @@ import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
 import { Building2, FileText, Pencil } from "lucide-react"
-import { ApiHata, oku, yaz } from "@/lib/sorgu"
+import { sayi } from "@/lib/bicim"
+import { ApiHata, hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { Alan, Bolum, Bos, DUGME, DUGME_ANA, GIRDI, Rozet, Satir, VeriTablosu } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
@@ -67,7 +68,7 @@ function Kutu({ children, ek = "" }: { children: ReactNode; ek?: string }) {
 function GelirBlok({ baslik, g, apn }: { baslik: string; g: Gelir; apn?: boolean }) {
   const toplam =
     Object.entries(g.toplam)
-      .map(([p, v]) => `${v.toLocaleString("tr-TR")} ${p}`)
+      .map(([p, v]) => `${sayi(v)} ${p}`)
       .join(" · ") || "—"
   return (
     <div>
@@ -81,7 +82,7 @@ function GelirBlok({ baslik, g, apn }: { baslik: string; g: Gelir; apn?: boolean
           <span className="font-mono font-bold text-slate-500">{k.donem}</span>
           {apn && k.installation_pct !== undefined ? <span className="text-slate-400">%{k.installation_pct}</span> : null}
           <span className="font-mono font-black text-slate-700">
-            {k.tutar.toLocaleString("tr-TR")} {k.para}
+            {sayi(k.tutar)} {k.para}
           </span>
         </div>
       ))}
@@ -98,7 +99,7 @@ function Operasyon({ kart, t }: { kart: Kart; t: Metin }) {
         {([[t.alarm, s.alarm_kapanan, "bg-rose-500/5", "text-rose-600"], [t.sikayet, s.sikayet_kapanan, "bg-amber-500/5", "text-amber-600"], [t.talep, s.talep_kapanan, "bg-blue-500/5", "text-blue-600"]] as const).map(([etiket, deger, zemin, yazi]) => (
           <div key={etiket} className={`w-full rounded-xl border border-slate-200/80 p-3 text-left ${zemin}`}>
             <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{etiket}</div>
-            <div className={`mt-0.5 font-mono text-2xl font-black leading-tight ${yazi}`}>{deger.toLocaleString("tr-TR")}</div>
+            <div className={`mt-0.5 font-mono text-2xl font-black leading-tight ${yazi}`}>{sayi(deger)}</div>
             <div className="mt-1 text-[10px] font-bold text-slate-500">{t.yilIciKapanan}</div>
           </div>
         ))}
@@ -107,8 +108,8 @@ function Operasyon({ kart, t }: { kart: Kart; t: Metin }) {
         <p className="mt-3 text-xs font-bold text-slate-500">
           {t.istirakDahil}:{" "}
           <span className="font-mono text-slate-700">
-            {t.envanter} {d.envanter.toLocaleString("tr-TR")} · {t.alarm} {d.alarm_kapanan.toLocaleString("tr-TR")} · {t.sikayet} {d.sikayet_kapanan.toLocaleString("tr-TR")} · {t.talep}{" "}
-            {d.talep_kapanan.toLocaleString("tr-TR")}
+            {t.envanter} {sayi(d.envanter)} · {t.alarm} {sayi(d.alarm_kapanan)} · {t.sikayet} {sayi(d.sikayet_kapanan)} · {t.talep}{" "}
+            {sayi(d.talep_kapanan)}
           </span>
         </p>
       ) : null}
@@ -152,7 +153,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
       await istek()
       return true
     } catch (h) {
-      bildir(anahtar, `${t.kaydedilemedi}: ${(h as Error).message}`)
+      bildir(anahtar, hataMesaji(h, t.kaydedilemedi))
       return false
     }
   }
@@ -341,7 +342,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                   <span className="font-mono text-tl-blue">{o.tam_ft}</span>
                 </Satir>
                 <Satir etiket={t.envanter}>
-                  <span className="font-mono">{k.envanter.toLocaleString("tr-TR")}</span>
+                  <span className="font-mono">{sayi(k.envanter)}</span>
                 </Satir>
               </div>
             </div>

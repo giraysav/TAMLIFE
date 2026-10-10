@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import type { LucideIcon } from "lucide-react"
 import { Briefcase, CalendarCheck, CalendarDays, Circle, FileText, FolderKanban, LifeBuoy, Link2, MessageSquare, Presentation, Radar, TrendingUp, Wifi } from "lucide-react"
+import teknocan from "@/assets/teknocan.png"
 import { oku } from "@/lib/sorgu"
+import { useHareket } from "@/lib/hareket"
 import { ModulYayi } from "@/components/ui/modul-yayi"
 import type { YayOgesi } from "@/components/ui/modul-yayi"
 
-type Kart = { key: string; title: string }
+type Kart = { key: string; title: string; title_en?: string }
 
 const IKON: Record<string, LucideIcon> = {
   takvim_ozet: CalendarCheck,
@@ -43,16 +45,25 @@ const VARSAYILAN_RENK: readonly [string, string] = ["#64748b", "#334155"]
 export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string) => void }) {
   const { data: kartlar = [] } = useQuery({ queryKey: ["home"], queryFn: () => oku<Kart[]>("/api/v1/home") })
 
-  const tr = dil === "tr"
+  const hareket = useHareket()
   const ogeler: YayOgesi[] = kartlar.slice(0, 12).map((kart) => {
     const Ikon = IKON[kart.key] ?? Circle
-    return { anahtar: kart.key, etiket: kart.title, ikon: <Ikon aria-hidden />, renk: RENK[kart.key] ?? VARSAYILAN_RENK, onClick: () => onGit(kart.key) }
+    const etiket = dil === "en" ? kart.title_en || kart.title : kart.title
+    return { anahtar: kart.key, etiket, ikon: <Ikon aria-hidden />, renk: RENK[kart.key] ?? VARSAYILAN_RENK, onClick: () => onGit(kart.key) }
   })
 
   return (
     <ModulYayi
       ogeler={ogeler}
-      altBaslik={tr ? "Bir karta tıklayarak ilgili modüle geçin." : "Click a card to jump to its module."}
+      alt={
+        <img
+          src={teknocan}
+          alt="Teknocan"
+          draggable={false}
+          className="tl-hareket h-[clamp(130px,20vh,220px)] w-auto select-none drop-shadow-[0_14px_18px_rgba(0,40,85,0.25)]"
+          style={hareket ? { animation: "tl-yuz 6s ease-in-out infinite" } : undefined}
+        />
+      }
     />
   )
 }

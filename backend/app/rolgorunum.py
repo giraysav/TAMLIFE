@@ -21,9 +21,9 @@ from app.ortak import UygulamaHatasi
 from app.session import Principal
 
 DUZENLENEBILIR = ("TeamMngr", "TeamMember")
-# Modul gorunumunun disindaki eylem yetkileri (admin verir, admin her zaman hepsine sahiptir). Varsayilan: rol icin kapali.
-YETKILER: dict[str, str] = {
-    "takvim.sunuma_gonder": "TAM Takvim: çeyrek bazlı sunuma gönder",
+# Modul gorunumunun disindaki eylem yetkileri: kimlik -> (etiket, etiket_en). Admin verir, admin her zaman hepsine sahiptir. Varsayilan: rol icin kapali.
+YETKILER: dict[str, tuple[str, str]] = {
+    "takvim.sunuma_gonder": ("TAM Takvim: çeyrek bazlı sunuma gönder", "TAM Calendar: send to quarterly presentation"),
 }
 ROL_ETIKET = {"admin": "Admin", "TeamMngr": "Manager", "TeamMember": "Member"}
 GIRIS_VARSAYILAN = "ozet"
@@ -110,7 +110,7 @@ def gorunumler(db: Session) -> list[dict]:
 
 
 def yetki_katalogu() -> list[dict]:
-    return [{"id": k, "label": v} for k, v in YETKILER.items()]
+    return [{"id": k, "label": tr, "label_en": en} for k, (tr, en) in YETKILER.items()]
 
 
 def katalog() -> list[dict]:
@@ -118,8 +118,9 @@ def katalog() -> list[dict]:
         {
             "id": m.key,
             "label": m.title,
+            "label_en": m.title_en,
             "admin_only": m.admin_only,
-            "children": [{"id": f"{m.key}/{c.key}", "label": c.title} for c in m.children],
+            "children": [{"id": f"{m.key}/{c.key}", "label": c.title, "label_en": c.title_en} for c in m.children],
         }
         for m in MODULES
         if m.in_nav

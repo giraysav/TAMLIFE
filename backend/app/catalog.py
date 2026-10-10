@@ -21,6 +21,8 @@ class SubModule:
     title: str
     description: str = ""
     ready: bool = False
+    title_en: str = ""
+    description_en: str = ""
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class Module:
     key: str
     title: str
     kind: str
+    title_en: str = ""  # arayuz dili English iken gosterilen ad
     admin_only: bool = False
     public: bool = False
     in_nav: bool = True
@@ -48,14 +51,14 @@ class Module:
 # Sira: moduller.py MODULLER. Ana sayfa sirasi HOME_ORDER.
 MODULES: tuple[Module, ...] = (
     Module(
-        "musteri", "Müşteri Yönetimi", "modul",
+        "musteri", "Müşteri Yönetimi", "modul", title_en="Customer Management",
         i18n="musteri.tamPortfoy", card_id="dash-card-modul-portfoy",
         box_id="mod_musteri", permission_group="modules",
         registry_id="portfoy", registry_status="aktif", modal_id="mgmtMusteriModal",
         table="customers",
     ),
     Module(
-        "takvim", "İzin&Takvim Yönetimi", "modul",
+        "takvim", "İzin&Takvim Yönetimi", "modul", title_en="Leave & Calendar Management",
         i18n="tab.takvim", card_id="dash-card-modul-takvim",
         box_id="mod_takvim", permission_group="modules",
         note="kişinin kendi takvimi",
@@ -63,7 +66,7 @@ MODULES: tuple[Module, ...] = (
         table="calendar_records",
     ),
     Module(
-        "takvim_ozet", "TAM Takvim", "kart",
+        "takvim_ozet", "TAM Takvim", "kart", title_en="TAM Calendar",
         i18n="card.takvim.title", card_id="dash-card-takvim",
         box_id="card_takvim_ozet", permission_group="dashboard_cards",
         note="TeamMember yalnız kendi takvimini görür",
@@ -71,85 +74,85 @@ MODULES: tuple[Module, ...] = (
         table="calendar_records",
     ),
     Module(
-        "onedesk", "Onedesk", "modul",
+        "onedesk", "Onedesk", "modul", title_en="Onedesk",
         i18n="card.ats.title", card_id="dash-card-onedesk",
         box_id="mod_onedesk", permission_group="modules",
         registry_status="aktif", modal_id="atsModal",
         table="customers",
     ),
     Module(
-        "utilizasyon", "TAM Utilizasyon", "modul", admin_only=True,
+        "utilizasyon", "TAM Utilizasyon", "modul", title_en="TAM Utilization", admin_only=True,
         note="ana sayfa kutucuğu yok; yalnız admin",
         registry_status="aktif", modal_id="mgmtUtilizasyonModal",
         table="util_criteria",
     ),
     Module(
-        "roller", "Rol Yönetimi", "modul", admin_only=True,
+        "roller", "Rol Yönetimi", "modul", title_en="Role Management", admin_only=True,
         note="ana sayfa kutucuğu yok; yalnız admin",
         table="users",
     ),
     Module(
-        "talep", "Geliştirme Talepleri", "modul", public=True,
+        "talep", "Geliştirme Talepleri", "modul", title_en="Development Requests", public=True,
         note="ana sayfada kutucuk değil",
         registry_status="aktif", modal_id="mgmtTalepModal",
         table="gelistirme_talepleri",
     ),
     Module(
-        "rapor", "Gönderilen Aylık Rapor", "kart",
+        "rapor", "Gönderilen Aylık Rapor", "kart", title_en="Sent Monthly Reports",
         i18n="card.rapor.title", card_id="dash-card-rapor",
         box_id="card_rapor", permission_group="dashboard_cards",
         registry_status="aktif", modal_id="aylikRaporModal",
         table="reports",
     ),
     Module(
-        "proje", "Takip Edilen Projeler", "kart",
+        "proje", "Takip Edilen Projeler", "kart", title_en="Tracked Projects",
         i18n="card.proje.title", card_id="dash-card-proje",
         box_id="card_proje", permission_group="dashboard_cards",
         registry_status="aktif", modal_id="projeModal",
         table="project_items",
     ),
     Module(
-        "tamsms", "ICT Sms & Gelir", "kart",
+        "tamsms", "ICT Sms & Gelir", "kart", title_en="ICT SMS & Revenue",
         i18n="card.tamSms.title", card_id="dash-card-tamsms",
         box_id="card_tamsms", permission_group="dashboard_cards",
         registry_id="ictapn", registry_status="aktif", modal_id="ictApnModal",
         table="ict_revenues",
     ),
     Module(
-        "tamapn", "APN Gelir ve Kurulum", "kart",
+        "tamapn", "APN Gelir ve Kurulum", "kart", title_en="APN Revenue & Installation",
         i18n="card.tamApn.title", card_id="dash-card-tamapn",
         box_id="card_tamapn", permission_group="dashboard_cards",
         table="apn_revenues",
     ),
     Module(
-        "gelir_uretim", "Gelir Faydası Sağlanan İşler", "kart", ready=False,
+        "gelir_uretim", "Gelir Faydası Sağlanan İşler", "kart", title_en="Revenue-Benefit Work", ready=False,
         i18n="card.gelirUretim.title", card_id="dash-card-gelir-uretim",
         box_id="card_gelir_uretim", permission_group="dashboard_cards",
         note="icerik yakinda detaylandirilacak",
     ),
     Module(
-        "sunum", "Çeyrek Bazlı Sunum", "kart",
+        "sunum", "Çeyrek Bazlı Sunum", "kart", title_en="Quarterly Presentation",
         i18n="card.sunum.title", card_id="dash-card-sunum",
         box_id="card_sunum", permission_group="dashboard_cards",
         registry_status="aktif", modal_id="sunumModal",
         table="qbr_reports",
     ),
     Module(
-        "radar", "Müşteri Radar", "kart",
+        "radar", "Müşteri Radar", "kart", title_en="Customer Radar",
         i18n="card.radar.title", card_id="dash-card-radar",
         box_id="card_radar", permission_group="dashboard_cards",
         registry_status="aktif", modal_id="radarModal",
         table="radar_prospects",
     ),
     Module(
-        "baglantili", "Bağlantılı Araçlar", "kart", ready=False,
+        "baglantili", "Bağlantılı Araçlar", "kart", title_en="Connected Tools", ready=False,
         i18n="card.placeholder.title", card_id="dash-card-baglantili",
         box_id="card_baglantili", permission_group="dashboard_cards",
         note="içerik henüz yok",
         registry_status="stub",
     ),
     Module(
-        "topoloji", "TopoMaker", "modul", in_nav=False, permission="musteri",
+        "topoloji", "TopoMaker", "modul", title_en="TopoMaker", in_nav=False, permission="musteri",
         note="ana sayfa kutucuğu yok; müşteri iznine bağlı",
         registry_status="aktif", modal_id="topoMakerModal",
     ),

@@ -148,6 +148,7 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
             <span className="truncate text-sm font-black leading-none">{kullanici.username}</span>
             <span className="flex items-center gap-1.5">
               <span
+                key={dil} // rol adi iki dilde ayni; tarayici dil degisiminde buyuk harf donusumunu (ADMIN/ADMİN) tazelemiyor
                 className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                   admin ? "bg-tl-yellow text-tl-navy" : "bg-white/15 text-white"
                 }`}

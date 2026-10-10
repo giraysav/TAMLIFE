@@ -99,7 +99,7 @@ def test_veritabani_okunamazsa_yonetici_olmayan_kapali(client, monkeypatch):
 
 
 def test_alt_modul_hazirligi(client, monkeypatch):
-    alt = (catalog.SubModule("liste", "Müşteri Listesi", "açıklama", True), catalog.SubModule("kart", "Müşteri Kartı"))
+    alt = (catalog.SubModule("liste", "Müşteri Listesi", "açıklama", True, "Customer List", "description"), catalog.SubModule("kart", "Müşteri Kartı"))
     yeni = tuple(dataclasses.replace(m, children=alt) if m.key == "musteri" else m for m in catalog.MODULES)
     for yer in (catalog, navigation, rolgorunum):
         monkeypatch.setattr(yer, "MODULES", yeni)
@@ -112,6 +112,7 @@ def test_alt_modul_hazirligi(client, monkeypatch):
     nav = client.get("/api/v1/session/me").json()["data"]["navigation"]
     kok = next(i for i in nav if i["id"] == "musteri")
     assert [c["id"] for c in kok["children"]] == ["musteri/liste", "musteri/kart"]
+    assert (kok["children"][0]["label_en"], kok["children"][0]["description_en"]) == ("Customer List", "description")
     assert client.get("/api/v1/modules/musteri/liste").status_code == 200
     assert client.get("/api/v1/modules/musteri/yok").status_code == 404
 
@@ -160,3 +161,20 @@ def test_grup_yerlesimi_ve_tam_ozet_yok(client):
         assert grup[k] == "insights", k
     for k in ("musteri", "takvim", "onedesk", "tamsms", "tamapn", "baglantili"):
         assert grup[k] == "work", k
+
+
+def test_ingilizce_etiketler(client):
+    """Arayuz English iken menu, ana sayfa kartlari ve rol ekrani catalog'daki EN adlari kullanir; TR alanlar aynen kalir."""
+    assert all(m.title_en for m in catalog.MODULES) and all(p[3] for p in navigation.PRESENTATION.values())
+    login_ok(client)
+    nav = {i["id"]: i for i in client.get("/api/v1/session/me").json()["data"]["navigation"]}
+    assert (nav["musteri"]["label"], nav["musteri"]["label_en"]) == ("Müşteri Yönetimi", "Customer Management")
+    assert nav["takvim_ozet"]["label_en"] == "TAM Calendar" and nav["tamsms"]["description_en"]
+    assert nav["yonetim"]["label_en"] == "Administration"
+    assert all(c["label_en"] and c["description_en"] for c in nav["yonetim"]["children"])
+    kartlar = {c["key"]: c for c in client.get("/api/v1/home").json()["data"]}
+    assert (kartlar["takvim"]["title"], kartlar["takvim"]["title_en"]) == ("İzin&Takvim Yönetimi", "Leave & Calendar Management")
+    assert all(c["title_en"] for c in kartlar.values())
+    assert all(m["title_en"] for m in client.get("/api/v1/modules").json()["data"])
+    roller = client.get("/api/v1/roller").json()["data"]
+    assert all(m["label_en"] for m in roller["catalog"]) and all(y["label_en"] for y in roller["permission_catalog"])

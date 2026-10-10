@@ -1,3 +1,4 @@
+import { sayi } from "@/lib/bicim"
 import { Halka, Lejant, YatayCubuklar } from "@/components/grafik"
 import type { Seri } from "@/components/grafik"
 import { DURUM_RENK, DURUM_SIRASI } from "@/takvim/takvim-metin"
@@ -26,7 +27,7 @@ export function TakvimGrafigi({ genel, uyeler, t }: { genel: Ozet; uyeler: Grafi
         <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.durumToplami}</p>
         <Halka
           dilimler={seriler.map((s) => ({ anahtar: s.anahtar, ad: s.ad, deger: genel.durumlar[s.anahtar] ?? 0, renk: s.renk }))}
-          baslik={izinToplam.toLocaleString("tr-TR")}
+          baslik={sayi(izinToplam)}
           alt={t.izinTatilGunu}
         />
         <Lejant seriler={seriler.filter((s) => (genel.durumlar[s.anahtar] ?? 0) > 0)} sayilar={genel.durumlar} />
@@ -34,7 +35,7 @@ export function TakvimGrafigi({ genel, uyeler, t }: { genel: Ozet; uyeler: Grafi
       <div className="grid gap-5">
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">{t.kisiBazinda}</p>
-          <YatayCubuklar satirlar={uyeler.map((u) => ({ anahtar: u.ad, etiket: u.ad, degerler: u.durumlar, sag: u.izin_gun.toLocaleString("tr-TR") }))} seriler={seriler} yukseklik={12} />
+          <YatayCubuklar satirlar={uyeler.map((u) => ({ anahtar: u.ad, etiket: u.ad, degerler: u.durumlar, sag: sayi(u.izin_gun) }))} seriler={seriler} yukseklik={12} />
         </div>
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">{t.toplantilar}</p>

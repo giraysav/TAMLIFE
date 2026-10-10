@@ -71,7 +71,9 @@ def _kayit(db, **alan):
 def test_rol_yetkileri_kaydedilir_ve_korunur(veri):
     hdr = login_ok(veri)
     ilk = veri.get("/api/v1/roller").json()["data"]
-    assert ilk["permission_catalog"] == [{"id": "takvim.sunuma_gonder", "label": "TAM Takvim: çeyrek bazlı sunuma gönder"}]
+    assert ilk["permission_catalog"] == [
+        {"id": "takvim.sunuma_gonder", "label": "TAM Takvim: çeyrek bazlı sunuma gönder", "label_en": "TAM Calendar: send to quarterly presentation"}
+    ]
     assert next(r for r in ilk["roles"] if r["role"] == "TeamMember")["permissions"] == []  # varsayilan kapali
     assert next(r for r in ilk["roles"] if r["role"] == "admin")["permissions"] == ["takvim.sunuma_gonder"]
     assert _rol_ver(veri, hdr, yetkiler=["takvim.sunuma_gonder"])["permissions"] == ["takvim.sunuma_gonder"]

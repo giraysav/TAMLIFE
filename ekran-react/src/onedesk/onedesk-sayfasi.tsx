@@ -29,7 +29,7 @@ export function OnedeskSayfasi({ dil, admin }: { dil: Dil; admin: boolean }) {
   const sutunlar =
     d?.kapsam === "kapali"
       ? d.grafik.map((g) => ({ etiket: t.aylar[(g.ay ?? 1) - 1] ?? "", degerler: { alarm: g.alarm, talep: g.talep, sikayet: g.sikayet } }))
-      : (d?.grafik ?? []).map((g) => ({ etiket: g.etiket ?? "", degerler: { alarm: g.alarm, talep: g.talep, sikayet: g.sikayet } }))
+      : (d?.grafik ?? []).map((g) => ({ etiket: t.kovalar[g.etiket ?? ""] ?? g.etiket ?? "", degerler: { alarm: g.alarm, talep: g.talep, sikayet: g.sikayet } }))
 
   return (
     <div className="grid grid-cols-1 gap-4">

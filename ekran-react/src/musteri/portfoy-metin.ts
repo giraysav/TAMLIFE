@@ -34,6 +34,7 @@ const TR = {
   yuklenemedi: "Müşteri portföyü yüklenemedi.",
   toplam: (n: number) => `${n} müşteri`,
   sayfa: (s: number, t: number) => `Sayfa ${s} / ${t}`,
+  sayfalama: "Sayfalama",
   // form
   formBaslik: "Yeni müşteri",
   formAciklama: "Ana müşteri ya da bir çatı müşterinin iştiraki ekleyin.",
@@ -93,6 +94,7 @@ const EN: typeof TR = {
   yuklenemedi: "Could not load the customer portfolio.",
   toplam: (n: number) => `${n} customers`,
   sayfa: (s: number, t: number) => `Page ${s} / ${t}`,
+  sayfalama: "Pagination",
   formBaslik: "New customer",
   formAciklama: "Add a main customer or a subsidiary of a parent customer.",
   tur: "Type",

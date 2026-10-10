@@ -24,11 +24,12 @@ export type YayOgesi = {
   onClick?: () => void
 }
 
-const TASARIM_G = 1200
-const TASARIM_Y = 470
-const MERKEZ_Y = 640
-const YARICAP = { dis: 520, ic: 385 } as const
+const TASARIM_G = 1300
+const TASARIM_Y = 505
+const MERKEZ_Y = 700
+const YARICAP = { dis: 600, ic: 445 } as const
 const EN_KUCUK_OLCEK = 0.7
+const EN_BUYUK_OLCEK = 1.15
 const DAR_ESIK = 840
 const EASE = [0.22, 1, 0.36, 1] as const
 
@@ -42,13 +43,13 @@ function acilar(adet: number, adim: number): number[] {
 /** Olceklenmis kart olculeri (px, tam sayi). Yazi boyutu yarim piksel adimlidir. */
 function olculer(s: number) {
   return {
-    g: Math.round(118 * s),
-    y: Math.round(108 * s),
-    ikon: Math.round(44 * s),
-    glif: Math.round(22 * s),
-    yazi: Math.max(10, Math.round(12 * s * 2) / 2),
-    bosluk: Math.round(8 * s),
-    dolgu: Math.round(10 * s),
+    g: Math.round(140 * s),
+    y: Math.round(126 * s),
+    ikon: Math.round(52 * s),
+    glif: Math.round(26 * s),
+    yazi: Math.max(10, Math.round(13.5 * s * 2) / 2),
+    bosluk: Math.round(9 * s),
+    dolgu: Math.round(12 * s),
   }
 }
 
@@ -106,7 +107,8 @@ function Kart({ oge, sira, azHareket, b, stil }: { oge: YayOgesi; sira: number; 
   )
 }
 
-export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; baslik?: ReactNode; altBaslik?: ReactNode }) {
+/** alt: yayin altindaki serbest alanin ortasina yerlesir; sahne ust kapsayicinin kalan yuksekligini doldurur (flex-1). */
+export function ModulYayi({ ogeler, alt }: { ogeler: YayOgesi[]; alt?: ReactNode }) {
   const cerceve = useRef<HTMLDivElement>(null)
   const [genislik, setGenislik] = useState(TASARIM_G)
   const azHareket = !useHareket()
@@ -142,7 +144,7 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
   }
 
   const dar = genislik < DAR_ESIK
-  const s = Math.min(1, Math.max(EN_KUCUK_OLCEK, genislik / TASARIM_G))
+  const s = Math.min(EN_BUYUK_OLCEK, Math.max(EN_KUCUK_OLCEK, genislik / TASARIM_G))
   const b = olculer(s)
   const G = Math.round(genislik)
   const Y = Math.round(TASARIM_Y * s)
@@ -168,11 +170,11 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
     <section
       onPointerMove={imlec}
       onPointerLeave={imlecCik}
-      className="relative w-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 via-white to-sky-50/70 px-4 pb-10 pt-6 shadow-sm"
+      className="relative flex w-full flex-1 flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-b from-slate-50 via-white to-sky-50/70 px-4 pb-6 pt-6 shadow-sm"
     >
       <span aria-hidden className="pointer-events-none absolute left-1/2 top-24 size-[520px] -translate-x-1/2 rounded-full bg-tl-blue/10 blur-3xl" />
       <span aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-tl-yellow/20 blur-3xl" />
-      <div ref={cerceve} className="relative mx-auto w-full max-w-[1200px] overflow-hidden" style={{ height: dar ? "auto" : Y, perspective: dar ? undefined : 1300 }}>
+      <div ref={cerceve} className="relative mx-auto w-full max-w-[1500px] shrink-0 overflow-hidden" style={{ height: dar ? "auto" : Y, perspective: dar ? undefined : 1300 }}>
         {dar ? (
           <ul className="grid grid-cols-2 gap-3 py-2 sm:grid-cols-3">
             {ogeler.map((o) => (
@@ -250,16 +252,16 @@ export function ModulYayi({ ogeler, baslik, altBaslik }: { ogeler: YayOgesi[]; b
         )}
       </div>
 
-      <motion.div
-        className="relative mx-auto mt-3 max-w-[640px] text-center"
-        initial={azHareket ? false : { opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 1.0, ease: EASE }}
-      >
-        {baslik ? <h2 className="text-[26px] font-black leading-[1.15] tracking-tight text-tl-navy sm:text-[34px]">{baslik}</h2> : null}
-        {altBaslik ? <p className={`${baslik ? "mt-2" : ""} text-sm font-bold text-slate-500`}>{altBaslik}</p> : null}
-        <span aria-hidden className="mx-auto mt-4 block h-1 w-16 rounded-full bg-gradient-to-r from-tl-yellow to-tl-accent" />
-      </motion.div>
+      {alt ? (
+        <motion.div
+          className="relative flex flex-1 items-center justify-center pt-2"
+          initial={azHareket ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 1.0, ease: EASE }}
+        >
+          {alt}
+        </motion.div>
+      ) : null}
     </section>
   )
 }
