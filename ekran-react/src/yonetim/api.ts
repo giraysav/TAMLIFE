@@ -152,8 +152,153 @@ export type Uygulama = {
   geri_alinan: number
 }
 
+// --- TAM Utilizasyon (/api/v1/skor) -------------------------------------------------------------------------------------
+export type KaynakSecimi = {
+  kaynak: string
+  eslesme: { sutun: string; alan: string }[]
+  islem: string
+  sutun: string
+  filtreler: { sutun: string; islec: string; deger: string }[]
+  esleme: [string, string][]
+}
+export type Kriter = {
+  title: string
+  type?: string
+  metric?: string
+  weight: number | string
+  b30?: string
+  b50?: string
+  b70?: string
+  b100?: string
+  servis_puanlari?: Record<string, number>
+  servis_dahil?: string[]
+  kaynak_secimi?: KaynakSecimi
+}
+export type KriterTablosu = { scope: "parent" | "affiliate"; version: number; criteria: Kriter[]; varsayilan: boolean; updated_by: string | null; updated_at: string | null }
+export type SkorMeta = {
+  kaynak_adlari: Record<string, string>
+  tur_ipuclari: [string, string][]
+  varsayilan_kurallar: Record<string, Record<string, string>>
+  servis_puanlari: Record<string, number>
+  metrikler: Record<string, string>
+  sabit_puan_turleri: string[]
+  islemler: Record<string, string>
+  islecler: Record<string, string>
+  degersiz_islecler: string[]
+  eslesme_alanlari: Record<string, string>
+  tur_islemleri: Record<string, string[]>
+  partiler: { kaynak: string; parti: number; etiket: string; satir: number; sutunlar: string[]; zaman: string | null }[]
+}
+export type KriterSonucu = {
+  baslik: string
+  tur: string
+  agirlik: number
+  puan: number
+  katki: number
+  durum: "otomatik" | "manuel" | "eksik"
+  kaynak: string | null
+  deger: unknown
+  varsayilan_kural: boolean
+}
+export type SonAtama = { kaynak: string; atayan: string; zaman: string | null } | null
+export type SkorMusterisi = {
+  id: number
+  ad: string
+  tam: string
+  tam_id: number | null
+  mevcut: number | null
+  yeni: number
+  fark: number | null
+  tamam: boolean
+  eksik: string[]
+  kriterler: KriterSonucu[]
+  son_atama: SonAtama
+}
+export type KaynakDurumu = { ad: string; metrikler: string[]; hazir: boolean; neden: string }
+export type SkorOnizleme = {
+  kaynaklar: KaynakDurumu[]
+  uyarilar: string[]
+  kriterler: { baslik: string; tur: string; agirlik: number }[]
+  musteriler: SkorMusterisi[]
+  ozet: { toplam: number; hazir: number }
+}
+export type AtamaSonucu = { uygulanan: { id: number; ad: string; eski: number | null; yeni: number }[]; atlanan: { id: number; ad: string; neden: string }[]; degismeyen: number }
+export type IstirakDugumu = { id: number; ad: string; dahil: boolean; yeni: number | null; tamam: boolean | null; eksik: string[]; kriterler: KriterSonucu[] }
+export type AgacMusterisi = SkorMusterisi & { istirakler: IstirakDugumu[] }
+export type AgacPersoneli = { id: number; ad: string; tam: boolean; musteri_sayisi: number; skorlu_musteri: number; toplam_puan: number; agirlik_puani: number | null; musteriler: AgacMusterisi[] }
+export type DagilimSatiri = {
+  id: number
+  ad: string
+  sira: number
+  musteri_sayisi: number
+  istirakli_musteri: number
+  skorlu_musteri: number
+  toplam_puan: number
+  agirlik_puani: number | null
+  hedef_fark: number
+  dengeleme_musteri: number
+}
+export type SkorAgaci = {
+  kaynaklar: KaynakDurumu[]
+  kriterler: { baslik: string; tur: string; agirlik: number }[]
+  uyarilar: string[]
+  personel: AgacPersoneli[]
+  atanmamis: AgacMusterisi[]
+  tum_personel: { id: number; ad: string; tam: boolean; dahil: boolean; musteri_sayisi: number }[]
+  ozet: { toplam: number; cati: number; hazir: number; istirak: number; istirak_dahil: number }
+  dagilim: {
+    satirlar: DagilimSatiri[]
+    ozet: { tam_sayisi: number; musteri_sayisi: number; toplam_puan: number; hedef_agirlik: number; ortalama_musteri_puani: number; skorlu_musteri: number }
+  }
+}
+export type SiralamaSatiri = { id: number; full_name: string; customer_count: number; avg_score: number; rank: number; bar_pct: number }
+export type SkorTalebi = {
+  id: number
+  customer_id: number
+  customer_name: string
+  tam_id: number | null
+  tam_name: string
+  score: number | null
+  requested_by_name: string
+  requested_at: string
+}
+export type UrunTutarOzeti = {
+  satir: number
+  aktif_satir: number
+  lokasyon_sayisi: number
+  devre_sayisi: number
+  fatura_bedeli: number
+  servisler: string[]
+  baglanti: string[]
+  eslesmeyen_gruplar: string[]
+}
+export type UrunTutarKaydi = UrunTutarOzeti & { id: number; ad: string; cati: boolean; dosya: string; yukleyen: string; zaman: string | null }
+export type UrunTutarYukleme = {
+  eslesen: number
+  kart_musterisine: number
+  dosyadaki: { ad: string; musteri_no: string; satir: number }[]
+  dosyadaki_adet: number
+  kart_musteri_no: string
+  musteriler: (UrunTutarOzeti & { id: number; ad: string })[]
+}
+export type KaynakOnizleme = {
+  parti: number
+  toplam_satir: number
+  filtrelenen: number
+  musteri: number
+  eslesmeyen: number
+  eslesmeyen_ornek: [string, number][]
+  ornek: { ad: string; cati: boolean; deger: unknown; satir: number }[]
+}
+
 // --- Sorgu anahtarlari --------------------------------------------------------------------------------------------------
 export const ANAHTAR = {
+  skorKriter: ["skor", "kriterler"] as const,
+  skorMeta: ["skor", "meta"] as const,
+  skorAgac: ["skor", "agac"] as const,
+  skorSiralama: ["skor", "siralama"] as const,
+  skorTalepler: ["skor", "talepler"] as const,
+  skorUrunTutar: ["skor", "urun-tutar"] as const,
   ozet: ["yonetim", "ozet"] as const,
   veritabani: ["yonetim", "veritabani"] as const,
   arizalar: ["yonetim", "arizalar"] as const,

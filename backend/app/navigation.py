@@ -25,9 +25,11 @@ PRESENTATION: dict[str, tuple[str, str, str, str]] = {
     "baglantili": ("work", "link", "Kurum içi bağlantılı araçlar", "Internal connected tools"),
 }
 
-# Yalnız admin: TEK giriş, altı bölüm (kimlik "yonetim/<bolum>"). Eski admin / integrations / veri / roller girişleri buraya indi.
+# Yalnız admin: TEK giriş, yedi bölüm (kimlik "yonetim/<bolum>"). Eski admin / integrations / veri / roller girişleri buraya indi.
+# Katalogdaki "utilizasyon" modülü (yalnız admin) arayüzde yonetim/utilizasyon bölümüne açılır.
 YONETIM_BOLUMLERI: tuple[tuple[str, str, str, str, str], ...] = (
     ("durum", "Genel Durum", "Sağlık kontrolleri ve göstergeler", "Overview", "Health checks and indicators"),
+    ("utilizasyon", "TAM Utilizasyon", "Final skor kriterleri, toplu atama, skor ağacı", "TAM Utilization", "Final score criteria, bulk assignment, score tree"),
     ("tampon", "Veri Girişi", "Dış kaynak verisi: tampon, analiz, dağıtım", "Data intake", "External data: buffer, analysis, distribution"),
     ("veritabani", "Veritabanı", "Sürüm, tablolar, bütünlük ve yedek", "Database", "Version, tables, integrity and backup"),
     ("roller", "Roller", "Rol görünümleri ve giriş sayfaları", "Roles", "Role views and landing pages"),

@@ -128,10 +128,10 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     data = client.get("/api/v1/session/me").json()["data"]
     ids = {item["id"] for item in data["navigation"]}
     assert {"musteri", "utilizasyon", "yonetim"} <= ids
-    assert not ids & {"roller", "admin", "integrations", "veri"}  # admin icin tek giris: Yonetim (alti bolum); eski kimlikler yok
+    assert not ids & {"roller", "admin", "integrations", "veri"}  # admin icin tek giris: Yonetim (yedi bolum); eski kimlikler yok
     yonetim = next(i for i in data["navigation"] if i["id"] == "yonetim")
     assert [c["id"] for c in yonetim["children"]] == [
-        f"yonetim/{b}" for b in ("durum", "tampon", "veritabani", "roller", "arizalar", "gunlukler")
+        f"yonetim/{b}" for b in ("durum", "utilizasyon", "tampon", "veritabani", "roller", "arizalar", "gunlukler")
     ]
     assert yonetim["group"] == "admin"
     assert data["idle_timeout_minutes"] == get_settings().session_idle_minutes

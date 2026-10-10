@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Activity, ArrowDownToLine, Database, ScrollText, ShieldCheck, TriangleAlert } from "lucide-react"
+import { Activity, ArrowDownToLine, ChartColumn, Database, ScrollText, ShieldCheck, TriangleAlert } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { MenuOgesi } from "@/lib/oturum"
 import type { Dil } from "@/shell/metin"
@@ -14,6 +14,7 @@ import { Yukleniyor } from "@/components/sayfa-ui"
 /** Her bolum ayri JS parcasidir: Yonetim yalniz admin acinca indirilir, diger kullanicilarin ilk yuklemesini sismirmez. */
 const BOLUMLER = {
   durum: { ikon: Activity, bilesen: lazy(() => import("@/yonetim/bolumler/durum")) },
+  utilizasyon: { ikon: ChartColumn, bilesen: lazy(() => import("@/yonetim/bolumler/utilizasyon")) },
   tampon: { ikon: ArrowDownToLine, bilesen: lazy(() => import("@/yonetim/bolumler/tampon")) },
   veritabani: { ikon: Database, bilesen: lazy(() => import("@/yonetim/bolumler/veritabani")) },
   roller: { ikon: ShieldCheck, bilesen: lazy(() => import("@/yonetim/bolumler/roller")) },
@@ -28,7 +29,7 @@ export function bolumMu(deger: string): deger is BolumKimligi {
   return deger in BOLUMLER
 }
 
-/** Yonetim (yalniz admin): tek giris, alti bolum. Adres #/yonetim/<bolum>; bolum yoksa Genel Durum. */
+/** Yonetim (yalniz admin): tek giris, yedi bolum. Adres #/yonetim/<bolum>; bolum yoksa Genel Durum. */
 export default function YonetimSayfasi({ dil, bolum, digerleri }: { dil: Dil; bolum: string; digerleri: MenuOgesi[] }) {
   const t = ym(dil)
   const aktif: BolumKimligi = bolumMu(bolum) ? bolum : "durum"

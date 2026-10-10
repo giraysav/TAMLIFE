@@ -1,4 +1,4 @@
-# Uretimden birebir tasindi: kutucuklar/utilizasyon/skor_motoru.py (2026-10-04).
+# Uretimden birebir tasindi: kutucuklar/utilizasyon/skor_motoru.py (2026-10-04; 'X' sabit puan kurali 2026-10-10).
 # Hesap kurali degistirilmez; esdegerlik testi tests/test_skor.py.
 """Final skor motoru - sunucu tarafi (2026-09-27). Toplu dinamik atamanin altyapisi.
 
@@ -41,6 +41,9 @@ SAYISAL = {'auto_onedesk': 'sikayet_talep', 'auto_servis_sayisi': 'lokasyon_sayi
            'servis_cesitliligi': 'servisler', 'auto_sozlesme': 'fatura_bedeli', 'auto_rapor': 'rapor_sayisi'}
 KATEGORIK = {'auto_segment': 'segment', 'auto_baglanti': 'baglanti'}
 KAYNAKSIZ = 'auto_kaynaksiz'
+# Sozlesme / Raporlama satirinda barem hucrelerinden TEK birine 'X' yazilirsa o hucrenin puani TUM musteriler icin
+# sabit puandir (kullanici karari 2026-10-08); diger hucreler arayuzde kilitlenir, burada yok sayilir.
+SABIT_PUAN_TURLERI = ('auto_sozlesme', 'auto_rapor')
 OTOMATIK_TURLER = tuple(SAYISAL) + tuple(KATEGORIK) + (KAYNAKSIZ,)
 # Baslik -> tur (normalize baslikta ilk eslesen; sira onemli). Sayfadaki TUR_IPUCLARI ile AYNI.
 TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('sikayet', 'auto_onedesk'), ('talep', 'auto_onedesk'),
@@ -74,8 +77,22 @@ SERVIS_PUANLARI = {
     'Güvenlik': 10, 'Cloud': 10, 'Data': 8, 'DWDM': 8, 'SDWAN': 8, 'SOC': 8, 'Yurt Dışı': 8,
     'WIFI': 7, 'Ses': 5, 'Co-Location': 5, '5651 Loglama': 3,
 }
+# Kriter tablosu hic kaydedilmemisse (cati ve istirak) kullanilan resmi Excel modeli: 7 kriter, agirliklar 20/20/5/5/15/20/15.
+# Uretim kutucuklar/utilizasyon/servis.py _default_util_criteria ile birebir.
+VARSAYILAN_KRITERLER = (
+    {'type': 'auto_onedesk', 'title': '1. Şikayet/Talep Yoğunluğu', 'metric': 'Yıl boyu açık + kapanan şikayet ve talep (OneDesk)', 'b30': '1-49', 'b50': '50-199', 'b70': '200-499', 'b100': '500+', 'weight': 20},
+    {'type': 'servis_cesitliligi', 'title': '2. Servis Çeşitliliği', 'metric': 'Servis puanları toplamı (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-29', 'b70': '30-39', 'b100': '40+', 'weight': 20},
+    {'type': 'auto_servis_sayisi', 'title': '3. Lokasyon Sayısı', 'metric': 'Açık adres + atanmış devre (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-99', 'b70': '100-299', 'b100': '300+', 'weight': 5},
+    {'type': 'auto_baglanti', 'title': '4. Bağlantı Tipi', 'metric': 'ME / DSL / Mobile Backup yapısı (Ürün-Tutar)', 'b30': '', 'b50': '', 'b70': '', 'b100': '', 'weight': 5},
+    {'type': 'auto_segment', 'title': '5. Segment', 'metric': 'SMB 50 · MA 70 · SA / PA / WHOLESALE 100', 'b30': '', 'b50': 'SMB', 'b70': 'MA', 'b100': 'SA, PA, WHOLESALE', 'weight': 15},
+    {'type': 'auto_sozlesme', 'title': '6. Sözleşme', 'metric': 'Fatura bedeli TL (Ürün-Tutar; yedek: kart FT Hacim)', 'b30': '1-49.999', 'b50': '50.000-249.999', 'b70': '250.000-999.999', 'b100': '1.000.000+', 'weight': 20},
+    {'type': 'auto_rapor', 'title': '7. Raporlama', 'metric': 'Bu yıl aylık rapor hazırlanan ay sayısı', 'b30': '1-3', 'b50': '4-6', 'b70': '7-9', 'b100': '10+', 'weight': 15},
+)  # fmt: skip
 
 
+def varsayilan_kriterler():
+    """VARSAYILAN_KRITERLER'in degistirilebilir kopyasi."""
+    return [dict(k) for k in VARSAYILAN_KRITERLER]
 
 
 def tur_coz(kriter):
@@ -162,8 +179,20 @@ def servis_puani(kriter, servisler):
     return toplam
 
 
+def sabit_puan(kriter):
+    """Sozlesme / Raporlama satirinda tam bir barem hucresinde 'X' varsa o hucrenin puani (30/50/70/100), yoksa None.
+    Birden fazla X belirsizdir (arayuz buna izin vermez): kural gecerli sayilmaz, satir normal kuralla hesaplanir."""
+    if tur_coz(kriter) not in SABIT_PUAN_TURLERI:
+        return None
+    isaretli = [puan for alan, puan in BAREM_ALANLARI if normal((kriter or {}).get(alan)) == 'x']
+    return isaretli[0] if len(isaretli) == 1 else None
+
+
 def kural_puani(kriter, deger):
     """Musterinin degeri -> (puan, eslesen_kural_puani|None). Tutmayan kural = 0 puan."""
+    sabit = sabit_puan(kriter)
+    if sabit is not None:
+        return sabit, deger
     tur = tur_coz(kriter)
     liste, _ = kurallar(kriter)
     if tur in SAYISAL:
@@ -191,6 +220,11 @@ def kriter_degerlendir(kriter, metrikler, manuel=None):
         agirlik = 0.0
     sonuc = {'baslik': baslik, 'tur': tur, 'agirlik': agirlik, 'puan': 0, 'katki': 0.0,
              'durum': 'eksik', 'kaynak': None, 'deger': None, 'varsayilan_kural': False}
+    sabit = sabit_puan(kriter)
+    if sabit is not None:       # X isareti: veri gerekmez, her musteri ayni puani alir
+        sonuc.update(puan=sabit, durum='otomatik', kaynak='Sabit puan (X işareti)', deger='X')
+        sonuc['katki'] = round(agirlik * (sabit / 100), 4)
+        return sonuc
     anahtar = SAYISAL.get(tur) or KATEGORIK.get(tur)
     metrik = (metrikler or {}).get(anahtar) if anahtar else None
     if metrik is not None:

@@ -40,9 +40,10 @@ const IzinTakvim = lazy(() => import("@/takvim/izin-takvim").then((m) => ({ defa
 const TamTakvim = lazy(() => import("@/takvim/tam-takvim").then((m) => ({ default: m.TamTakvim })))
 const SunumSayfasi = lazy(() => import("@/sunum/sunum-sayfasi").then((m) => ({ default: m.SunumSayfasi })))
 
-/** Eski yonetim adresleri (yer imleri, gecmis) tek Yonetim alaninin bolumlerine yonlenir. */
+/** Eski yonetim adresleri (yer imleri, gecmis) ve Yonetim'e katlanan modul (utilizasyon) tek Yonetim alaninin bolumlerine yonlenir. */
 const ESKI_ADRESLER: Record<string, string> = {
   admin: "yonetim/durum",
+  utilizasyon: "yonetim/utilizasyon",
   integrations: "yonetim/durum",
   veri: "yonetim/veritabani",
   roller: "yonetim/roller",
@@ -210,8 +211,8 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis }: Props) {
   const kullanici = useMemo(() => ({ ...oturum, navigation: yerelMenu(oturum.navigation, dil) }), [oturum, dil])
   const [secili, setSecili] = useState(() => hashId() || "ozet")
   const icerik = useRef<HTMLElement>(null)
-  /** Yonetim disindaki admin alanlari (orn. TAM Utilizasyon): Yonetim sayfasinin altinda baglanti olarak gorunur. */
-  const digerYonetim = useMemo(() => kullanici.navigation.filter((o) => o.group === "admin" && o.id !== "yonetim"), [kullanici.navigation])
+  /** Yonetim disindaki admin alanlari: Yonetim sayfasinin altinda baglanti olarak gorunur (Yonetim bolumune katlananlar, orn. TAM Utilizasyon, haric). */
+  const digerYonetim = useMemo(() => kullanici.navigation.filter((o) => o.group === "admin" && o.id !== "yonetim" && !ESKI_ADRESLER[o.id]), [kullanici.navigation])
   const izinli = useMemo(() => {
     const kume = new Set(["ozet", "profil"])
     for (const o of kullanici.navigation) {

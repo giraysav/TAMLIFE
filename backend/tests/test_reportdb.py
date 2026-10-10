@@ -622,5 +622,5 @@ def test_dilimsiz_kaynak_saati_turkiye_saati_sayilir():
     from app.onedesk.ice_al import tarih_oku
 
     assert tarih_oku("10.10.2026 12:00:00") == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)  # Onedesk/Oracle yerel saat -> UTC
-    assert tarih_oku(datetime(2026, 10, 10, 12, 0)) == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)
+    assert tarih_oku(datetime(2026, 10, 10, 12, 0)) == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)  # noqa: DTZ001 - dilimsiz deger bilerek (yerel saat)
     assert tarih_oku(datetime(2026, 10, 10, 12, 0, tzinfo=UTC)) == datetime(2026, 10, 10, 12, 0, tzinfo=UTC)  # dilimli dokunulmaz

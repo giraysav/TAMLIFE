@@ -34,6 +34,7 @@ from app.models import (
     ScoreDetail,
     ScoreHistory,
     SmsRevenue,
+    UrunTutarOzet,
 )
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
@@ -585,7 +586,7 @@ def sil(db: Session, user: Principal, musteri_id: int) -> dict:
         kimlikler += cocuklar
         kuyruk = cocuklar
     # Once gonderimler (rapora bagli), sonra raporlar ve digerleri; en son musteriler (altlar ustten once).
-    for tablo in (ReportDispatch, ReportDraft, ReportRecipient, Report, CustomerTeam, ScoreHistory, ScoreDetail, ScoreApprovalRequest, AffiliateFinalFlag):
+    for tablo in (ReportDispatch, ReportDraft, ReportRecipient, Report, CustomerTeam, ScoreHistory, ScoreDetail, ScoreApprovalRequest, AffiliateFinalFlag, UrunTutarOzet):
         db.execute(delete(tablo).where(tablo.customer_id.in_(kimlikler)))
     for kimlik in reversed(kimlikler):
         db.execute(delete(Customer).where(Customer.id == kimlik))

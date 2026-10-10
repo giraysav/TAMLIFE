@@ -1,30 +1,34 @@
-"""Final skor HTTP katmani (/api/v1/skor). Is kurali skor_servis.py ve skor.py'dedir."""
+"""Final skor / TAM Utilizasyon HTTP katmani (/api/v1/skor). Is kurali servis.py, motor.py, kaynaklar.py'dedir.
+
+Yetki (uretim moduller.py: utilizasyon yalniz_admin; uclar @modul_gerekli('utilizasyon') / @admin_required): yonetim uclarinin
+hepsi YALNIZ admin. Tek istisna TAM tarafindaki "skor atamasi iste" (POST /talepler): oturum + kendi musterisi.
+"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.audit import audit_log
-from app.db import get_db
+from app.config import get_settings
+from app.db import get_db, oturum
 from app.deps import require_admin, require_user
+from app.kullanicilar import kullanici_kaydi
 from app.ortak import KimlikTipi, ok
 from app.session import Principal
-from app.skor import servis
+from app.skor import kaynak_secimi, servis, urun_tutar
 
 router = APIRouter(prefix="/api/v1/skor", tags=["skor"])
 
 
-def _final_yetki(user: Principal = Depends(require_user)) -> Principal:
-    if not servis.final_skor_yetkisi(user):
-        raise HTTPException(status_code=403, detail="Yetki yok")
-    return user
-
-
-
 def _denetim(user: Principal, islem: str, detay: str = "") -> None:
     audit_log.remember(actor=user.username, action=islem, outcome="allow", module_key="utilizasyon", detail=detay)
+
+
+def _kimlik(db: Session, user: Principal) -> int:
+    return kullanici_kaydi(db, user).id
 
 
 class KriterGovde(BaseModel):
@@ -61,43 +65,61 @@ class IstirakGovde(BaseModel):
     dahil: bool
 
 
+class OnizleGovde(BaseModel):
+    satir: dict
+
+
 @router.get("/kriterler/{scope}")
 def kriterleri_oku(scope: str, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
-    surum, satirlar = servis.kriterler_oku(db, scope)
-    return ok({"scope": scope, "version": surum, "criteria": satirlar})
+    return ok(servis.kriter_tablosu(db, scope))
 
 
 @router.put("/kriterler/{scope}")
 def kriterleri_kaydet(scope: str, body: KriterGovde, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
-    sonuc = servis.kriterler_kaydet(db, scope, body.criteria, user.username)
+    sonuc = servis.kriterler_kaydet(db, scope, body.criteria, user.username, _kimlik(db, user))
     db.commit()
-    _denetim(user, "skor.kriter_kaydet", f"scope={scope} surum={sonuc['version']}")
+    u = sonuc["uygulama"]
+    ek = f" uygulanan={len(u['uygulanan'])} atlanan={len(u['atlanan'])} degismeyen={u['degismeyen']}" if u else ""
+    _denetim(user, "skor.kriter_kaydet", f"scope={scope} surum={sonuc['version']}{ek}")
     return ok(sonuc)
 
 
+@router.get("/meta")
+def meta(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    return ok(servis.meta(db))
+
+
+@router.post("/kaynak-onizle")
+def kaynak_onizle(body: OnizleGovde, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    return ok(kaynak_secimi.onizle(db, body.satir))
+
+
 @router.post("/toplu/onizleme")
-def toplu_onizleme(body: TopluOnizleme, user: Principal = Depends(_final_yetki), db: Session = Depends(get_db)) -> dict:
-    kriterler, sonuc = servis.hesapla(db, servis.cati_musteriler(db, body.tam_id))
-    return ok(
-        {
-            "kriterler": [{"baslik": k.get("title"), "tur": k.get("type") or "manual", "agirlik": k.get("weight")} for k in kriterler],
-            "musteriler": sonuc,
-            "ozet": {"toplam": len(sonuc), "hazir": sum(1 for s in sonuc if s["tamam"])},
-        }
-    )
+def toplu_onizleme(body: TopluOnizleme, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    return ok(servis.onizleme(db, body.tam_id))
 
 
 @router.post("/toplu/uygula")
-def toplu_uygula(body: TopluUygula, user: Principal = Depends(_final_yetki), db: Session = Depends(get_db)) -> dict:
-    sonuc = servis.toplu_uygula(db, body.customer_ids, user.username)
+def toplu_uygula(body: TopluUygula, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    sonuc = servis.toplu_uygula(db, body.customer_ids, user.username, _kimlik(db, user))
     db.commit()
     _denetim(user, "skor.toplu_uygula", f"uygulanan={len(sonuc['uygulanan'])} atlanan={len(sonuc['atlanan'])}")
     return ok(sonuc)
 
 
+@router.get("/agac")
+def agac(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    return ok(servis.agac(db))
+
+
+@router.get("/siralama")
+def siralama(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    return ok(servis.siralama(db))
+
+
 @router.put("/musteri/{musteri_id}")
-def musteri_skoru(musteri_id: KimlikTipi, body: MusteriSkoru, user: Principal = Depends(_final_yetki), db: Session = Depends(get_db)) -> dict:
-    servis.musteri_skoru_ata(db, musteri_id, body.tam_id, body.score, body.detay, user.username)
+def musteri_skoru(musteri_id: KimlikTipi, body: MusteriSkoru, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    servis.musteri_skoru_ata(db, musteri_id, body.tam_id, body.score, body.detay, user.username, _kimlik(db, user))
     db.commit()
     _denetim(user, "skor.musteri", f"musteri={musteri_id}")
     return ok({"customer_id": musteri_id})
@@ -112,14 +134,14 @@ def talep_ac(body: TalepGovde, user: Principal = Depends(require_user), db: Sess
 
 
 @router.get("/talepler")
-def talepleri_listele(user: Principal = Depends(_final_yetki), db: Session = Depends(get_db)) -> dict:
+def talepleri_listele(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
     satirlar = servis.talepler(db)
     return ok({"count": len(satirlar), "requests": satirlar})
 
 
 @router.post("/talepler/{talep_id}/karar")
-def talep_karar(talep_id: KimlikTipi, body: KararGovde, user: Principal = Depends(_final_yetki), db: Session = Depends(get_db)) -> dict:
-    servis.talep_karar(db, talep_id, body.action, user)
+def talep_karar(talep_id: KimlikTipi, body: KararGovde, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    servis.talep_karar(db, talep_id, body.action, _kimlik(db, user))
     db.commit()
     _denetim(user, "skor.talep_karar", f"talep={talep_id} islem={body.action}")
     return ok({"id": talep_id})
@@ -139,3 +161,40 @@ def istirak_final_dahil(musteri_id: KimlikTipi, body: IstirakGovde, user: Princi
     db.commit()
     _denetim(user, "skor.istirak_dahil", f"musteri={musteri_id} dahil={dahil}")
     return ok({"dahil": dahil})
+
+
+@router.get("/urun-tutar")
+def urun_tutar_listesi(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    return ok(servis.urun_tutar_listesi(db))
+
+
+def _urun_tutar_yukle(musteri_id: int, veri: bytes, dosya: str, kullanici: str) -> dict:
+    """Kendi oturumunda (threadpool): openpyxl okumasi CPU-yogun; olay dongusunu bekletmez."""
+    with oturum() as db:
+        sonuc = urun_tutar.yukle(db, musteri_id, veri, dosya, kullanici)
+        db.commit()
+        return sonuc
+
+
+@router.put("/urun-tutar/{musteri_id}")
+async def urun_tutar_yukle(
+    musteri_id: KimlikTipi,
+    request: Request,
+    dosya: str = Query(default="", max_length=200),
+    user: Principal = Depends(require_admin),
+) -> dict:
+    """Ham .xlsx govdesi (tampon yuklemesiyle ayni kalip: cok parcali form yok). Ozet musteri basina son yuklemeyle degisir."""
+    sinir = get_settings().ingest_max_mb * 1024 * 1024
+    bildirilen = request.headers.get("content-length", "")
+    if bildirilen.isdigit() and int(bildirilen) > sinir:
+        raise HTTPException(status_code=413, detail=f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).")
+    parcalar: list[bytes] = []
+    boyut = 0
+    async for parca in request.stream():
+        boyut += len(parca)
+        if boyut > sinir:
+            raise HTTPException(status_code=413, detail=f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).")
+        parcalar.append(parca)
+    sonuc = await run_in_threadpool(_urun_tutar_yukle, musteri_id, b"".join(parcalar), dosya or "urun_tutar.xlsx", user.username)
+    _denetim(user, "skor.urun_tutar", f"musteri={musteri_id} ozet={len(sonuc['musteriler'])} eslesen={sonuc['eslesen']}")
+    return ok(sonuc)

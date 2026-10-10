@@ -51,6 +51,7 @@ TABLE_OWNER = {
     "score_approval_request": "utilizasyon",
     "scoring_exclusion": "utilizasyon",
     "affiliate_final_flag": "utilizasyon",
+    "urun_tutar_ozet": "utilizasyon",
     "demand": "talep",
     "demand_log": "talep",
     "sms_revenue": "tamsms",
@@ -311,12 +312,13 @@ class ScoreDetail(Base):
 
 
 class ScoreHistory(Base):
-    """source: 'sayfa' | 'toplu' | 'kriter_degisikligi'."""
+    """source: 'sayfa' | 'toplu' | 'kriter_degisikligi'. old_score: yazilmadan onceki skor (uretim skor_gecmisi.eski)."""
 
     __tablename__ = "score_history"
     __table_args__ = (Index("ix_score_history_customer_at", "customer_id", "at"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"))
+    old_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     score: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(40))
     actor: Mapped[str] = mapped_column(String(120), default="")
@@ -359,6 +361,18 @@ class AffiliateFinalFlag(Base):
     __tablename__ = "affiliate_final_flag"
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
     included: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class UrunTutarOzet(Base):
+    """Urun-Tutar Excel ozeti (uretim analiz.db urun_tutar): musteri basina son yukleme degistirir. Ham satir (adres, devre,
+    numara) SAKLANMAZ; yalniz skor icin gereken ozet (servisler, lokasyon, baglanti, fatura...). Bkz. app/skor/urun_tutar.py."""
+
+    __tablename__ = "urun_tutar_ozet"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    file_name: Mapped[str] = mapped_column(String(200), default="")
+    uploaded_by: Mapped[str] = mapped_column(String(120), default="")
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Demand(Base):

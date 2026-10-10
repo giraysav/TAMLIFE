@@ -11,3 +11,5 @@ oracledb==26.0.1  # Oracle (ReportDB/Onent/Urun-Tutar); yalniz isci surecte ve k
 cryptography==50.0.1
 cffi==2.1.1
 pycparser==3.0
+openpyxl==3.1.5  # Urun-Tutar Excel (Utilizasyon); yalniz yuklemede tembel yuklenir
+et-xmlfile==2.0.0
