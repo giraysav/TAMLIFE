@@ -19,7 +19,7 @@ from app.deps import require_admin
 from app.models import IngestBatch
 from app.ortak import KimlikTipi, UygulamaHatasi, iso, ok, sayfa_bilgisi
 from app.session import Principal
-from app.tampon import analiz, dagitim, depo, kaynak
+from app.tampon import analiz, dagitim, depo, kaynak, oracle
 
 router = APIRouter(prefix="/api/v1/tampon", tags=["tampon"])
 
@@ -83,6 +83,15 @@ class KuralGovde(BaseModel):
 @router.get("/kaynaklar")
 def kaynaklar(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     return ok(kaynak.durumlar(db))
+
+
+@router.post("/kaynaklar/{anahtar}/test")
+def kaynak_testi(anahtar: str, admin: Principal = Depends(require_admin)) -> dict[str, Any]:
+    """Oracle baglanti testi (SELECT 1 FROM DUAL) AYRI surecte; yanit adres/parola tasimaz. Panel kimligi Oracle giris tetikleyicisinden
+    gecmeyebilir: o durumda hata doner, zamanlanmis gorev (izinli kimlik) yine calisir."""
+    sonuc = oracle.baglanti_testi(anahtar[:40])
+    _denetim(admin, "tampon.kaynak_testi", f"kaynak={anahtar[:40]} ok={sonuc['ok']}")
+    return ok(sonuc)
 
 
 @router.get("/hedefler")

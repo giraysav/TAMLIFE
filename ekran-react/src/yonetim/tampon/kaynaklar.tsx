@@ -1,11 +1,11 @@
 import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { FlaskConical, Upload } from "lucide-react"
+import { FlaskConical, PlugZap, Upload } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, sorguMetni, yaz, yukle } from "@/lib/sorgu"
-import type { Kaynak, Parti } from "@/yonetim/api"
+import type { BaglantiTesti, Kaynak, Parti } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
 import { zaman } from "@/lib/bicim"
 
@@ -48,6 +48,11 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
   const ornek = useMutation({
     mutationFn: () => yaz<Parti>("POST", "/api/v1/tampon/ornek"),
     onSuccess: partiSonucu,
+    onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
+  })
+  const test = useMutation({
+    mutationFn: (anahtar: string) => yaz<BaglantiTesti>("POST", `/api/v1/tampon/kaynaklar/${encodeURIComponent(anahtar)}/test`),
+    onSuccess: (s) => setBilgi({ ton: s.ok ? "yesil" : "amber", metin: [s.mesaj, s.ipucu].filter(Boolean).join(" — ") }),
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
   })
 
@@ -117,12 +122,24 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
                 baslik: t.durum,
                 hucre: (k) =>
                   k.tur === "oracle" ? (
-                    <span className="grid gap-0.5">
-                      <Rozet ton="gri">{t.canliKapali}</Rozet>
+                    <span className="grid justify-items-start gap-0.5">
+                      <Rozet ton={k.hazir ? "yesil" : "gri"}>{k.hazir ? t.canliHazir : t.canliKapali}</Rozet>
                       <span className="text-[10px] text-slate-400">
                         {t.yapilandirma[k.yapilandirma]}
                         {k.eksik.length ? ` · ${t.eksikAnahtar}: ${k.eksik.join(", ")}` : ""}
                       </span>
+                      {k.reportdb ? (
+                        <span className="text-[10px] text-slate-400">
+                          {t.kartlaraYaz(k.reportdb.kartlara_yaz)}
+                          {k.reportdb.yas_dk !== null ? ` · ${t.sonVeriYasi(k.reportdb.yas_dk, k.reportdb.taze)}` : ""}
+                        </span>
+                      ) : null}
+                      {k.hazir ? (
+                        <button type="button" className={DUGME} disabled={test.isPending} onClick={() => test.mutate(k.anahtar)}>
+                          <PlugZap aria-hidden className="size-3.5" />
+                          {test.isPending && test.variables === k.anahtar ? t.testEdiliyor : t.baglantiTesti}
+                        </button>
+                      ) : null}
                     </span>
                   ) : (
                     <Rozet ton="yesil">{t.yapilandirma.tamam}</Rozet>

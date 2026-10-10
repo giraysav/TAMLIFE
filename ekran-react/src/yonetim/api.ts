@@ -62,14 +62,16 @@ export type GunlukDosyasi = { dosya: string; var: boolean; satirlar: string[] }
 export type Kaynak = {
   anahtar: string
   ad: string
-  tur: "dosya" | "ornek" | "oracle"
+  tur: "dosya" | "ornek" | "oracle" | "oracle_parti"
   hazir: boolean
   neden: string
   yapilandirma: "tamam" | "eksik" | "kapalı"
   eksik: string[]
   parti_sayisi: number
   son: { id: number; durum: string; satir: number; zaman: string | null; hata: string } | null
+  reportdb?: { kartlara_yaz: boolean; kural: number; yas_dk: number | null; taze: boolean; tazelik_dk: number }
 }
+export type BaglantiTesti = { ok: boolean; mesaj: string; ipucu: string }
 export type Parti = {
   id: number
   kaynak: string

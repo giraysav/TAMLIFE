@@ -1,6 +1,6 @@
 """Dis kaynaklar: uretimdeki anahtar adlari (ORACLE_REPORTDB_*, ONENTDB_DB_*, URUNTUTAR_DB_*).
 
-Deger okunmaz, surucu yuklenmez, baglanti acilmaz.
+Burada yalniz *_ENABLED bayragi okunur (acik_mi); surucu yuklenmez, baglanti acilmaz (baglanti: app.tampon.oracle, isci surecte).
 Onedesk DB, canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski
 kodun ONEDESK_DB_* adi artik yok). Onent ve Urun-Tutar anahtarlari
 api_services.OracleSourceConfig ile integrations.py kaydindan gelir.
@@ -8,6 +8,7 @@ api_services.OracleSourceConfig ile integrations.py kaydindan gelir.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 
@@ -75,6 +76,24 @@ SOURCES: tuple[Source, ...] = (
         _oracle("ONENTDB_DB", "ONENT_DB_URL"),
     ),
 )
+
+ORACLE_ZORUNLU = ("HOST", "SERVICE_NAME", "USER", "PASSWORD")  # uretim baglanti_eksikleri; PORT bossa 1521
+
+
+def acik_mi(anahtar: str) -> bool:
+    """*_ENABLED bayragi: yalniz 'true' acar (uretim OracleSourceConfig ile ayni; 'false' dolu diye acik sayilmaz)."""
+    return os.environ.get(anahtar, "").strip().lower() == "true"
+
+
+def on_ek(source: Source) -> str:
+    """'ORACLE_REPORTDB_ENABLED' -> 'ORACLE_REPORTDB'."""
+    return source.enabled_key.rsplit("_ENABLED", 1)[0]
+
+
+def oracle_eksikleri(source: Source) -> list[str]:
+    """Bos zorunlu baglanti anahtarlarinin ADLARI (deger degil)."""
+    return [f"{on_ek(source)}_{ad}" for ad in ORACLE_ZORUNLU if not os.environ.get(f"{on_ek(source)}_{ad}", "").strip()]
+
 
 def source_key_names() -> tuple[str, ...]:
     names: list[str] = list(SHARED_ORACLE_KEYS)

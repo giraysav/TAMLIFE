@@ -1,15 +1,14 @@
-"""Kaynaklar: tampona veri getiren yollar. Bugun: CSV yukleme ve ornek veri (yalniz gelistirme).
+"""Kaynaklar: tampona veri getiren yollar. CSV yukleme, ornek veri (yalniz gelistirme) ve Oracle kaynaklari (ReportDB, Onent, Urun-Tutar).
 
-Oracle kaynaklari (ReportDB, Onent, Urun-Tutar) AYNI arayuzde gorunur ama canli baglanti KAPALIDIR (app.external.connect).
-Acilacagi gun: ayri bir isci surec kaynaktan SELECT calistirip satirlari depo.ice_al'a verir; panel sureci Oracle'a baglanmaz
-(uretimde de boyleydi: native surucu web surecine yuklenmez).
+Oracle: <ON EK>_ENABLED=true + zorunlu anahtarlar doluyken 'hazir'. Cekimi panel DEGIL isci surec yapar (python -m app.isci; uretimde de
+boyleydi: surucu web surecine yuklenmez, panel kimligi Oracle giris tetikleyicisinden gecmez). Panel yalniz durumu gosterir ve
+baglanti testini ayri surecte calistirir (oracle.baglanti_testi).
 """
 
 from __future__ import annotations
 
 import csv
 import io
-import os
 import random
 import re
 from collections import Counter
@@ -20,10 +19,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.external import SOURCES
 from app.models import Customer, IngestBatch
 from app.ortak import UygulamaHatasi, iso
-from app.tampon import depo
+from app.tampon import depo, oracle, reportdb
 from app.tampon.eslestirme import musteri_anahtarlari
 
 ORNEK = "ornek"
@@ -33,6 +31,10 @@ _SLUG = re.compile(r"[^a-z0-9]+")
 
 
 _ASCII = str.maketrans("ıİşŞğĞüÜöÖçÇ", "iIsSgGuUoOcC")
+ORACLE_PARTI_ADLARI = {
+    reportdb.KAYIT_KAYNAGI: "ReportDB alarm kayıtları (Onedesk'e)",
+    **{f"{k}_import": f"{s.label} · içeri alma sorgusu" for k, s in oracle.KAYNAKLAR.items()},
+}
 
 
 def kaynak_anahtari(ad: str) -> str:
@@ -84,29 +86,28 @@ def csv_oku(veri: bytes) -> tuple[list[str], Iterator[list[Any]]]:
     return basliklar, satirlar()
 
 
-def _oracle_durum() -> list[dict[str, Any]]:
+def _oracle_durum(db: Session) -> list[dict[str, Any]]:
     cikti = []
-    for s in SOURCES:
-        if s.id.endswith("_import"):
-            continue
-        onek = s.enabled_key.rsplit("_ENABLED", 1)[0]
-        acik = bool(os.environ.get(s.enabled_key, "").strip())
-        eksik = [
-            f"{onek}_{a}"
-            for a in ("HOST", "PORT", "SERVICE_NAME", "USER", "PASSWORD")
-            if acik and not os.environ.get(f"{onek}_{a}", "").strip()
-        ]
-        cikti.append(
-            {
-                "anahtar": s.id,
-                "ad": s.label,
-                "tur": "oracle",
-                "hazir": False,
-                "neden": "Canlı bağlantı bu sürümde kapalı (ayrı işçi süreç ve sorgu sözleşmesi bekleniyor).",
-                "yapilandirma": "eksik" if eksik else ("tamam" if acik else "kapalı"),
-                "eksik": eksik,
-            }
-        )
+    for anahtar, s in oracle.KAYNAKLAR.items():
+        d = oracle.durum(anahtar)
+        if not d["acik"]:
+            neden = f"Kaynak kapalı ({s.enabled_key}=true değil)."
+        elif d["eksik"]:
+            neden = "Bağlantı ayarı eksik."
+        else:
+            neden = "Çekim ayrı işçi süreçte (python -m app.isci); panel Oracle'a bağlanmaz."
+        satir: dict[str, Any] = {
+            "anahtar": anahtar,
+            "ad": s.label,
+            "tur": "oracle",
+            "hazir": d["hazir"],
+            "neden": neden,
+            "yapilandirma": "kapalı" if not d["acik"] else ("eksik" if d["eksik"] else "tamam"),
+            "eksik": d["eksik"],
+        }
+        if anahtar == reportdb.KAYNAK:
+            satir["reportdb"] = reportdb.durum(db)
+        cikti.append(satir)
     return cikti
 
 
@@ -128,15 +129,16 @@ def durumlar(db: Session) -> list[dict[str, Any]]:
                 "eksik": [],
             }
         )
-    liste.extend(_oracle_durum())
+    liste.extend(_oracle_durum(db))
     anahtarlar = db.scalars(select(IngestBatch.source_key).distinct()).all()
     for k in anahtarlar:
-        if k.startswith(CSV_ON_EK) and not any(x["anahtar"] == k for x in liste):
+        csv_mi = k.startswith(CSV_ON_EK)
+        if (csv_mi or k.startswith("oracle_")) and not any(x["anahtar"] == k for x in liste):
             liste.append(
                 {
                     "anahtar": k,
-                    "ad": f"CSV · {k[len(CSV_ON_EK) :]}",
-                    "tur": "dosya",
+                    "ad": f"CSV · {k[len(CSV_ON_EK) :]}" if csv_mi else ORACLE_PARTI_ADLARI.get(k, k),
+                    "tur": "dosya" if csv_mi else "oracle_parti",
                     "hazir": True,
                     "neden": "",
                     "yapilandirma": "tamam",
@@ -190,3 +192,27 @@ def ornek_parti(db: Session, kullanici: str) -> IngestBatch:
         satirlar.append([numaralar[0][0], numaralar[0][1], "Alarm", "Açık", "2026-10-01 09:00:00"])
     parti = depo.parti_olustur(db, ORNEK, "Örnek veri (yerel üretim, gerçek değil)", kullanici)
     return depo.ice_al(db, parti, basliklar, satirlar)
+
+
+def oracle_parti(db: Session, anahtar: str, kullanici: str) -> IngestBatch:
+    """<ON EK>_IMPORT_QUERY sonucu -> tampon partisi '<kaynak>_import' (uretim db_al.calistir). YALNIZ isci surec cagirir.
+
+    Satirlar blok blok akar (bellekte tum sonuc yok); sinir asilirsa sessizce kesmek yerine parti 'failed' olur. Hata metni
+    oracle.hata_metni'nden gecer (adres/parola tasimaz); basarisiz parti ekranda kalir (kaynagin yalniz son hatasi).
+    """
+    a = oracle.ayar(anahtar)
+    sorgu = oracle.sorgu_temizle(a.IMPORT_QUERY)
+    parti = depo.parti_olustur(db, f"{anahtar}_import", f"{a.kaynak.label} (içeri alma sorgusu)", kullanici)
+    db.commit()
+    parti_id = parti.id
+    try:
+        akis = a.akis(sorgu, get_settings().ingest_max_rows + 1)
+        basliklar = _basliklari_tekillestir([str(b or "") for b in next(akis)])
+        return depo.ice_al(db, parti, basliklar, ([oracle.deger(v) for v in s] for blok in akis for s in blok))
+    except UygulamaHatasi as e:
+        depo.basarisiz(db, parti_id, e.mesaj)
+        raise
+    except Exception as e:
+        mesaj = " ".join(oracle.hata_metni(e, a.gizliler())).strip()
+        depo.basarisiz(db, parti_id, mesaj)
+        raise oracle.OracleHata(mesaj, 502) from e

@@ -8,6 +8,8 @@ os.environ["TAMLIFE_ENV"] = "test"
 os.environ["TAMLIFE_LOCAL_USER"] = "admin"
 os.environ["TAMLIFE_LOCAL_PASSWORD"] = "test-parola-1"
 os.environ["TAMLIFE_LOCAL_ROLE"] = "admin"
+# TAMLIFE_ENV'i degistiren testlerde create_app() gercek backend/.env'i ortama eklemesin (Oracle/AD anahtarlari sonraki testlere sizardi).
+os.environ["TAMLIFE_ENV_DOSYASI"] = os.path.join(os.path.dirname(__file__), "yok.env")
 
 from collections.abc import Iterator
 from pathlib import Path

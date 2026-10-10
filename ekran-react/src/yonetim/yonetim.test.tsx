@@ -7,7 +7,7 @@ import type { Katalog, KuralGovdesi, Ozet } from "@/yonetim/api"
 import Arizalar from "@/yonetim/bolumler/arizalar"
 import Durum from "@/yonetim/bolumler/durum"
 import { ym } from "@/yonetim/metin"
-import { kaynakAdiOner } from "@/yonetim/tampon/kaynaklar"
+import { Kaynaklar, kaynakAdiOner } from "@/yonetim/tampon/kaynaklar"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
 import { bayt, sureYaz, zaman } from "@/lib/bicim"
 
@@ -251,4 +251,26 @@ describe("Kural formu", () => {
 
 beforeEach(() => {
   window.localStorage.clear()
+})
+
+describe("Veri Girisi kaynaklari", () => {
+  it("yalniz hazir Oracle kaynaginda baglanti testi var; sonuc ve ReportDB durumu gorunur", async () => {
+    const t = ym("tr")
+    const kaynak = { neden: "", eksik: [], parti_sayisi: 0, son: null }
+    const cagrilar = sahteSunucu({
+      "/kaynaklar/oracle_reportdb/test": { ok: false, mesaj: "ORA-12541: ***", ipucu: "Dinleyiciye ulaşılamadı (adres / port)." },
+      "/api/v1/tampon/kaynaklar": [
+        { ...kaynak, anahtar: "oracle_reportdb", ad: "Onedesk / REPORTDB", tur: "oracle", hazir: true, yapilandirma: "tamam",
+          reportdb: { kartlara_yaz: false, kural: 2, yas_dk: 3.5, taze: true, tazelik_dk: 20 } },
+        { ...kaynak, anahtar: "oracle_onent", ad: "Onent / Oracle", tur: "oracle", hazir: false, yapilandirma: "kapalı" },
+      ],
+    })
+    sarmala(<Kaynaklar dil="tr" onYeniParti={() => {}} />)
+    const dugmeler = await screen.findAllByRole("button", { name: t.baglantiTesti })
+    expect(dugmeler).toHaveLength(1)
+    expect(screen.getByText(t.kartlaraYaz(false) + " · " + t.sonVeriYasi(3.5, true))).toBeTruthy()
+    fireEvent.click(dugmeler[0])
+    expect(await screen.findByText(/ORA-12541: \*\*\* — Dinleyiciye/)).toBeTruthy()
+    expect(cagrilar.some((c) => c.endsWith("/api/v1/tampon/kaynaklar/oracle_reportdb/test"))).toBe(true)
+  })
 })

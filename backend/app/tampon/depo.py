@@ -64,6 +64,20 @@ def _basarisiz(db: Session, parti_id: int, mesaj: str) -> None:
     db.commit()
 
 
+def basarisiz(db: Session, parti_id: int, mesaj: str) -> None:
+    """Isci cekimi basarisiz: parti 'failed' (mesaj ekranda); ayni kaynagin ONCEKI failed partileri silinir (zamanlanmis gorev
+    her turda hata verse de liste sismez, son hata kalir)."""
+    _basarisiz(db, parti_id, mesaj)
+    parti = db.get(IngestBatch, parti_id)
+    if parti is None:
+        return
+    for eski in db.scalars(
+        select(IngestBatch.id).where(IngestBatch.source_key == parti.source_key, IngestBatch.status == "failed", IngestBatch.id != parti_id)
+    ).all():
+        sil(db, eski, kontrol=False)
+    db.commit()
+
+
 def ice_al(db: Session, parti: IngestBatch, basliklar: Sequence[str], satirlar: Iterable[Sequence[object]]) -> IngestBatch:
     """Satirlari bloklar halinde yazar, profil cikarir, korumalari uygular. Her blok kendi islemindedir (commit).
 

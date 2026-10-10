@@ -171,7 +171,7 @@ def test_kurum_baglantilari_yonetimde_sir_sizdirmaz(client, monkeypatch):
         assert r.status_code == 200
         assert "gizli-host.example" not in r.text and "cok-gizli-parola" not in r.text
     row = next(k for k in kaynaklar.json()["data"] if k["anahtar"] == "oracle_reportdb")
-    assert row["yapilandirma"] == "eksik" and "ORACLE_REPORTDB_PORT" in row["eksik"]
+    assert row["yapilandirma"] == "eksik" and "ORACLE_REPORTDB_SERVICE_NAME" in row["eksik"]  # PORT bossa 1521 (uretim kurali)
     assert "ORACLE_REPORTDB_HOST" not in row["eksik"]  # dolu olan anahtarin adi bile yok sayilir
     kontrol = next(k for k in ozet.json()["data"]["saglik"]["kontroller"] if k["id"] == "entegrasyon")
     assert kontrol["durum"] == "uyari"  # yarim yapilandirma uyari verir

@@ -1,23 +1,25 @@
 """Veri Girisi partisinden Onedesk kaydi aktarimi (admin).
 
-Kaynak: tampon.depo partisi (CSV ya da ileride canli Onedesk DB cekimi). Sutunlar baslik adindan tanir (uretim ats_analizi
-SUTUN_ADLARI mantigi); kayit numarasi (cagri no) varsa ayni numara + tur guncellenir, yoksa eklenir. Aktarimdan sonra
-etkilenen musterilerin sayaclari (acik / yil boyu kapanan) kayitlardan yeniden hesaplanir.
+Kaynak: tampon.depo partisi (CSV ya da isci surecin ReportDB alarm kayit partisi). Sutunlar baslik adindan tanir (uretim ats_analizi
+SUTUN_ADLARI mantigi); kayit numarasi (cagri no) varsa ayni numara + tur guncellenir, yoksa eklenir. Musteri: 'Musteri No' sutunu
+varsa once numarayla (tek karta duserse; uretim kurali), yoksa / eslesmezse unvanla. Aktarimdan sonra etkilenen musterilerin
+sayaclari (acik / yil boyu kapanan) kayitlardan yeniden hesaplanir (sayac_yenile=False: sayilar baska yoldan gelir).
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Customer, IngestBatch, OnedeskRecord
 from app.onedesk.servis import TURLER, OnedeskHata
 from app.ortak import eslestirme_anahtari, normal, simdi
 from app.tampon import depo
+from app.tampon.eslestirme import musteri_anahtarlari
 
 EN_COK_SATIR = 200_000
 PARCA = 500
@@ -27,6 +29,7 @@ SUTUN_ADLARI: dict[str, tuple[str, ...]] = {
     "tur": ("kayit turu", "cagri turu", "tur", "type"),
     "durum": ("durum", "status", "state", "statu"),
     "musteri": ("musteri adi", "musteri", "customer", "firma"),
+    "musteri_no": ("musteri no", "customer no", "musteri numarasi"),
     "lokasyon": ("lokasyon", "ci adi", "ci name", "location", "site", "konfigurasyon ogesi", "ci"),
     "kategori": ("kategori", "alarm adi", "category", "ozet", "summary"),
     "acilis": ("acilis tarihi", "acilis", "open date", "olusturma tarihi", "created"),
@@ -69,15 +72,19 @@ def tur_tani(deger: object, varsayilan: str | None) -> str | None:
     return varsayilan
 
 
+TR_SAATI = timezone(timedelta(hours=3), "TR")  # Onedesk disa aktarimi ve Oracle saatleri yerel ve dilimsiz; Turkiye 2016'dan beri sabit +03
+
+
 def tarih_oku(deger: object) -> datetime | None:
+    """Dilimsiz deger Turkiye saati sayilir ve UTC'ye cevrilir (DB'de tum zamanlar UTC); dilimli deger oldugu gibi UTC'ye."""
     if isinstance(deger, datetime):
-        return deger if deger.tzinfo else deger.replace(tzinfo=UTC)
+        return (deger if deger.tzinfo else deger.replace(tzinfo=TR_SAATI)).astimezone(UTC)
     m = _FRAKSIYON.sub("", str(deger or "").strip())
     if not m:
         return None
     for bicim in _BICIMLER:
         try:
-            return datetime.strptime(m, bicim).replace(tzinfo=UTC)
+            return datetime.strptime(m, bicim).replace(tzinfo=TR_SAATI).astimezone(UTC)
         except ValueError:
             continue
     return None
@@ -116,8 +123,8 @@ def sayaclari_yenile(db: Session, musteri_idleri: set[int]) -> None:
         )
 
 
-def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None) -> dict:
-    """Hazir partiyi Onedesk kaydi olarak aktarir. varsayilan_tur: kaynakta tur sutunu yoksa tum satirlarin turu."""
+def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None, *, kaynak: str = "import", sayac_yenile: bool = True) -> dict:
+    """Hazir partiyi Onedesk kaydi olarak aktarir. varsayilan_tur: kaynakta tur sutunu yoksa tum satirlarin turu; kaynak: kayit source."""
     parti = db.get(IngestBatch, parti_id)
     if parti is None:
         raise OnedeskHata(404, "Parti bulunamadı.")
@@ -133,7 +140,13 @@ def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None) -
     if parti.row_count > EN_COK_SATIR:
         raise OnedeskHata(413, f"Parti en fazla {EN_COK_SATIR} satır aktarılabilir.")
 
-    musteriler = {eslestirme_anahtari(m.name): m.id for m in db.scalars(select(Customer)) if m.name}
+    musteriler: dict[str, int] = {}
+    no_dizini: dict[str, set[int]] = {}
+    for m in db.scalars(select(Customer)):
+        if m.name:
+            musteriler[eslestirme_anahtari(m.name)] = m.id
+        for k in musteri_anahtarlari(m.customer_no):
+            no_dizini.setdefault(k, set()).add(m.id)
     eklenen = guncellenen = atlanan = eslesmeyen = 0
     etkilenen: set[int] = set()
     parca: list[list] = []
@@ -156,7 +169,8 @@ def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None) -
             acilis, kapanis = tarih_oku(_hucre(satir, s["acilis"])), tarih_oku(_hucre(satir, s["kapanis"]))
             durum_metni = normal(_hucre(satir, s["durum"]))
             kapali = kapanis is not None if s["durum"] is None else any(k in durum_metni for k in _KAPALI)
-            cid = musteriler.get(eslestirme_anahtari(ad))
+            adaylar = {i for k in musteri_anahtarlari(_hucre(satir, s["musteri_no"])) for i in no_dizini.get(k, ())}
+            cid = next(iter(adaylar)) if len(adaylar) == 1 else musteriler.get(eslestirme_anahtari(ad))
             if cid is None:
                 eslesmeyen += 1
             else:
@@ -171,7 +185,7 @@ def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None) -
                 "closed_at": (kapanis or simdi()) if kapali else None,
                 "root_cause": _hucre(satir, s["kok"]),
                 "resolution": _hucre(satir, s["cozum"]),
-                "source": "import",
+                "source": kaynak[:20],
             }
             kayit = mevcut.get((tur, numara)) if numara else None
             if kayit is None:
@@ -195,7 +209,8 @@ def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None) -
     if parca:
         isle(parca)
     db.flush()
-    sayaclari_yenile(db, etkilenen)
+    if sayac_yenile:
+        sayaclari_yenile(db, etkilenen)
     return {
         "parti": parti_id,
         "eklenen": eklenen,
@@ -205,3 +220,11 @@ def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None) -
         "etkilenen_musteri": len(etkilenen),
         "sutunlar": {alan: (parti.columns[i] if i is not None and i < len(parti.columns) else None) for alan, i in s.items()},
     }
+
+
+def kaynak_yenile(db: Session, parti_id: int | None, kaynak: str, tur: str) -> dict:
+    """Kaynagin (source) bu turdeki kayitlarini partiyle DEGISTIRIR (uretim reportdb_acik_kayit / ats_kaydet: her turda liste tamamen
+    yenilenir, eski veri kalmaz). Tek islem, commit cagiranda. parti_id None: liste bosaltilir. Sayaclar yeniden hesaplanmaz."""
+    silinen = db.execute(delete(OnedeskRecord).where(OnedeskRecord.source == kaynak, OnedeskRecord.kind == tur)).rowcount or 0
+    sonuc = parti_aktar(db, parti_id, tur, kaynak=kaynak, sayac_yenile=False) if parti_id else {"eklenen": 0, "guncellenen": 0}
+    return {**sonuc, "silinen": silinen}

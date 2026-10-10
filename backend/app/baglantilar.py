@@ -7,33 +7,17 @@ from __future__ import annotations
 
 from app.ad import directory
 from app.config import get_settings
-from app.external import SOURCES
+from app.external import SOURCES, acik_mi, oracle_eksikleri
 
 
 def connections() -> list[dict[str, object]]:
-    """AD, ORACLE_REPORTDB (Onedesk DB), ONENT, URUNTUTAR. Configured or not."""
-    settings = get_settings()
+    """AD, ORACLE_REPORTDB (Onedesk DB), ONENT, URUNTUTAR. configured = *_ENABLED=true (uretimle ayni kural)."""
     return [
         {"id": "ad", "slot": "AD", "configured": directory.configured()},
-        {
-            "id": "oracle_reportdb",
-            "slot": "ORACLE_REPORTDB",
-            "configured": settings.present("ORACLE_REPORTDB_ENABLED"),
-        },
-        {
-            "id": "onent",
-            "slot": "ONENT",
-            "configured": settings.present("ONENTDB_DB_ENABLED"),
-        },
-        {
-            "id": "uruntutar",
-            "slot": "URUNTUTAR",
-            "configured": settings.present("URUNTUTAR_DB_ENABLED"),
-        },
+        {"id": "oracle_reportdb", "slot": "ORACLE_REPORTDB", "configured": acik_mi("ORACLE_REPORTDB_ENABLED")},
+        {"id": "onent", "slot": "ONENT", "configured": acik_mi("ONENTDB_DB_ENABLED")},
+        {"id": "uruntutar", "slot": "URUNTUTAR", "configured": acik_mi("URUNTUTAR_DB_ENABLED")},
     ]
-
-
-_REQUIRED_SUFFIXES = ("HOST", "PORT", "SERVICE_NAME", "USER", "PASSWORD")
 
 
 def integrations() -> dict[str, object]:
@@ -54,11 +38,10 @@ def integrations() -> dict[str, object]:
     for source in SOURCES:
         if source.id.endswith("_import"):
             continue
-        prefix = source.enabled_key.rsplit("_ENABLED", 1)[0]
-        enabled = settings.present(source.enabled_key)
-        missing = [f"{prefix}_{s}" for s in _REQUIRED_SUFFIXES if not settings.present(f"{prefix}_{s}")] if enabled else []
+        enabled = acik_mi(source.enabled_key)
+        missing = oracle_eksikleri(source) if enabled else []
         state = "disabled" if not enabled else ("incomplete" if missing else "ready")
         items.append(
-            {"id": source.id, "label": source.label, "state": state, "description": "Salt okunur dis kaynak", "missing": missing}
+            {"id": source.id, "label": source.label, "state": state, "description": "Salt okunur dis kaynak (cekim isci surecte)", "missing": missing}
         )
     return {"items": items, "runtime": {"network": "kapali (canli baglanti yok)", "assets": "yerel"}}
