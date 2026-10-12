@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Bolum, Panel } from "@/components/sayfa-ui"
+import { Sidebar, SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { yaziDegistir, yaziOku, yaziUygula } from "@/lib/yazi"
 import type { Kullanici } from "@/lib/oturum"
 import { MusteriKarti } from "@/musteri/musteri-karti"
@@ -247,5 +248,25 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     expect(await within(form).findByRole("status")).toHaveTextContent(/Kaydedilemedi|geçersiz/i)
     expect(cagrilar.some((c) => c.yontem === "PUT" && c.yol.endsWith("/kimlik"))).toBe(false)
     expect(screen.getByRole("form", { name: "Düzenle" })).toBeInTheDocument()
+  })
+})
+
+describe("kabuk kaydirmasi", () => {
+  it("kabuk sayfaya sabit: belgeyi uzatan mutlak konumlu oge (sr-only) ikinci kaydirma cubugu acmaz, yan menu hareket etmez", () => {
+    vi.stubGlobal("matchMedia", (sorgu: string) => ({ matches: false, media: sorgu, addEventListener: () => undefined, removeEventListener: () => undefined }))
+    render(
+      <SidebarProvider>
+        <Sidebar>menu</Sidebar>
+        <SidebarInset>
+          <table>
+            <caption className="sr-only">Ekip Özeti</caption>
+          </table>
+        </SidebarInset>
+      </SidebarProvider>,
+    )
+    const icerik = screen.getByRole("main")
+    expect(icerik).toHaveClass("relative", "overflow-auto") // mutlak konumlu ogeler icerigin icinde kalir, kaydiran tek yer
+    const kabuk = icerik.parentElement as HTMLElement
+    expect(kabuk).toHaveClass("relative", "overflow-hidden", "h-full") // belge hic kaymaz: yan menu ve kullanici karti sabit
   })
 })

@@ -63,7 +63,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   return (
     <SidebarContext.Provider value={value}>
-      <div className="flex h-full min-h-0 w-full">{children}</div>
+      {/* Kabuk sayfaya sabit: sr-only gibi mutlak konumlu ogeler belgeyi uzatip ikinci kaydirma cubugu acmasin; kaydiran tek yer SidebarInset. */}
+      <div className="relative flex h-full min-h-0 w-full overflow-hidden">{children}</div>
     </SidebarContext.Provider>
   )
 }
@@ -88,7 +89,7 @@ export function Sidebar({ className, children }: HTMLAttributes<HTMLElement>) {
 }
 
 export function SidebarInset({ className, ...props }: ComponentProps<"main">) {
-  return <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-background", className)} {...props} />
+  return <main className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-background", className)} {...props} />
 }
 
 export function SidebarTrigger({ className, onClick, ...props }: ComponentProps<typeof Button>) {
