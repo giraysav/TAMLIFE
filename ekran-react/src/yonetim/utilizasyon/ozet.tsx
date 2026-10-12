@@ -91,7 +91,7 @@ export function UtilOzet({ dil }: { dil: Dil }) {
             { baslik: u.dengeleme, hucre: (s) => (s.dengeleme_musteri > 0 ? `+${s.dengeleme_musteri}` : s.dengeleme_musteri), sinif: "text-right font-mono" },
           ]}
         />
-        <p className="mt-2 text-[11px] font-bold text-slate-400">
+        <p className="mt-2 text-[0.6875rem] font-bold text-slate-400">
           {u.toplamPuan}: {d.ozet.toplam_puan} · {u.musteri}: {d.ozet.musteri_sayisi} · {u.skorlu}: {d.ozet.skorlu_musteri}
         </p>
       </Panel>

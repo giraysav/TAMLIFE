@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from pydantic import Field
@@ -27,6 +27,11 @@ class UygulamaHatasi(Exception):
 
 def simdi() -> datetime:
     return datetime.now(UTC)
+
+
+def rapor_donemi(an: date | datetime) -> tuple[int, int]:
+    """Bir ayda gonderilen aylik rapor ONCEKI ayin raporudur: Ekim'de Eylul raporu (Ocak'ta onceki yilin Araligi)."""
+    return (an.year, an.month - 1) if an.month > 1 else (an.year - 1, 12)
 
 
 def iso(zaman: datetime | None) -> str | None:

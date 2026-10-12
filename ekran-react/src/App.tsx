@@ -15,7 +15,7 @@ function dilOku(): Dil {
 }
 
 export default function App() {
-  const { durum, kullanici, giris, cikis } = useOturum()
+  const { durum, kullanici, giris, cikis, yenile } = useOturum()
   const [dil, setDil] = useState<Dil>(dilOku)
   // Alt bilesenler cizilmeden once: sayi/tarih bicimi ve sayfa dili (CSS buyuk harf: ADMIN/ADMİN, ekran okuyucu) dile uyar.
   bicimDili(dil)
@@ -33,9 +33,11 @@ export default function App() {
     } catch {
       /* tarayici kaydedemiyor */
     }
+    // Sunucunun urettigi metinler (saglik, ekip ozeti, kaynak durumu) X-Dil ile gelir: onbellekteki eski dil yenilenir.
+    void istemci.invalidateQueries()
   }
 
   if (durum === "yukleniyor") return null
   if (durum === "yok" || !kullanici) return <Giris dil={dil} giris={giris} />
-  return <Panel kullanici={kullanici} dil={dil} onDil={dilSec} onCikis={() => void cikis()} />
+  return <Panel kullanici={kullanici} dil={dil} onDil={dilSec} onCikis={() => void cikis()} onProfilDegisti={() => void yenile()} />
 }

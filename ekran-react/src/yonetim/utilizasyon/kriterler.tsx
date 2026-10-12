@@ -9,7 +9,7 @@ import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { zaman } from "@/lib/bicim"
 import { ym } from "@/yonetim/metin"
 import type { YM } from "@/yonetim/metin"
-import { degerYaz } from "@/yonetim/utilizasyon/ortak"
+import { OtoMetin, degerYaz } from "@/yonetim/utilizasyon/ortak"
 
 type Kapsam = "parent" | "affiliate"
 const BAREM = ["b30", "b50", "b70", "b100"] as const
@@ -105,31 +105,42 @@ export function Kriterler({ dil }: { dil: Dil }) {
               {k === "parent" ? u.catiTablo : u.istirakTablo}
             </button>
           ))}
-          <span className="text-[11px] font-bold text-slate-400">
+          <span className="text-[0.6875rem] font-bold text-slate-400">
             {tablo.data.varsayilan ? <Rozet ton="amber">{u.varsayilan}</Rozet> : u.surum(tablo.data.version, tablo.data.updated_by, tablo.data.updated_at ? zaman(tablo.data.updated_at) : "")}
           </span>
           {kirli ? <Rozet ton="sari">{u.kaydedilmedi}</Rozet> : null}
         </div>
-        <p className="text-[11px] font-bold text-slate-400">
+        <p className="text-[0.6875rem] font-bold text-slate-400">
           {u.kuralIpucu} {u.xIpucu}
           {kapsam === "affiliate" ? ` ${u.istirakNotu}` : ""}
         </p>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full min-w-[60rem] text-left text-xs">
+          {/* Sabit kolon oranlari (table-fixed): hucre metni kesilmez, alan yazdikca asagi uzar (OtoMetin). */}
+          <table className="w-full min-w-[64rem] table-fixed text-left text-xs">
             <caption className="sr-only">{kapsam === "parent" ? u.catiTablo : u.istirakTablo}</caption>
+            <colgroup>
+              <col className="w-[15%]" />
+              <col className="w-[21%]" />
+              {BAREM.map((b) => (
+                <col key={b} className="w-[10%]" />
+              ))}
+              <col className="w-[6%]" />
+              <col className="w-[14%]" />
+              <col className="w-[4%]" />
+            </colgroup>
             <thead className="bg-tl-navy text-white">
               <tr>
                 <th scope="col" className="px-2 py-2 font-black">{u.kriter}</th>
                 <th scope="col" className="px-2 py-2 font-black">{u.metrik}</th>
                 {BAREM.map((b) => (
-                  <th key={b} scope="col" className="w-24 px-2 py-2 text-center font-black">
+                  <th key={b} scope="col" className="px-2 py-2 text-center font-black">
                     {PUAN[b]}
                   </th>
                 ))}
-                <th scope="col" className="w-20 bg-tl-yellow/20 px-2 py-2 text-center font-black">{u.agirlik}</th>
+                <th scope="col" className="bg-tl-yellow/20 px-1 py-2 text-center font-black">{u.agirlik}</th>
                 <th scope="col" className="px-2 py-2 text-center font-black">{u.veriKaynagi}</th>
-                <th scope="col" className="w-10 px-2 py-2">
+                <th scope="col" className="px-1 py-2">
                   <span className="sr-only">{u.sil}</span>
                 </th>
               </tr>
@@ -143,38 +154,38 @@ export function Kriterler({ dil }: { dil: Dil }) {
                 const servisTablosu = k.servis_puanlari ?? m.servis_puanlari
                 return [
                   <tr key={`k-${i}`} className="align-top even:bg-slate-50/70">
-                    <td className="px-2 py-1.5">
-                      <input
-                        className={`${GIRDI} !py-1.5 font-black text-tl-navy`}
+                    <td className="px-1.5 py-1.5">
+                      <OtoMetin
+                        className="font-black text-tl-navy"
                         aria-label={u.kriter}
                         placeholder={u.baslikYer}
                         maxLength={200}
-                        value={k.title}
-                        onChange={(e) => degistir(i, { title: e.target.value, type: "" })}
+                        deger={k.title}
+                        onDeger={(v) => degistir(i, { title: v, type: "" })}
                       />
                       {servisli ? (
-                        <button type="button" className="mt-1 text-[10px] font-black text-tl-blue underline-offset-2 hover:underline" onClick={() => setAcik(acik?.i === i && acik.ne === "servis" ? null : { i, ne: "servis" })}>
+                        <button type="button" className="mt-1 text-[0.625rem] font-black text-tl-blue underline-offset-2 hover:underline" onClick={() => setAcik(acik?.i === i && acik.ne === "servis" ? null : { i, ne: "servis" })}>
                           {u.servisler}: {k.servis_dahil ? u.servisSecili(k.servis_dahil.length, Object.keys(servisTablosu).length) : u.servisTumu}
                         </button>
                       ) : null}
                     </td>
-                    <td className="px-2 py-1.5">
-                      <input className={`${GIRDI} !py-1.5 font-normal`} aria-label={u.metrik} maxLength={200} value={k.metric ?? ""} onChange={(e) => degistir(i, { metric: e.target.value })} />
+                    <td className="px-1.5 py-1.5">
+                      <OtoMetin className="font-normal" aria-label={u.metrik} maxLength={200} deger={k.metric ?? ""} onDeger={(v) => degistir(i, { metric: v })} />
                     </td>
                     {BAREM.map((b) => {
                       const kilitli = x !== null && x !== b
                       return (
-                        <td key={b} className="bg-slate-50/70 px-1.5 py-1.5">
-                          <input
-                            className={`${GIRDI} !py-1.5 text-center ${kilitli ? "cursor-not-allowed opacity-40" : ""} ${x === b ? "!border-tl-navy !bg-tl-yellow/30" : ""}`}
+                        <td key={b} className="bg-slate-50/70 px-1 py-1.5">
+                          <OtoMetin
+                            className={`text-center ${kilitli ? "cursor-not-allowed opacity-40" : ""} ${x === b ? "!border-tl-navy !bg-tl-yellow/30" : ""}`}
                             aria-label={`${k.title || u.kriter} ${PUAN[b]}`}
                             title={kilitli ? u.xKilit : undefined}
                             disabled={kilitli}
                             maxLength={120}
                             placeholder={m.varsayilan_kurallar[tur]?.[b] ?? ""}
-                            value={k[b] ?? ""}
-                            onChange={(e) => {
-                              const deger = m.sabit_puan_turleri.includes(tur) && normal(e.target.value) === "x" ? "X" : e.target.value
+                            deger={k[b] ?? ""}
+                            onDeger={(v) => {
+                              const deger = m.sabit_puan_turleri.includes(tur) && normal(v) === "x" ? "X" : v
                               degistir(i, (yeni) => {
                                 yeni[b] = deger
                                 return yeni
@@ -184,23 +195,23 @@ export function Kriterler({ dil }: { dil: Dil }) {
                         </td>
                       )
                     })}
-                    <td className="bg-tl-yellow/10 px-1.5 py-1.5">
+                    <td className="bg-tl-yellow/10 px-1 py-1.5">
                       <input
                         type="number"
                         min={0}
                         max={100}
-                        className={`${GIRDI} !py-1.5 text-center font-black text-tl-navy`}
+                        className={`${GIRDI} !px-1 !py-1.5 text-center font-black text-tl-navy`}
                         aria-label={`${k.title || u.kriter} ${u.agirlik}`}
                         value={k.weight}
                         onChange={(e) => degistir(i, { weight: e.target.value })}
                       />
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-1.5 py-1.5 text-center">
                       <button
                         type="button"
                         aria-expanded={acik?.i === i && acik.ne === "kaynak"}
                         onClick={() => setAcik(acik?.i === i && acik.ne === "kaynak" ? null : { i, ne: "kaynak" })}
-                        className={`inline-flex max-w-56 items-center rounded-full border px-2.5 py-1 text-[10px] font-black leading-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
+                        className={`inline-flex max-w-full items-center rounded-2xl border px-2.5 py-1 text-left text-[0.625rem] font-black leading-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
                           secim
                             ? "border-tl-navy bg-tl-navy text-tl-yellow"
                             : tur === KAYNAKSIZ
@@ -305,7 +316,7 @@ function ServisSecimi({ tablo, dahil, t, onDegis }: { tablo: Record<string, numb
   const secili = new Set((dahil ?? adlar).map(normal))
   return (
     <fieldset className="grid gap-2">
-      <legend className="text-[10px] font-black uppercase tracking-wide text-slate-500">{t.util.servisler}</legend>
+      <legend className="text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{t.util.servisler}</legend>
       <div className="flex flex-wrap gap-2">
         {adlar.map((ad) => (
           <label key={ad} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700">
@@ -405,7 +416,7 @@ function KaynakFormu({
     <div className="grid gap-3">
       <div>
         <p className="text-xs font-black text-tl-navy">{u.kaynakSecimi}</p>
-        <p className="text-[11px] font-bold text-slate-400">{u.kaynakSecimiAciklama}</p>
+        <p className="text-[0.6875rem] font-bold text-slate-400">{u.kaynakSecimiAciklama}</p>
       </div>
       {tur === KAYNAKSIZ || islemler.length === 0 ? (
         <Bildirim ton="amber">{meta.kaynak_adlari[KAYNAKSIZ]}</Bildirim>
@@ -437,7 +448,7 @@ function KaynakFormu({
           </div>
 
           <fieldset className="grid gap-1.5">
-            <legend className="text-[10px] font-black uppercase tracking-wide text-slate-500">{u.eslesme}</legend>
+            <legend className="text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{u.eslesme}</legend>
             {s.eslesme.map((e, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">
                 <span className="w-56">{sutunSecimi(e.sutun, (v) => setS({ ...s, eslesme: s.eslesme.map((x, j) => (j === i ? { ...x, sutun: v } : x)) }), u.sutun)}</span>
@@ -470,7 +481,7 @@ function KaynakFormu({
           </fieldset>
 
           <fieldset className="grid gap-1.5">
-            <legend className="text-[10px] font-black uppercase tracking-wide text-slate-500">{u.kosullar}</legend>
+            <legend className="text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{u.kosullar}</legend>
             {s.filtreler.map((f, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">
                 <span className="w-56">{sutunSecimi(f.sutun, (v) => setS({ ...s, filtreler: s.filtreler.map((x, j) => (j === i ? { ...x, sutun: v } : x)) }), u.sutun)}</span>
@@ -516,7 +527,7 @@ function KaynakFormu({
           ) : null}
 
           {sonuc ? (
-            <div className="grid gap-1 rounded-lg bg-white p-2 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+            <div className="grid gap-1 rounded-lg bg-white p-2 text-[0.6875rem] font-bold text-slate-600 ring-1 ring-slate-200">
               <p className="text-tl-navy">{u.onizlemeOzet(sonuc.musteri, sonuc.eslesmeyen, sonuc.filtrelenen, sonuc.toplam_satir)}</p>
               {sonuc.eslesmeyen_ornek.length ? (
                 <p className="text-amber-700">

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { ReactNode } from "react"
 import { Plus, X } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Alan, Bildirim, DUGME, DUGME_ANA, GIRDI } from "@/components/sayfa-ui"
@@ -20,6 +21,16 @@ export const BOS_KURAL: KuralGovdesi = {
 
 const AZAMI_KOSUL = 5
 
+/** Etiketli alan + altinda kisa ipucu (ipucu etiketin disinda: alanin erisilebilir adi kisa kalir). */
+function Ipuclu({ etiket, ipucu, children }: { etiket: string; ipucu: string; children: ReactNode }) {
+  return (
+    <div className="grid content-start gap-1">
+      <Alan etiket={etiket}>{children}</Alan>
+      <span className="text-[0.625rem] font-bold leading-snug text-slate-400">{ipucu}</span>
+    </div>
+  )
+}
+
 type Props = {
   dil: Dil
   katalog: Katalog
@@ -37,6 +48,7 @@ type Props = {
 /** Dagitim kurali formu. Hedef katalogu SABITTIR (serbest hedef yok); islem hedef tipine gore suzulur; kural kapali baslar. */
 export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarlari, sutunlar, hata, kaydediliyor, onKaydet, onVazgec }: Props) {
   const t = ym(dil)
+  const ip = t.kuralIpuclari
   const [f, setF] = useState<KuralGovdesi>(baslangic)
   const set = <K extends keyof KuralGovdesi>(alan: K, deger: KuralGovdesi[K]) => setF((o) => ({ ...o, [alan]: deger }))
 
@@ -76,12 +88,12 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
         onKaydet({ ...f, value_column: degerGerekli ? f.value_column : "" })
       }}
     >
-      <h4 className="text-[11px] font-black uppercase tracking-widest text-tl-navy">{duzenleme ? t.kuralDuzenle : t.yeniKural}</h4>
+      <h4 className="text-[0.6875rem] font-black uppercase tracking-widest text-tl-navy">{duzenleme ? t.kuralDuzenle : t.yeniKural}</h4>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <Alan etiket={t.kuralAdi}>
           <input className={GIRDI} required maxLength={120} value={f.name} onChange={(e) => set("name", e.target.value)} />
         </Alan>
-        <Alan etiket={t.kaynaklar}>
+        <Ipuclu etiket={t.kuralKaynak} ipucu={ip.kuralKaynak}>
           <select className={GIRDI} required value={f.source_key} onChange={(e) => set("source_key", e.target.value)}>
             <option value="">{t.secin}</option>
             {kaynaklar.map((k) => (
@@ -90,8 +102,11 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
               </option>
             ))}
           </select>
-        </Alan>
-        <Alan etiket={t.eslesmeAlani}>
+        </Ipuclu>
+        <Ipuclu etiket={t.anahtarSutunu} ipucu={ip.anahtarSutunu}>
+          {sutunKontrolu(f.key_column, (v) => set("key_column", v), t.anahtarSutunu)}
+        </Ipuclu>
+        <Ipuclu etiket={t.eslesmeAlani} ipucu={ip.eslesmeAlani}>
           <select className={GIRDI} value={f.match_field} onChange={(e) => set("match_field", e.target.value)}>
             {katalog.eslesme_alanlari.map((a) => (
               <option key={a.anahtar} value={a.anahtar}>
@@ -99,9 +114,8 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
               </option>
             ))}
           </select>
-        </Alan>
-        <Alan etiket={t.anahtarSutunu}>{sutunKontrolu(f.key_column, (v) => set("key_column", v), t.anahtarSutunu)}</Alan>
-        <Alan etiket={t.hedef}>
+        </Ipuclu>
+        <Ipuclu etiket={t.hedef} ipucu={ip.hedef}>
           <select className={GIRDI} required value={f.target} onChange={(e) => hedefSec(e.target.value)}>
             <option value="">{t.secin}</option>
             {katalog.hedefler.map((h) => (
@@ -110,8 +124,8 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
               </option>
             ))}
           </select>
-        </Alan>
-        <Alan etiket={t.islem}>
+        </Ipuclu>
+        <Ipuclu etiket={t.islem} ipucu={ip.islem}>
           <select className={GIRDI} required value={f.operation} onChange={(e) => set("operation", e.target.value)}>
             <option value="">{t.secin}</option>
             {islemler.map((i) => (
@@ -120,12 +134,17 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
               </option>
             ))}
           </select>
-        </Alan>
-        {degerGerekli ? <Alan etiket={t.degerSutunu}>{sutunKontrolu(f.value_column, (v) => set("value_column", v), t.degerSutunu)}</Alan> : null}
+        </Ipuclu>
+        {degerGerekli ? (
+          <Ipuclu etiket={t.degerSutunu} ipucu={ip.degerSutunu}>
+            {sutunKontrolu(f.value_column, (v) => set("value_column", v), t.degerSutunu)}
+          </Ipuclu>
+        ) : null}
       </div>
 
       <fieldset className="grid gap-2">
-        <legend className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">{t.kosullar}</legend>
+        <legend className="mb-1 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.kosullar}</legend>
+        <p className="-mt-1 text-[0.625rem] font-bold text-slate-400">{ip.kosullar}</p>
         {f.conditions.map((k, i) => {
           const degersiz = katalog.degersiz_islecler.includes(k.islec)
           return (
@@ -161,11 +180,11 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
             <input type="checkbox" className="mt-0.5" checked={f.zero_unmatched} onChange={(e) => set("zero_unmatched", e.target.checked)} />
             <span>
               {t.eslesmeyeniSifirla}
-              <span className="block text-[11px] font-bold text-slate-400">{t.eslesmeyeniAciklama}</span>
+              <span className="block text-[0.6875rem] font-bold text-slate-400">{t.eslesmeyeniAciklama}</span>
             </span>
           </label>
         ) : null}
-        <Alan etiket={t.enBuyukYas}>
+        <Ipuclu etiket={t.enBuyukYas} ipucu={ip.enBuyukYas}>
           <input
             type="number"
             min={1}
@@ -174,7 +193,7 @@ export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarla
             value={f.max_age_minutes ?? ""}
             onChange={(e) => set("max_age_minutes", e.target.value === "" ? null : Number(e.target.value))}
           />
-        </Alan>
+        </Ipuclu>
       </div>
 
       {hata ? <Bildirim ton="amber">{hata}</Bildirim> : null}

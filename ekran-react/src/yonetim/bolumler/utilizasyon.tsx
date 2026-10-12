@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { BellRing, Calculator, FileSpreadsheet, Gauge, ListChecks, Network } from "lucide-react"
+import { BellRing, Calculator, FileSpreadsheet, Gauge, ListChecks, Network, Users } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Sekmeler } from "@/components/sayfa-ui"
 import type { SekmeSecenegi } from "@/components/sayfa-ui"
@@ -11,11 +11,12 @@ import { ym } from "@/yonetim/metin"
 import { SkorAgaciBolumu } from "@/yonetim/utilizasyon/agac"
 import { TopluAtama } from "@/yonetim/utilizasyon/atama"
 import { Kriterler } from "@/yonetim/utilizasyon/kriterler"
+import { MusteriListesi } from "@/yonetim/utilizasyon/musteri-listesi"
 import { UtilOzet } from "@/yonetim/utilizasyon/ozet"
 import { Talepler } from "@/yonetim/utilizasyon/talepler"
 import { UrunTutar } from "@/yonetim/utilizasyon/urun-tutar"
 
-const SEKMELER = ["ozet", "kriterler", "atama", "agac", "talepler", "veri"] as const
+const SEKMELER = ["ozet", "kriterler", "atama", "agac", "talepler", "veri", "musteriler"] as const
 type Sekme = (typeof SEKMELER)[number]
 
 /** TAM Utilizasyon (uretim Final Skoru Atama + Veri Yonlendirici kriter/agac ekranlari). Secili alt sekme adreste: #/yonetim/utilizasyon?sekme=kriterler. */
@@ -34,6 +35,7 @@ export default function Utilizasyon({ dil }: { dil: Dil }) {
     { id: "agac", etiket: u.sekme.agac, ikon: Network },
     { id: "talepler", etiket: u.sekme.talepler, ikon: BellRing, sayi: bekleyen > 0 ? bekleyen : undefined },
     { id: "veri", etiket: u.sekme.veri, ikon: FileSpreadsheet },
+    { id: "musteriler", etiket: u.sekme.musteriler, ikon: Users },
   ]
 
   return (
@@ -49,6 +51,8 @@ export default function Utilizasyon({ dil }: { dil: Dil }) {
         <SkorAgaciBolumu dil={dil} />
       ) : sekme === "talepler" ? (
         <Talepler dil={dil} />
+      ) : sekme === "musteriler" ? (
+        <MusteriListesi dil={dil} />
       ) : (
         <UrunTutar dil={dil} />
       )}

@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     ad_izinli_gruplar: str = Field(default="", validation_alias="AD_IZINLI_GRUPLAR")  # noktali virgulle ayrilmis grup DN; doluysa AD_ARAMA_KOKU zorunlu
     ad_arama_koku: str = Field(default="", validation_alias="AD_ARAMA_KOKU")
     ad_otomatik_ac: str = Field(default="true", validation_alias="AD_OTOMATIK_AC")  # AD'de dogrulanan, panelde olmayan kisi TeamMember acilir
+    # Panel kullanicisini SILEBILEN tek hesap (kullanici adi). Admin rolu verilmis baska kisi bile silemez. Sir degildir.
+    kullanici_silme_yetkilisi: str = Field(default="admin", validation_alias="KULLANICI_SILME_YETKILISI")
 
     @property
     def cookie_secure_effective(self) -> bool:

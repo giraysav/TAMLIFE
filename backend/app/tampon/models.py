@@ -55,3 +55,20 @@ class DistributionLog(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     actor: Mapped[str] = mapped_column(String(120), default="")
     reverted: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class CustomerImportRun(Base):
+    """Ham Musteri Verisi aktarimi: kartlara yazilan her degerin onceki/sonraki hali (geri alma icin) ve ozet.
+
+    record: {'guncellenen': [{id, unvan, onceki, sonraki, iletisim_onceki, iletisim_sonraki}], 'olusturulan': [{id, unvan}],
+    'iletisim_olusturulan': [musteri id]}. Parti silinse de kayit kalir (batch_id yabanci anahtar degildir)."""
+
+    __tablename__ = "customer_import_run"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    batch_id: Mapped[int] = mapped_column(Integer)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    actor: Mapped[str] = mapped_column(String(120), default="")
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    record: Mapped[dict] = mapped_column(JSON, default=dict)
+    reverted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reverted_by: Mapped[str] = mapped_column(String(120), default="")

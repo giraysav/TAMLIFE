@@ -5,7 +5,8 @@
 - Rol AD'den gelmez; app_user.role (panel DB). AD yalniz "bu kisi bu parolayla dogrulandi" der.
 - Es zamanli bind 3, baglanti/yanit suresi 5/10 sn: yanit vermeyen DC istekleri kilitlemesin.
 - AD_ENABLED=false (varsayilan) iken ldap3 hic yuklenmez. Yerel dev girisi (TAMLIFE_LOCAL_*) yalniz dev/test.
-Tani: `python -m app.ad` (DNS -> TCP -> TLS/sertifika; --bind ile tek seferlik bind, parola sorulur, DB'ye yazmaz).
+Tani: `python -m app.ad` (DNS -> TCP -> TLS/sertifika; --bind ile tek seferlik bind, parola sorulur, DB'ye yazmaz). Ayni adimlar
+(bind'siz) panelde: Yonetim > Kurum Baglantilari > Erisimi test et (erisim_adimlari).
 """
 
 from __future__ import annotations
@@ -206,10 +207,59 @@ def _yaz(durum: str, baslik: str, ayrinti: str = "") -> None:
         print("           " + satir)
 
 
-def tani(bind: bool = False) -> int:
-    """DNS -> TCP -> TLS/sertifika -> (istege bagli) bind; ilk kirilan halkayi adiyla soyler. 0 = saglam."""
-    import getpass
+def erisim_adimlari() -> list[dict[str, str]]:
+    """AD erisim zinciri, BIND YOK: ayar -> DNS -> TCP -> TLS/sertifika; ilk kirilan halkada durur. Panel (Kurum Baglantilari) ve
+    `python -m app.ad` ayni adimlari kullanir. Adim: {'adim', 'durum' ('ok'|'hata'), 'baslik', 'ayrinti'} - parola/sir icermez."""
     import socket
+
+    adimlar: list[dict[str, str]] = []
+
+    def ekle(adim: str, durum: str, baslik: str, ayrinti: str = "") -> list[dict[str, str]]:
+        adimlar.append({"adim": adim, "durum": durum, "baslik": baslik, "ayrinti": ayrinti})
+        return adimlar
+
+    try:
+        ayar_dogrula()
+    except (RuntimeError, ImportError) as exc:
+        return ekle("ayar", "hata", "Ayar gecersiz", str(exc))
+    a = get_settings()
+    if not _acik(a.ad_enabled):
+        return ekle("ayar", "hata", "AD_ENABLED=true degil", "backend/.env icindeki AD_* satirlarini kontrol edin.")
+    adres = urlparse(a.ad_server.strip())
+    host, port = adres.hostname or "", adres.port or 636
+    if not host:
+        return ekle("ayar", "hata", "AD_SERVER sunucu adi yok", "Ornek: ldaps://<dc-adi>:636")
+    try:
+        ekle("dns", "ok", f"DNS: {host}", ", ".join(sorted({str(x[4][0]) for x in socket.getaddrinfo(host, None)})))
+    except OSError as exc:
+        return ekle("dns", "hata", f"DNS: {host}", f"{type(exc).__name__}: {exc}\nnslookup {host}")
+    try:
+        socket.create_connection((host, port), timeout=BAGLANTI_SURESI).close()
+        ekle("tcp", "ok", f"TCP: {host}:{port}")
+    except OSError as exc:
+        return ekle("tcp", "hata", f"Ag: {host}:{port}", f"{type(exc).__name__}: {exc}\nTest-NetConnection {host} -Port {port}")
+    baglam = ssl.create_default_context()
+    if a.ad_ca_cert_file.strip():
+        try:
+            baglam.load_verify_locations(a.ad_ca_cert_file.strip())
+        except OSError as exc:
+            return ekle("tls", "hata", "CA dosyasi okunamadi", f"{a.ad_ca_cert_file}\n{exc}")
+    try:
+        with socket.create_connection((host, port), timeout=BAGLANTI_SURESI) as ham, baglam.wrap_socket(ham, server_hostname=host) as tls:
+            sert = tls.getpeercert() or {}
+            konu = dict(x[0] for x in sert.get("subject", ()))
+            veren = dict(x[0] for x in sert.get("issuer", ()))
+            ekle("tls", "ok", "TLS ve sertifika dogrulandi", f"protokol: {tls.version()}\nkonu: {konu.get('commonName', '?')}\nveren: {veren.get('commonName', '?')}\nbitis: {sert.get('notAfter', '?')}")
+    except ssl.SSLCertVerificationError as exc:
+        ekle("tls", "hata", "SERTIFIKA DOGRULANAMADI", f"{exc}\nKurum ara+kok CA zincirini .pem olarak AD_CA_CERT_FILE ile gosterin.")
+    except OSError as exc:
+        ekle("tls", "hata", "TLS el sikisma basarisiz", f"{type(exc).__name__}: {exc}")
+    return adimlar
+
+
+def tani(bind: bool = False) -> int:
+    """erisim_adimlari'ni yazar, istenirse tek seferlik bind dener; ilk kirilan halkayi adiyla soyler. 0 = saglam."""
+    import getpass
 
     from app.config import env_dosyasi_yukle
 
@@ -217,42 +267,10 @@ def tani(bind: bool = False) -> int:
         sys.stdout.reconfigure(errors="replace")  # Windows konsol kod sayfasi
 
     env_dosyasi_yukle()
-    try:
-        ayar_dogrula()
-    except (RuntimeError, ImportError) as exc:
-        _yaz("hata", "Ayar gecersiz", str(exc))
-        return 2
-    a = get_settings()
-    if not _acik(a.ad_enabled):
-        _yaz("hata", "AD_ENABLED=true degil", "backend/.env icindeki AD_* satirlarini kontrol edin.")
-        return 2
-    adres = urlparse(a.ad_server.strip())
-    host, port = adres.hostname or "", adres.port or 636
-    try:
-        _yaz("ok", f"DNS: {host}", ", ".join(sorted({x[4][0] for x in socket.getaddrinfo(host, None)})))
-        socket.create_connection((host, port), timeout=BAGLANTI_SURESI).close()
-        _yaz("ok", f"TCP: {host}:{port}")
-    except OSError as exc:
-        _yaz("hata", f"Ag: {host}:{port}", f"{type(exc).__name__}: {exc}\nTest-NetConnection {host} -Port {port}")
-        return 2
-    baglam = ssl.create_default_context()
-    if a.ad_ca_cert_file.strip():
-        try:
-            baglam.load_verify_locations(a.ad_ca_cert_file.strip())
-        except OSError as exc:
-            _yaz("hata", "CA dosyasi okunamadi", f"{a.ad_ca_cert_file}\n{exc}")
-            return 2
-    try:
-        with socket.create_connection((host, port), timeout=BAGLANTI_SURESI) as ham, baglam.wrap_socket(ham, server_hostname=host) as tls:
-            sert = tls.getpeercert() or {}
-            konu = dict(x[0] for x in sert.get("subject", ()))
-            veren = dict(x[0] for x in sert.get("issuer", ()))
-            _yaz("ok", "TLS ve sertifika dogrulandi", f"protokol: {tls.version()}\nkonu: {konu.get('commonName', '?')}\nveren: {veren.get('commonName', '?')}\nbitis: {sert.get('notAfter', '?')}")
-    except ssl.SSLCertVerificationError as exc:
-        _yaz("hata", "SERTIFIKA DOGRULANAMADI", f"{exc}\nKurum ara+kok CA zincirini .pem olarak AD_CA_CERT_FILE ile gosterin.")
-        return 2
-    except OSError as exc:
-        _yaz("hata", "TLS el sikisma basarisiz", f"{type(exc).__name__}: {exc}")
+    adimlar = erisim_adimlari()
+    for x in adimlar:
+        _yaz(x["durum"], x["baslik"], x["ayrinti"])
+    if any(x["durum"] == "hata" for x in adimlar):
         return 2
     if not bind:
         print("\nAg ve sertifika saglam. Bind testi icin: python -m app.ad --bind")

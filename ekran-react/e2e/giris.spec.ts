@@ -108,7 +108,12 @@ test("kullanici karti sol altta: profil, yonetim, talepler, dil, cikis", async (
   await page.locator("button[aria-haspopup='menu']").click()
   await page.getByRole("menuitem", { name: "Profil" }).click()
   await expect(page.getByRole("heading", { name: "Profil", level: 1 })).toBeVisible()
-  await expect(page.getByText("Oturum açan personelin bilgileri.")).toBeVisible()
+  await expect(page.getByText("Bilgilerinizi buradan güncelleyebilirsiniz.")).toBeVisible()
+  // Yalniz AD/LDAP kullanici adi kilitli; ad, soyad, telefon, sirket, adres ve web adresi duzenlenir.
+  await expect(page.getByLabel("Kullanıcı adı (AD/LDAP)")).toBeDisabled()
+  for (const alan of ["Ad", "Soyad", "Telefon", "Şirket", "Web adresi", "Adres"]) {
+    await expect(page.getByLabel(alan, { exact: true })).toBeEditable()
+  }
   await page.locator("button[aria-haspopup='menu']").click()
   await page.getByRole("menuitem", { name: "Yönetim" }).click()
   await expect(page).toHaveURL(/#\/yonetim\/durum$/)
@@ -129,7 +134,7 @@ test("genel bakis tek parca, yeni adlar, Toptan yok", async ({ page }) => {
   for (const kaldirilan of ["Modüller", "Ana sayfa kartı", "Panel tablosu", "Dış kaynak", "Rol yönetimi"]) {
     await expect(main.getByText(kaldirilan, { exact: true })).toHaveCount(0)
   }
-  await expect(main.getByRole("button", { name: "Yönetim" })).toHaveCount(0)
+  await expect(main.getByRole("button", { name: "Yönetim", exact: true })).toHaveCount(0)
   await expect(main.getByText("TAM Life tek panelde, tüm modüller bir arada.")).toHaveCount(0) // baslik cumlesi kaldirildi
   await expect(page.getByRole("img", { name: "TAM Life" }).first()).toBeVisible() // sol ustte logo
   await expect(main.getByRole("button", { name: "Onedesk" })).toBeVisible() // yaydaki kart
@@ -156,19 +161,27 @@ test("sayfa icinde geri oku: modulden genel bakisa doner", async ({ page }) => {
   await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
 })
 
-test("rol yonetimi: uc rol, admin sabit, hicbir modul kilitli degil", async ({ page }) => {
+test("rol yonetimi: uc rol, admin sabit, yonetim modulleri role verilemez", async ({ page }) => {
   test.skip(!PAROLA, "E2E_PASS tanimli degil")
   await girisYap(page)
   await page.goto("/#/roller") // admin icin eski adres: Yonetim > Roller
   await expect(page).toHaveURL(/#\/yonetim\/roller$/)
   await expect(page.getByRole("heading", { name: "Yönetim › Roller", level: 1 })).toBeVisible()
+  // Rol kutulari asagi yukari acilir: baslikta rol adi, sayfa ve kisi sayisi; varsayilan kapali.
   for (const rol of ["Admin", "Manager", "Member"]) {
-    await expect(page.locator("main").getByText(rol, { exact: true }).first()).toBeVisible()
+    const baslik = page.getByRole("button", { name: new RegExp(rol) })
+    await expect(baslik).toHaveAttribute("aria-expanded", "false")
   }
-  await expect(page.getByText("Admin tüm sayfaları görür ve bu görünüm değiştirilemez.")).toBeVisible()
-  const utilizasyon = page.getByRole("checkbox", { name: /TAM Utilizasyon/ })
-  await expect(utilizasyon.first()).toBeEnabled() // hicbir modul kilitli degil
-  await expect(page.getByRole("checkbox", { name: /Rol Yönetimi/ }).first()).toBeEnabled()
+  await expect(page.getByLabel("Giriş sayfası")).toHaveCount(0)
+  await page.getByRole("button", { name: /Admin/ }).click()
+  await expect(page.getByText("Admin tüm sayfaları görür, tüm ek yetkilere sahiptir ve bu görünüm değiştirilemez.")).toBeVisible()
+  await expect(page.getByText("Bu roldeki personel", { exact: false }).first()).toBeVisible()
+  await page.getByRole("button", { name: /Admin/ }).click()
+  await page.getByRole("button", { name: /Manager/ }).click()
+  await page.getByRole("button", { name: /Member/ }).click()
+  // Yonetim alani yalniz admin: TAM Utilizasyon ve Rol Yonetimi role verilemez, listede yoktur.
+  await expect(page.getByRole("checkbox", { name: /^TAM Utilizasyon$/ })).toHaveCount(0)
+  await expect(page.getByRole("checkbox", { name: /^Rol Yönetimi$/ })).toHaveCount(0)
   await expect(page.getByLabel("Giriş sayfası").first()).toBeVisible()
   await expect(page.getByRole("button", { name: "Kaydet" })).toHaveCount(2)
 })

@@ -2,8 +2,8 @@
 
   /takvim/ben, /takvim/gun, /takvim/toplu  -> Izin&Takvim Yonetimi (takvim): kisi yalniz kendi gunlerini yazar
   /takvim/ekip...                           -> TAM Takvim (takvim_ozet): panele giris yapmis herkesin ozeti
-  /takvim/sunuma-gonder                     -> yalniz 'takvim.sunuma_gonder' yetkisi olan rol (admin her zaman); yetkiyi admin Rol Yonetimi'nden verir
-  /sunum/ogeler                             -> Ceyrek Bazli Sunum (sunum): gonderilmis ogeler
+  /takvim/sunuma-gonder                     -> yalniz 'sunum.gonder' yetkisi olan rol (admin her zaman); yetkiyi admin Rol Yonetimi › Ceyrek Bazli Sunum'dan verir
+Ceyrek Bazli Sunum sayfasinin uclari app.sunum.api'dedir.
 """
 
 from __future__ import annotations
@@ -16,15 +16,14 @@ from app.audit import audit_log
 from app.db import get_db
 from app.erisim import Erisim, modul_erisim
 from app.ortak import KimlikTipi, ok
+from app.rolgorunum import SUNUM_YETKISI
+from app.sunum import servis as sunum_servis
+from app.sunum.api import yetkili_olmali
 from app.takvim import servis
-from app.takvim.servis import TakvimHata
 
 router = APIRouter(prefix="/api/v1", tags=["takvim"])
 kendi_erisim = modul_erisim("takvim")
 ekip_erisim = modul_erisim("takvim_ozet")
-sunum_erisim = modul_erisim("sunum")
-
-YETKI_SUNUM = "takvim.sunuma_gonder"
 Yil = Query(ge=2000, le=2100)
 
 
@@ -34,7 +33,7 @@ class Serbest(BaseModel):
 
 class SunumaGovde(BaseModel):
     yil: int = Field(ge=2000, le=2100)
-    ceyrek: int = Field(ge=0, le=4)
+    ceyrek: int = Field(ge=1, le=4)  # tum yil sunuma gonderilmez
     gonder: bool
 
 
@@ -58,8 +57,8 @@ def toplu(body: Serbest, e: Erisim = Depends(kendi_erisim)):
 @router.get("/takvim/ekip")
 def ekip(yil: int | None = Query(default=None, ge=2000, le=2100), ceyrek: int | None = Query(default=None, ge=0, le=4), e: Erisim = Depends(ekip_erisim), db: Session = Depends(get_db)):
     vy, vc = servis.bu_ceyrek()
-    sonuc = servis.ekip(db, e.user, yil or vy, vc if ceyrek is None else ceyrek)
-    sonuc["sunuma_gonderebilir"] = e.yetkili_mi(YETKI_SUNUM)
+    sonuc = servis.ekip(db, yil or vy, vc if ceyrek is None else ceyrek)
+    sonuc["sunuma_gonderebilir"] = e.yetkili_mi(SUNUM_YETKISI)
     return ok(sonuc)
 
 
@@ -70,20 +69,14 @@ def uye(uye_id: KimlikTipi, yil: int = Yil, ceyrek: int = Query(ge=0, le=4), e: 
 
 @router.post("/takvim/sunuma-gonder")
 def sunuma_gonder(body: SunumaGovde, e: Erisim = Depends(ekip_erisim), db: Session = Depends(get_db)):
-    if not e.yetkili_mi(YETKI_SUNUM):
-        raise TakvimHata(403, "Sunuma gönderme yetkiniz yok; yönetici Rol Yönetimi'nden verir.")
-    sonuc = servis.sunuma_gonder(db, e.user, body.yil, body.ceyrek, body.gonder)
+    yetkili_olmali(e)
+    sonuc = sunum_servis.gonder(db, e.user, servis.SUNUM_KAYNAK, body.yil, body.ceyrek, body.gonder)
     db.commit()
     audit_log.remember(
         actor=e.user.username,
-        action="takvim.sunuma_gonder" if body.gonder else "takvim.sunumdan_cikar",
+        action="sunum.gonder" if body.gonder else "sunum.kaldir",
         outcome="allow",
         module_key="takvim_ozet",
         detail=f"donem={sonuc['donem']}",
     )
     return ok(sonuc)
-
-
-@router.get("/sunum/ogeler")
-def sunum_ogeleri(yil: int | None = Query(default=None, ge=2000, le=2100), e: Erisim = Depends(sunum_erisim), db: Session = Depends(get_db)):
-    return ok(servis.sunum_ogeleri(db, yil))

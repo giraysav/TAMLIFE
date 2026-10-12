@@ -6,10 +6,12 @@ import { sorguMetni } from "@/lib/sorgu"
 import type { Katalog, KuralGovdesi, Ozet } from "@/yonetim/api"
 import Arizalar from "@/yonetim/bolumler/arizalar"
 import Durum from "@/yonetim/bolumler/durum"
+import Kurum from "@/yonetim/bolumler/kurum"
 import Veritabani from "@/yonetim/bolumler/veritabani"
 import { ym } from "@/yonetim/metin"
-import { Kaynaklar, kaynakAdiOner } from "@/yonetim/tampon/kaynaklar"
+import { Kaynaklar } from "@/yonetim/tampon/kaynaklar"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
+import { Rehber } from "@/yonetim/tampon/rehber"
 import { bayt, sureYaz, zaman } from "@/lib/bicim"
 
 afterEach(() => {
@@ -27,8 +29,8 @@ function sahteSunucu(cevaplar: Record<string, unknown>) {
   const cagrilar: string[] = []
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (girdi: string) => {
-      cagrilar.push(String(girdi))
+    vi.fn(async (girdi: string, ayar?: RequestInit) => {
+      cagrilar.push(`${ayar?.method ?? "GET"} ${String(girdi)}`)
       const anahtar = Object.keys(cevaplar).find((k) => String(girdi).includes(k))
       return anahtar === undefined
         ? new Response(JSON.stringify({ detail: "yok" }), { status: 404, headers: { "Content-Type": "application/json" } })
@@ -58,11 +60,6 @@ describe("bicimleyiciler ve yardimcilar", () => {
   it("sorguMetni bos degerleri atar ve kodlar", () => {
     expect(sorguMetni({ a: "x y", b: "", c: null, d: undefined, e: 0 })).toBe("?a=x+y&e=0")
     expect(sorguMetni({ a: "" })).toBe("")
-  })
-  it("dosya adindan kaynak adi: tarih eki ve uzanti atilir", () => {
-    expect(kaynakAdiOner("alarm-ozeti_2026-10.csv")).toBe("alarm-ozeti")
-    expect(kaynakAdiOner("rapor.csv")).toBe("rapor")
-    expect(kaynakAdiOner("veri20261007.txt")).toBe("veri")
   })
   it("TR ve EN metin anahtarlari ayni (EN: typeof TR) ve fonksiyonlar calisir", () => {
     expect(Object.keys(ym("en"))).toEqual(Object.keys(ym("tr")))
@@ -105,8 +102,7 @@ describe("Genel Durum", () => {
     expect(screen.getAllByText("Tamam").length).toBe(2)
     expect(screen.getByText("Uyarı")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /Açık arıza/ })).toHaveAttribute("href", "#/yonetim/arizalar")
-    expect(screen.queryByText("ORACLE_REPORTDB · ayarlı")).not.toBeInTheDocument() // dis veritabanlari Veritabani sekmesinde
-    expect(screen.getByText("AD · ayarlı değil")).toBeInTheDocument()
+    expect(screen.queryByText(/AD ·|ORACLE_REPORTDB/)).not.toBeInTheDocument() // kurum baglantilari ayri sekmede, Oracle Veritabani'nda
   })
 
   it("EN dilinde metinler cevrilir", async () => {
@@ -206,33 +202,39 @@ describe("Kural formu", () => {
 
   it("islem listesi hedef tipine gore suzulur; say secilince deger sutunu gizlenir", () => {
     ac()
-    const hedef = screen.getByLabelText("Hedef (sabit)")
-    const islem = screen.getByLabelText("İşlem")
+    const t = ym("tr")
+    const hedef = screen.getByLabelText(t.hedef)
+    const islem = screen.getByLabelText(t.islem)
     fireEvent.change(hedef, { target: { value: "customer.alarm_count" } })
     expect(within(islem).getAllByRole("option").map((o) => o.textContent)).toEqual(["Seçin…", "Say (satır adedi)", "Topla"])
     fireEvent.change(islem, { target: { value: "topla" } })
-    expect(screen.getByRole("combobox", { name: "Değer sütunu" })).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: t.degerSutunu })).toBeInTheDocument()
     fireEvent.change(islem, { target: { value: "say" } })
-    expect(screen.queryByRole("combobox", { name: "Değer sütunu" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: t.degerSutunu })).not.toBeInTheDocument()
     // metin hedefine gecince sayisal islem gecersiz: sifirlanir ve "eslesmeyeni sifirla" kaybolur
     fireEvent.change(hedef, { target: { value: "customer.sector" } })
     expect((islem as HTMLSelectElement).value).toBe("")
-    expect(screen.queryByText("Eşleşmeyen kartları sıfırla")).not.toBeInTheDocument()
+    expect(screen.queryByText(t.eslesmeyeniSifirla)).not.toBeInTheDocument()
     expect(within(islem).getAllByRole("option").map((o) => o.textContent)).toEqual(["Seçin…", "En sık değer"])
-    expect(secim(/Kaynaklar/)).toBeInTheDocument()
+    expect(secim(t.kuralKaynak)).toBeInTheDocument()
+    // her alanin altinda sade dilde kisa ipucu var
+    expect(screen.getByText(t.kuralIpuclari.anahtarSutunu)).toBeInTheDocument()
+    expect(screen.getByText(t.kuralIpuclari.hedef)).toBeInTheDocument()
+    expect(screen.getByText(t.kuralIpuclari.enBuyukYas)).toBeInTheDocument()
   })
 
   it("koşul ekleme (en fazla 5), degersiz isleçte deger alani yok, kaydet govdeyi dogru uretir", () => {
+    const t = ym("tr")
     const onKaydet = ac()
-    fireEvent.change(screen.getByLabelText("Hedef (sabit)"), { target: { value: "customer.alarm_count" } })
-    fireEvent.change(screen.getByLabelText("İşlem"), { target: { value: "say" } })
+    fireEvent.change(screen.getByLabelText(t.hedef), { target: { value: "customer.alarm_count" } })
+    fireEvent.change(screen.getByLabelText(t.islem), { target: { value: "say" } })
     for (let i = 0; i < 5; i += 1) fireEvent.click(screen.getByRole("button", { name: "Koşul ekle" }))
     expect(screen.queryByRole("button", { name: "Koşul ekle" })).not.toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: "Koşulu sil" })).toHaveLength(5)
     // ilk kosul: Durum dolu (degersiz) -> deger alani yok; digerlerini sil
     const sutunlar = screen.getAllByRole("combobox", { name: "Sütun" })
     fireEvent.change(sutunlar[0], { target: { value: "Durum" } })
-    fireEvent.change(screen.getAllByRole("combobox", { name: "İşleç" })[0], { target: { value: "dolu" } })
+    fireEvent.change(screen.getAllByRole("combobox", { name: t.islec })[0], { target: { value: "dolu" } })
     for (let i = 0; i < 4; i += 1) fireEvent.click(screen.getAllByRole("button", { name: "Koşulu sil" })[1])
     expect(screen.queryByLabelText("Değer")).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "Kaydet" }))
@@ -261,9 +263,9 @@ describe("Veri Girisi kaynaklari", () => {
     const cagrilar = sahteSunucu({
       "/kaynaklar/oracle_reportdb/test": { ok: false, mesaj: "ORA-12541: ***", ipucu: "Dinleyiciye ulaşılamadı (adres / port)." },
       "/api/v1/tampon/kaynaklar": [
-        { ...kaynak, anahtar: "oracle_reportdb", ad: "Onedesk / REPORTDB", tur: "oracle", hazir: true, yapilandirma: "tamam",
+        { ...kaynak, anahtar: "oracle_reportdb", ad: "REPORTDB", tur: "oracle", hazir: true, yapilandirma: "tamam",
           reportdb: { kartlara_yaz: false, kural: 2, yas_dk: 3.5, taze: true, tazelik_dk: 20 } },
-        { ...kaynak, anahtar: "oracle_onent", ad: "Onent / Oracle", tur: "oracle", hazir: false, yapilandirma: "kapalı" },
+        { ...kaynak, anahtar: "oracle_onent", ad: "ONENTDB", tur: "oracle", hazir: false, yapilandirma: "kapalı" },
       ],
     })
     sarmala(<Kaynaklar dil="tr" onYeniParti={() => {}} />)
@@ -272,29 +274,157 @@ describe("Veri Girisi kaynaklari", () => {
     expect(screen.getByText(t.kartlaraYaz(false) + " · " + t.sonVeriYasi(3.5, true))).toBeTruthy()
     fireEvent.click(dugmeler[0])
     expect(await screen.findByText(/ORA-12541: \*\*\* — Dinleyiciye/)).toBeTruthy()
-    expect(cagrilar.some((c) => c.endsWith("/api/v1/tampon/kaynaklar/oracle_reportdb/test"))).toBe(true)
+    expect(cagrilar.some((c) => c === "POST /api/v1/tampon/kaynaklar/oracle_reportdb/test")).toBe(true)
+  })
+})
+
+describe("Ham Musteri Verisi", () => {
+  it("son partiyi onizler, satirlari gosterir ve onayla kartlara yazar", async () => {
+    const t = ym("tr")
+    vi.stubGlobal("confirm", () => true)
+    const kaynak = { neden: "", eksik: [], parti_sayisi: 1, hazir: true, yapilandirma: "tamam", tur: "dosya" }
+    const cagrilar = sahteSunucu({
+      "/musteri-ham/onizle": {
+        parti_id: 7,
+        ozet: { toplam: 2, guncelle: 1, degisiklik_yok: 0, yeni: 0, hata: 1, uyari: 0, alan_degisikligi: 1, yeni_olustur: false, genis_bicim: false, uygulanacak: 1, tanimsiz_sutunlar: ["Not"] },
+        uyum: { toplam: 30, eslesen: 3, alanlar: [{ sutun: "Müşteri Adı", alan: "Müşteri Ünvanı" }], eksik: [], fazla: ["Not"], zorunlu_eksik: [], uyumlu: true, bicim: "liste" },
+        satirlar: [
+          { sira: 1, unvan: "Alfa", durum: "guncelle", degisiklikler: [{ alan: "segment", baslik: "Segment", eski: "SA", yeni: "MA" }], hatalar: [], uyarilar: [] },
+          { sira: 2, unvan: "Beta", durum: "hata", degisiklikler: [], hatalar: ["TAC E-posta: geçerli bir e-posta adresi olmalı"], uyarilar: [] },
+        ],
+        kesildi: 0,
+        plan_ozeti: "h",
+      },
+      "/musteri-ham/uygula": { kayit_id: 3, ozet: { guncellenen: 1, olusturulan: 0 } },
+      "/musteri-ham/aktarimlar": [],
+      "/api/v1/tampon/kaynaklar": [{ ...kaynak, anahtar: "musteri_ham", ad: "Ham Müşteri Verisi", son: { id: 7, durum: "ready", satir: 2, zaman: null, hata: "" } }],
+    })
+    sarmala(<Kaynaklar dil="tr" onYeniParti={() => {}} />)
+    fireEvent.click(await screen.findByRole("button", { name: t.ham.onizle }))
+    expect(await screen.findByText(t.ham.bicim.liste)).toBeTruthy()
+    expect(screen.getByText("TAC E-posta: geçerli bir e-posta adresi olmalı")).toBeTruthy()
+    expect(screen.getByRole("link", { name: t.ham.bosSablon })).toHaveAttribute("href", "/api/v1/tampon/musteri-ham/sablon.xlsx")
+    fireEvent.click(screen.getByRole("button", { name: t.ham.uygula(1) }))
+    expect(await screen.findByText(t.ham.uygulandi(1, 0))).toBeTruthy()
+    expect(cagrilar).toContain("POST /api/v1/tampon/musteri-ham/uygula")
   })
 })
 
 describe("Veritabani", () => {
-  it("dis veritabanlari (yalniz Oracle) Veritabani sekmesinde listelenir", async () => {
+  it("dis veritabanlari artik Kurum Baglantilari'nda: burada yalniz yonlendirme", async () => {
     const t = ym("tr")
-    const kaynak = { neden: "", eksik: [], parti_sayisi: 0, son: null }
-    sahteSunucu({
+    const cagrilar = sahteSunucu({
       "/api/v1/yonetim/veritabani": {
         motor: "sqlite", dosya: "dev.db", boyut_bayt: 1024, disk_serbest_bayt: 2048, surum: "0002_ad_kimlik", hedef_surum: "0002_ad_kimlik",
         surum_uyumlu: true, eksik_tablolar: [], tablolar: [], toplam_satir: 0, butunluk: "ok",
         yedek: { dizin: "yedek", desteklenir: true, saklanan: 30, adet: 0, liste: [] },
       },
-      "/api/v1/tampon/kaynaklar": [
-        { ...kaynak, anahtar: "csv", ad: "CSV yükleme", tur: "dosya", hazir: true, yapilandirma: "tamam" },
-        { ...kaynak, anahtar: "oracle_reportdb", ad: "Onedesk / REPORTDB", tur: "oracle", hazir: false, yapilandirma: "kapalı", eksik: ["ORACLE_REPORTDB_PASSWORD"] },
-      ],
     })
     sarmala(<Veritabani dil="tr" />)
-    expect(await screen.findByText("Onedesk / REPORTDB")).toBeInTheDocument()
-    expect(screen.getAllByText(t.disVeritabanlari).length).toBeGreaterThan(0)
-    expect(screen.queryByText("CSV yükleme")).not.toBeInTheDocument()
-    expect(screen.getByText(new RegExp(`${t.eksikAnahtar}: ORACLE_REPORTDB_PASSWORD`))).toBeInTheDocument()
+    expect(await screen.findByRole("link", { name: t.kurumaGit })).toHaveAttribute("href", "#/yonetim/kurum")
+    expect(cagrilar.some((c) => c.includes("/tampon/kaynaklar"))).toBe(false)
+  })
+})
+
+describe("Kurum Baglantilari", () => {
+  const AD = {
+    id: "ad",
+    tur: "dizin",
+    label: "AD / LDAPS",
+    state: "incomplete",
+    missing: ["AD_DOMAIN"],
+    bilgiler: { sunucu: "dc.ornek.local", port: 636, ldaps: true, ssl: true, alan: "", ca_dosyasi: false, grup_kisiti: true, otomatik_ac: true },
+  }
+
+  it("AD karti: durum, gizli olmayan ayarlar, eksik anahtar; erisim testi adimlari (bind yok)", async () => {
+    const t = ym("tr")
+    const cagrilar = sahteSunucu({
+      "/api/v1/yonetim/kurum/ad-testi": {
+        tamam: false,
+        adimlar: [
+          { adim: "dns", durum: "ok", baslik: "DNS: dc.ornek.local", ayrinti: "10.0.0.5" },
+          { adim: "tcp", durum: "hata", baslik: "Ag: dc.ornek.local:636", ayrinti: "TimeoutError: timed out" },
+        ],
+      },
+      "/api/v1/yonetim/kurum": { baglantilar: [AD] },
+    })
+    sarmala(<Kurum dil="tr" />)
+    expect(await screen.findByText(t.kurum.adBaslik)).toBeInTheDocument()
+    expect(screen.getAllByText(t.kurum.durum.incomplete)).toHaveLength(2) // ozet dugmesi + kart
+    expect(screen.getByText("dc.ornek.local")).toBeInTheDocument()
+    expect(screen.getByText(t.kurum.caYok)).toBeInTheDocument()
+    expect(screen.getByText("AD_DOMAIN")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: t.kurum.test }))
+    expect(await screen.findByText(t.kurum.hata)).toBeInTheDocument()
+    expect(screen.getByText(t.kurum.adim.tcp)).toBeInTheDocument()
+    expect(screen.getByText("TimeoutError: timed out")).toBeInTheDocument()
+    expect(cagrilar).toContain("POST /api/v1/yonetim/kurum/ad-testi")
+  })
+
+  const ORACLE = {
+    tur: "oracle",
+    missing: [],
+    son_parti: null,
+    bilgiler: { sunucu: "reportdb-scan.ornek", port: 1521, servis: "REPORTDB", kullanici: "OKUYUCU", parola: true, zaman_asimi: 10, oracle_istemci: true, sorgu_tamam: true, sorgu_hata: null },
+  }
+
+  it("Oracle kartlari: AD ile ayni duzen; yalniz hazir kaynak test edilir, Tumunu test et hepsini dener", async () => {
+    const t = ym("tr")
+    const cagrilar = sahteSunucu({
+      "/api/v1/yonetim/kurum/oracle_reportdb/test": {
+        tamam: false,
+        adimlar: [
+          { adim: "ayar", durum: "ok", baslik: "Ayarlar tamam", ayrinti: "port 1521" },
+          { adim: "dns", durum: "ok", baslik: "Sunucu adı çözüldü", ayrinti: "1 adres" },
+          { adim: "tcp", durum: "ok", baslik: "Porta ulaşıldı (1521)", ayrinti: "" },
+          { adim: "oturum", durum: "hata", baslik: "Oracle oturumu", ayrinti: "ORA-01017: ***\nKullanıcı adı ya da parola hatalı." },
+        ],
+      },
+      "/api/v1/yonetim/kurum/ad-testi": { tamam: true, adimlar: [] },
+      "/api/v1/yonetim/kurum": {
+        baglantilar: [
+          AD,
+          { ...ORACLE, id: "oracle_reportdb", label: "REPORTDB", state: "ready", acma_anahtari: "ORACLE_REPORTDB_ENABLED",
+            son_parti: { id: 7, durum: "ready", satir: 120, zaman: null, hata: "" }, reportdb: { kartlara_yaz: true, kural: 2, yas_dk: 4, taze: true, tazelik_dk: 20 } },
+          { ...ORACLE, id: "oracle_galapagos", label: "GALAPAGOSDB", state: "disabled", acma_anahtari: "GALAPAGOSDB_DB_ENABLED",
+            bilgiler: { ...ORACLE.bilgiler, sunucu: "", oracle_istemci: false, sorgu_tamam: false, sorgu_hata: "İçeri alma sorgusu tanımlı değil." } },
+        ],
+      },
+    })
+    sarmala(<Kurum dil="tr" />)
+    expect(await screen.findByRole("heading", { name: "REPORTDB" })).toBeInTheDocument()
+    expect(screen.getByText(t.kurum.oracleNe.oracle_galapagos)).toBeInTheDocument()
+    expect(screen.getAllByText("reportdb-scan.ornek")).toHaveLength(1) // REPORTDB sunucusu acik; GALAPAGOSDB'de "tanimli degil"
+    expect(screen.getByText(t.kurum.oracleKapali("GALAPAGOSDB_DB_ENABLED"))).toBeInTheDocument()
+    expect(screen.getByText("İçeri alma sorgusu tanımlı değil.")).toBeInTheDocument()
+    expect(screen.getByText(t.kartlaraYaz(true) + " · " + t.sonVeriYasi(4, true))).toBeInTheDocument()
+    expect(screen.getByText(/^#7 · Hazır/)).toBeInTheDocument()
+    expect(screen.getAllByRole("button", { name: t.kurum.test })).toHaveLength(2) // AD + REPORTDB; kapali GALAPAGOSDB yok
+    fireEvent.click(screen.getByRole("button", { name: t.kurum.tumunuTest }))
+    expect(await screen.findByText(t.kurum.adim.oturum)).toBeInTheDocument()
+    expect(screen.getByText(/parola hatalı/)).toBeInTheDocument()
+    expect(cagrilar).toContain("POST /api/v1/yonetim/kurum/oracle_reportdb/test")
+    expect(cagrilar).toContain("POST /api/v1/yonetim/kurum/ad-testi")
+    expect(cagrilar.some((c) => c.includes("oracle_galapagos/test"))).toBe(false)
+  })
+
+  it("Yonetim sekme sirasi: Kurum Baglantilari, Veri Girisi ile Veritabani arasinda (EN de var)", () => {
+    expect(Object.keys(ym("tr").bolumler)).toEqual(["durum", "utilizasyon", "tampon", "kurum", "veritabani", "roller", "arizalar", "gunlukler"])
+    expect(ym("en").bolumler.kurum).toBe("Corporate connections")
+  })
+})
+
+describe("Veri Girisi rehberi", () => {
+  it("Nasil calisir: akis, kaynaklar, kural alanlari (formdaki ipucuyla ayni metin), ornekler ve geri al", () => {
+    const t = ym("tr")
+    render(<Rehber dil="tr" />)
+    expect(screen.getByText(t.rehber.baslik)).toBeInTheDocument()
+    expect(screen.getByText(/Tampon \(parti\)/)).toBeInTheDocument()
+    for (const b of [t.rehber.kaynaklarBaslik, t.rehber.alanlarBaslik, t.rehber.ornekBaslik, t.rehber.uygulaBaslik]) expect(screen.getByText(b)).toBeInTheDocument()
+    expect(screen.getByText(t.kuralIpuclari.eslesmeAlani)).toBeInTheDocument()
+    expect(screen.getByText(t.rehber.ornekler[0][0])).toBeInTheDocument()
+    cleanup()
+    render(<Rehber dil="en" />)
+    expect(screen.getByText("How does it work?")).toBeInTheDocument()
   })
 })

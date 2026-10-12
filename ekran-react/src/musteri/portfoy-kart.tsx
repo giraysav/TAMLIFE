@@ -26,7 +26,7 @@ export const SEGMENT_RENK: Record<string, string> = {
 }
 
 function SkorCubugu({ skor, etiket, yok }: { skor: number | null; etiket: string; yok: string }) {
-  if (skor === null) return <span className="text-[10px] font-bold text-slate-300">{yok}</span>
+  if (skor === null) return <span className="text-[0.625rem] font-bold text-slate-300">{yok}</span>
   const ton = skor >= 80 ? "bg-emerald-500" : skor >= 60 ? "bg-amber-500" : "bg-rose-500"
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2" title={`${etiket}: %${skor}`}>
@@ -42,7 +42,7 @@ function Olcu({ ad, deger, ton }: { ad: string; deger: number; ton: "kirmizi" | 
   const sinif = deger > 0 ? { kirmizi: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", mavi: "bg-blue-50 text-blue-600" }[ton] : "bg-slate-50 text-slate-300"
   return (
     <div className={`rounded-xl px-2 py-1.5 text-center ${sinif}`}>
-      <div className="text-[9px] font-black uppercase tracking-wide text-slate-400">{ad}</div>
+      <div className="text-[0.5625rem] font-black uppercase tracking-wide text-slate-400">{ad}</div>
       <div className="font-mono text-base font-black leading-tight">{sayi(deger)}</div>
     </div>
   )
@@ -56,10 +56,10 @@ export function MusteriKarti({ m, dil, onizleme = false }: { m: PortfoyKart; dil
       <div className="grid gap-3 pl-1.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="line-clamp-2 break-words text-[15px] font-black leading-snug text-tl-navy" title={m.name}>
+            <p className="line-clamp-2 break-words text-[0.9375rem] font-black leading-snug text-tl-navy" title={m.name}>
               {kisaUnvan(m.name) || t.unvanBos}
             </p>
-            {m.segment ? <span className={`mt-1.5 inline-block rounded-lg px-2 py-0.5 text-[10px] font-black ${SEGMENT_RENK[m.segment] ?? "bg-slate-100 text-slate-600"}`}>{m.segment}</span> : null}
+            {m.segment ? <span className={`mt-1.5 inline-block rounded-lg px-2 py-0.5 text-[0.625rem] font-black ${SEGMENT_RENK[m.segment] ?? "bg-slate-100 text-slate-600"}`}>{m.segment}</span> : null}
           </div>
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-tl-navy/5 text-tl-navy transition-colors group-hover:bg-tl-navy group-hover:text-tl-yellow">
             <Building2 aria-hidden className="size-4" />
@@ -67,12 +67,12 @@ export function MusteriKarti({ m, dil, onizleme = false }: { m: PortfoyKart; dil
         </div>
         {m.owner ? (
           <p className="flex items-center gap-1.5 truncate text-xs font-bold text-slate-500">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-tl-blue/10 text-[9px] font-black text-tl-blue">{baslangicHarfleri(m.owner)}</span>
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-tl-blue/10 text-[0.5625rem] font-black text-tl-blue">{baslangicHarfleri(m.owner)}</span>
             <span className="truncate">{m.owner}</span>
           </p>
         ) : null}
         <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">{t.acikKayitlar}</p>
+          <p className="mb-1 text-[0.5625rem] font-black uppercase tracking-widest text-slate-400">{t.acikKayitlar}</p>
           <div className="grid grid-cols-3 gap-2">
             <Olcu ad={t.alarm} deger={m.alarm} ton="kirmizi" />
             <Olcu ad={t.sikayet} deger={m.sikayet} ton="amber" />
@@ -82,7 +82,7 @@ export function MusteriKarti({ m, dil, onizleme = false }: { m: PortfoyKart; dil
         <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2">
           <SkorCubugu skor={m.score} etiket={t.skor} yok={t.skorYok} />
           {m.istirakler.length > 0 ? (
-            <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800" title={m.istirakler.map((i) => i.name).join(", ")}>
+            <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[0.625rem] font-black text-amber-800" title={m.istirakler.map((i) => i.name).join(", ")}>
               {m.istirakler.length} {t.istirak}
             </span>
           ) : null}

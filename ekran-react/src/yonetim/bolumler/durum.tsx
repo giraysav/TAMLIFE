@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { CircleCheck, CircleX, RefreshCw, TriangleAlert } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Bolum, DUGME, HataKutu, Rozet, Yukleniyor } from "@/components/sayfa-ui"
+import { Bolum, DUGME, HataKutu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
 import { oku } from "@/lib/sorgu"
 import type { Durum3, Ozet } from "@/yonetim/api"
@@ -15,14 +15,14 @@ const BANT = {
   hata: { sinif: "border-rose-200 bg-rose-50 text-rose-800", ikon: CircleX },
 } as const
 
-/** Genel Durum: tek istekte saglik kontrolleri + gostergeler + baglanti yuvalari. Sekme gorunurken 30 sn'de bir tazelenir. */
+/** Genel Durum: tek istekte saglik kontrolleri + gostergeler (kurum baglantilari ayri sekmede). Sekme gorunurken 30 sn'de bir tazelenir. */
 export default function Durum({ dil }: { dil: Dil }) {
   const t = ym(dil)
   const q = useQuery({ queryKey: ANAHTAR.ozet, queryFn: () => oku<Ozet>("/api/v1/yonetim/ozet"), refetchInterval: 30_000 })
 
   if (q.isPending) return <Yukleniyor metin={t.yukleniyor} iskelet />
   if (q.isError) return <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
-  const { saglik, gostergeler: g, baglantilar } = q.data
+  const { saglik, gostergeler: g } = q.data
   const bant = BANT[saglik.genel as Durum3]
   const Ikon = bant.ikon
 
@@ -32,7 +32,7 @@ export default function Durum({ dil }: { dil: Dil }) {
         <Ikon aria-hidden className="size-5 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black">{t.genel[saglik.genel]}</p>
-          <p className="text-[11px] font-bold opacity-80">
+          <p className="text-[0.6875rem] font-bold opacity-80">
             {t.sonKontrol}: {zaman(saglik.zaman)}
           </p>
         </div>
@@ -84,19 +84,6 @@ export default function Durum({ dil }: { dil: Dil }) {
             </li>
           ))}
         </ul>
-      </Bolum>
-
-      <Bolum anahtar="yonetim-durum-baglantilar" baslik={t.baglantilar}>
-        <ul className="flex flex-wrap gap-2">
-          {baglantilar.filter((b) => b.tur !== "veritabani").map((b) => (
-            <li key={b.id}>
-              <Rozet ton={b.configured ? "yesil" : "gri"}>
-                {b.slot} · {b.configured ? t.ayarli : t.ayarsiz}
-              </Rozet>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-[11px] font-bold text-slate-400">{t.baglantiNotu}</p>
       </Bolum>
     </div>
   )

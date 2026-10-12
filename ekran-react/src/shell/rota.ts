@@ -24,3 +24,12 @@ export function sorguAyarla(yol: string, degerler: Record<string, string | null>
   const metin = sorgu.toString()
   window.location.hash = `#/${yol}${metin ? `?${metin}` : ""}`
 }
+
+/** Acilacak sayfa: menude (sunucunun navigation listesinde) olan kimlik; olmayan genel bakisa doner. Admin icin Yonetim
+ *  bolumleri istisnadir: bolum listesi arayuzdedir (yonetim-sayfasi), sunucu listesi eski kalsa da (orn. API yeniden
+ *  baslatilmadan arayuz guncellendiyse) yeni bolum ana sayfaya atmaz; bilinmeyen bolumu Yonetim Genel Durum'a cevirir. */
+export function aktifSayfa(kimlik: string, izinli: ReadonlySet<string>, admin: boolean): string {
+  if (izinli.has(kimlik)) return kimlik
+  if (admin && (kimlik === "yonetim" || kimlik.startsWith("yonetim/"))) return kimlik
+  return "ozet"
+}

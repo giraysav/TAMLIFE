@@ -9,11 +9,11 @@ from __future__ import annotations
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import kullanici_oturumu, mevcut_oturumlar
-from app.kullanicilar import giris_yapmislar, kullanici_kaydi
+from app.kullanicilar import giris_yapmislar
 from app.models import AppUser, CalendarDay, Presentation
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.session import Principal
@@ -62,7 +62,7 @@ def bu_ceyrek() -> tuple[int, int]:
 # --- kisinin kendi takvimi -----------------------------------------------------------------------------
 def _tarih(deger: object, etiket: str = "Tarih") -> date:
     try:
-        return datetime.strptime(str(deger or "")[:10], "%Y-%m-%d").date()  # noqa: DTZ007
+        return datetime.strptime(str(deger or "")[:10], "%Y-%m-%d").date()
     except ValueError:
         raise TakvimHata(400, f"{etiket} geçerli bir tarih olmalı (YYYY-AA-GG).") from None
 
@@ -186,7 +186,7 @@ def _uye(u: AppUser, o: dict) -> dict:
     }
 
 
-def ekip(db: Session, user: Principal, yil: int, ceyrek: int) -> dict:
+def ekip(db: Session, yil: int, ceyrek: int) -> dict:
     """Panele giris yapmis herkes; her kisi icin izin/gun durumu ve toplanti toplamlari (TAM Takvim)."""
     bas, son = donem_araligi(yil, ceyrek)
     liste = [_uye(u, _ozet_olustur(_gunler(u.username, bas, son))) for u in giris_yapmislar(db)]
@@ -219,15 +219,11 @@ def uye_gunleri(db: Session, yil: int, ceyrek: int, uye_id: int) -> dict:
     return {"uye": uye.display_name or uye.username, "gunler": [_gun(g) for g in gunler]}
 
 
-# --- sunuma gonder -----------------------------------------------------------------------------------
-def sunuma_gonder(db: Session, user: Principal, yil: int, ceyrek: int, gonder: bool) -> dict:
-    """Donemin TAM Takvim goruntusunu ceyrek bazli sunuma ekler (ya da kaldirir). Donem basina tek kayit; yeniden gonderim gunceller."""
-    donem = donem_adi(yil, ceyrek)
-    if not gonder:
-        db.execute(delete(Presentation).where(Presentation.source == SUNUM_KAYNAK, Presentation.period == donem))
-        return {"donem": donem, "sunumda": None}
-    anlik = ekip(db, user, yil, ceyrek)
-    yuk = {
+# --- ceyrek bazli sunum (app.sunum kaynagi) --------------------------------------------------------------
+def sunum_ozeti(db: Session, yil: int, ceyrek: int) -> dict:
+    """Donemin TAM Takvim goruntusu (Ceyrek Bazli Sunum 'takvim' kaynagi; grafik bu yukle cizilir)."""
+    anlik = ekip(db, yil, ceyrek)
+    return {
         "yil": yil,
         "ceyrek": ceyrek,
         "durumlar": anlik["durumlar"],
@@ -236,23 +232,3 @@ def sunuma_gonder(db: Session, user: Principal, yil: int, ceyrek: int, gonder: b
             {k: u[k] for k in ("ad", "durumlar", "online", "yuzyuze", "izin_gun", "toplanti", "kayitli_gun")} for u in anlik["uyeler"]
         ],
     }
-    kayit = db.scalar(select(Presentation).where(Presentation.source == SUNUM_KAYNAK, Presentation.period == donem))
-    ad = kullanici_kaydi(db, user).display_name or user.username
-    if kayit is None:
-        kayit = Presentation(source=SUNUM_KAYNAK, period=donem)
-        db.add(kayit)
-    kayit.title = f"TAM Takvim — {donem}"
-    kayit.payload, kayit.sent_by, kayit.sent_at = yuk, ad[:120], simdi()
-    db.flush()
-    return {"donem": donem, "sunumda": {"gonderen": kayit.sent_by, "zaman": iso(kayit.sent_at)}}
-
-
-def sunum_ogeleri(db: Session, yil: int | None = None) -> list[dict]:
-    """Ceyrek bazli sunum modulu icin gonderilmis ogeler (yeniden eskiye)."""
-    sorgu = select(Presentation).where(Presentation.source != "")
-    if yil:
-        sorgu = sorgu.where(Presentation.period.like(f"{yil}%"))
-    return [
-        {"id": p.id, "kaynak": p.source, "donem": p.period, "baslik": p.title, "gonderen": p.sent_by, "zaman": iso(p.sent_at), "veri": p.payload}
-        for p in db.scalars(sorgu.order_by(Presentation.period.desc(), Presentation.id.desc()).limit(100))
-    ]

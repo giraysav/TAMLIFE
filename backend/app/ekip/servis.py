@@ -1,0 +1,248 @@
+"""Ekip ozeti. Uretim karsiligi: kutucuklar/ekip/servis.py (_build_team_overview, _build_team_ai_summary, _build_team_stats,
+_build_tam_personal_ai_summary). Ayri modul degil, Genel Bakis'ta bolum (2026-10-11 kullanici karari).
+
+Her TAM icin: bugunku takvim durumu, portfoy (cati musteri), bu ayin rapor uyumu (Aylik Rapor ile ayni rapor birimi kurali),
+risk yuku (tum musterilerinin acik alarm + sikayet), acik talep, kapanan kayit, utilizasyon (puanlama disi personelde bos),
+bu ayin toplantilari ve projeler. Uretimdeki 'acik gorev' (DailyTask) yeni panelde yok; yerine acik proje sayilir.
+ICT/APN geliri kisisel dosyadadir, ozete girmez.
+Kapsam: admin ve TeamMngr tum ekibi, TeamMember yalniz kendini gorur. Ozet cumleleri kural tabanlidir (LLM yok).
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.authz import yonetici_mi
+from app.db import mevcut_oturumlar
+from app.dil import ingilizce, m
+from app.kullanicilar import kullanici_kaydi
+from app.models import AppUser, CalendarDay, Customer, ProjectItem, Report, ScoringExclusion
+from app.musteri.servis import rapor_birimi_mi
+from app.ortak import rapor_donemi, tr_kucuk
+from app.session import Principal
+from app.skor.servis import tam_skor_ozeti
+from app.takvim.servis import DURUMLAR
+
+EKIP_ROLLERI = ("TeamMember", "TeamMngr")
+KRITIK_UYUM = 50  # % alti kritik (uretim)
+ORTA_UYUM = 80
+YUKSEK_RISK = 16  # acik alarm + sikayet (uretim)
+ONEMLI_ONCELIK = ("yuksek", "kritik")
+
+
+def _bugun() -> date:
+    """Takvim gunu yerel gundur (sunucu Turkiye saatinde); UTC kullanilirsa 00-03 arasi dunu gosterir."""
+    return datetime.now().date()
+
+
+def _uyeler(db: Session, user: Principal) -> list[AppUser]:
+    if not yonetici_mi(user):
+        return [kullanici_kaydi(db, user)]
+    sorgu = select(AppUser).where(AppUser.active.is_not(False), AppUser.role.in_(EKIP_ROLLERI), AppUser.is_admin.is_not(True))
+    return list(db.scalars(sorgu))
+
+
+def _takvim(uyeler: list[AppUser], bugun: date) -> dict[str, tuple[str | None, int, int]]:
+    """Kullanici adi -> (bugunku durum, bu ay online, bu ay yuz yuze). Dosyasi olmayan kisi yok sayilir (okuma dosya olusturmaz)."""
+    bas = bugun.replace(day=1)
+    sonuc: dict[str, tuple[str | None, int, int]] = {}
+    for ad, k in mevcut_oturumlar([u.username for u in uyeler]):
+        gunler = list(k.scalars(select(CalendarDay).where(CalendarDay.day >= bas, CalendarDay.day <= bugun)))
+        durum = next((g.status for g in gunler if g.day == bugun), None)
+        sonuc[ad] = (durum, sum(g.online_count for g in gunler), sum(g.face_count for g in gunler))
+    return sonuc
+
+
+DURUM_EN = {
+    "calisiyor": "working",
+    "yillik_izin": "on annual leave",
+    "sirket_izni": "on company leave",
+    "raporlu": "on sick leave",
+    "arife_tatili": "on half-day holiday",
+    "resmi_tatil": "on public holiday",
+    "hafta_sonu": "on weekend",
+}
+
+
+def _uyum_kelimesi(yuzde: int) -> str:
+    if yuzde < KRITIK_UYUM:
+        return m("kritik seviyede", "critical")
+    return m("orta seviyede", "moderate") if yuzde < ORTA_UYUM else m("sağlıklı seviyede", "healthy")
+
+
+def _sayi(deger: object) -> str:
+    """Ondalik ayrac dile gore: TR virgul, EN nokta."""
+    return str(deger) if ingilizce() else str(deger).replace(".", ",")
+
+
+def kisi_cumlesi(s: dict) -> str:
+    """Uretim _build_tam_personal_ai_summary (kural tabanli tek paragraf). Dil: istegin dili (app.dil)."""
+    if s["bugun"]:
+        parcalar = [m(f"{s['ad']}, bugün {tr_kucuk(s['bugun_ad'])}.", f"{s['ad']} is {DURUM_EN.get(s['bugun'], s['bugun'])} today.")]
+    else:
+        parcalar = [m(f"{s['ad']}: bugün için takvim kaydı yok.", f"{s['ad']}: no calendar entry for today.")]
+    if s["musteri"]:
+        if s["rapor_beklenen"]:
+            parcalar.append(
+                m(
+                    f"{s['musteri']} müşteri portföyünü yönetiyor; bu ay {s['rapor_atilan']}/{s['rapor_beklenen']} rapor gönderdi "
+                    f"(%{s['uyum']} uyum, {_uyum_kelimesi(s['uyum'])}).",
+                    f"Manages a portfolio of {s['musteri']} customers; sent {s['rapor_atilan']}/{s['rapor_beklenen']} reports for the "
+                    f"report month ({s['uyum']}% compliance, {_uyum_kelimesi(s['uyum'])}).",
+                )
+            )
+        else:
+            parcalar.append(m(f"{s['musteri']} müşteri portföyünü yönetiyor.", f"Manages a portfolio of {s['musteri']} customers."))
+    else:
+        parcalar.append(m("Henüz sorumlu olduğu bir müşteri portföyü yok.", "No customer portfolio assigned yet."))
+    acik = s["alarm"] + s["sikayet"] + s["talep"]
+    if acik or s["kapanan"]:
+        parcalar.append(
+            m(
+                f"Portföyünde {s['alarm']} açık alarm, {s['sikayet']} açık şikayet ve {s['talep']} açık talep var (toplam {acik}); "
+                f"yıl içinde {s['kapanan']} kayıt kapatıldı.",
+                f"The portfolio has {s['alarm']} open alarms, {s['sikayet']} open complaints and {s['talep']} open requests "
+                f"(total {acik}); {s['kapanan']} records were closed this year.",
+            )
+        )
+    if s["final_skor"] is not None:
+        parcalar.append(
+            m(f"Ortalama TAM Utilizasyon skoru {_sayi(s['final_skor'])}.", f"Average TAM Utilization score is {_sayi(s['final_skor'])}.")
+        )
+    if s["online"] or s["yuzyuze"]:
+        parcalar.append(
+            m(
+                f"Bu ay {s['online']} online, {s['yuzyuze']} yüz yüze toplantı/etkinlik gerçekleştirdi.",
+                f"Held {s['online']} online and {s['yuzyuze']} face-to-face meetings/events this month.",
+            )
+        )
+    if s["proje_acik"] or s["proje_kapanan"]:
+        parcalar.append(
+            m(
+                f"{s['proje_acik'] + s['proje_kapanan']} proje kaydı var ({s['proje_acik']} devam ediyor, {s['proje_kapanan']} kapandı).",
+                f"{s['proje_acik'] + s['proje_kapanan']} project records ({s['proje_acik']} ongoing, {s['proje_kapanan']} closed).",
+            )
+        )
+    if s["onemli_isler"]:
+        n = len(s["onemli_isler"])
+        parcalar.append(m(f"{n} yüksek/kritik öncelikli projeyi takip ediyor.", f"Tracks {n} high/critical priority projects."))
+    return " ".join(parcalar)
+
+
+def ekip_cumlesi(satirlar: list[dict], risk_var: bool) -> str | None:
+    """Uretim _build_team_ai_summary."""
+    if not satirlar:
+        return None
+    kritik = sum(1 for s in satirlar if s["rapor_beklenen"] and s["uyum"] < KRITIK_UYUM)
+    riskli = sum(1 for s in satirlar if risk_var and s["risk"] >= YUKSEK_RISK)
+    parcalar = []
+    if kritik:
+        parcalar.append(
+            m(
+                f"{kritik} TAM'ın rapor uyumu kritik seviyede (%{KRITIK_UYUM} altı)",
+                f"{kritik} TAMs have critical report compliance (below {KRITIK_UYUM}%)",
+            )
+        )
+    if riskli:
+        parcalar.append(m(f"{riskli} TAM yüksek risk yükü taşıyor", f"{riskli} TAMs carry a high risk load"))
+    if parcalar:
+        return " · ".join(parcalar) + "."
+    if not risk_var:
+        return m(
+            "Ekip genelinde rapor uyumu sağlıklı seviyede; risk yükü için ReportDB verisi henüz alınmadı.",
+            "Team-wide report compliance is healthy; ReportDB data for risk load has not been received yet.",
+        )
+    return m(
+        "Ekip genelinde rapor uyumu ve risk göstergeleri şu an sağlıklı seviyede.",
+        "Team-wide report compliance and risk indicators are currently healthy.",
+    )
+
+
+def ozet(db: Session, user: Principal) -> dict:
+    bugun = _bugun()
+    rapor_yil, rapor_ay = rapor_donemi(bugun)  # uyum: bu ay gonderilmesi gereken (onceki ayin) rapor
+    uyeler = _uyeler(db, user)
+    kimlikler = {u.id for u in uyeler}
+    musteriler = list(db.scalars(select(Customer)))
+    # Alarm/sikayet sayisi hic yoksa 0 'saglikli' degil, veri yoktur (uretim _risk_verisi_var).
+    risk_var = any(c.alarm_count or c.complaint_count or c.request_count for c in musteriler)
+    tum = {c.id: c for c in musteriler}
+    atilan: set[int] = set()
+    for kimlik in db.scalars(select(Report.customer_id).where(Report.report_month == rapor_ay, Report.report_year == rapor_yil).distinct()):
+        c = tum.get(kimlik)
+        if c is not None:
+            atilan.add(c.id if rapor_birimi_mi(c) else (c.parent_id or c.id))
+    sahip: dict[int, list[Customer]] = {}
+    for c in musteriler:
+        if c.owner_id in kimlikler:
+            sahip.setdefault(c.owner_id, []).append(c)
+    disi = set(db.scalars(select(ScoringExclusion.user_id)))
+    projeler: dict[int, list[ProjectItem]] = {}
+    for p in db.scalars(select(ProjectItem).where(ProjectItem.owner_id.in_(kimlikler))):
+        projeler.setdefault(p.owner_id, []).append(p)
+    takvim = _takvim(uyeler, bugun)
+
+    satirlar = []
+    for u in uyeler:
+        hepsi = sahip.get(u.id, [])
+        catilar = [c for c in hepsi if c.parent_id is None]
+        birimler = [c.id for c in hepsi if rapor_birimi_mi(c)]
+        gonderilen = sum(1 for b in birimler if b in atilan)
+        skor = tam_skor_ozeti([] if u.id in disi else catilar)
+        durum, online, yuzyuze = takvim.get(u.username, (None, 0, 0))
+        pler = projeler.get(u.id, [])
+        acik_p = [p for p in pler if p.status != "kapandi"]
+        alarm = sum(c.alarm_count or 0 for c in hepsi)
+        sikayet = sum(c.complaint_count or 0 for c in hepsi)
+        s = {
+            "id": u.id,
+            "ad": u.display_name or u.username,
+            "rol": u.role,
+            "bugun": durum,
+            "bugun_ad": DURUMLAR.get(durum, durum) if durum else "",
+            "musteri": len(catilar),
+            "rapor_atilan": gonderilen,
+            "rapor_beklenen": len(birimler),
+            "uyum": round(gonderilen * 100 / len(birimler)) if birimler else 0,
+            "alarm": alarm,
+            "sikayet": sikayet,
+            "talep": sum(c.request_count or 0 for c in hepsi),
+            "kapanan": sum((c.alarm_closed_count or 0) + (c.complaint_closed_count or 0) + (c.request_closed_count or 0) for c in hepsi),
+            "risk": alarm + sikayet,
+            "puanlama_disi": u.id in disi,
+            "final_skor": skor["final_skor"],
+            "toplam_puan": skor["toplam_puan"],
+            "agirlik_puani": skor["agirlik_puani"],
+            "online": online,
+            "yuzyuze": yuzyuze,
+            "proje_acik": len(acik_p),
+            "proje_kapanan": len(pler) - len(acik_p),
+            "onemli_isler": [
+                {"id": p.id, "baslik": p.title, "oncelik": p.priority, "hedef": p.target_date.isoformat() if p.target_date else None}
+                for p in sorted(acik_p, key=lambda p: (p.priority != "kritik", p.target_date or date.max))
+                if p.priority in ONEMLI_ONCELIK
+            ],
+        }
+        s["cumle"] = kisi_cumlesi(s)
+        satirlar.append(s)
+    # Uretim: agirlik puanina gore buyukten kucuge (Veri Yonlendirici > Personel Agirlik ile ayni deger); skoru olmayan en altta.
+    satirlar.sort(key=lambda s: tr_kucuk(s["ad"]))
+    satirlar.sort(key=lambda s: s["agirlik_puani"] if s["agirlik_puani"] is not None else -1, reverse=True)
+    return {
+        "tarih": bugun.isoformat(),
+        "kapsam": "ekip" if yonetici_mi(user) else "kendi",
+        "risk_var": risk_var,
+        "cumle": ekip_cumlesi(satirlar, risk_var),
+        "sayilar": {
+            "kisi": len(satirlar),
+            "kritik_uyum": sum(1 for s in satirlar if s["rapor_beklenen"] and s["uyum"] < KRITIK_UYUM),
+            "yuksek_risk": sum(1 for s in satirlar if risk_var and s["risk"] >= YUKSEK_RISK),
+            "acik_proje": sum(s["proje_acik"] for s in satirlar),
+            "bugun_izinli": sum(1 for s in satirlar if s["bugun"] in ("yillik_izin", "sirket_izni", "raporlu")),
+        },
+        "satirlar": satirlar,
+        "esikler": {"kritik_uyum": KRITIK_UYUM, "yuksek_risk": YUKSEK_RISK},
+    }

@@ -12,17 +12,24 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app import ad
 from app.audit import audit_log
 from app.config import env_dosyasi_yukle, get_settings
+from app.dil import DilAraKatmani
+from app.ekip.api import router as ekip_router
 from app.gelir.api import router as gelir_router
 from app.katalog_api import router as katalog_router
 from app.musteri.api import router as musteri_router
 from app.onedesk.api import router as onedesk_router
 from app.ortak import UygulamaHatasi, ok
 from app.oturum_api import router as oturum_router
+from app.proje.api import router as proje_router
+from app.radar.api import router as radar_router
 from app.rol_api import router as rol_router
 from app.security import install as install_security
 from app.skor.api import router as skor_router
+from app.sunum.api import router as sunum_router
 from app.takvim.api import router as takvim_router
+from app.talep.api import router as talep_router
 from app.tampon.router import router as tampon_router
+from app.topoloji.api import router as topoloji_router
 from app.yonetim import dosya_gunlugu
 from app.yonetim.gunlukler import kalici_yaz
 from app.yonetim.router import router as yonetim_router
@@ -48,12 +55,13 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
     install_security(app)
+    app.add_middleware(DilAraKatmani)  # X-Dil: sunucu metinlerinin dili (app.dil.m)
     app.add_exception_handler(UygulamaHatasi, uygulama_hatasi)  # bilinen is hatasi: kod + mesaj
     app.add_exception_handler(Exception, genel_istisna)  # beklenmeyen hata: kod + kayit no, ham metin yok
     audit_log.sink = kalici_yaz  # denetim olaylari audit_event'e KALICI yazilir
     if settings.env != "test":
         dosya_gunlugu.kur()
-    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, onedesk_router, gelir_router, takvim_router, yonetim_router, tampon_router):
+    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, onedesk_router, gelir_router, takvim_router, sunum_router, talep_router, radar_router, proje_router, topoloji_router, ekip_router, yonetim_router, tampon_router):
         app.include_router(router)
 
     @app.get("/api/v1/health")

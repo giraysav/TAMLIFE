@@ -178,8 +178,8 @@ def test_hata_metni_sir_tasimaz_ve_ipucu_verir():
 def test_deger_json_uyumlu():
     assert oracle.deger(Decimal(12)) == 12 and isinstance(oracle.deger(Decimal(12)), int)
     assert oracle.deger(Decimal("12.5")) == 12.5
-    assert oracle.deger(datetime(2026, 10, 1, 9, 30)) == "2026-10-01 09:30:00"  # noqa: DTZ001 - Oracle saat dilimsiz dondurur
-    assert oracle.deger(datetime(2026, 10, 1)) == "2026-10-01"  # noqa: DTZ001
+    assert oracle.deger(datetime(2026, 10, 1, 9, 30)) == "2026-10-01 09:30:00"
+    assert oracle.deger(datetime(2026, 10, 1)) == "2026-10-01"
     assert (oracle.deger(b"\x01\xff"), oracle.deger("  a "), oracle.deger("  "), oracle.deger(None)) == ("01ff", "a", None, None)
 
 
@@ -213,6 +213,15 @@ def test_baglanti_testi_ayni_surecte(sahte, acik, monkeypatch):
     sahte.hata = Exception("ORA-01017: invalid credential; logon denied ornek-parola-123")
     sonuc = oracle.baglanti_testi("oracle_reportdb", senkron=True)
     assert sonuc["ok"] is False and sonuc["ipucu"] == "Kullanıcı adı ya da parola hatalı." and "ornek-parola" not in sonuc["mesaj"]
+
+
+def test_giris_tetikleyicisi_ve_sure_dolumu_ipuclari():
+    """Parola dogru olsa da ORA-00604 > ORA-20099 (logon tetikleyicisi) gelebilir: ipucu parola sifirlamanin cozmedigini soyler."""
+    ilk, ipucu = oracle.hata_metni(Exception("ORA-00604: error occurred at recursive SQL level 1\nORA-20099: Access denied\nORA-06512: at line 17\nORA-04088: error during execution of trigger 'X.T'"))
+    assert ilk.startswith("ORA-00604") and "giriş tetikleyicisi" in ipucu and "Parola sıfırlamak çözmez" in ipucu
+    assert "tetikleyicisi" in oracle.hata_metni(Exception("ORA-04088: error during execution of trigger"))[1]
+    assert "süresi dolmuş" in oracle.hata_metni(Exception("ORA-28001: the password has expired"))[1]
+    assert oracle.hata_metni(Exception("ORA-01017: invalid credential"))[1] == "Kullanıcı adı ya da parola hatalı."
 
 
 def test_istemci_hazirla_bir_kez_hata_engellemez(sahte, monkeypatch):
@@ -599,7 +608,7 @@ def test_isci_cek_import_query_partisi(client, sahte, monkeypatch):
     assert isci.main(["cek", "oracle_onent"]) == 1 and _partiler() == []  # yalniz SELECT / WITH
     monkeypatch.setenv("ONENTDB_DB_IMPORT_QUERY", "SELECT NO, AD, TUTAR, TARIH FROM ORNEK_TABLO;")
     sahte.sutunlar = ["NO", "AD", "TUTAR", "TARIH"]
-    sahte.satirlar = [(Decimal(1), " ORNEK-A ", Decimal("12.5"), datetime(2026, 10, 1, 9, 30)), (Decimal(2), "ORNEK-B", None, None)]  # noqa: DTZ001
+    sahte.satirlar = [(Decimal(1), " ORNEK-A ", Decimal("12.5"), datetime(2026, 10, 1, 9, 30)), (Decimal(2), "ORNEK-B", None, None)]
     assert isci.main(["cek", "oracle_onent"]) == 0
     with Session(engine()) as db:
         p = db.scalars(select(IngestBatch)).one()
@@ -622,5 +631,5 @@ def test_dilimsiz_kaynak_saati_turkiye_saati_sayilir():
     from app.onedesk.ice_al import tarih_oku
 
     assert tarih_oku("10.10.2026 12:00:00") == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)  # Onedesk/Oracle yerel saat -> UTC
-    assert tarih_oku(datetime(2026, 10, 10, 12, 0)) == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)  # noqa: DTZ001 - dilimsiz deger bilerek (yerel saat)
+    assert tarih_oku(datetime(2026, 10, 10, 12, 0)) == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)
     assert tarih_oku(datetime(2026, 10, 10, 12, 0, tzinfo=UTC)) == datetime(2026, 10, 10, 12, 0, tzinfo=UTC)  # dilimli dokunulmaz

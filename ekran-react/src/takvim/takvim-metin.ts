@@ -72,19 +72,12 @@ const TR = {
   toplantilar: "Toplantılar (online / yüz yüze)",
   sunumaGonder: "Çeyrek bazlı sunuma gönder",
   sunumaGonderAlt: "İşaretlenirse bu çeyreğin takvim özeti Çeyrek Bazlı Sunum modülüne eklenir.",
-  sunumYetkisiYok: "Bu işlem için yetkiniz yok. Yönetici, Rol Yönetimi'nden “Çeyrek bazlı sunuma gönder” yetkisini rolünüze verebilir.",
+  sunumYetkisiYok: "Bu işlem için yetkiniz yok. Yönetici, Rol Yönetimi › Çeyrek Bazlı Sunum bölümünden “Çeyrek bazlı sunumu yönet” yetkisini rolünüze verebilir.",
   sunumCeyrekGerekli: "Sunuma göndermek için bir çeyrek seçin (tüm yıl gönderilemez).",
   sunumda: (g: string, z: string) => `Sunumda · ${g} · ${z}`,
   sunumGonderildi: "Sunuma eklendi.",
   sunumKaldirildi: "Sunumdan çıkarıldı.",
   sunumHata: "Sunum işlemi tamamlanamadı.",
-  // sunum
-  sunumBaslik: "Çeyrek Bazlı Sunum",
-  sunumAciklama: "Çeyrek sunumuna gönderilen özetler",
-  sunumYok: "Henüz sunuma gönderilen öğe yok",
-  sunumYokAlt: "TAM Takvim sayfasında bir çeyrek için “Çeyrek bazlı sunuma gönder” seçildiğinde burada görünür.",
-  gonderen: "Gönderen",
-  kaynakTakvim: "TAM Takvim",
 }
 
 const EN: typeof TR = {
@@ -155,18 +148,12 @@ const EN: typeof TR = {
   toplantilar: "Meetings (online / face-to-face)",
   sunumaGonder: "Send to quarterly presentation",
   sunumaGonderAlt: "If checked, this quarter's calendar summary is added to the Quarterly Presentation module.",
-  sunumYetkisiYok: "You are not allowed to do this. An administrator can grant the “Send to quarterly presentation” permission to your role in Role Management.",
+  sunumYetkisiYok: "You are not allowed to do this. An administrator can grant “Manage the quarterly presentation” to your role in Role Management › Quarterly Presentation.",
   sunumCeyrekGerekli: "Select a quarter to send (the whole year cannot be sent).",
   sunumda: (g: string, z: string) => `In presentation · ${g} · ${z}`,
   sunumGonderildi: "Added to the presentation.",
   sunumKaldirildi: "Removed from the presentation.",
   sunumHata: "Could not complete the presentation action.",
-  sunumBaslik: "Quarterly Presentation",
-  sunumAciklama: "Summaries sent to the quarterly presentation",
-  sunumYok: "Nothing has been sent to the presentation yet",
-  sunumYokAlt: "It appears here when “Send to quarterly presentation” is selected for a quarter on the TAM Calendar page.",
-  gonderen: "Sent by",
-  kaynakTakvim: "TAM Calendar",
 }
 
 export function takvimMetin(dil: Dil) {

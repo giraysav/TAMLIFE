@@ -4,6 +4,10 @@
   rol <kullanici> <rol>         admin | TeamMngr | TeamMember; kayit yoksa AD kullanicisi olarak acar (ilk girisi beklemeden yetki)
   aktif|pasif <kullanici>       pasif kullanici giris yapamaz (AD kullanicisi silinmez, pasife alinir)
   parola <kullanici>            YEREL ACIL HESAP parolasi (en az 12 karakter, gizli sorulur); AD kullanicisina verilmez
+  sil <kullanici>... [--devret <hedef>] [--evet]
+                                kullaniciyi siler (panelden silmeyle ayni kural). --evet yoksa DENEME: ne olacagini yazar, hicbir sey silmez.
+                                Bagli kayitlar silen hesaba (KULLANICI_SILME_YETKILISI, varsayilan admin) devredilir; --devret verilirse
+                                musteri sorumlusu dahi tum kayitlar o kisiye gecer (ornek: eski elle acilmis hesabin AD hesabi)
 
 Rol/pasif degisikligi acik oturumlara yeniden giriste yansir (oturumlar panel surecinin belleginde).
 """
@@ -19,15 +23,72 @@ from app import kullanicilar
 from app.config import env_dosyasi_yukle
 from app.db import oturum
 from app.models import AppUser
+from app.ortak import UygulamaHatasi
+from app.session import Principal
 
 ROLLER = ("admin", "TeamMngr", "TeamMember")
+
+
+def _sil(db, arg: list[str]) -> int:
+    """sil <kullanici>... [--devret <hedef>] [--evet]: once deneme (geri alinir), --evet ile gercek silme."""
+    evet = "--evet" in arg
+    kalan = [a for a in arg if a != "--evet"]
+    devret_ad = None
+    if "--devret" in kalan:
+        i = kalan.index("--devret")
+        if i + 1 >= len(kalan):
+            print("--devret icin kullanici adi gerekli.")
+            return 2
+        devret_ad = kalan[i + 1]
+        del kalan[i : i + 2]
+    if not kalan:
+        print("Silinecek kullanici adi gerekli.")
+        return 2
+    yetkili = kullanicilar.silme_yetkilisi_ad()
+    sahip = kullanicilar.bul(db, yetkili) if yetkili else None
+    if sahip is None:
+        print("Silme yetkilisi hesap (KULLANICI_SILME_YETKILISI, varsayilan admin) panelde kayitli degil; once o hesabi gorun: liste.")
+        return 1
+    devret = None
+    if devret_ad:
+        devret = kullanicilar.bul(db, devret_ad)
+        if devret is None:
+            print(f"Devir hedefi yok: {devret_ad}")
+            return 1
+    yapan = Principal(sahip.username, "admin", True)
+    hata = False
+    for ad in kalan:
+        satir = kullanicilar.bul(db, ad)
+        if satir is None:
+            print(f"{ad}: kullanici yok")
+            hata = True
+            continue
+        try:
+            o = kullanicilar.sil(db, yapan, satir.id, devret)
+        except UygulamaHatasi as exc:
+            print(f"{ad}: {exc.mesaj}")
+            hata = True
+            continue
+        hedef = f" -> {devret.username}" if devret else f" -> {sahip.username}"
+        print(f"{o['username']:<24} devredilen={o['devredilen']} bosaltilan={o['bosaltilan']} silinen={o['silinen']}{hedef}")
+    if hata:
+        db.rollback()
+        print("Hata var: hicbir sey silinmedi.")
+        return 1
+    if evet:
+        db.commit()
+        print("SILINDI.")
+    else:
+        db.rollback()
+        print("DENEME: hicbir sey silinmedi. Gercekten silmek icin ayni komutun sonuna --evet ekleyin.")
+    return 0
 
 
 def main(argv: list[str]) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")  # Windows konsol kod sayfasinda olmayan harf (orn. ı) cokertmesin
     env_dosyasi_yukle()
-    if not argv or argv[0] not in {"liste", "rol", "aktif", "pasif", "parola"}:
+    if not argv or argv[0] not in {"liste", "rol", "aktif", "pasif", "parola", "sil"}:
         print(__doc__)
         return 2
     komut, *arg = argv
@@ -37,6 +98,8 @@ def main(argv: list[str]) -> int:
                 tur = "AD" if u.is_ad_user else ("yerel" if u.password_hash else "-")
                 print(f"{u.username:<24} {u.role:<11} {'aktif' if u.active else 'PASIF':<6} {tur:<6} {u.display_name}")
             return 0
+        if komut == "sil":
+            return _sil(db, arg)
         if not arg:
             print("Kullanici adi gerekli.")
             return 2

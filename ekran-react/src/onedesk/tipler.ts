@@ -10,7 +10,7 @@ export type Durum = {
   musteriler: ({ id: number | null; ad: string; toplam: number } & Record<Tur, number>)[]
   musteri_sayisi: number
   grafik: ({ etiket?: string; ay?: number } & Record<Tur, number>)[]
-  kaynak: { kayit: number; ornek: boolean; son_kayit: string | null }
+  kaynak: { kayit: number; son_kayit: string | null }
 }
 export type Top10 = {
   yil: number
@@ -30,7 +30,6 @@ export type Oneriler = { yil: number; kapsanan: number; gruplar: { kok_sebep: st
 export type Parti = { id: number; kaynak: string; etiket: string; satir: number; zaman: string | null; sutunlar: string[] }
 export type Kaynak = {
   kayit: number
-  ornek: boolean
   son_kayit: string | null
   canli_baglanti: { yuva: string; yapilandirildi: boolean; acik: boolean }
   partiler: Parti[]

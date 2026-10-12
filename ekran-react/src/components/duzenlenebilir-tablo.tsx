@@ -67,6 +67,7 @@ export function DuzenlenebilirTablo({
   onSil,
   alt,
   rowClass,
+  saltOkunur = false,
 }: {
   kolonlar: Kolon[]
   satirlar: Satir[]
@@ -77,6 +78,8 @@ export function DuzenlenebilirTablo({
   onSil: (id: number) => Promise<void>
   alt?: ReactNode
   rowClass?: (satir: Satir) => string
+  /** true: ekle/duzenle/sil dugmeleri gosterilmez (veri yazma yalniz admin) */
+  saltOkunur?: boolean
 }) {
   const liste = useId()
   const [duzenle, setDuzenle] = useState<number | "yeni" | null>(null)
@@ -175,12 +178,14 @@ export function DuzenlenebilirTablo({
           <option key={m} value={m} />
         ))}
       </datalist>
-      <div className="flex justify-end">
-        <button type="button" className={DUGME} onClick={() => ac("yeni")} disabled={duzenle === "yeni"}>
-          <Plus aria-hidden className="size-3.5" />
-          {metin.ekle}
-        </button>
-      </div>
+      {saltOkunur ? null : (
+        <div className="flex justify-end">
+          <button type="button" className={DUGME} onClick={() => ac("yeni")} disabled={duzenle === "yeni"}>
+            <Plus aria-hidden className="size-3.5" />
+            {metin.ekle}
+          </button>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-left text-xs">
           <thead className="bg-tl-navy text-white">
@@ -190,9 +195,11 @@ export function DuzenlenebilirTablo({
                   {k.baslik}
                 </th>
               ))}
-              <th scope="col" className="w-24 px-3 py-2.5 text-right font-black">
-                <span className="sr-only">{metin.islemSutunu}</span>
-              </th>
+              {saltOkunur ? null : (
+                <th scope="col" className="w-24 px-3 py-2.5 text-right font-black">
+                  <span className="sr-only">{metin.islemSutunu}</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -209,14 +216,16 @@ export function DuzenlenebilirTablo({
                       {okuma(k, s)}
                     </td>
                   ))}
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                    <button type="button" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-tl-blue focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow" onClick={() => ac(s.id, s)} aria-label={`${metin.duzenle}`} title={metin.duzenle}>
-                      <Pencil aria-hidden className="size-4" />
-                    </button>
-                    <button type="button" className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow" onClick={() => void sil(s.id)} aria-label={metin.sil} title={metin.sil}>
-                      <Trash2 aria-hidden className="size-4" />
-                    </button>
-                  </td>
+                  {saltOkunur ? null : (
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                      <button type="button" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-tl-blue focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow" onClick={() => ac(s.id, s)} aria-label={`${metin.duzenle}`} title={metin.duzenle}>
+                        <Pencil aria-hidden className="size-4" />
+                      </button>
+                      <button type="button" className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow" onClick={() => void sil(s.id)} aria-label={metin.sil} title={metin.sil}>
+                        <Trash2 aria-hidden className="size-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ),
             )}

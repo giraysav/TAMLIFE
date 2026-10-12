@@ -11,6 +11,7 @@ export function Cekmece({
   children,
   alt,
   kapatEtiketi = "Kapat",
+  genis = false,
 }: {
   acik: boolean
   onKapat: () => void
@@ -19,12 +20,14 @@ export function Cekmece({
   children: ReactNode
   alt?: ReactNode
   kapatEtiketi?: string
+  /** Genis tablo icin max-w-3xl (varsayilan max-w-md) */
+  genis?: boolean
 }) {
   return (
     <Dialog.Root open={acik} onOpenChange={(a) => (a ? undefined : onKapat())}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-tl-navy/50 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl focus-visible:outline-hidden">
+        <Dialog.Content className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-white shadow-2xl focus-visible:outline-hidden ${genis ? "max-w-3xl" : "max-w-md"}`}>
           <div className="relative overflow-hidden bg-gradient-to-br from-tl-navy to-tl-blue px-5 py-4 text-white">
             <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 size-28 rounded-full bg-tl-yellow/25 blur-2xl" />
             <Dialog.Title className="relative text-base font-black tracking-tight">{baslik}</Dialog.Title>

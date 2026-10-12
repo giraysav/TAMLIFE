@@ -18,7 +18,7 @@ Kaynak (yalnız okundu): `kutucuklar/portfoy/{servis.py,kart/servis.py,kart/duze
 
 ## Kurallar (üretimden)
 - **Kapsam:** admin ve Manager tüm müşterileri; Member yalnız kendi müşterisi ve kendi çatısının iştirakini görür. Görünmeyen müşteri 404 verir (varlığı sızdırılmaz).
-- **Eylemler:** ekle/düzenle/ekip-iletişim Müşteri Yönetimi'ni görene açık (Member başkası adına ya da başkasının çatısı altına ekleyemez); sil, sorumlu TAM devri ve final skor yetkisi yalnız admin/Manager. Aylık rapor geri alma yalnız admin.
+- **Eylemler (2026-10-11):** veri ekleme, değiştirme ve silme (müşteri ekle, kimlik, iletişim, iştirak, sorumlu TAM devri, ayrı rapor seçimi, sil) **yalnız admin**; Member kartı yalnız okur. Kural tek yerde: `deps.require_veri_yazma`; kartın `erisim` bayrakları aynı kurala bağlıdır, arayüz düğmeleri bu bayraklardan gizlenir. Aylık rapor hazırlama/gönderme ve final skor talebi bu kuralın dışındadır. Aylık rapor geri alma yalnız admin.
 - **Kimlik:** ünvan benzersiz (büyük/küçük harf ve boşluk farkı yok sayılır, 409); segment `SMB/SA/MA/PA/WHOLESALE` (eski değer yalnız müşterinin mevcut değeriyse korunur); ünvan değişince gelirler ve Destech/CI/RACI satırları yeni ünvana taşınır.
 - **Ekip ve iletişim:** e-posta ve GSM biçimi doğrulanır; boş değer alanı temizler.
 - **Kart bölümleri:** kimlik, operasyon özeti (kendisi / iştirak dahil), ekip (Destech), iletişim, kritik CI, raporlar (**Gönderilen Aylık Rapor** modülü verilmişse), gelirler (**ICT Sms & Gelir** / **APN Gelir ve Kurulum** modülleri verilmişse), izleme (Cacti adresleri).
@@ -29,7 +29,7 @@ Kaynak (yalnız okundu): `kutucuklar/portfoy/{servis.py,kart/servis.py,kart/duze
 `/api/v1/musteri` (liste, ekle), `/musteri/{id}` (kart), `.../kimlik`, `.../iletisim`, `.../sorumlu`, `DELETE`, `.../ayri-rapor`, `.../rapor/{taslak,alicilar,gonder,gecmis}`, `/rapor/gonderim/{id}/geri-al`, `/rapor/{gonderilenler,durum}`.
 
 ## Yapılmayan / dogrulanmadi
-- Outlook taslağı (`.eml`) ve mail HTML şablonu üretimi (gönderim kaydı + kilit var).
+- Outlook taslağı (`.eml`, `rapor/eposta.py`) gerçek Outlook'ta açılarak denenmedi; testler MIME yapısını doğrular.
 - `rapor_ceviri` (otomatik çeviri) ve toplu aylık rapor temizliği (`aylik_rapor_kaydi_sil`, `gecmisi_temizle`).
 - Excel ile müşteri/matris/gelir yükleme, Cacti kazıma.
 - `report` metin alanlarının taslak alanlarıyla eşlemesi.

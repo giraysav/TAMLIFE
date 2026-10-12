@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { DatabaseBackup, ShieldCheck } from "lucide-react"
+import { ArrowRight, DatabaseBackup, ShieldCheck } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
-import type { Kaynak, Veritabani as VeritabaniTipi, Yedek } from "@/yonetim/api"
-import { OracleDurum, useBaglantiTesti } from "@/yonetim/tampon/kaynaklar"
+import type { Veritabani as VeritabaniTipi, Yedek } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
 import type { YM } from "@/yonetim/metin"
 import { Gosterge } from "@/yonetim/ui"
@@ -14,45 +13,16 @@ import { zaman, bayt, sayi } from "@/lib/bicim"
 
 type Dogrulama = { tamam: boolean; butunluk: string }
 
-/** Dis veritabanlari (Oracle REPORTDB / ONENT / Urun-Tutar): yapilandirma, ReportDB tazeligi, son cekim, baglanti testi. */
+/** Dis veritabanlari (Oracle) Kurum Baglantilari'nda: durum ve baglanti testi orada, burada yalniz yonlendirme. */
 function DisVeritabanlari({ t }: { t: YM }) {
-  const q = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
-  const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
-  const test = useBaglantiTesti(t, setBilgi)
   return (
-    <Bolum anahtar="yonetim-db-dis" baslik={t.disVeritabanlari}>
-      <div className="grid gap-3">
-        <p className="text-[11px] font-bold text-slate-500">{t.disVeritabaniNotu}</p>
-        {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
-        {q.isPending ? (
-          <Yukleniyor metin={t.yukleniyor} iskelet />
-        ) : q.isError ? (
-          <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
-        ) : (
-          <VeriTablosu<Kaynak>
-            baslik={t.disVeritabanlari}
-            satirlar={q.data.filter((k) => k.tur === "oracle")}
-            anahtar={(k) => k.anahtar}
-            kolonlar={[
-              {
-                baslik: t.disVeritabanlari,
-                hucre: (k) => (
-                  <span className="grid">
-                    <span className="font-black text-tl-navy">{k.ad}</span>
-                    <code className="text-[10px] text-slate-400">{k.anahtar}</code>
-                  </span>
-                ),
-              },
-              { baslik: t.durum, hucre: (k) => <OracleDurum k={k} t={t} test={test} /> },
-              {
-                baslik: t.sonParti,
-                hucre: (k) => (k.son ? <span className="whitespace-nowrap">#{k.son.id} · {t.partiDurum[k.son.durum] ?? k.son.durum} · {zaman(k.son.zaman)}</span> : "—"),
-              },
-            ]}
-          />
-        )}
-      </div>
-    </Bolum>
+    <p className="flex flex-wrap items-center gap-2 text-[0.6875rem] font-bold text-slate-500">
+      {t.disVeritabaniKurumda}
+      <a href="#/yonetim/kurum" className="inline-flex items-center gap-1 text-tl-blue underline-offset-2 hover:underline">
+        {t.kurumaGit}
+        <ArrowRight aria-hidden className="size-3" />
+      </a>
+    </p>
   )
 }
 
@@ -116,7 +86,7 @@ export default function Veritabani({ dil }: { dil: Dil }) {
                 <DatabaseBackup aria-hidden className="size-4" />
                 {yedekAl.isPending ? t.yedekAliniyor : t.yedekAl}
               </button>
-              <span className="text-[11px] font-bold text-slate-500">{t.yedekSaklanan(d.yedek.saklanan)}</span>
+              <span className="text-[0.6875rem] font-bold text-slate-500">{t.yedekSaklanan(d.yedek.saklanan)}</span>
             </div>
           ) : (
             <Bildirim>{t.yedekDesteklenmiyor}</Bildirim>
@@ -128,7 +98,7 @@ export default function Veritabani({ dil }: { dil: Dil }) {
             anahtar={(y) => y.ad}
             bos={<p className="text-xs font-bold text-slate-400">{t.yedekYok}</p>}
             kolonlar={[
-              { baslik: t.yedek, hucre: (y) => <code className="text-[11px]">{y.ad}</code> },
+              { baslik: t.yedek, hucre: (y) => <code className="text-[0.6875rem]">{y.ad}</code> },
               { baslik: t.zaman, hucre: (y) => zaman(y.zaman) },
               { baslik: t.boyut, hucre: (y) => bayt(y.boyut_bayt), sinif: "text-right" },
               {
@@ -147,7 +117,7 @@ export default function Veritabani({ dil }: { dil: Dil }) {
               },
             ]}
           />
-          <dl className="grid gap-1 text-[11px] font-bold text-slate-500">
+          <dl className="grid gap-1 text-[0.6875rem] font-bold text-slate-500">
             <div className="flex flex-wrap gap-x-2">
               <dt>{t.yedekKlasoru}:</dt>
               <dd className="break-all">
@@ -155,8 +125,8 @@ export default function Veritabani({ dil }: { dil: Dil }) {
               </dd>
             </div>
           </dl>
-          <p className="text-[11px] font-bold text-slate-400">{t.yedekAyriDisk}</p>
-          <p className="text-[11px] font-bold text-slate-400">{t.geriYuklemeNotu}</p>
+          <p className="text-[0.6875rem] font-bold text-slate-400">{t.yedekAyriDisk}</p>
+          <p className="text-[0.6875rem] font-bold text-slate-400">{t.geriYuklemeNotu}</p>
         </div>
       </Bolum>
 
@@ -168,7 +138,7 @@ export default function Veritabani({ dil }: { dil: Dil }) {
             satirlar={tablolar}
             anahtar={(x) => x.ad}
             kolonlar={[
-              { baslik: t.tablolar, hucre: (x) => <code className="text-[11px]">{x.ad}</code> },
+              { baslik: t.tablolar, hucre: (x) => <code className="text-[0.6875rem]">{x.ad}</code> },
               { baslik: t.modul, hucre: (x) => x.modul },
               { baslik: t.satirAdedi, hucre: (x) => sayi(x.satir), sinif: "text-right font-mono" },
               { baslik: t.durum, hucre: (x) => <Rozet ton={x.var ? "yesil" : "kirmizi"}>{x.var ? t.tabloVar : t.tabloYok}</Rozet> },

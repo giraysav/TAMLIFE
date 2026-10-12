@@ -1,11 +1,9 @@
-"""Skor motoru: uretimden alinan sabit vektorlerle esdegerlik.
+"""Skor motoru: eski panelden alinan sabit vektorlerle esdegerlik.
 
-tests/skor_golden.json uretim skor_motoru.py calistirilarak uretildi (2026-10-04; 'X:' ile baslayan sabit puan vakalari
-2026-10-10). Uretim dosyasi bu makinede varsa ayrica canli karsilastirma da yapilir (yalniz okuma; dosya saf hesaptir).
+tests/skor_golden.json eski panelin skor_motoru.py dosyasi calistirilarak uretildi (2026-10-04; 'X:' ile baslayan sabit puan
+vakalari 2026-10-10). Eski panel kapatildigi icin canli karsilastirma yoktur; referans bu dosyadir.
 """
 
-import ast
-import importlib.util
 import json
 import pathlib
 
@@ -14,7 +12,6 @@ import pytest
 from app.skor import motor as skor
 
 GOLD = json.loads((pathlib.Path(__file__).with_name("skor_golden.json")).read_text(encoding="utf-8"))
-PROD = pathlib.Path(r"D:\TAMLIFE\backend\app\kutucuklar\utilizasyon\skor_motoru.py")
 
 
 def _ozet(r):
@@ -75,24 +72,3 @@ def test_varsayilan_kriterler_uretim_modeli():
     ]
     k[0]["weight"] = 99
     assert skor.VARSAYILAN_KRITERLER[0]["weight"] == 20  # kopya doner
-
-
-@pytest.mark.skipif(not PROD.is_file(), reason="uretim dosyasi bu makinede yok")
-def test_canli_uretim_dosyasiyla_ayni():
-    spec = importlib.util.spec_from_file_location("prod_skor", PROD)
-    prod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(prod)
-    for vaka in GOLD["cases"]:
-        a = skor.musteri_skoru(vaka["kriterler"], vaka["metrikler"], vaka["manuel"])
-        b = prod.musteri_skoru(vaka["kriterler"], vaka["metrikler"], vaka["manuel"])
-        assert a == b, vaka["ad"]
-    assert prod.SABIT_PUAN_TURLERI == skor.SABIT_PUAN_TURLERI
-
-
-@pytest.mark.skipif(not PROD.with_name("servis.py").is_file(), reason="uretim dosyasi bu makinede yok")
-def test_varsayilan_kriterler_uretimle_ayni():
-    """Uretim utilizasyon/servis.py _default_util_criteria donus listesi (calistirmadan, ast ile okunur)."""
-    agac = ast.parse(PROD.with_name("servis.py").read_text(encoding="utf-8"))
-    islev = next(n for n in agac.body if isinstance(n, ast.FunctionDef) and n.name == "_default_util_criteria")
-    donus = next(n for n in ast.walk(islev) if isinstance(n, ast.Return))
-    assert ast.literal_eval(donus.value) == skor.varsayilan_kriterler()

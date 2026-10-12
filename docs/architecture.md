@@ -1,78 +1,93 @@
-# TAMLIFE v3.5 mimari
+# TAMLIFE v3.5 — güncel mimari (2026-10-12, canlı)
 
-Üretim uygulaması `D:\Project\TAM_Life\TAMLIFE` bu ağacın dışındadır ve salt okunurdur. Müşteri satırı kopyalanmaz. Canlı AD bind ve canlı Oracle bağlantısı yoktur.
+TAMLIFE, Turkcell TAM ekipleri için iç kullanım paneldir. v3.5, eski Flask panelinin (`E:\TAMLIFE`, durduruldu) FastAPI + React ile yeniden yazımıdır ve 2026-10-12'den beri `https://tamlife/` adresinde canlıdır (≤20 eşzamanlı kullanıcı). Bu belge kodun bugünkü halini anlatır; ayrıntılı tasarım notları `docs/` altındaki diğer dosyalardadır.
 
-Eski yapıda her kutu `backend/app/kutucuklar/<ad>` altında ayrı duruyordu. v3.5 bunu tek listeye indirir: klasör başına modül yoktur.
+## 1. Çalışma düzeni (sunucu LADIN01, `E:\TAMLIFE_Dev\TAMLIFE_v3.5`)
 
-## 1. Katalog
+```
+Tarayıcı ──HTTPS 443──► Windows http.sys (TLS'i sonlandırır; özel anahtar kilitli olduğu için sertifika mağazada kalır)
+                          └─► kurulum\tls_vekili.ps1 (HttpListener vekili, -Ad '+')  ──HTTP──► 127.0.0.1:8117
+                                                                                       uvicorn, tek süreç (--workers 1)
+                                                                                       FastAPI "app.main:app"
+                                                                                         ├─ /api/v1/**        JSON API
+                                                                                         ├─ /, /assets, /<dosya>   ekran-react\dist
+                                                                                         └─ oturum + denetim halkası: BELLEK
+                                              SQLAlchemy ─► backend\var\dev.db            ortak panel DB (adı yanıltıcı; CANLI DB budur)
+                                                         ─► backend\var\kullanicilar\<kullanici>.db   kişisel veri (takvim, SMS/APN geliri)
+İşçi süreçler (panel dışı, kendi çıkış kodu ve kilit dosyası):
+  python -m app.isci reportdb      ─► Oracle REPORTDB (yalnız tek SELECT) ─► tampon (ingest_batch / ingest_block)   [görev kapalı: DBA izni bekleniyor]
+  python -m app.rapor.ceviri --isci ─► CTranslate2 TR→EN (aylık rapor çevirisi; çökerse yalnız alt süreç ölür)
+```
 
-Tek kaynak `backend/app/catalog.py`. Kimlik, ad ve bayrak üç üretim kaydından birleştirildi:
+- **Kalıcı çalıştırma:** `kurulum\canli_gorev_kur.ps1` iki SYSTEM görevi kurar: `TAMLIFE_v35_Panel` (`canli_baslat.ps1`: prod modu, AD girişi, 127.0.0.1:8117) ve `TAMLIFE_v35_TLS_Vekil` (443 → 8117). İkisi açılışta başlar, kapanırsa 15 sn sonra yeniden açar. Günlük: `var\log\canli_panel.log`, `canli_vekil.log` (10 MB'ta döner). `-Hemen`, `-Durum`, `-Kaldir`.
+- **Yalnız 443.** 80'den yönlendirme yoktur. Eski panelin `https://+:443/` kaydı yüzünden eski panel kapatılmış, vekil `-Ad '+'` ile başlatılmıştır.
+- **Prod kipi:** `TAMLIFE_ENV=prod` → yerel admin girişi yok, `/docs` ve `/openapi.json` kapalı, `TrustedHost` yalnız `TAMLIFE_ALLOWED_HOSTS`, `Origin` ya `scheme://Host` olmalı ya da `TAMLIFE_ALLOWED_ORIGINS`'te, `X-Forwarded-For` yalnız `TAMLIFE_TRUSTED_PROXIES`'ten kabul edilir.
+- **Geliştirme:** `backend\dev.ps1` (API 8117, SQLite `var/dev.db`), arayüz için `cd ekran-react; npm run dev` (Vite 5173, `/api` → 8117) ya da `dev.ps1 -Arayuz`.
 
-- `backend/app/moduller.py` içindeki `MODULLER`
-- aynı dosyadaki `ANA_SAYFA_KUTUCUKLARI`
-- `backend/app/kutucuklar/registry.py` içindeki `KUTU_TANIMLARI`
+## 2. Backend (`backend/app`, ~17 bin satır Python, 138 API işlemi)
 
-Uydurma modül yoktur. Listede olmayan bir kutu eklenmedi. `ictapn` ayrı modül değildir; kayıt `tamsms` anahtarına bağlıdır. `portfoy` ayrı modül değildir; anahtar `musteri`dir. `talep`, `roller` ve `utilizasyon` ana sayfa kutusu değildir. `topoloji` ana sayfada yoktur ve `musteri` iznine bağlıdır.
+Çekirdek + özellik paketleri. `main.py` yalnız uygulamayı kurar (ara katmanlar, hata işleyiciler, router'lar, derlenmiş arayüz).
 
-Kimlikler: `musteri`, `takvim`, `takvim_ozet`, `onedesk`, `utilizasyon`, `roller`, `talep`, `ekip`, `rapor`, `proje`, `tamsms`, `tamapn`, `gelir_uretim`, `sunum`, `radar`, `baglantili`, `topoloji`.
+| Katman | Dosyalar | İş |
+|---|---|---|
+| Çekirdek | `config.py`, `db.py`, `models.py`, `catalog.py`, `ortak.py` | Ayarlar (`backend/.env`, git dışı), motor önbelleği ve oturumlar, şema, tek modül kataloğu, hata sözleşmesi (`UygulamaHatasi(kod, mesaj)`) |
+| Kimlik / yetki | `oturum_api.py`, `ad.py`, `kullanicilar.py`, `session.py`, `security.py`, `authz.py`, `deps.py`, `erisim.py`, `rolgorunum.py`, `rol_api.py`, `navigation.py`, `katalog_api.py` | Giriş, AD/LDAPS, kullanıcı kaydı, bellek oturumu, CSRF/Origin, rol görünümü, menü |
+| Özellik paketleri | `musteri`, `rapor`, `skor`, `onedesk`, `gelir`, `takvim`, `sunum`, `talep`, `radar`, `proje`, `topoloji`, `ekip` | Her biri `api.py` (router) + `servis.py` (iş kuralı) |
+| Yönetim (yalnız admin) | `yonetim/*`, `tampon/*` | DB, arızalar, günlükler, sağlık, kurum bağlantıları; Veri Girişi hattı |
+| Araçlar | `isci.py`, `hesap.py`, `eski_aktar.py` | ReportDB işçisi, hesap/rol/acil parola CLI, eski panelden tek seferlik aktarım |
 
-Bayraklar üretimdeki anlamıyla durur. `yalniz_admin` olanlar `utilizasyon` ve `roller`. `herkese_acik` olan `talep`. Ana sayfada hazır olmayanlar `gelir_uretim` ve `baglantili` (`baglantili` kayıt durumu `stub`). Sağlık tabloları `MODUL_TABLOLARI` ile aynıdır.
+Bağımlılık yönü: `skor ← musteri ← rapor`; `onedesk → tampon.depo` (yalnız okuma); `yonetim` ile `tampon` birbirini import etmez. Dil: `dil.py` (`X-Dil: tr|en` → `m("Türkçe", "English")`).
 
-## 2. Dizin (AD/LDAP)
+API grupları (işlem sayısı): musteri 24 · tampon 26 · skor 16 · yonetim 15 · gelir 13 · proje 8 · onedesk 7 · takvim 6 · sunum 4 · talep 4 · rapor 3 · session 3 · modules 2 · roller 2 · ekip, radar, topoloji, home, health 1'er. Başarı gövdesi `{"status":"success","data":…}`, hata `{"detail":…}` (yakalanmayanda `hata_kodu` + `kayit_no`). Durum değiştiren istek `x-csrf-token` taşır.
 
-Kimlik yuvası `backend/app/ad.py`. `ldap3` yoktur, soket açılmaz, bind yapılmaz. Ayrı `LDAP_*` anahtarı yoktur; eski servis LDAPS ayarını `AD_*` adlarıyla okur.
+## 3. Veri
 
-Anahtarlar (değer yok, varsayılan boş):
+- **Ortak panel DB** (`TAMLIFE_DATABASE_URL`, SQLite; PostgreSQL desteklenir): 33 tablo — müşteri (`customer`, `customer_team`, `report*`, `affiliate_final_flag`), skor (`score_*`, `util_criteria_set`, `scoring_exclusion`, `urun_tutar_ozet`), Onedesk (`onedesk_record`), Veri Girişi (`ingest_batch`, `ingest_block`, `distribution_rule/log`, `customer_import_run`), yönetim (`app_user`, `role_view`, `audit_event`, `fault_event`, `app_setting`), talep/proje/sunum (`demand*`, `project_*`, `presentation`). Şema Alembic ile yönetilir: `0001_baslangic` … `0008_profil_kisi_yetki`, açık `op.create_table`; `tests/test_alembic.py` modelle karşılaştırır.
+- **Kullanıcı başına SQLite** (`var/kullanicilar/<kullanici>.db`): yalnız kişisel veri (`calendar_day`, `sms_revenue`, `apn_revenue`, `apn_work`); ilk açılışta `create_all`, Alembic dışı.
+- **Veri yalnız gerçek kaynaktan gelir:** Veri Girişi dosya yüklemesi (xlsx/csv), REPORTDB/ONENTDB/GALAPAGOSDB okumaları ve eski panelden tek seferlik aktarım. Uydurma/örnek veri yolu yoktur.
+- **Veri Girişi hattı:** kaynak → tampon (sıkıştırılmış bloklar) → analiz/önizleme → onaylı dağıtım (geri alınabilir). Ham müşteri yüklemesi `tampon/musteri_ham.py` + `musteri_aktar.py`.
+- **Dış kaynaklar:** Oracle için python-oracledb thick mod (`ORACLE_CLIENT_DIR`, Instant Client 19.32), yalnız tek `SELECT`, `*_ENABLED=true` ve anahtarlar doluysa bağlanır. REPORTDB'de oturum açılır ama `ADMIN.DB_LOGIN_TR` logon tetikleyicisi (DB kullanıcısı + OS kullanıcısı + makine) ORA-20099 ile reddeder; çözüm DBA iznidir (erişim talebi formu), tetikleyiciyi aşmak yoktur.
 
-`AD_ENABLED`, `AD_SERVER`, `AD_DOMAIN`, `AD_USE_SSL`, `AD_CA_CERT_FILE`, `AD_IZINLI_ALANLAR`, `AD_ALAN_KONTROLU`, `AD_KIMLIK_KONTROLU`, `AD_IZINLI_GRUPLAR`, `AD_ARAMA_KOKU`, `AD_OTOMATIK_AC`.
+## 4. Kimlik, yetki ve güvenlik
 
-Dolu sayılması için `AD_ENABLED=true` ve `AD_SERVER` ile `AD_DOMAIN` dolu olmalıdır. Yuva dolu olsa bile adaptör dizine gitmez. Parola ve anahtar değeri bu dosyaya ve API yanıtına yazılmaz; yanıt yalnız anahtar adını ve dolu olup olmadığını söyler.
+- Giriş sırası: pasif kullanıcı reddi → AD kullanıcısı AD ile (LDAPS, kullanıcının kendi bind'i, parola saklanmaz) → yerel acil hesap (scrypt) → dev yerel hesap (yalnız dev) → kaydı olmayan AD kullanıcısı `TeamMember` olarak açılır (`AD_OTOMATIK_AC`). Rol her zaman `app_user`'dan; ilk admin `python -m app.hesap rol <kullanici> admin`.
+- Roller: `admin`, `TeamMngr`, `TeamMember`. Modül erişimi `erisim.modul_erisim("modul")` (rol görünümü + eylem yetkileri); kural sunucuda zorlanır, arayüz yansıtır.
+- **Yönetim alanı yalnız admin:** `/yonetim/*`, `/tampon/*`, `/roller` ve skor yönetim uçları `require_admin` ister. `utilizasyon` ve `roller` modülleri (`admin_only`) hiçbir rol görünümüyle açılmaz. **Veri yazma yalnız admin:** müşteri, gelir ve proje kalemleri (`require_veri_yazma`). Bilerek açık kalanlar: rapor akışı, takvim, talep açma, skor talepleri, proje çalışma işaretleri.
+- Denetim kalıcıdır (`audit_log` → kuyruklu yazıcı → `audit_event`); yakalanmayan hata kod + kayıt no ile `fault_event`e düşer, ham istisna kullanıcıya dönmez. Parola, anahtar, `.env` değerleri hiçbir yerde yazılmaz/gösterilmez.
 
-Panel oturumu dizin değildir. `TAMLIFE_LOCAL_USER`, `TAMLIFE_LOCAL_PASSWORD` ve `TAMLIFE_LOCAL_ROLE` yalnız bellek içi panel kapısıdır. Oturum çerezi HttpOnly ve SameSite Lax'tir. Çerez değeri JSON gövdesine konmaz.
+## 5. Arayüz (`ekran-react`, ~16,7 bin satır TS/TSX)
 
-Roller: `admin`, `TeamMngr`, `TeamMember`. `utilizasyon` ve `roller` yalnız admin içindir. `talep` giriş yapana açıktır.
+React 19, TypeScript 7, Vite 8, TanStack Query, Tailwind 4, framer-motion, lucide. Tek API yolu `src/lib/sorgu.ts` (`oku`/`yaz`/`yukle`).
 
-## 3. Dış kaynak (Oracle / Onedesk)
+- `src/shell`: giriş, çatı (`panel.tsx`), menü, hesap kartı, rol sayfası. `src/components`: ortak UI (`sayfa-ui.tsx` + alan başlığı bantları `BASLIK_BANDI`/`ALT_BASLIK_BANDI`, grafikler, çekmece, çoklu seçim filtresi, düzenlenebilir tablo, `ui/` ilkeller; Genel Bakış yayı `ui/modul-yayi.tsx` + `ui/ozet-orbit.tsx`).
+- Özellik klasörleri: `musteri`, `onedesk`, `gelir`, `takvim`, `sunum`, `talep`, `radar`, `proje`, `topoloji`, `ekip`, `yonetim` (8 bölüm: Genel Durum, TAM Utilizasyon, Veri Girişi, Kurum Bağlantıları, Veritabanı, Roller, Arızalar, Günlükler).
+- Derleme çıktısı `ekran-react/dist` API tarafından sunulur (`TAMLIFE_STATIC_DIR`); `index.html` her istekte okunur, yeniden derleme paneli yeniden başlatmaz (`assets/` açılışta bağlanır, `dist` boşken açılmışsa yeniden başlat).
+- Görünüm ölçeği: arayüz rem tabanlı; kök yazı boyutu `<html data-yazi>` (`lib/yazi.ts`: normal / büyük (varsayılan 1,125×) / çok büyük), hesap menüsünden seçilir.
+- Genel Bakış: yatayda gerilmiş iki yarım elips üzerinde 92×68 modül kartları, ortada Teknocan (104×180 kutu), altında Ekip Özeti.
 
-Liste `backend/app/external.py`. Her kaynak üretimdeki anahtar adlarını taşır. DSN değeri repoda yoktur. Sürücü yüklenmez, bağlantı kodu yoktur: kaynaklar yalnız anahtar adı ve doluluk olarak raporlanır (`baglantilar.py`); canlı çekim ileride `tampon/` altına ayrı işçi olarak girer.
+## 6. Test ve doğrulama
 
-Ortak: `ORACLE_CLIENT_DIR`.
+- Backend: `cd backend; ..\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider` (482 test, 1 atlanır; `ruff check .` temiz).
+- Arayüz: `cd ekran-react; npm test` (119 test), `npm run lint`, `npm run build`.
+- Alembic, rol/yetki (`test_yonetim_uclari_admin_disina_kapali` tüm Yönetim uçlarını OpenAPI'den dener), skor altın vektörleri (`skor_golden.json`), eski aktarım (`test_eski_aktar.py`) ayrı testlidir.
 
-Onedesk DB (REPORTDB) / Oracle (`ORACLE_REPORTDB_ENABLED`): `ORACLE_REPORTDB_ENABLED`, `ORACLE_REPORTDB_HOST`, `ORACLE_REPORTDB_PORT`, `ORACLE_REPORTDB_SERVICE_NAME`, `ORACLE_REPORTDB_USER`, `ORACLE_REPORTDB_PASSWORD`, `ORACLE_REPORTDB_QUERY`, `ORACLE_REPORTDB_TIMEOUT`, `ORACLE_REPORTDB_IMPORT_QUERY`, `ORACLE_REPORTDB_IMPORT_TIMEOUT`, `ORACLE_REPORTDB_URL`, `ONEDESK_BASE_URL`, `ONEDESK_API_KEY`.
+## 7. Depo düzeni
 
-Onent / Oracle (`ONENTDB_DB_ENABLED`): `ONENTDB_DB_ENABLED`, `ONENTDB_DB_HOST`, `ONENTDB_DB_PORT`, `ONENTDB_DB_SERVICE_NAME`, `ONENTDB_DB_USER`, `ONENTDB_DB_PASSWORD`, `ONENTDB_DB_QUERY`, `ONENTDB_DB_TIMEOUT`, `ONENTDB_DB_IMPORT_QUERY`, `ONENTDB_DB_IMPORT_TIMEOUT`, `ONENT_DB_URL`.
+```
+TAMLIFE_v3.5/
+├─ backend/      app/ (paketler yukarıda) · alembic/ · tests/ · dev.ps1 · .env.example · ruff.toml · pytest.ini
+│                var/ (git dışı: dev.db, kullanicilar/, logs/, yedek/)  ·  .env (git dışı, sır)
+├─ ekran-react/  src/ · public/ (html2canvas, jsPDF, rapor görselleri) · e2e/ · dist/ (git dışı)
+├─ kurulum/      canli_baslat.ps1 · canli_gorev_kur.ps1 · tls_vekili.ps1 · reportdb_gorev_kur.ps1 · ceviri_kur.ps1 · sertifika/
+├─ docs/         bu belge + tasarım notları
+├─ requirements.txt   CLAUDE.md
+```
 
-Ürün-Tutar / Oracle (`URUNTUTAR_DB_ENABLED`): `URUNTUTAR_DB_ENABLED`, `URUNTUTAR_DB_HOST`, `URUNTUTAR_DB_PORT`, `URUNTUTAR_DB_SERVICE_NAME`, `URUNTUTAR_DB_USER`, `URUNTUTAR_DB_PASSWORD`, `URUNTUTAR_DB_QUERY`, `URUNTUTAR_DB_TIMEOUT`, `URUNTUTAR_DB_IMPORT_QUERY`, `URUNTUTAR_DB_IMPORT_TIMEOUT`, `URUN_TUTAR_DB_URL`.
+Git dışı, sunucuda kalıcı: `backend\.env`, `backend\var\`, `ekran-react\dist`, `.venv`, `ceviri_modeli\tr_en`, Instant Client klasörü.
 
-İçe alma kapıları aynı Oracle ön ekini kullanır. Açık olma anahtarı sorgu adıdır: `ORACLE_REPORTDB_IMPORT_QUERY`, `ONENTDB_DB_IMPORT_QUERY`.
+## 8. Açık işler
 
-Onedesk DB, canlı `.env`'deki adıyla `ORACLE_REPORTDB_*` ön ekini kullanır; eski kodun `ONEDESK_DB_*` adı kaldırıldı. `ONEDESK_BASE_URL` ve `ONEDESK_API_KEY` DB değil REST ayarıdır, adı değişmedi.
-
-Üretim ham deposunun içe alma tabloları (`ham_veri.db`): `veri_setleri`, `ham_bloklar`, `kurallar`, `metrikler`, `uygulama_gunlugu`. Yeni panelde bunların karşılığı sıkıştırılmış blok tamponudur: `ingest_batch` (parti) ve `ingest_block` (satır blokları); dağıtım `distribution_rule` / `distribution_log`. Ayrıntı: `yonetim-ve-tampon-tasarimi.md`.
-
-## 4. Panel veritabanı (PostgreSQL)
-
-Panel şeması PostgreSQL içindir. Adres `TAMLIFE_DATABASE_URL`. Boş ise varsayılan `postgresql+psycopg://localhost:5432/tamlife` (parola yok).
-
-Geçit `backend/app/gateway.py` içe aktarılırken bağlanmaz. Şema `backend/app/models.py`. Sürüm `backend/alembic` (`0001_panel_schema` … `0007_external_source_kaldir`; 33 alan tablosu).
-
-`pin_code` ve `totp_secret` kolonları yoktur. Denetim metninde parola, pin ve çerez reddedilir.
-
-## Kök
-
-İngilizce kök: `backend`, `ekran-react`, `docs`. React arayüzü `ekran-react` altındadır ve iş kuralı taşımaz.
-
-## 5. Yonetim
-
-Yönetim tek giriştir (yalnız admin): #/yonetim/<bölüm> — Genel Durum, Veri Girişi, Veritabanı, Roller, Arızalar, Günlükler. API `/api/v1/yonetim/**` ve `/api/v1/tampon/**`; ayrıntı ve veri modeli: `yonetim-ve-tampon-tasarimi.md`. Bağlantı yuvaları yalnız dolu/boş döner (AD: `AD_ENABLED` + `AD_SERVER` + `AD_DOMAIN`; `ORACLE_REPORTDB`, `ONENT`, `URUNTUTAR`); değer dönmez.
-
-## CSRF (OpenAPI'de görünmez)
-
-Giriş sonrası sunucu `tamlife_csrf` çerezini (JS'in okuyabildiği) ve `tamlife_session` çerezini (HttpOnly) verir. Durum değiştiren her istek (login hariç) `x-csrf-token` başlığında çerez değerini taşır; sunucu bunu oturumdaki değerle karşılaştırır. Ayrı bir `/csrf` rotası yoktur. İstemci: `ekran-react/src/lib/http.ts`. Tipler `npm run api:uret` ile canlı `/openapi.json`'dan üretilir (yalnız dev ortamında açık; `src/lib/api-types.ts` bugün bayat ve import edilmiyor).
-
-## Rol görünümleri ve alt modüller
-
-- Üç ana rol: `admin`, Manager (`TeamMngr`), Member (`TeamMember`). Her rolün göreceği modül/alt modüller ve **giriş sayfası** admin tarafından belirlenir (Yönetim → Rol Yönetimi, `GET/PUT /api/v1/roller`). Kayıt `role_view` tablosundadır; kayıt yoksa admin'e özel olmayan tüm modüller ve giriş sayfası `ozet` varsayılır.
-- Kural sunucuda zorlanır (`/session/me`, `/modules`, `/home`, `/modules/{modul}/{alt}`). Admin her şeyi görür; `utilizasyon` ve `roller` de role verilebilir (varsayılan açık); Yönetim (`yonetim/*`) yalnız admin içindir. Veritabanı okunamazsa yönetici olmayan kullanıcı kapalı kalır (yalnız genel bakış ve profil).
-- **Alt modül hazırlığı:** `catalog.Module.children` (`SubModule`) tanımlıdır, kimlik `<modul>/<alt>`; sol menüde modülün altında açılır, adres `#/<modul>/<alt>`, rol görünümünde ayrı işaretlenir. Henüz hiçbir modülde alt modül tanımlı değildir; ayrıntılar verildikçe `catalog.py`'ye eklenir.
-- Kaldırılan: TAM Toptan modülü. Yeni adlar: ICT Sms & Gelir, APN Gelir ve Kurulum, Gelir Faydası Sağlanan İşler, Çeyrek Bazlı Sunum.
+- REPORTDB: logon tetikleyicisi izni (DBA) gelince `TAM_Life_v35_ReportDB_6dk` görevi açılır (`kurulum\reportdb_gorev_kur.ps1`).
+- 114 çatı müşterinin segmenti boş (eski panelde de boştu): Veri Girişi › ham müşteri yüklemesiyle doldurulur.
+- GALAPAGOSDB anahtarları ve ONENTDB/Ürün-Tutar bağlantıları sunucu `.env`'inde doğrulanacak.
+- Çeviri modeli yeni klasöre alınmalı (`kurulum\ceviri_kur.ps1`, kaynak eski panel klasörü) ki canlı panel `E:\TAMLIFE`'a bağımlı kalmasın.

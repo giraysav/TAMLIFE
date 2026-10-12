@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Activity, ArrowDownToLine, ChartColumn, Database, ScrollText, ShieldCheck, TriangleAlert } from "lucide-react"
+import { Activity, ArrowDownToLine, ChartColumn, Database, Network, ScrollText, ShieldCheck, TriangleAlert } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { MenuOgesi } from "@/lib/oturum"
 import type { Dil } from "@/shell/metin"
@@ -16,6 +16,7 @@ const BOLUMLER = {
   durum: { ikon: Activity, bilesen: lazy(() => import("@/yonetim/bolumler/durum")) },
   utilizasyon: { ikon: ChartColumn, bilesen: lazy(() => import("@/yonetim/bolumler/utilizasyon")) },
   tampon: { ikon: ArrowDownToLine, bilesen: lazy(() => import("@/yonetim/bolumler/tampon")) },
+  kurum: { ikon: Network, bilesen: lazy(() => import("@/yonetim/bolumler/kurum")) },
   veritabani: { ikon: Database, bilesen: lazy(() => import("@/yonetim/bolumler/veritabani")) },
   roller: { ikon: ShieldCheck, bilesen: lazy(() => import("@/yonetim/bolumler/roller")) },
   arizalar: { ikon: TriangleAlert, bilesen: lazy(() => import("@/yonetim/bolumler/arizalar")) },
@@ -29,7 +30,7 @@ export function bolumMu(deger: string): deger is BolumKimligi {
   return deger in BOLUMLER
 }
 
-/** Yonetim (yalniz admin): tek giris, yedi bolum. Adres #/yonetim/<bolum>; bolum yoksa Genel Durum. */
+/** Yonetim (yalniz admin): tek giris, sekiz bolum. Adres #/yonetim/<bolum>; bolum yoksa Genel Durum. */
 export default function YonetimSayfasi({ dil, bolum, digerleri }: { dil: Dil; bolum: string; digerleri: MenuOgesi[] }) {
   const t = ym(dil)
   const aktif: BolumKimligi = bolumMu(bolum) ? bolum : "durum"
@@ -57,7 +58,7 @@ export default function YonetimSayfasi({ dil, bolum, digerleri }: { dil: Dil; bo
                   <Ikon aria-hidden className="size-3.5" />
                   {t.bolumler[id]}
                   {id === "arizalar" && acikAriza > 0 ? (
-                    <span className="rounded-full bg-rose-500 px-1.5 text-[10px] leading-4 text-white" aria-label={`${acikAriza} ${t.durumlar.open}`}>
+                    <span className="rounded-full bg-rose-500 px-1.5 text-[0.625rem] leading-4 text-white" aria-label={`${acikAriza} ${t.durumlar.open}`}>
                       {acikAriza}
                     </span>
                   ) : null}
@@ -80,7 +81,7 @@ export default function YonetimSayfasi({ dil, bolum, digerleri }: { dil: Dil; bo
       </HataSiniri>
 
       {digerleri.length > 0 ? (
-        <p className="text-[11px] font-bold text-slate-400">
+        <p className="text-[0.6875rem] font-bold text-slate-400">
           {t.digerAlanlar}:{" "}
           {digerleri.map((o, i) => (
             <span key={o.id}>

@@ -2,9 +2,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { KriterTablosu, SiralamaSatiri, SkorAgaci, SkorMeta } from "@/yonetim/api"
+import type { KriterTablosu, SiralamaSatiri, SkorAgaci, SkorMeta, SkorOnizleme } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
 import YonetimSayfasi from "@/yonetim/yonetim-sayfasi"
+import { TopluAtama } from "@/yonetim/utilizasyon/atama"
 import { Kriterler, normal, turCoz, xHucresi } from "@/yonetim/utilizasyon/kriterler"
 import { UtilOzet } from "@/yonetim/utilizasyon/ozet"
 
@@ -135,8 +136,56 @@ describe("TAM Utilizasyon", () => {
     const t = ym("tr")
     const nav = screen.getByRole("navigation", { name: t.bolumNav })
     const yollar = Array.from(nav.querySelectorAll("a")).map((a) => a.getAttribute("href"))
-    expect(yollar.slice(0, 3)).toEqual(["#/yonetim/durum", "#/yonetim/utilizasyon", "#/yonetim/tampon"])
+    expect(yollar).toEqual([
+      "#/yonetim/durum",
+      "#/yonetim/utilizasyon",
+      "#/yonetim/tampon",
+      "#/yonetim/kurum",
+      "#/yonetim/veritabani",
+      "#/yonetim/roller",
+      "#/yonetim/arizalar",
+      "#/yonetim/gunlukler",
+    ])
     expect(t.bolumler.utilizasyon).toBe("TAM Utilizasyon")
     expect(ym("en").util.sekme.atama).toBe("Bulk assignment")
   })
+
+  it("kriter metin hucreleri yazdikca uzayan cok satirli alan (textarea); Enter yeni satir acmaz", async () => {
+    sahteSunucu({ "/api/v1/skor/kriterler/parent": TABLO, "/api/v1/skor/meta": META })
+    sarmala(<Kriterler dil="tr" />)
+    const b30 = await screen.findByLabelText("6. Sözleşme 30")
+    expect(b30.tagName).toBe("TEXTAREA")
+    fireEvent.change(b30, { target: { value: "1-\n49.999" } })
+    expect(b30).toHaveValue("1- 49.999")
+    expect(screen.getAllByLabelText(ym("tr").util.metrik)[0].tagName).toBe("TEXTAREA")
+  })
+
+  it("toplu atama: satir kutusu tiklaninca secilir / birakilir (eksik kriterli musteri de); uygula secilenleri gonderir", async () => {
+    const u = ym("tr").util
+    const musteri = (id: number, ad: string, tamam: boolean) => ({
+      id, ad, tam: "ORNEK TAM", tam_id: 2, mevcut: null, yeni: 40, fark: null, tamam, eksik: tamam ? [] : ["6. Sözleşme"], kriterler: [], son_atama: null,
+    })
+    const onizleme: SkorOnizleme = { kaynaklar: [], uyarilar: [], kriterler: [], musteriler: [musteri(1, "ORNEK A", true), musteri(2, "ORNEK B", false)], ozet: { toplam: 2, hazir: 1 } }
+    const cagrilar = sahteSunucu({
+      "/api/v1/skor/toplu/onizleme": onizleme,
+      "/api/v1/skor/toplu/uygula": { uygulanan: [], atlanan: [{ id: 2, ad: "ORNEK B", neden: "eksik kriter: 6. Sözleşme" }], degismeyen: 0 },
+      "/api/v1/skor/agac": { tum_personel: [] },
+    })
+    vi.stubGlobal("confirm", () => true)
+    sarmala(<TopluAtama dil="tr" />)
+    const kutu = (await screen.findByLabelText(u.secMusteri("ORNEK B"))) as HTMLInputElement
+    expect(kutu).not.toBeDisabled()
+    fireEvent.click(kutu)
+    expect(kutu).toBeChecked()
+    expect(screen.getByRole("button", { name: u.seciliUygula(1) })).not.toBeDisabled()
+    fireEvent.click(kutu)
+    expect(kutu).not.toBeChecked()
+    expect(screen.getByRole("button", { name: u.seciliUygula(0) })).toBeDisabled()
+    fireEvent.click(screen.getByLabelText(u.secMusteri("ORNEK A")))
+    fireEvent.click(kutu)
+    fireEvent.click(screen.getByRole("button", { name: u.seciliUygula(2) }))
+    expect(await screen.findByText(/ORNEK B: eksik kriter/)).toBeInTheDocument()
+    expect(cagrilar.find((c) => c.yol.includes("/toplu/uygula"))?.govde).toEqual({ customer_ids: [1, 2] })
+  })
 })
+

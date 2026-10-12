@@ -110,8 +110,16 @@ export function TopluAtama({ dil }: { dil: Dil }) {
               kolonlar={[
                 {
                   baslik: "",
+                  // Eksik kriterli satir da secilebilir (eskiden disabled'di: DEV'de hic musteri "Tamam" olmadigindan hicbiri secilemiyordu);
+                  // sunucu eksik kriterliyi yazmaz, nedeniyle "atlandi" doner.
                   hucre: (m) => (
-                    <input type="checkbox" aria-label={u.secMusteri(m.ad)} checked={secili.has(m.id)} disabled={!m.tamam} onChange={(e) => sec(m.id, e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      className="size-4 cursor-pointer accent-tl-navy"
+                      aria-label={u.secMusteri(m.ad)}
+                      checked={secili.has(m.id)}
+                      onChange={(e) => sec(m.id, e.target.checked)}
+                    />
                   ),
                   sinif: "w-8",
                 },
@@ -137,7 +145,7 @@ export function TopluAtama({ dil }: { dil: Dil }) {
                   baslik: u.sonAtama,
                   hucre: (m) =>
                     m.son_atama ? (
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[0.6875rem] text-slate-500">
                         {u.kaynakAdi[m.son_atama.kaynak] ?? m.son_atama.kaynak} · {m.son_atama.atayan || "—"} · {zaman(m.son_atama.zaman)}
                       </span>
                     ) : (

@@ -72,7 +72,7 @@ def test_kriter_surumleri_onizleme_ve_toplu_uygulama(veri):
     m1 = next(m for m in on["musteriler"] if m["id"] == 1)
     assert (m1["mevcut"], m1["yeni"], m1["fark"], m1["tam"]) == (70.0, 70.0, 0.0, "Admin")
     assert m1["son_atama"]["kaynak"] == "kriter_degisikligi" and m1["kriterler"][0]["kaynak"].startswith("Panel")
-    assert {k["ad"] for k in on["kaynaklar"]} >= {"Panel (kart + aylık rapor)", "Ürün-Tutar (Excel)", "ReportDB"} and on["uyarilar"] == []
+    assert {k["ad"] for k in on["kaynaklar"]} >= {"Panel (kart + aylık rapor)", "Ürün-Tutar (Excel)", "REPORTDB"} and on["uyarilar"] == []
     only2 = veri.post("/api/v1/skor/toplu/onizleme", json={"tam_id": 2}, headers=hdr).json()["data"]
     assert [m["id"] for m in only2["musteriler"]] == [2]
     # toplu uygula: istirak ve olmayan kimlik atlanir

@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { CircleAlert, Inbox, LifeBuoy, MessageSquareWarning, Siren } from "lucide-react"
 import { Halka, Lejant, Sutunlar, YatayCubuklar } from "@/components/grafik"
-import { Bildirim, BosKutu, GIRDI, HataKutu, Kpi, Panel, SayfaKabi, Sekmeler, Yukleniyor } from "@/components/sayfa-ui"
+import { BosKutu, GIRDI, HataKutu, Kpi, Panel, SayfaKabi, Sekmeler, Yukleniyor } from "@/components/sayfa-ui"
 import { sayi } from "@/lib/bicim"
 import { oku } from "@/lib/sorgu"
 import { OneriPaneli, RcaPaneli, Top10Paneli } from "@/onedesk/analiz"
@@ -11,6 +11,7 @@ import { onedeskMetin } from "@/onedesk/onedesk-metin"
 import { turSerileri } from "@/onedesk/tipler"
 import type { Durum } from "@/onedesk/tipler"
 import type { Dil } from "@/shell/metin"
+import { varsayilanYil, yilSecenekleri } from "@/lib/yillar"
 
 type Kapsam = "acik" | "kapali"
 
@@ -20,9 +21,8 @@ type Kapsam = "acik" | "kapali"
  */
 export function OnedeskSayfasi({ dil, admin }: { dil: Dil; admin: boolean }) {
   const t = onedeskMetin(dil)
-  const buYil = new Date().getFullYear()
   const [kapsam, setKapsam] = useState<Kapsam>("acik")
-  const [yil, setYil] = useState(buYil)
+  const [yil, setYil] = useState(varsayilanYil())
   const q = useQuery({ queryKey: ["onedesk", "durum", kapsam, yil], queryFn: () => oku<Durum>(`/api/v1/onedesk/durum?kapsam=${kapsam}&yil=${yil}`) })
   const d = q.data
   const seriler = turSerileri(t)
@@ -34,10 +34,10 @@ export function OnedeskSayfasi({ dil, admin }: { dil: Dil; admin: boolean }) {
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={LifeBuoy} baslik={t.baslik} aciklama={t.aciklama}>
-        <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wide text-white/70">
+        <label className="flex items-center gap-2 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
           {t.yil}
           <select className={`${GIRDI} !w-auto !py-2`} value={yil} onChange={(e) => setYil(Number(e.target.value))}>
-            {[buYil, buYil - 1, buYil - 2, buYil - 3].map((y) => (
+            {yilSecenekleri().map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>
@@ -56,7 +56,6 @@ export function OnedeskSayfasi({ dil, admin }: { dil: Dil; admin: boolean }) {
         ]}
       />
 
-      {d?.kaynak.ornek ? <Bildirim ton="amber">{t.ornekUyari}</Bildirim> : null}
 
       {q.isPending ? (
         <Yukleniyor metin="…" />
@@ -73,7 +72,7 @@ export function OnedeskSayfasi({ dil, admin }: { dil: Dil; admin: boolean }) {
             <Kpi etiket={t.sikayet} deger={sayi(d.toplam.sikayet)} ikon={MessageSquareWarning} ton="amber" />
           </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-            <Panel baslik={kapsam === "acik" ? t.yaslanma : t.aylik} aciklama={kapsam === "acik" ? t.yaslanmaAlt : t.aylikAlt} sag={<Lejant seriler={seriler} sayilar={d.toplam} />}>
+            <Panel baslik={kapsam === "acik" ? t.yaslanma : t.aylik} aciklama={kapsam === "acik" ? t.yaslanmaAlt : t.aylikAlt} sag={<Lejant koyu seriler={seriler} sayilar={d.toplam} />}>
               <div className="flex flex-wrap items-center gap-6">
                 <Halka
                   dilimler={seriler.map((s) => ({ anahtar: s.anahtar, ad: s.ad, deger: d.toplam[s.anahtar as "alarm"], renk: s.renk }))}

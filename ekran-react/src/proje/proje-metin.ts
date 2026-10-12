@@ -1,0 +1,108 @@
+import { ORTAK } from "@/shell/metin"
+import type { Dil } from "@/shell/metin"
+
+export const KATEGORILER = ["proje", "calisma", "ddos", "dc_tasima", "topoloji"] as const
+export const DURUMLAR = ["acik", "devam", "beklemede", "kapandi"] as const
+export const ONCELIKLER = ["dusuk", "orta", "yuksek", "kritik"] as const
+export type Kategori = (typeof KATEGORILER)[number]
+export type Durum = (typeof DURUMLAR)[number]
+export type Oncelik = (typeof ONCELIKLER)[number]
+
+const TR = {
+  ...ORTAK.tr,
+  baslik: "Takip Edilen Projeler",
+  aciklama: "Proje, Çalışma, Ddos Optimizasyonu, DC Taşıması ve Topoloji İyileştirme sayıları - TAM bazında",
+  // ozet
+  ozet: "TAM Bazında Özet",
+  kolTam: "TAM",
+  kolKapanan: "Kapanan",
+  kolDevam: "Devam Eden",
+  kolToplam: "Toplam",
+  genelToplam: "GENEL TOPLAM",
+  kayitYok: "Henüz kayıt eklenmedi.",
+  // detay
+  detayTakibi: "Proje Detay Takibi",
+  yeniProje: "+ Yeni Proje",
+  sorumlu: "Sorumlu TAM",
+  kategori: "Kategori",
+  oncelik: "Öncelik",
+  durum: "Durum",
+  baslangic: "Başlangıç",
+  hedef: "Hedef tarih",
+  projeBasligi: "Proje Başlığı",
+  aciklamaAlani: "Açıklama (opsiyonel)",
+  baslikZorunlu: "Proje başlığı zorunlu.",
+  kaydedilemedi: "Kaydedilemedi.",
+  aksiyonIpucu: "Aksiyon/not ekle...",
+  ekle: "Ekle",
+  silOnay: (b: string) => `“${b}” projesi ve aksiyon geçmişi silinsin mi?`,
+  kapanis: "Kapanış",
+  // musteri bazli
+  musteriCalisma: "Müşteri Bazlı Çalışmalar",
+  musteriCalismaAciklama: "Her müşteri için yapılan çalışmayı işaretleyin; isterseniz detay yazın. Her değişiklik anında kaydedilir.",
+  tumPersonel: "-- Tüm Personel --",
+  musteriAra: "Müşteri ara...",
+  kolMusteri: "Müşteri",
+  kolDetay: "Detay",
+  detayAc: (ad: string) => `${ad}: çalışma detayları`,
+  musteriYok: "Hiç Müşteri Bulunamadı",
+  kaydediliyor: "Kaydediliyor…",
+  kaydedildiZaman: (z: string) => `✓ Kaydedildi · ${z}`,
+  excel: "Excel",
+  yazdir: "PDF / Yazdır",
+  raporBaslik: "Müşteri Bazlı Proje / Çalışma Raporu",
+  raporAlt: (m: number, y: number) => `${m} müşteri · ${y} işaretli çalışma`,
+  kategori_: { proje: "Proje", calisma: "Çalışma", ddos: "Ddos Optimizasyonu", dc_tasima: "DC Taşıması", topoloji: "Topoloji İyileştirme" } satisfies Record<Kategori, string>,
+  kategoriKisa: { proje: "Proje", calisma: "Çalışma", ddos: "Ddos Opt.", dc_tasima: "DC Taşıma", topoloji: "Topoloji" } satisfies Record<Kategori, string>,
+  durum_: { acik: "Açık", devam: "Devam Ediyor", beklemede: "Beklemede", kapandi: "Kapandı" } satisfies Record<Durum, string>,
+  oncelik_: { dusuk: "Düşük", orta: "Orta", yuksek: "Yüksek", kritik: "Kritik" } satisfies Record<Oncelik, string>,
+}
+
+const EN: typeof TR = {
+  ...ORTAK.en,
+  baslik: "Tracked Projects",
+  aciklama: "Project, Work, DDoS Optimization, DC Migration and Topology Improvement counts - per TAM",
+  ozet: "Summary per TAM",
+  kolTam: "TAM",
+  kolKapanan: "Closed",
+  kolDevam: "Ongoing",
+  kolToplam: "Total",
+  genelToplam: "GRAND TOTAL",
+  kayitYok: "No records yet.",
+  detayTakibi: "Project Detail Tracking",
+  yeniProje: "+ New project",
+  sorumlu: "Owner TAM",
+  kategori: "Category",
+  oncelik: "Priority",
+  durum: "Status",
+  baslangic: "Start",
+  hedef: "Target date",
+  projeBasligi: "Project title",
+  aciklamaAlani: "Description (optional)",
+  baslikZorunlu: "Project title is required.",
+  kaydedilemedi: "Could not save.",
+  aksiyonIpucu: "Add action/note...",
+  ekle: "Add",
+  silOnay: (b: string) => `Delete the project “${b}” and its action history?`,
+  kapanis: "Closed",
+  musteriCalisma: "Customer-Based Work",
+  musteriCalismaAciklama: "Tick the work done for each customer and add details if needed. Every change is saved immediately.",
+  tumPersonel: "-- All staff --",
+  musteriAra: "Search customer...",
+  kolMusteri: "Customer",
+  kolDetay: "Details",
+  detayAc: (ad: string) => `${ad}: work details`,
+  musteriYok: "No customers found",
+  kaydediliyor: "Saving…",
+  kaydedildiZaman: (z: string) => `✓ Saved · ${z}`,
+  excel: "Excel",
+  yazdir: "PDF / Print",
+  raporBaslik: "Customer-Based Project / Work Report",
+  raporAlt: (m: number, y: number) => `${m} customers · ${y} ticked work items`,
+  kategori_: { proje: "Project", calisma: "Work", ddos: "DDoS Optimization", dc_tasima: "DC Migration", topoloji: "Topology Improvement" },
+  kategoriKisa: { proje: "Project", calisma: "Work", ddos: "DDoS Opt.", dc_tasima: "DC Migr.", topoloji: "Topology" },
+  durum_: { acik: "Open", devam: "In progress", beklemede: "On hold", kapandi: "Closed" },
+  oncelik_: { dusuk: "Low", orta: "Medium", yuksek: "High", kritik: "Critical" },
+}
+
+export const projeMetin = (dil: Dil) => (dil === "en" ? EN : TR)

@@ -13,7 +13,7 @@ type SmsKayit = { id: number; musteri: string; proje: string; tutar: number; par
 type Liste = { items: SmsKayit[]; toplam: Record<string, number>; yillar: number[] }
 
 /** ICT Sms & Gelir: yalniz uc sutun, musteri adi - proje bilgisi - gelir bilgisi. */
-export function SmsSayfasi({ dil }: { dil: Dil }) {
+export function SmsSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = gelirMetin(dil)
   const qc = useQueryClient()
   const [yil, setYil] = useState("")
@@ -39,7 +39,7 @@ export function SmsSayfasi({ dil }: { dil: Dil }) {
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={MessageSquare} baslik={t.smsBaslik} aciklama={t.smsAciklama}>
-        <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wide text-white/70">
+        <label className="flex items-center gap-2 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
           {t.yil}
           <select className={`${GIRDI} !w-auto !py-2`} value={yil} onChange={(e) => setYil(e.target.value)}>
             <option value="">{t.tumYillar}</option>
@@ -71,6 +71,7 @@ export function SmsSayfasi({ dil }: { dil: Dil }) {
             satirlar={liste.data.items}
             metin={t.tablo}
             musteriAdlari={adlar.data}
+            saltOkunur={!yazabilir}
             bosKutu={<BosKutu ikon={MessageSquare} baslik={t.smsBos} aciklama={t.smsBosAlt} />}
             onKaydet={async (govde, id) => {
               await kaydet.mutateAsync({ govde, id })

@@ -2,17 +2,17 @@
 
 Her kaynak musteri basina METRIK uretir; motor metrikleri kriter kurallarina (barem hucreleri) gore puana cevirir. Oncelik (metrik
 basina, ilk hazir olan kullanilir; hata veren kaynak atlanir, siradakine gecilir):
-  Secilen veri kaynagi (kriterdeki kaynak_secimi) > ReportDB > Urun-Tutar DB > Urun-Tutar Excel > Onent DB > Panel
-  sikayet_talep   : ReportDB  > Panel  (bu yil kapanan + su an acik sikayet ve talep)
-  lokasyon_sayisi : Urun-Tutar > Onent DB > Panel (Envanter alani - YEDEK, lokasyon degil)
-  servisler       : Urun-Tutar (musterinin servis/urun adlari)
-  segment         : Urun-Tutar DB > Panel (kartta secilen segment; SEGMENTLER disindaki deger veri sayilmaz)
-  baglanti        : Urun-Tutar (baglanti tipleri)
-  fatura_bedeli   : Urun-Tutar > Panel (kart FT Hacim - YEDEK; 0 = veri yok)
+  Secilen veri kaynagi (kriterdeki kaynak_secimi) > REPORTDB > Urun-Tutar Excel > ONENTDB > Panel
+  sikayet_talep   : REPORTDB  > Panel  (bu yil kapanan + su an acik sikayet ve talep)
+  lokasyon_sayisi : Urun-Tutar Excel > ONENTDB > Panel (Envanter alani - YEDEK, lokasyon degil)
+  servisler       : Urun-Tutar Excel (musterinin servis/urun adlari)
+  segment         : Panel (kartta secilen segment; SEGMENTLER disindaki deger veri sayilmaz)
+  baglanti        : Urun-Tutar Excel (baglanti tipleri)
+  fatura_bedeli   : Urun-Tutar Excel > Panel (kart FT Hacim - YEDEK; 0 = veri yok)
   rapor_sayisi    : Panel (bu yil aylik rapor hazirlanan ay sayisi)
 
-Panel verisi DEV veritabanindandir: kart sayaclari (Onedesk kayitlari ve Veri Girisi dagitimi doldurur: ReportDB / CSV / Oracle
-ice alma), Envanter, FT Hacim, segment ve gonderilmis aylik raporlar (report). DB kaynaklari (ReportDB / Urun-Tutar / Onent)
+Panel verisi DEV veritabanindandir: kart sayaclari (Onedesk kayitlari ve Veri Girisi dagitimi doldurur: REPORTDB / CSV / Oracle
+ice alma), Envanter, FT Hacim, segment ve gonderilmis aylik raporlar (report). DB kaynaklari (REPORTDB / ONENTDB)
 uretimdeki gibi sozlesme bekler: baglanti ayarli degilse 'hazir degil', ayarliysa 'sorgu henuz yazilmadi' uyarisi; tampona alinmis
 bu verileri skora baglamanin yolu kriterdeki veri kaynagi secimidir.
 """
@@ -27,7 +27,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.dil import m as dm
 from app.models import Customer, Report
+from app.ortak import rapor_donemi
 from app.skor import kaynak_secimi, urun_tutar
 from app.tampon import oracle
 
@@ -65,7 +67,7 @@ def rapor_birimi_mi(musteri: Customer) -> bool:
 def yillik_rapor_aylari(db: Session, yil: int | None = None) -> dict[int, int]:
     """{rapor birimi customer_id: bu yil aylik rapor hazirlanan AY sayisi} - tek sorgu. Catisina dahil istirak icin hazirlanan
     rapor catinin sayilir (rapor.servis.durum_ozeti ile ayni tanim). Rapor kaydi = gonderilmis, geri alinmamis rapor."""
-    yil = yil or datetime.now(UTC).year
+    yil = yil or rapor_donemi(datetime.now(UTC))[0]  # Ocak'ta gonderilen Aralik raporu onceki yila sayilir
     aylar: dict[int, set[int]] = {}
     for cid, ust, ayri, ay in db.execute(
         select(Customer.id, Customer.parent_id, Customer.separate_report, Report.report_month)
@@ -145,33 +147,34 @@ class _DbKaynagi(Kaynak):
 
     def hazir(self, db: Session) -> tuple[bool, str]:
         if not self.yapilandirildi():
-            return False, f"{self.ad}: bağlantı tanımlı değil ({oracle.KAYNAKLAR[self.oracle_anahtari].enabled_key}). Erişim gelince bağlanacak."
+            anahtar = oracle.KAYNAKLAR[self.oracle_anahtari].enabled_key
+            return False, dm(
+                f"{self.ad}: bağlantı tanımlı değil ({anahtar}). Erişim gelince bağlanacak.",
+                f"{self.ad}: connection not configured ({anahtar}). It will connect once access is available.",
+            )
         return True, ""
 
     def _oku(self, db: Session, musteriler: list[Customer]) -> dict[int, dict]:
-        raise KaynakHazirDegil(f"{self.ad}: bağlantı tanımlı ama sorgu henüz yazılmadı (veri sözleşmesi bekleniyor).")
+        raise KaynakHazirDegil(
+            dm(
+                f"{self.ad}: bağlantı tanımlı ama sorgu henüz yazılmadı (veri sözleşmesi bekleniyor).",
+                f"{self.ad}: connection configured but the query is not written yet (awaiting the data contract).",
+            )
+        )
 
 
 class ReportDbKaynagi(_DbKaynagi):
-    """ReportDB. Beklenen: musteri (Musteri No) basina YIL BOYU acik + kapanan sikayet + talep (alarm haric) -> 'sikayet_talep'."""
+    """REPORTDB. Beklenen: musteri (Musteri No) basina YIL BOYU acik + kapanan sikayet + talep (alarm haric) -> 'sikayet_talep'."""
 
-    ad = "ReportDB"
+    ad = "REPORTDB"
     metrikler = ("sikayet_talep",)
     oracle_anahtari = "oracle_reportdb"
 
 
-class UrunTutarDbKaynagi(_DbKaynagi):
-    """Urun-Tutar raporu (Oracle). Beklenen: servisler, lokasyon_sayisi, segment, baglanti, fatura_bedeli."""
-
-    ad = "Ürün-Tutar"
-    metrikler = ("servisler", "lokasyon_sayisi", "segment", "baglanti", "fatura_bedeli")
-    oracle_anahtari = "oracle_urun_tutar"
-
-
 class OnentDbKaynagi(_DbKaynagi):
-    """Onent DB. Beklenen: musteri basina aktif devre / CI sayisi -> 'lokasyon_sayisi' (Urun-Tutar'dan sonra)."""
+    """ONENTDB. Beklenen: musteri basina aktif devre / CI sayisi -> 'lokasyon_sayisi' (Urun-Tutar Excel'den sonra)."""
 
-    ad = "Onent DB"
+    ad = "ONENTDB"
     metrikler = ("lokasyon_sayisi",)
     oracle_anahtari = "oracle_onent"
 
@@ -208,7 +211,9 @@ class KriterSecimKaynagi(Kaynak):
         self.metrikler = tuple(dict.fromkeys(m for _, m, _, _ in self.secimli))
 
     def hazir(self, db: Session) -> tuple[bool, str]:
-        return (True, "") if self.secimli else (False, "Kriterlerde veri kaynağı seçimi yok.")
+        return (
+            (True, "") if self.secimli else (False, dm("Kriterlerde veri kaynağı seçimi yok.", "No data source selected in the criteria."))
+        )
 
     def oku_uyarili(self, db: Session, musteriler: list[Customer]) -> tuple[dict[int, dict], list[str]]:
         if not self.secimli:
@@ -219,7 +224,14 @@ class KriterSecimKaynagi(Kaynak):
 
 def kaynaklar(kriterler: list[dict] | None) -> list[Kaynak]:
     """Oncelik sirasi: listede ONCE gelen hazir kaynak metrigi saglar."""
-    return [KriterSecimKaynagi(kriterler), ReportDbKaynagi(), UrunTutarDbKaynagi(), UrunTutarExcelKaynagi(), OnentDbKaynagi(), PanelKaynagi()]
+    return [KriterSecimKaynagi(kriterler), ReportDbKaynagi(), UrunTutarExcelKaynagi(), OnentDbKaynagi(), PanelKaynagi()]
+
+
+AD_EN = {
+    "Panel (kart + aylık rapor)": "Panel (card + monthly report)",
+    "Ürün-Tutar (Excel)": "Product-Amount (Excel)",
+    "Seçilen veri kaynağı": "Selected data source",
+}
 
 
 def kaynak_durumlari(db: Session, kriterler: list[dict] | None) -> list[dict]:
@@ -227,7 +239,7 @@ def kaynak_durumlari(db: Session, kriterler: list[dict] | None) -> list[dict]:
     durum = []
     for k in kaynaklar(kriterler):
         hazir, neden = k.hazir(db)
-        durum.append({"ad": k.ad, "metrikler": list(k.metrikler), "hazir": hazir, "neden": neden})
+        durum.append({"ad": dm(k.ad, AD_EN.get(k.ad, k.ad)), "metrikler": list(k.metrikler), "hazir": hazir, "neden": neden})
     return durum
 
 

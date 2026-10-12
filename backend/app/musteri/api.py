@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.audit import audit_log
-from app.db import get_db
+from app.config import get_settings
+from app.db import get_db, oturum
+from app.deps import require_veri_yazma
+from app.dil import m
 from app.erisim import Erisim, modul_erisim
 from app.musteri import servis as ms
 from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, ok
@@ -71,7 +75,11 @@ class GonderGovde(BaseModel):
     to: str | list[str] | None = None
     cc: str | list[str] | None = None
     subject: str | None = Field(default=None, max_length=400)
+    body_text: str | None = Field(default=None, max_length=10000)  # bos: kayitli taslak / hazir metin
+    signature: str | None = Field(default=None, max_length=2000)
+    lang: Literal["tr", "en"] | None = None
     pdf_base64: str | None = Field(default=None, max_length=45 * 1024 * 1024)
+    alanlar: dict | None = None  # gonderilen rapor metni; taslak olarak saklanir (takip icin)
 
 
 def _govde(model: BaseModel) -> dict:
@@ -109,7 +117,9 @@ def secenekler(e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db
 
 
 @router.post("/musteri")
-def ekle(body: YeniMusteri, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+def ekle(
+    body: YeniMusteri, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+):
     sonuc = _yap(db, lambda: ms.musteri_ekle(db, e.user, _govde(body)), yaz=True)
     if isinstance(sonuc, dict):
         _denetim(e.user, "musteri.ekle", f"musteri={sonuc['data']['id']}")
@@ -122,7 +132,13 @@ def kart(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Sessio
 
 
 @router.put("/musteri/{musteri_id:int}/kimlik")
-def kimlik(musteri_id: KimlikTipi, body: Serbest, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+def kimlik(
+    musteri_id: KimlikTipi,
+    body: Serbest,
+    e: Erisim = Depends(musteri_erisim),
+    db: Session = Depends(get_db),
+    _y: Principal = Depends(require_veri_yazma),
+):
     sonuc = _yap(db, lambda: ms.kimlik_guncelle(db, e.user, musteri_id, _govde(body)), yaz=True)
     if isinstance(sonuc, dict):
         _denetim(e.user, "musteri.kimlik", f"musteri={musteri_id}")
@@ -130,7 +146,13 @@ def kimlik(musteri_id: KimlikTipi, body: Serbest, e: Erisim = Depends(musteri_er
 
 
 @router.put("/musteri/{musteri_id:int}/iletisim")
-def iletisim(musteri_id: KimlikTipi, body: Serbest, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+def iletisim(
+    musteri_id: KimlikTipi,
+    body: Serbest,
+    e: Erisim = Depends(musteri_erisim),
+    db: Session = Depends(get_db),
+    _y: Principal = Depends(require_veri_yazma),
+):
     sonuc = _yap(db, lambda: ms.iletisim_kaydet(db, e.user, musteri_id, _govde(body)), yaz=True)
     if isinstance(sonuc, dict):
         _denetim(e.user, "musteri.iletisim", f"musteri={musteri_id}")
@@ -138,7 +160,13 @@ def iletisim(musteri_id: KimlikTipi, body: Serbest, e: Erisim = Depends(musteri_
 
 
 @router.put("/musteri/{musteri_id:int}/sorumlu")
-def sorumlu(musteri_id: KimlikTipi, body: SorumluGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+def sorumlu(
+    musteri_id: KimlikTipi,
+    body: SorumluGovde,
+    e: Erisim = Depends(musteri_erisim),
+    db: Session = Depends(get_db),
+    _y: Principal = Depends(require_veri_yazma),
+):
     sonuc = _yap(db, lambda: ms.tam_degistir(db, e.user, musteri_id, body.owner_id), yaz=True)
     if isinstance(sonuc, dict):
         _denetim(e.user, "musteri.sorumlu", f"musteri={musteri_id} yeni={body.owner_id}")
@@ -146,7 +174,9 @@ def sorumlu(musteri_id: KimlikTipi, body: SorumluGovde, e: Erisim = Depends(must
 
 
 @router.delete("/musteri/{musteri_id:int}")
-def sil(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+def sil(
+    musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+):
     sonuc = _yap(db, lambda: ms.sil(db, e.user, musteri_id), yaz=True)
     if isinstance(sonuc, dict):
         _denetim(e.user, "musteri.sil", f"musteri={musteri_id} adet={sonuc['data']['silinen']}")
@@ -155,7 +185,13 @@ def sil(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session
 
 # --- aylik rapor -----------------------------------------------------------------------------------
 @router.put("/musteri/{musteri_id:int}/ayri-rapor")
-def ayri_rapor(musteri_id: KimlikTipi, body: AyriRaporGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+def ayri_rapor(
+    musteri_id: KimlikTipi,
+    body: AyriRaporGovde,
+    e: Erisim = Depends(musteri_erisim),
+    db: Session = Depends(get_db),
+    _y: Principal = Depends(require_veri_yazma),
+):
     return _yap(db, lambda: rs.ayri_rapor_ayarla(db, e.user, musteri_id, body.ayri_rapor), yaz=True)
 
 
@@ -180,6 +216,99 @@ def gonder(musteri_id: KimlikTipi, body: GonderGovde, e: Erisim = Depends(muster
     if isinstance(sonuc, dict):
         _denetim(e.user, "rapor.gonder", f"musteri={musteri_id}")
     return sonuc
+
+
+async def _dosya_govdesi(request: Request, sinir_mb: int) -> bytes:
+    """Ham dosya govdesi (cok parcali form yok); boyut siniri akis sirasinda uygulanir."""
+    sinir = sinir_mb * 1024 * 1024
+    mesaj = m(f"Dosya \u00e7ok b\u00fcy\u00fck (en fazla {sinir_mb} MB).", f"File too large (max {sinir_mb} MB).")
+    bildirilen = request.headers.get("content-length", "")
+    if bildirilen.isdigit() and int(bildirilen) > sinir:
+        raise HTTPException(status_code=413, detail=mesaj)
+    parcalar: list[bytes] = []
+    boyut = 0
+    async for parca in request.stream():
+        boyut += len(parca)
+        if boyut > sinir:
+            raise HTTPException(status_code=413, detail=mesaj)
+        parcalar.append(parca)
+    return b"".join(parcalar)
+
+
+def _ayri_oturumda(islem: Callable[[Session], Any]) -> Any:
+    """Excel okumasi CPU-yogun: threadpool'da kendi oturumuyla calisir, olay dongusunu bekletmez."""
+    with oturum() as db:
+        sonuc = islem(db)
+        db.commit()
+        return sonuc
+
+
+@router.get("/musteri/{musteri_id:int}/rapor/sla")
+def sla_oku(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.sla_getir(db, e.user, musteri_id))
+
+
+@router.put("/musteri/{musteri_id:int}/rapor/sla")
+async def sla_yukle(
+    musteri_id: KimlikTipi, request: Request, dosya: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
+):
+    """SLA Excel'i (.xlsx govdesi). Donemde oncekinin yerine gecer; rapor gonderilirken iletiye otomatik eklenir."""
+    veri = await _dosya_govdesi(request, min(get_settings().ingest_max_mb, 30))
+    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.sla_yukle(db, e.user, musteri_id, veri, dosya))
+    _denetim(e.user, "rapor.sla_yukle", f"musteri={musteri_id} boyut={len(veri)}")
+    return ok(sonuc)
+
+
+@router.delete("/musteri/{musteri_id:int}/rapor/sla")
+def sla_sil(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.sla_sil(db, e.user, musteri_id))
+
+
+@router.post("/musteri/{musteri_id:int}/rapor/gorsel")
+async def gorsel_ekle(
+    musteri_id: KimlikTipi, request: Request, baslik: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
+):
+    """Elle eklenen rapor grafigi (MRTG vb.; GALAPAGOS baglanana kadar). PNG/JPEG/GIF govdesi."""
+    veri = await _dosya_govdesi(request, 10)
+    return ok(await run_in_threadpool(_ayri_oturumda, lambda db: rs.gorsel_ekle(db, e.user, musteri_id, veri, baslik)))
+
+
+@router.delete("/musteri/{musteri_id:int}/rapor/gorsel/{numara:int}")
+def gorsel_sil(musteri_id: KimlikTipi, numara: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.gorsel_sil(db, e.user, musteri_id, numara))
+
+
+@router.post("/musteri/{musteri_id:int}/rapor/dosya")
+async def dosya_ekle(
+    musteri_id: KimlikTipi, request: Request, ad: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
+):
+    """Rapor iletisine eklenecek dosya (ham govde). Gonderimde iletiye otomatik girer."""
+    veri = await _dosya_govdesi(request, 20)
+    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.dosya_ekle(db, e.user, musteri_id, veri, ad))
+    _denetim(e.user, "rapor.dosya_ekle", f"musteri={musteri_id} boyut={len(veri)}")
+    return ok(sonuc)
+
+
+@router.delete("/musteri/{musteri_id:int}/rapor/dosya/{numara:int}")
+def dosya_sil(musteri_id: KimlikTipi, numara: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.dosya_sil(db, e.user, musteri_id, numara))
+
+
+@router.post("/musteri/{musteri_id:int}/rapor/sla/analiz")
+async def sla_analizi(musteri_id: KimlikTipi, body: Serbest, e: Erisim = Depends(musteri_erisim)):
+    """SLA Excel'inin tum verisinin ozeti; `yz: true` ise (ve YZ aciksa) dil modeli yorumu da. Excel okumasi threadpool'da."""
+    govde = body.model_dump()
+    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.sla_analizi(db, e.user, musteri_id, govde))
+    if govde.get("yz") is True:
+        _denetim(e.user, "rapor.sla_yz", f"musteri={musteri_id}")
+    return ok(sonuc)
+
+
+@router.post("/musteri/{musteri_id:int}/rapor/cevir")
+async def cevir(musteri_id: KimlikTipi, body: Serbest, e: Erisim = Depends(musteri_erisim)):
+    """Personelin yazdigi rapor alanlarinin TR -> EN makine cevirisi (ayri surecte; uzun surebilir)."""
+    govde = body.model_dump()
+    return ok(await run_in_threadpool(_ayri_oturumda, lambda db: rs.metin_cevir(db, e.user, musteri_id, govde)))
 
 
 @router.get("/musteri/{musteri_id:int}/rapor/gecmis")

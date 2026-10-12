@@ -20,7 +20,25 @@ export type Ozet = {
   baglantilar: Baglanti[]
 }
 
-export type Yedek = { ad: string; boyut_bayt: number; zaman: string | null }
+/** Kurum Baglantilari (/yonetim/kurum): yalniz gizli olmayan ayarlar; CA yolu / grup DN'leri yalniz var-yok. */
+type KurumOrtak = { id: string; label: string; state: "ready" | "incomplete" | "disabled"; missing: string[] }
+export type AdBaglantisi = KurumOrtak & {
+  tur: "dizin"
+  bilgiler: { sunucu: string; port: number | null; ldaps: boolean; ssl: boolean; alan: string; ca_dosyasi: boolean; grup_kisiti: boolean; otomatik_ac: boolean }
+}
+/** Oracle: adres / servis / kullanici / parola yalniz tanimli mi (deger gelmez). */
+export type OracleBaglantisi = KurumOrtak & {
+  tur: "oracle"
+  acma_anahtari: string
+  bilgiler: { sunucu: string; port: number; servis: string; kullanici: string; parola: boolean; zaman_asimi: number; oracle_istemci: boolean; sorgu_tamam: boolean; sorgu_hata: string | null }
+  son_parti: { id: number; durum: string; satir: number; zaman: string | null; hata: string } | null
+  reportdb?: { kartlara_yaz: boolean; kural: number; yas_dk: number | null; taze: boolean; tazelik_dk: number }
+}
+export type KurumBaglantisi = AdBaglantisi | OracleBaglantisi
+export type AdAdimi = { adim: "ayar" | "dns" | "tcp" | "tls" | "oturum"; durum: "ok" | "hata"; baslik: string; ayrinti: string }
+export type AdTesti = { tamam: boolean; adimlar: AdAdimi[] }
+
+export type Yedek ={ ad: string; boyut_bayt: number; zaman: string | null }
 export type Veritabani = {
   motor: string
   dosya: string | null
@@ -62,7 +80,7 @@ export type GunlukDosyasi = { dosya: string; var: boolean; satirlar: string[] }
 export type Kaynak = {
   anahtar: string
   ad: string
-  tur: "dosya" | "ornek" | "oracle" | "oracle_parti"
+  tur: "dosya" | "oracle" | "oracle_parti"
   hazir: boolean
   neden: string
   yapilandirma: "tamam" | "eksik" | "kapalı"
@@ -72,6 +90,29 @@ export type Kaynak = {
   reportdb?: { kartlara_yaz: boolean; kural: number; yas_dk: number | null; taze: boolean; tazelik_dk: number }
 }
 export type BaglantiTesti = { ok: boolean; mesaj: string; ipucu: string }
+/** Ham Musteri Verisi: dosyanin katalogla karsilastirmasi. bicim: sablon | liste (takma adlar) | genis (cati/istirak). */
+export type HamUyum = {
+  toplam: number
+  eslesen: number
+  alanlar: { sutun: string; alan: string }[]
+  eksik: string[]
+  fazla: string[]
+  zorunlu_eksik: string[]
+  uyumlu: boolean
+  bicim: "sablon" | "liste" | "genis"
+}
+export type HamDegisiklik = { alan: string; baslik: string; eski: string | number; yeni: string | number }
+export type HamSatir = { sira: number; unvan: string; durum: "guncelle" | "yeni" | "hata" | "degisiklik_yok"; degisiklikler: HamDegisiklik[]; hatalar: string[]; uyarilar: string[] }
+export type HamOnizleme = {
+  parti_id: number
+  ozet: { toplam: number; guncelle: number; degisiklik_yok: number; yeni: number; hata: number; uyari: number; alan_degisikligi: number; yeni_olustur: boolean; genis_bicim: boolean; uygulanacak: number; tanimsiz_sutunlar: string[] }
+  uyum: HamUyum
+  satirlar: HamSatir[]
+  kesildi: number
+  plan_ozeti: string
+}
+export type HamAktarim = { id: number; parti_id: number; zaman: string | null; kullanici: string; guncellenen: number; olusturulan: number; geri_alinan: { zaman: string; kullanici: string } | null }
+export type HamGeriAl = { geri_alinan_alan: number; korunan_alan: number; silinen_musteri: number; silinemeyen_musteri: string[] }
 export type Parti = {
   id: number
   kaynak: string
@@ -292,7 +333,24 @@ export type KaynakOnizleme = {
 }
 
 // --- Sorgu anahtarlari --------------------------------------------------------------------------------------------------
+/** TAM Utilizasyon > Musteri Listesi (GET /yonetim/musteriler): agac sirasiyla cati, altinda istirakleri. */
+export type MusteriSatiri = {
+  id: number
+  name: string
+  segment: string
+  parent_id: number | null
+  parent_name: string | null
+  owner_id: number | null
+  owner: string | null
+  affiliates: number
+  score: number | null
+}
+export type MusteriListesi = { total: number; items: MusteriSatiri[] }
+export type MusteriSilSonucu = { silinen: number; istenen: number; hepsi: boolean }
+export type MusteriEkleSonucu = { eklenen: number; idler: number[]; atlanan: { ad: string; sebep: string }[] }
+
 export const ANAHTAR = {
+  musteriListesi: ["yonetim", "musteriler"] as const,
   skorKriter: ["skor", "kriterler"] as const,
   skorMeta: ["skor", "meta"] as const,
   skorAgac: ["skor", "agac"] as const,
@@ -300,6 +358,7 @@ export const ANAHTAR = {
   skorTalepler: ["skor", "talepler"] as const,
   skorUrunTutar: ["skor", "urun-tutar"] as const,
   ozet: ["yonetim", "ozet"] as const,
+  kurum: ["yonetim", "kurum"] as const,
   veritabani: ["yonetim", "veritabani"] as const,
   arizalar: ["yonetim", "arizalar"] as const,
   arizaKodlari: ["yonetim", "ariza-kodlari"] as const,
@@ -312,6 +371,7 @@ export const ANAHTAR = {
   hedefler: ["tampon", "hedefler"] as const,
   kurallar: ["tampon", "kurallar"] as const,
   uygulamalar: ["tampon", "uygulamalar"] as const,
+  hamAktarimlar: ["tampon", "musteri-ham", "aktarimlar"] as const,
 }
 
 /** {a: "x", b: ""} -> "?a=x" (bos degerler atilir). */

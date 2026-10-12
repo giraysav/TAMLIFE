@@ -103,7 +103,7 @@ export function UrunTutar({ dil }: { dil: Dil }) {
         {sonuc ? (
           <div className="mt-3 grid gap-3">
             <Bildirim ton="yesil">{u.yuklendi(sonuc.eslesen, sonuc.kart_musterisine)}</Bildirim>
-            <p className="text-[11px] font-bold text-slate-500">
+            <p className="text-[0.6875rem] font-bold text-slate-500">
               {u.kartNo(sonuc.kart_musteri_no)} · {u.dosyadaki(sonuc.dosyadaki_adet)}: {sonuc.dosyadaki.map((d) => `${d.ad || "—"} (${d.musteri_no || "—"}, ${d.satir})`).join(" · ")}
             </p>
             <VeriTablosu baslik={u.yuklenenler} satirlar={sonuc.musteriler} anahtar={(o) => o.id} kolonlar={ozetKolonlari(t)} />

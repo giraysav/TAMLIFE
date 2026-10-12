@@ -109,12 +109,13 @@ def test_segmentler_musteri_paketiyle_ayni():
 def test_db_kaynagi_ayarliysa_uyari_ayarli_degilse_sessiz(veri, monkeypatch):
     with Session(engine()) as db:
         durum = {k["ad"]: k for k in kaynaklar.kaynak_durumlari(db, [])}
-    assert durum["ReportDB"]["hazir"] is False and "ORACLE_REPORTDB_ENABLED" in durum["ReportDB"]["neden"]
+    assert durum["REPORTDB"]["hazir"] is False and "ORACLE_REPORTDB_ENABLED" in durum["REPORTDB"]["neden"]
+    assert "Ürün-Tutar" not in durum  # Urun-Tutar DB kaldirildi (2026-10-10); Excel kalir
     assert durum["Panel (kart + aylık rapor)"]["hazir"] is True and durum["Seçilen veri kaynağı"]["hazir"] is False
     for ad, deger in (("ENABLED", "true"), ("HOST", "ornek.invalid"), ("SERVICE_NAME", "ORNEK"), ("USER", "ornek"), ("PASSWORD", "ornek-parola")):
         monkeypatch.setenv(f"ORACLE_REPORTDB_{ad}", deger)
     m, uyarilar = _metrikler()
-    assert any("ReportDB" in u and "sorgu henüz yazılmadı" in u for u in uyarilar)
+    assert any("REPORTDB" in u and "sorgu henüz yazılmadı" in u for u in uyarilar)
     assert m[1]["sikayet_talep"]["kaynak"].startswith("Panel")  # hata veren kaynak atlanir, siradaki besler
 
 

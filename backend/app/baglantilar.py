@@ -1,38 +1,66 @@
-"""Baglanti yuvalarinin durumu (AD, Oracle kaynaklari): yalniz anahtar adlari ve durum.
+"""Baglanti yuvalarinin durumu (AD, Oracle kaynaklari): yalniz anahtar adlari, durum ve gizli olmayan ayar ozeti.
 
-Bu modulden cikan JSON yalniz boolean ve ad icerir; gizli deger asla kopyalanmaz. Kullananlar: yonetim/ozet, yonetim/saglik.
+Bu modulden cikan JSON gizli deger icermez (parola/anahtar asla). Oracle icin adres bile verilmez; AD icin yalniz sunucu adi, port,
+alan ve var/yok bilgileri (AD'de servis hesabi/parola yoktur); Oracle icin port, zaman asimi ve var/yok bilgileri. Kullananlar: yonetim/ozet, yonetim/saglik, yonetim/router (Kurum Baglantilari).
 """
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.ad import directory
 from app.config import get_settings
 from app.external import SOURCES, acik_mi, oracle_eksikleri
+from app.ortak import iso
 
 
 def connections() -> list[dict[str, object]]:
-    """AD, ORACLE_REPORTDB (Onedesk DB), ONENT, URUNTUTAR. configured = *_ENABLED=true (uretimle ayni kural)."""
+    """AD, ORACLE_REPORTDB (REPORTDB), ONENTDB, GALAPAGOSDB. configured = *_ENABLED=true (uretimle ayni kural)."""
     return [
         {"id": "ad", "slot": "AD", "tur": "dizin", "configured": directory.configured()},
         {"id": "oracle_reportdb", "slot": "ORACLE_REPORTDB", "tur": "veritabani", "configured": acik_mi("ORACLE_REPORTDB_ENABLED")},
-        {"id": "onent", "slot": "ONENT", "tur": "veritabani", "configured": acik_mi("ONENTDB_DB_ENABLED")},
-        {"id": "uruntutar", "slot": "URUNTUTAR", "tur": "veritabani", "configured": acik_mi("URUNTUTAR_DB_ENABLED")},
+        {"id": "onent", "slot": "ONENTDB", "tur": "veritabani", "configured": acik_mi("ONENTDB_DB_ENABLED")},
+        {"id": "galapagos", "slot": "GALAPAGOSDB", "tur": "veritabani", "configured": acik_mi("GALAPAGOSDB_DB_ENABLED")},
     ]
 
 
+def ad_ayarlari() -> dict[str, object]:
+    """Kurum Baglantilari kartinda gosterilen AD ayarlari. CA dosyasinin yolu ve grup DN'leri verilmez, yalniz tanimli mi."""
+    a = get_settings()
+    adres = urlparse(a.ad_server.strip())
+    try:
+        port = adres.port or (636 if adres.scheme.lower() == "ldaps" else None)
+    except ValueError:  # 'ldaps://dc:abc' gibi bozuk port
+        port = None
+    return {
+        "sunucu": adres.hostname or "",
+        "port": port,
+        "ldaps": adres.scheme.lower() == "ldaps",
+        "ssl": a.ad_use_ssl.strip().lower() == "true",
+        "alan": a.ad_domain.strip(),
+        "ca_dosyasi": bool(a.ad_ca_cert_file.strip()),
+        "grup_kisiti": bool(a.ad_izinli_gruplar.strip()),
+        "otomatik_ac": a.ad_otomatik_ac.strip().lower() == "true",
+    }
+
+
 def integrations() -> dict[str, object]:
-    """Kurum bagimliliklarinin durumu. Yalniz anahtar adlari ve durum; deger hic okunmaz."""
+    """Kurum bagimliliklarinin durumu. Oracle: yalniz anahtar adlari ve durum; AD: ek olarak gizli olmayan ayar ozeti."""
     settings = get_settings()
     items: list[dict[str, object]] = []
-    ad_missing = [key for key in ("AD_SERVER", "AD_DOMAIN") if not settings.present(key)]
-    ad_on = directory.configured()
+    ad_acik = settings.ad_enabled.strip().lower() == "true"
+    ad_missing = [key for key in ("AD_SERVER", "AD_DOMAIN") if not settings.present(key)] if ad_acik else []
     items.append(
         {
             "id": "ad",
-            "label": "AD / LDAP",
-            "state": "ready" if ad_on else ("incomplete" if ad_missing and settings.present("AD_ENABLED") else "disabled"),
+            "label": "AD / LDAPS",
+            "state": "ready" if directory.configured() else ("incomplete" if ad_missing else "disabled"),
             "description": "Kullanici dogrulama (LDAPS, kullanicinin kendi bind'i)",
-            "missing": ad_missing if settings.present("AD_ENABLED") else [],
+            "missing": ad_missing,
+            "bilgiler": ad_ayarlari(),
         }
     )
     for source in SOURCES:
@@ -45,3 +73,37 @@ def integrations() -> dict[str, object]:
             {"id": source.id, "label": source.label, "state": state, "description": "Salt okunur dis kaynak (cekim isci surecte)", "missing": missing}
         )
     return {"items": items, "runtime": {"network": "kapali (canli baglanti yok)", "assets": "yerel"}}
+
+
+def _son_parti(db: Session, anahtar: str) -> dict[str, object] | None:
+    """Kaynaktan gelen son parti (tampon, ice alma sorgusu ya da REPORTDB kayitlari): durum, satir, zaman, hata."""
+    from app.models import IngestBatch
+    from app.tampon import reportdb
+
+    anahtarlar = [anahtar, f"{anahtar}_import"] + ([reportdb.KAYIT_KAYNAGI] if anahtar == reportdb.KAYNAK else [])
+    son = db.scalars(select(IngestBatch).where(IngestBatch.source_key.in_(anahtarlar)).order_by(IngestBatch.id.desc()).limit(1)).first()
+    if son is None:
+        return None
+    return {"id": son.id, "durum": son.status, "satir": son.row_count, "zaman": iso(son.received_at), "hata": son.error}
+
+
+def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
+    """Yonetim > Kurum Baglantilari: AD/LDAPS + Oracle kaynaklari (REPORTDB, ONENTDB, GALAPAGOSDB). Gizli deger yok; Oracle'da
+    adres/servis/kullanici yalniz tanimli mi. Canli baglanti yalniz test ucunda (ayri surec)."""
+    from app.tampon import oracle, reportdb
+
+    sonuc: list[dict[str, object]] = []
+    for i in integrations()["items"]:  # type: ignore[union-attr]
+        if i["id"] == "ad":
+            sonuc.append({**i, "tur": "dizin"})
+        elif i["id"] in oracle.KAYNAKLAR:
+            ek: dict[str, object] = {
+                "tur": "oracle",
+                "acma_anahtari": oracle.KAYNAKLAR[i["id"]].enabled_key,
+                "bilgiler": oracle.bilgiler(i["id"]),
+                "son_parti": _son_parti(db, i["id"]),
+            }
+            if i["id"] == reportdb.KAYNAK:
+                ek["reportdb"] = reportdb.durum(db)
+            sonuc.append({**i, **ek})
+    return sonuc

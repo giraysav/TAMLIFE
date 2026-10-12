@@ -1,5 +1,7 @@
 # TAMLIFE v3.5 — topoloji ve dizin yapısı (mevcut durum)
 
+> **Not (2026-10-12):** Bölüm 1 (çalışma topolojisi: "yalnız lokal", kapalı AD/Oracle) tarihseldir. Canlı düzen (https://tamlife/, kalıcı görevler, prod kipi, işçi süreçler) için `architecture.md` geçerlidir; bu belge paket/dosya topolojisi referansı olarak kalır.
+
 > Güncellendi (2026-10-08): Onedesk, ICT SMS/APN, İzin&Takvim + TAM Takvim, Çeyrek Bazlı Sunum, rol eylem yetkileri, müşteri portföyü, sol alt hesap kartı ve yeni genel bakış yayı eklendi (`modul-onedesk-gelir-takvim.md`).
 > Önceki güncelleme (2026-10-07, temizlik ve sadeleştirme sonrası): özellik paketleri, tek hata sözleşmesi, ince `main.py`, `web/`/`contract.py`/`ingest.py`/`trmetin.py`/`external_source` kaldırıldı. Ayrıntı: `yonetim-ve-tampon-tasarimi.md` §7–8.
 
@@ -68,7 +70,6 @@ bağımsızlık: yonetim ↔ tampon birbirini import etmez; müşteri alanı tek
 | Onedesk (paket) | `onedesk/{api,servis,rca,yz,ice_al}.py` | aktif/kapanan A/T/Ş, top10, RCA ortak noktaları, tavsiyeler; LLM varsayılan kapalı |
 | Gelir (paket) | `gelir/{api,servis}.py` | ICT SMS; APN kurulum ve müşteri çalışmaları; Member yalnız kendi kayıtları |
 | Takvim (paket) | `takvim/{api,servis}.py` | gün durumu, toplu atama, TAM Takvim özeti, sunuma gönder (+ `/sunum/ogeler`) |
-| Dev aracı | `ornek_veri.py` | `python -m app.ornek_veri` — işaretli uydurma veri, yalnız `TAMLIFE_ENV=dev` |
 | Müşteri alanı | `musteri/{api,servis}.py`, `rapor/{servis,metin}.py`, `skor/{api,servis,motor}.py` | `skor/motor.py` üretimden birebir; golden test |
 | Veri | `models.py` (34 alan tablosu), `gateway.py`, `alembic/` | senkron `Session`, istek başına; PostgreSQL bağlantısı 3 sn zaman aşımlı |
 | Yönetim (paket) | `yonetim/*` (11 dosya) | yalnız admin; tek `ozet` isteği, yedek, arıza durumu, denetim sorgusu |
@@ -89,18 +90,22 @@ bağımsızlık: yonetim ↔ tampon birbirini import etmez; müşteri alanı tek
 | core | `app_user`, `audit_event` | — | `/session/*` | giriş, profil — **[canlı]** |
 | musteri | `customer`, `customer_team`, `matrix_config` | `musteri/` | `/musteri/**` (+ `/portfoy`, `/secenekler`) | `src/musteri/` portföy kartları + ekleme çekmecesi — **[canlı]** |
 | rapor | `report`, `report_draft`, `report_dispatch`, `report_recipient` | `rapor/` | `/rapor/**`, `/musteri/{id}/rapor/**` | `aylik-rapor.tsx`, `rapor-sayfasi.tsx` — **[canlı]** |
-| utilizasyon | `util_criteria_set`, `score_detail`, `score_history`, `score_approval_request`, `scoring_exclusion`, `affiliate_final_flag` | `skor/` | `/skor/**` | **yok** (kriter/dağıtım ekranı bekliyor) |
+| utilizasyon | `util_criteria_set`, `score_detail`, `score_history`, `score_approval_request`, `scoring_exclusion`, `affiliate_final_flag` | `skor/` | `/skor/**` | Yönetim › TAM Utilizasyon (`src/yonetim/bolumler/utilizasyon.tsx` + `src/yonetim/utilizasyon/`) — **[canlı]** (REPORTDB/ONENTDB sorguları yok) |
 | roller | `role_view` (+ `permissions`) | `rolgorunum.py` | `/roller` | `shell/roller-sayfasi.tsx` + Yönetim › Roller (sayfalar + ek yetkiler) — **[canlı]** |
 | onedesk | `onedesk_record` | `onedesk/` | `/onedesk/**` | `src/onedesk/` — **[canlı]** (Veri Girişi'nden beslenir) |
 | tamsms, tamapn | `sms_revenue`, `apn_revenue`, `apn_work` | `gelir/` | `/gelir/**` | `src/gelir/` — **[canlı]** |
 | takvim, takvim_ozet | `calendar_day`, `app_user.last_login_at` | `takvim/` | `/takvim/**` | `src/takvim/` — **[canlı]** |
 | sunum | `presentation` | `takvim/` | `/sunum/ogeler` | `src/sunum/` (şimdilik TAM Takvim'den gelenler) — **[canlı]** |
-| yonetim | `fault_event` (+ `audit_event`) | `yonetim/` | `/yonetim/**` | `src/yonetim/` 6 bölüm — **[canlı]** |
+| yonetim | `fault_event` (+ `audit_event`) | `yonetim/` | `/yonetim/**` | `src/yonetim/` 8 bölüm (Kurum Bağlantıları dahil) — **[canlı]** |
 | ingest (Veri Girişi) | `ingest_batch`, `ingest_block`, `distribution_rule`, `distribution_log` | `tampon/` | `/tampon/**` | `src/yonetim/tampon/` — **[canlı]** (CSV + örnek; Oracle kapalı) |
-| proje, talep, radar, gelir_uretim | `project*`, `demand*`, `radar_prospect`, `income_production` | yok | yok | genel `ModulSayfasi` **[iskelet]** |
-| baglantili, topoloji | — | yok | yok | `ready=False` / müşteri iznine bağlı **[iskelet]** |
+| talep | `demand`, `demand_log` | `talep/` | `/talep/**` | `src/talep/` (hesap menüsü › Geliştirme Talepleri) — **[canlı]** |
+| radar | ReportDB tamponu (`ingest_batch` `oracle_reportdb`) + `customer` | `radar/` | `/radar` | `src/radar/` — **[canlı]** (elle giriş yok; `radar_prospect` kullanılmıyor) |
+| proje | `project_item`, `project_action`, `project_customer_work` | `proje/` | `/proje/**` | `src/proje/` — **[canlı]** (özet, detay takibi, müşteri bazlı çalışmalar, Excel) |
+| gelir_uretim | `income_production` | yok | yok | genel `ModulSayfasi` **[iskelet]** |
+| topoloji (TopoMaker) | — (dosya saklanmaz) | `topoloji/` | `/topoloji/analiz` | `src/topoloji/` (müşteri kartı › Topo Maker) — **[canlı]** |
+| baglantili | — | yok | yok | `ready=False` **[iskelet]** |
 
-**Alembic zinciri:** `0001_panel_schema` → `0002_final_skor` → `0003_rol_gorunumu` → `0004_musteri_karti_rapor` → `0005_yonetim_tampon` → `0006_ingest_record_kaldir` → `0007_external_source_kaldir` → `0008_ozellik_modulleri`. Dikkat: `0001` `Base.metadata.create_all()` çağırır, yani **canlı model**den tablo üretir; sonraki adımlar `checkfirst`/`batch_alter_table` ile tamamlar. Revizyonlar dondurulmuş şema değildir (bkz. §6).
+**Alembic zinciri (2026-10-09 sıfırlandı):** `0001_baslangic` → `0002_ad_kimlik` → `0003_utilizasyon` → `0004_sunum_ayar` → `0005_talep` → `0006_proje`. Revizyonlar açık `op.create_table`/`op.add_column` ile yazılır, `app.models` import etmez (dondurulmuş şema); `tests/test_alembic.py` zincir sonucunu modelle karşılaştırır.
 
 ## 4. Frontend topolojisi (`ekran-react`)
 
@@ -139,7 +144,7 @@ E:\TAMLIFE_Dev\   (lokal geliştirme: D:\TAMLIFE_Dev)
    │  │  ├─ main.py  config.py  catalog.py  models.py  db.py  audit.py
    │  │  ├─ session.py security.py authz.py deps.py  rolgorunum.py navigation.py
    │  │  ├─ oturum_api.py katalog_api.py rol_api.py
-   │  │  ├─ ad.py external.py baglantilar.py  ariza.py ortak.py  erisim.py kullanicilar.py ornek_veri.py
+   │  │  ├─ ad.py external.py baglantilar.py  ariza.py ortak.py  erisim.py kullanicilar.py
    │  │  ├─ yonetim\                 router · ozet · saglik · veritabani · arizalar · gunlukler · kalici_yazici · dosya_gunlugu · yakalayici · models
    │  │  ├─ tampon\                  router · depo · analiz · dagitim · kaynak · eslestirme · profil · models
    │  │  ├─ musteri\                 api · servis
@@ -165,8 +170,8 @@ E:\TAMLIFE_Dev\   (lokal geliştirme: D:\TAMLIFE_Dev)
 ## 6. Tasarıma girdi olacak gözlemler
 
 1. **DB düzeni:** ortak panel DB + kullanıcı başına SQLite dosyası (`app/db.py`). Kişisel tablolar (`KullaniciBase`) Alembic dışında; yönetici görünümleri kullanıcı dosyalarını sırayla okur (≤20 kişi).
-2. **Migration:** zincir 2026-10-09'da tek başlangıç revizyonuna (`0001_baslangic`, `create_all`) indirildi. Hedef şema dondurulurken açık `op.create_table` revizyonuna çevrilmeli.
+2. **Migration:** zincir 2026-10-09'da tek başlangıç revizyonuna (`0001_baslangic`) indirildi, 2026-10-10'da açık `op.create_table` revizyonlarına çevrildi; şema/model eşitliği `tests/test_alembic.py` ile korunur.
 3. **Kalıcılık:** denetim kalıcı (kuyruklu yazıcı → `audit_event`); **oturumlar hâlâ bellekte** (yeniden başlatmada herkes düşer; `--workers 1` şartı buradan).
-4. **Kapsam boşluğu:** 17 modülün 9'u canlı (musteri, rapor, roller, onedesk, tamsms, tamapn, takvim, takvim_ozet, sunum) + Yönetim/Veri Girişi; proje, talep, radar, gelir_uretim yalnız tablo; 2'sinin hiçbir şeyi yok. Utilizasyon API'si hazır, arayüzü yok (skor kriter/dağıtım ekranı Veri Girişi ile birleşebilir).
-5. **İskeletler (bilerek duruyor, sırayla doldurulacak):** proje/talep/radar/gelir_uretim tabloları, skor API'si (arayüzü yok), e2e (Playwright kurulu değil).
-6. **Açık kararlar:** Excel yükleme (`openpyxl` yeni bağımlılık), yedekten geri yükleme, günlük saklama süresi, canlı Oracle adaptörleri (kaynak sorguları sözleşmesi + ayrı işçi süreç).
+4. **Kapsam boşluğu:** 17 modülün 14'ü canlı (musteri, rapor, roller, onedesk, tamsms, tamapn, takvim, takvim_ozet, sunum, utilizasyon, talep, radar, proje, topoloji) + Yönetim/Veri Girişi; gelir_uretim yalnız tablo; baglantili kartının hiçbir şeyi yok. Utilizasyon API'si ve arayüzü (Yönetim › TAM Utilizasyon) hazır.
+5. **İskeletler (bilerek duruyor, sırayla doldurulacak):** gelir_uretim tablosu, kullanılmayan `radar_prospect`, `baglantili` kartı, e2e (Playwright kurulu; `E2E_PASS` olmadan testler atlanır, hiç çalıştırılmadı).
+6. **Açık kararlar:** Excel yükleme (`openpyxl` yalnız Ürün-Tutar için eklendi; SMS/APN/müşteri Excel'i yok), yedekten geri yükleme, günlük saklama süresi, canlı Oracle adaptörleri (kaynak sorguları sözleşmesi + ayrı işçi süreç).

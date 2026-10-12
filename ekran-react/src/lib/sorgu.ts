@@ -1,4 +1,4 @@
-import { apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
+import { apiYolu, csrfBasliklari, dilBasligi, oturumYok } from "@/lib/http"
 
 /** Sunucu yaniti basarisizsa firlatilir; TanStack Query hata durumuna duser. durum 0 = ag. Mesaj yalniz sunucunun metnidir (yoksa bos; ekran kendi dilindeki yedegi yazar). */
 export class ApiHata extends Error {
@@ -13,7 +13,7 @@ export class ApiHata extends Error {
 async function gonder<T>(yontem: string, yol: string, basliklar?: Record<string, string>, govde?: BodyInit): Promise<T> {
   let cevap: Response
   try {
-    cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: basliklar, body: govde })
+    cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: { ...dilBasligi(), ...basliklar }, body: govde })
   } catch {
     throw new ApiHata(0, "")
   }
@@ -27,13 +27,14 @@ async function gonder<T>(yontem: string, yol: string, basliklar?: Record<string,
 
 export const oku = <T>(yol: string) => gonder<T>("GET", yol)
 
-export function yaz<T>(yontem: "POST" | "PUT" | "DELETE", yol: string, govde?: unknown): Promise<T> {
+export function yaz<T>(yontem: "POST" | "PUT" | "PATCH" | "DELETE", yol: string, govde?: unknown): Promise<T> {
   const json = govde !== undefined
   return gonder<T>(yontem, yol, csrfBasliklari(json ? { "Content-Type": "application/json" } : {}), json ? JSON.stringify(govde) : undefined)
 }
 
 /** Ham dosya govdesi (cok parcali form degil): sunucu tarafinda yeni bagimlilik gerektirmez. */
-export const yukle = <T>(yol: string, dosya: Blob, tur = "text/csv") => gonder<T>("PUT", yol, csrfBasliklari({ "Content-Type": tur }), dosya)
+export const yukle = <T>(yol: string, dosya: Blob, tur = "text/csv", yontem: "PUT" | "POST" = "PUT") =>
+  gonder<T>(yontem, yol, csrfBasliklari({ "Content-Type": tur }), dosya)
 
 export function hataMesaji(hata: unknown, yedek: string): string {
   return hata instanceof ApiHata && hata.message ? hata.message : yedek

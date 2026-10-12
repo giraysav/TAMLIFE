@@ -8,15 +8,17 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app import ad, baglantilar
 from app import session as oturum
 from app.audit import audit_log
 from app.db import engine, get_db
-from app.deps import require_admin
+from app.deps import require_admin, require_veri_yazma
 from app.ortak import KimlikTipi, ok
 from app.session import Principal
-from app.yonetim import arizalar, dosya_gunlugu, gunlukler, ozet, veritabani
+from app.tampon import oracle
+from app.yonetim import arizalar, dosya_gunlugu, gunlukler, musteri_listesi, ozet, veritabani
 
-router = APIRouter(prefix="/api/v1/yonetim", tags=["yonetim"])
+router = APIRouter(prefix="/api/v1/yonetim", tags=["yonetim"], dependencies=[Depends(require_admin)])  # yeni uc eklense de admin disi giremez
 
 
 
@@ -33,6 +35,33 @@ class ArizaDurumu(BaseModel):
 @router.get("/ozet")
 def genel_durum(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     return ok(ozet.ozet(db))
+
+
+# --- Kurum baglantilari (AD/LDAPS) ---------------------------------------------------------------------------------
+@router.get("/kurum")
+def kurum_baglantilari(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok({"baglantilar": baglantilar.kurum_baglantilari(db)})
+
+
+@router.post("/kurum/ad-testi")
+def ad_erisim_testi(admin: Principal = Depends(require_admin)) -> dict[str, Any]:
+    """DNS -> TCP -> TLS/sertifika (python -m app.ad ile ayni; bind YOK, parola istenmez). En fazla ~15 sn (adim basina 5 sn)."""
+    adimlar = ad.erisim_adimlari()
+    tamam = all(x["durum"] == "ok" for x in adimlar)
+    _denetim(admin, "yonetim.ad_erisim_testi", "ok" if tamam else f"hata={adimlar[-1]['adim']}")
+    return ok({"tamam": tamam, "adimlar": adimlar})
+
+
+@router.post("/kurum/{kaynak}/test")
+def oracle_erisim_testi(kaynak: str, admin: Principal = Depends(require_admin)) -> dict[str, Any]:
+    """Oracle kaynagi (oracle_reportdb | oracle_onent | oracle_galapagos): ayar -> DNS -> TCP -> oturum (SELECT 1 FROM DUAL, ayri
+    surecte). Yazmaz, tablo okumaz; yanit adres/parola tasimaz."""
+    if kaynak not in oracle.KAYNAKLAR:
+        raise oracle.OracleHata("Bu kaynak bir Oracle kaynağı değil.", 404)
+    adimlar = oracle.erisim_adimlari(kaynak)
+    tamam = all(x["durum"] == "ok" for x in adimlar) and adimlar[-1]["adim"] == "oturum"
+    _denetim(admin, "yonetim.oracle_erisim_testi", f"kaynak={kaynak} " + ("ok" if tamam else f"hata={adimlar[-1]['adim']}"))
+    return ok({"tamam": tamam, "adimlar": adimlar})
 
 
 # --- Veritabani -----------------------------------------------------------------------------------------------------
@@ -143,3 +172,42 @@ def uygulama_gunlugu(
     admin: Principal = Depends(require_admin),
 ) -> dict[str, Any]:
     return ok(dosya_gunlugu.oku(kayit, satir))
+
+
+# --- TAM Utilizasyon > Musteri Listesi ------------------------------------------------------------------------------
+class MusteriSilGovde(BaseModel):
+    ids: list[KimlikTipi] = Field(default_factory=list, max_length=musteri_listesi.EN_FAZLA_SILINECEK)
+    hepsi: bool = False
+    onay: str = Field(default="", max_length=20)  # hepsi=true iken "SIL" yazilmali
+
+
+class MusteriSatiri(BaseModel):
+    name: str = Field(max_length=300)  # servis 150 karakter sinirini Turkce mesajla uygular
+    segment: str | None = Field(default=None, max_length=100)
+
+
+class MusteriTopluEkleGovde(BaseModel):
+    satirlar: list[MusteriSatiri] = Field(max_length=musteri_listesi.EN_FAZLA_EKLENECEK)
+    parent_id: KimlikTipi | None = None
+    owner_id: KimlikTipi | None = None
+
+
+@router.get("/musteriler")
+def musteri_listesi_oku(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(musteri_listesi.liste(db))
+
+
+@router.post("/musteriler/sil")
+def musteri_sil(body: MusteriSilGovde, admin: Principal = Depends(require_veri_yazma), db: Session = Depends(get_db)) -> dict[str, Any]:
+    sonuc = musteri_listesi.sil(db, body.ids, body.hepsi, body.onay)
+    db.commit()
+    _denetim(admin, "yonetim.musteri_sil", f"silinen={sonuc['silinen']} istenen={sonuc['istenen']} hepsi={sonuc['hepsi']}")
+    return ok(sonuc)
+
+
+@router.post("/musteriler/toplu-ekle")
+def musteri_toplu_ekle(body: MusteriTopluEkleGovde, admin: Principal = Depends(require_veri_yazma), db: Session = Depends(get_db)) -> dict[str, Any]:
+    sonuc = musteri_listesi.toplu_ekle(db, admin, [s.model_dump() for s in body.satirlar], body.parent_id, body.owner_id)
+    db.commit()
+    _denetim(admin, "yonetim.musteri_toplu_ekle", f"eklenen={sonuc['eklenen']} atlanan={len(sonuc['atlanan'])} ust={body.parent_id or '-'}")
+    return ok(sonuc)

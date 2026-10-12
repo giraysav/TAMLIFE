@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { Check, ChevronUp, LogOut, MessageSquare, ShieldCheck, Sparkles, UserRound, Wand2 } from "lucide-react"
 import { baslangicHarfleri } from "@/lib/bicim"
 import { hareketDegistir, useHareket } from "@/lib/hareket"
+import { yaziDegistir, useYazi } from "@/lib/yazi"
 import type { Kullanici } from "@/lib/oturum"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
@@ -27,8 +28,10 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
   const [acik, setAcik] = useState(false)
   const kutu = useRef<HTMLDivElement>(null)
   const dugme = useRef<HTMLButtonElement>(null)
-  const admin = kullanici.is_admin
+  // Yonetim konsolu yalniz admin rolune: dizin/yerel admin ya da elle olusturulup admin rolu verilen kullanici.
+  const admin = kullanici.role === "admin"
   const hareket = useHareket()
+  const yazi = useYazi()
 
   useEffect(() => {
     if (!acik) return
@@ -55,6 +58,8 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
   }
 
   const rol = t.rolEtiket[kullanici.role] ?? kullanici.role
+  // Kisa kullanici adi (AD) degil personelin ad soyadi; profilde ad girilmemisse (eski/yerel kayit) kullanici adina dusulur.
+  const gorunenAd = kullanici.display_name || kullanici.username
 
   return (
     <div className="relative" ref={kutu}>
@@ -70,7 +75,7 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
               <ShieldCheck aria-hidden className="size-5 shrink-0" />
               <span className="grid leading-tight">
                 <span className="text-sm">{t.yonetim}</span>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-tl-navy/70">{t.yonetimKonsolu}</span>
+                <span className="text-[0.625rem] font-bold uppercase tracking-wide text-tl-navy/70">{t.yonetimKonsolu}</span>
               </span>
             </button>
           ) : null}
@@ -85,7 +90,7 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
             </button>
           ) : null}
           <div className="my-1 h-px bg-slate-100" />
-          <p className="px-2.5 pb-0.5 pt-1 text-[10px] font-black uppercase tracking-wide text-slate-400">{t.dil}</p>
+          <p className="px-2.5 pb-0.5 pt-1 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.dil}</p>
           {(["tr", "en"] as const).map((d) => (
             <button
               key={d}
@@ -106,6 +111,27 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
             <span className="flex size-4 items-center justify-center">{hareket ? <Check aria-hidden className="size-4 text-tl-blue" /> : <Wand2 aria-hidden className="size-4 text-slate-400" />}</span>
             {t.animasyonlar}
           </button>
+          <p className="px-2.5 pb-0.5 pt-1 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.yaziBoyutu}</p>
+          <div role="group" aria-label={t.yaziBoyutu} className="grid grid-cols-3 gap-1 px-1 pb-1">
+            {(
+              [
+                ["normal", t.yaziNormal],
+                ["buyuk", t.yaziBuyuk],
+                ["cok", t.yaziCok],
+              ] as const
+            ).map(([id, etiket]) => (
+              <button
+                key={id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={yazi === id}
+                onClick={() => yaziDegistir(id)}
+                className={`rounded-lg border px-1.5 py-1.5 text-xs font-bold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${yazi === id ? "border-tl-yellow bg-tl-yellow text-tl-navy" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+              >
+                {etiket}
+              </button>
+            ))}
+          </div>
           <div className="my-1 h-px bg-slate-100" />
           <button
             type="button"
@@ -127,7 +153,7 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
         type="button"
         aria-haspopup="menu"
         aria-expanded={acik}
-        aria-label={`${t.hesapMenusu}: ${kullanici.username}`}
+        aria-label={`${t.hesapMenusu}: ${gorunenAd}`}
         onClick={() => setAcik((a) => !a)}
         className="group relative block w-full overflow-hidden rounded-2xl bg-gradient-to-br from-tl-navy via-[#02407f] to-tl-blue p-px text-left shadow-lg shadow-tl-navy/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-tl-blue/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
       >
@@ -139,24 +165,26 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
               className="tl-hareket absolute inset-0 rounded-full"
               style={{ background: "conic-gradient(from 0deg, #ffc72c, #00a3e0, #ffc72c 60%, transparent 85%)", animation: "tl-donus 5s linear infinite" }}
             />
-            <span className="relative flex size-[38px] items-center justify-center rounded-full bg-tl-navy text-sm font-black tracking-tight text-tl-yellow">{baslangicHarfleri(kullanici.username)}</span>
+            <span className="relative flex size-[2.375rem] items-center justify-center rounded-full bg-tl-navy text-sm font-black tracking-tight text-tl-yellow">{baslangicHarfleri(gorunenAd)}</span>
             <span aria-hidden className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-tl-navy">
               <span className="tl-hareket size-2 rounded-full bg-emerald-400" style={{ animation: "tl-nabiz 2.4s ease-in-out infinite" }} />
             </span>
           </span>
           <span className="relative grid min-w-0 flex-1 gap-1">
-            <span className="truncate text-sm font-black leading-none">{kullanici.username}</span>
+            <span className="truncate text-sm font-black leading-none" title={`${gorunenAd} (${kullanici.username})`}>
+              {gorunenAd}
+            </span>
             <span className="flex items-center gap-1.5">
               <span
                 key={dil} // rol adi iki dilde ayni; tarayici dil degisiminde buyuk harf donusumunu (ADMIN/ADMİN) tazelemiyor
-                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.625rem] font-black uppercase tracking-wider ${
                   admin ? "bg-tl-yellow text-tl-navy" : "bg-white/15 text-white"
                 }`}
               >
                 {admin ? <Sparkles aria-hidden className="size-3" /> : null}
                 {rol}
               </span>
-              <span className="text-[10px] font-bold text-emerald-300">{t.cevrimici}</span>
+              <span className="text-[0.625rem] font-bold text-emerald-300">{t.cevrimici}</span>
             </span>
           </span>
           <ChevronUp aria-hidden className={`relative size-4 shrink-0 text-white/70 transition-transform ${acik ? "" : "rotate-180"} group-hover:text-tl-yellow`} />

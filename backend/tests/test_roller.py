@@ -41,8 +41,8 @@ def test_varsayilan_gorunum_ve_giris(client, monkeypatch):
     data = client.get("/api/v1/session/me").json()["data"]
     assert data["landing"] == "ozet"
     ids = {i["id"] for i in data["navigation"]}
-    assert {"musteri", "talep", "utilizasyon", "roller"} <= ids  # TAM Utilizasyon ve Rol Yonetimi varsayilan olarak acik
-    assert not ids & {"admin", "integrations", "veri", "yonetim"}
+    assert {"musteri", "talep"} <= ids
+    assert not ids & {"utilizasyon", "roller", "admin", "integrations", "veri", "yonetim"}  # TAM Utilizasyon ve Rol Yonetimi Yonetim alanidir: yalniz admin
 
 
 def test_admin_rolu_kisitlar_ve_giris_sayfasi_belirler(client, monkeypatch):
@@ -72,7 +72,7 @@ def test_admin_rolu_kisitlar_ve_giris_sayfasi_belirler(client, monkeypatch):
 def test_rol_kaydi_dogrulamalari(client, monkeypatch):
     hdr = login_ok(client)
     put = lambda rol, **g: client.put(f"/api/v1/roller/{rol}", json=g, headers=hdr)
-    assert put("TeamMngr", modules=["utilizasyon", "roller"], landing="ozet").status_code == 200  # hicbir modul kilitli degil
+    assert put("TeamMngr", modules=["utilizasyon", "roller"], landing="ozet").status_code == 400  # Yonetim alani role verilemez
     assert put("TeamMngr", modules=["yok"], landing="ozet").status_code == 400
     assert put("TeamMngr", modules=["musteri"], landing="rapor").status_code == 400  # giris verilenlerden biri olmali
     assert put("admin", modules=["musteri"], landing="ozet").status_code == 404  # admin duzenlenemez
@@ -127,29 +127,60 @@ def test_alt_modul_hazirligi(client, monkeypatch):
     assert client.get("/api/v1/modules/musteri/kart").status_code == 403
 
 
-def test_yonetim_modulleri_role_verilebilir_ama_tam_yetki_admin_de(client, monkeypatch):
+def test_yonetim_alani_role_verilemez(client, monkeypatch):
+    """Yonetim alani (utilizasyon, roller, yonetim ucu) yalniz admin: ne varsayilan gorunumle ne kayitli eski gorunumle ne API ile acilir."""
     hdr = login_ok(client)
-    r = client.put("/api/v1/roller/TeamMngr", json={"modules": ["musteri", "utilizasyon", "roller"], "landing": "utilizasyon"}, headers=hdr)
-    assert r.status_code == 200
+    listede = client.get("/api/v1/roller").json()["data"]
+    assert {m["id"] for m in listede["catalog"]}.isdisjoint({"utilizasyon", "roller"})  # rol ekraninda secenek olarak da cikmaz
+    r = client.put("/api/v1/roller/TeamMngr", json={"modules": ["musteri", "utilizasyon"], "landing": "ozet"}, headers=hdr)
+    assert r.status_code == 400
+    # Eskiden kaydedilmis gorunum (bu kural gelmeden once) Yonetim kimligi tasisa bile role acilmaz
+    with engine().begin() as con:
+        con.execute(text("DELETE FROM role_view"))
+        con.execute(
+            text("INSERT INTO role_view (role, modules, landing, permissions, updated_by) VALUES ('TeamMngr', :m, 'ozet', '[]', 'eski')"),
+            {"m": '["musteri", "utilizasyon", "roller"]'},
+        )
     _cikis(client, hdr)
     hdr2 = _rol_ile_giris(client, monkeypatch, "TeamMngr")
-    nav = {i["id"]: i for i in client.get("/api/v1/session/me").json()["data"]["navigation"]}
-    assert set(nav) == {"musteri", "utilizasyon", "roller"}
-    assert nav["utilizasyon"]["group"] == "work" and nav["roller"]["group"] == "work"  # Yonetim sayfasi admin'e ozel, menude Benim Yerim
-    assert client.get("/api/v1/modules/utilizasyon").status_code == 200
-    # Rol ekrani salt okunur: goruntuler, degistiremez
-    assert client.get("/api/v1/roller").status_code == 200
+    assert _nav_idleri(client) == {"musteri"}
+    for k in ("utilizasyon", "roller"):
+        assert client.get(f"/api/v1/modules/{k}").status_code == 403, k
+    assert client.get("/api/v1/roller").status_code == 403
     assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri"], "landing": "ozet"}, headers=hdr2).status_code == 403
     assert client.get("/api/v1/yonetim/ozet").status_code == 403
-    # Member'a admin acikca vermedi: gormez, rol ekranina da giremez
-    _cikis(client, hdr2)
-    hdr3 = _rol_ile_giris(client, monkeypatch, "admin")
-    assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri"], "landing": "ozet"}, headers=hdr3).status_code == 200
-    _cikis(client, hdr3)
-    _rol_ile_giris(client, monkeypatch, "TeamMember")
-    assert "utilizasyon" not in _nav_idleri(client)
-    assert client.get("/api/v1/modules/utilizasyon").status_code == 403
-    assert client.get("/api/v1/roller").status_code == 403
+    mngr = next(x for x in gorunumler_admin(client, monkeypatch, hdr2) if x["role"] == "TeamMngr")
+    assert mngr["modules"] == ["musteri"]  # admin ekraninda da eski Yonetim kimlikleri gorunmez
+
+
+def gorunumler_admin(client, monkeypatch, hdr):
+    _cikis(client, hdr)
+    _rol_ile_giris(client, monkeypatch, "admin")
+    return client.get("/api/v1/roller").json()["data"]["roles"]
+
+
+def test_yonetim_uclari_admin_disina_kapali(client, monkeypatch):
+    """Yonetim alaninin her ucu (yonetim, tampon, roller, skor) admin olmayana 403 verir; yeni bir uc eklenip korumasi unutulursa bu test kirilir."""
+    import re
+
+    monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMngr")
+    hdr = login_ok(client)
+    yollar = client.get("/openapi.json").json()["paths"]  # test ortaminda acik; tum router'lari duzlestirir
+    # Skor talebi acmak herkese acik (kendi talebi); gerisi Yonetim > TAM Utilizasyon'dur.
+    acik = {("post", "/api/v1/skor/talepler")}
+    sayi = 0
+    for yol, islemler in yollar.items():
+        if not yol.startswith(("/api/v1/yonetim", "/api/v1/tampon", "/api/v1/roller", "/api/v1/skor")):
+            continue
+        url = re.sub(r"\{(\w*id)\}", "1", yol)  # sayisal kimlikler
+        url = re.sub(r"\{\w+\}", "x", url)  # ad / kaynak / rol gibi metin parcalari
+        for yontem in islemler:
+            if (yontem, yol) in acik:
+                continue
+            r = client.request(yontem.upper(), url, headers=hdr, json={} if yontem in {"post", "put", "patch"} else None)
+            assert r.status_code == 403, (yontem, yol, r.status_code)
+            sayi += 1
+    assert sayi >= 40  # tarama gercekten uclari buldu (yeni router eklenirse sayi artar)
 
 
 def test_grup_yerlesimi_ve_tam_ozet_yok(client):

@@ -30,6 +30,18 @@ class LoginBody(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class ProfilBody(BaseModel):
+    """Kisinin kendi profili. Kullanici adi (AD/LDAP) ve rol bu govdede yoktur; fazladan alan 422 olur. Alan siniri servis katmaninda (Turkce mesaj)."""
+
+    model_config = {"extra": "forbid"}
+    first_name: str | None = Field(default=None, max_length=400)
+    last_name: str | None = Field(default=None, max_length=400)
+    phone: str | None = Field(default=None, max_length=400)
+    company: str | None = Field(default=None, max_length=800)
+    address: str | None = Field(default=None, max_length=2000)
+    website: str | None = Field(default=None, max_length=800)
+
+
 def _kimlik_dogrula(db: Session, girdi: str, parola: str) -> tuple[Principal | None, str]:
     """Eski servis (auth_bp) sirasi: pasif -> AD kullanicisi AD ile -> yerel acil hesap parolasi -> dev yerel kullanici -> kaydi
     olmayan kisi AD ile (dogrulanirsa TeamMember acilir). Rol her zaman panel DB'sinden; AD rol vermez. (kisi, sebep kodu)"""
@@ -65,7 +77,9 @@ def _kimlik_dogrula(db: Session, girdi: str, parola: str) -> tuple[Principal | N
 
 
 def _kisi(satir: AppUser) -> Principal:
-    return Principal(satir.username, satir.role, bool(satir.is_admin or satir.role == "admin"))
+    """Admin yetkisi YALNIZ role'den gelir: rolu sonradan degisen kullanicinin eski is_admin isareti yonetim konsolunu acmasin;
+    elle olusturulup admin rolu verilen kullanici (hesap.py rol) admin olur. Giriste is_admin satira bu degerle yazilir."""
+    return Principal(satir.username, satir.role, satir.role == "admin")
 
 
 @router.post("/login", response_model=None)
@@ -107,9 +121,17 @@ def close_session(request: Request, response: Response) -> dict:
 def whoami(user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
     gorunum = etkin(db, user)
     nav = navigation_for(user, gorunum.izinli)
+    try:
+        satir = kullanicilar.bul(db, user.username)
+    except SQLAlchemyError:
+        db.rollback()
+        satir = None  # DB okunamazsa oturum yine acik kalir; profil bos gelir
+    profil = kullanicilar.profil_sozlugu(satir, user)
     return ok(
         {
             "username": user.username,
+            "display_name": profil["display_name"],
+            "profile": profil,
             "role": user.role,
             "is_admin": user.is_admin,
             "idle_timeout_minutes": get_settings().session_idle_minutes,
@@ -118,3 +140,12 @@ def whoami(user: Principal = Depends(require_user), db: Session = Depends(get_db
             "permissions": {"modules": [item["id"] for item in nav], "actions": sorted(gorunum.yetkiler)},
         }
     )
+
+
+@router.put("/profile")
+def profil_yaz(body: ProfilBody, user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    """Oturum sahibi KENDI profilini gunceller (ad, soyad, telefon, sirket, adres, web). Baskasinin profili ve kullanici adi degismez."""
+    satir, degisen = kullanicilar.profil_guncelle(db, user, body.model_dump(exclude_unset=True))
+    db.commit()
+    audit_log.remember(actor=user.username, action="profil.guncelle", outcome="allow", detail=f"alanlar={','.join(degisen) or '-'}")  # degerler (telefon, adres) gunluge yazilmaz
+    return ok(kullanicilar.profil_sozlugu(satir, user))

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ScanSearch, Trash2 } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Bildirim, Bolum, DUGME, DUGME_ANA, Rozet, VeriTablosu } from "@/components/sayfa-ui"
+import { ALT_BASLIK_BANDI, ALT_BASLIK_YAZISI, Bildirim, Bolum, DUGME, DUGME_ANA, Rozet, VeriTablosu } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Analiz as AnalizTipi, Oneri, PartiAyrintisi, PartiSatirlari, SutunProfili } from "@/yonetim/api"
@@ -73,7 +73,7 @@ export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti
         <div className="flex flex-wrap items-center gap-3">
           <Rozet ton={PARTI_TON[parti.durum]}>{t.partiDurum[parti.durum]}</Rozet>
           <span className="text-xs font-black text-tl-navy">{parti.etiket || `#${parti.id}`}</span>
-          <span className="text-[11px] font-bold text-slate-500">
+          <span className="text-[0.6875rem] font-bold text-slate-500">
             {sayi(parti.satir)} {t.satir.toLowerCase()} · {parti.sutun_sayisi} {t.sutun.toLowerCase()} · {zaman(parti.zaman)}
           </span>
           <span className="ml-auto flex flex-wrap gap-2">
@@ -103,10 +103,10 @@ export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti
         {parti.hata ? <Bildirim ton="amber">{parti.hata}</Bildirim> : null}
         {parti.kullanimda ? <Bildirim>{t.kullanimda}</Bildirim> : null}
         {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
-        <p className="text-[11px] font-bold text-slate-400">{t.adimAciklama.analiz}</p>
+        <p className="text-[0.6875rem] font-bold text-slate-400">{t.adimAciklama.analiz}</p>
 
         <div className="grid gap-2">
-          <h4 className="text-[11px] font-black uppercase tracking-widest text-tl-navy">{t.oneriler}</h4>
+          <h4 className="text-[0.6875rem] font-black uppercase tracking-widest text-tl-navy">{t.oneriler}</h4>
           {analiz === null || analiz.oneriler.length === 0 ? (
             <>
               <Bildirim>{t.oneriYok}</Bildirim>
@@ -118,7 +118,7 @@ export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti
             </>
           ) : (
             <>
-              <p className="text-[11px] font-bold text-slate-400">{t.oneriAciklama(analiz.musteri_sayisi)}</p>
+              <p className="text-[0.6875rem] font-bold text-slate-400">{t.oneriAciklama(analiz.musteri_sayisi)}</p>
               <ul className="grid gap-2 md:grid-cols-2">
                 {analiz.oneriler.map((o: Oneri) => (
                   <li key={`${o.kolon}-${o.alan}`} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-sm">
@@ -138,8 +138,11 @@ export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti
           )}
         </div>
 
-        <details className="group rounded-xl border border-slate-200">
-          <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-black uppercase tracking-widest text-tl-navy">{t.sutunProfili}</summary>
+        <details className="group overflow-hidden rounded-xl border border-slate-200">
+          <summary className={`${ALT_BASLIK_BANDI} cursor-pointer select-none hover:brightness-95`}>
+            <span aria-hidden className="h-3.5 w-1 shrink-0 rounded-full bg-tl-yellow" />
+            <span className={ALT_BASLIK_YAZISI}>{t.sutunProfili}</span>
+          </summary>
           <div className="p-3">
             <VeriTablosu<SutunProfili>
               baslik={t.sutunProfili}
@@ -157,8 +160,11 @@ export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti
         </details>
 
         {satirlar.data ? (
-          <details className="group rounded-xl border border-slate-200">
-            <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-black uppercase tracking-widest text-tl-navy">{t.ilkSatirlar}</summary>
+          <details className="group overflow-hidden rounded-xl border border-slate-200">
+            <summary className={`${ALT_BASLIK_BANDI} cursor-pointer select-none hover:brightness-95`}>
+              <span aria-hidden className="h-3.5 w-1 shrink-0 rounded-full bg-tl-yellow" />
+              <span className={ALT_BASLIK_YAZISI}>{t.ilkSatirlar}</span>
+            </summary>
             <div className="p-3">
               <VeriTablosu<(string | null)[]>
                 baslik={t.ilkSatirlar}

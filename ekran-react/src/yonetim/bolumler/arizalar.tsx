@@ -33,7 +33,7 @@ function Ayrinti({ dil, ariza, onGuncel }: { dil: Dil; ariza: Ariza; onGuncel: (
   return (
     <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-tl-navy">{ariza.kod}</code>
+        <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[0.6875rem] font-black text-tl-navy">{ariza.kod}</code>
         <Rozet ton={ariza.seviye === "error" ? "kirmizi" : "amber"}>{t.seviyeler[ariza.seviye]}</Rozet>
         <Rozet ton={DURUM_TON[ariza.durum]}>{t.durumlar[ariza.durum]}</Rozet>
       </div>
@@ -53,11 +53,11 @@ function Ayrinti({ dil, ariza, onGuncel }: { dil: Dil; ariza: Ariza; onGuncel: (
         ))}
       </dl>
       <div>
-        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.mesaj}</p>
+        <p className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.mesaj}</p>
         <p className="mt-0.5 break-words text-xs font-bold text-slate-700">{ariza.mesaj || "—"}</p>
       </div>
       <div className="rounded-lg border border-tl-yellow/60 bg-tl-yellow/10 p-2">
-        <p className="text-[10px] font-black uppercase tracking-wide text-tl-navy/70">{t.cozumAdimi}</p>
+        <p className="text-[0.625rem] font-black uppercase tracking-wide text-tl-navy/70">{t.cozumAdimi}</p>
         <p className="mt-0.5 text-xs font-bold text-tl-navy">{ariza.cozum_adimi}</p>
       </div>
       <a className={`${DUGME} justify-self-start`} href={`#/yonetim/gunlukler${sorguMetni({ kayit: ariza.kayit_no.slice(0, 8) })}`}>
@@ -176,12 +176,12 @@ export default function Arizalar({ dil }: { dil: Dil }) {
               {
                 baslik: t.kayitNo,
                 hucre: (a) => (
-                  <button type="button" aria-pressed={a.id === secili?.id} onClick={() => setSecili(a)} className="font-mono text-[11px] font-black text-tl-blue underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow">
+                  <button type="button" aria-pressed={a.id === secili?.id} onClick={() => setSecili(a)} className="font-mono text-[0.6875rem] font-black text-tl-blue underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow">
                     {a.kayit_no.slice(0, 8)}
                   </button>
                 ),
               },
-              { baslik: t.kod, hucre: (a) => <code className="text-[11px]">{a.kod}</code> },
+              { baslik: t.kod, hucre: (a) => <code className="text-[0.6875rem]">{a.kod}</code> },
               { baslik: t.durum, hucre: (a) => <Rozet ton={DURUM_TON[a.durum]}>{t.durumlar[a.durum]}</Rozet> },
               { baslik: t.zaman, hucre: (a) => zaman(a.zaman) },
               { baslik: t.kaynakSutunu, hucre: (a) => <span className="line-clamp-1 max-w-56 break-all">{a.kaynak || "—"}</span> },

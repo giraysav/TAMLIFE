@@ -76,7 +76,7 @@ function Denetim({ dil }: { dil: Dil }) {
             kolonlar={[
               { baslik: t.zaman, hucre: (o) => <span className="whitespace-nowrap">{zaman(o.zaman)}</span> },
               { baslik: t.kullanici, hucre: (o) => o.kullanici },
-              { baslik: t.olay, hucre: (o) => <code className="text-[11px]">{o.olay}</code> },
+              { baslik: t.olay, hucre: (o) => <code className="text-[0.6875rem]">{o.olay}</code> },
               { baslik: t.sonuc, hucre: (o) => <Rozet ton={o.sonuc === "deny" ? "kirmizi" : "yesil"}>{t.sonucEtiket[o.sonuc] ?? o.sonuc}</Rozet> },
               { baslik: t.modul, hucre: (o) => o.modul || "—" },
               { baslik: t.ayrinti, hucre: (o) => <span className="line-clamp-2 max-w-96 break-words font-normal">{o.ayrinti || "—"}</span> },
@@ -184,7 +184,7 @@ function UygulamaGunlugu({ dil, baslangic }: { dil: Dil; baslangic: string | nul
         ) : q.data.satirlar.length === 0 ? (
           <Bildirim>{t.kayitBulunamadi}</Bildirim>
         ) : (
-          <pre tabIndex={0} aria-label={t.uygulamaGunlugu} className="max-h-96 overflow-auto rounded-xl border border-slate-200 bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-slate-100">
+          <pre tabIndex={0} aria-label={t.uygulamaGunlugu} className="max-h-96 overflow-auto rounded-xl border border-slate-200 bg-slate-900 p-3 font-mono text-[0.6875rem] leading-relaxed text-slate-100">
             {q.data.satirlar.join("\n")}
           </pre>
         )

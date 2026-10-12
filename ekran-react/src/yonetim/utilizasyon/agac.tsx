@@ -45,7 +45,7 @@ export function SkorAgaciBolumu({ dil }: { dil: Dil }) {
 
   return (
     <div className="grid gap-4">
-      <p className="text-[11px] font-bold text-slate-400">{u.agacAciklama}</p>
+      <p className="text-[0.6875rem] font-bold text-slate-400">{u.agacAciklama}</p>
       {hata ? <Bildirim ton="amber">{hata}</Bildirim> : null}
       {a.personel.map((p) => (
         <details key={p.id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -53,7 +53,7 @@ export function SkorAgaciBolumu({ dil }: { dil: Dil }) {
             <ChevronRight aria-hidden className="size-4 shrink-0 text-tl-navy/60 transition-transform group-open:rotate-90" />
             <span className="text-sm font-black text-tl-navy">{p.ad}</span>
             <Rozet ton={p.tam ? "sari" : "gri"}>{p.tam ? u.tamRozet : u.digerRozet}</Rozet>
-            <span className="ml-auto flex flex-wrap gap-3 text-[11px] font-bold text-slate-500">
+            <span className="ml-auto flex flex-wrap gap-3 text-[0.6875rem] font-bold text-slate-500">
               <span>
                 {u.musteri}: <b className="font-mono text-tl-navy">{p.musteri_sayisi}</b>
               </span>
@@ -106,7 +106,7 @@ function MusteriDugumu({ m, t, kilitli, onDahil }: { m: AgacMusterisi; t: YM; ki
           {m.istirakler.map((i) => (
             <li key={i.id} className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-bold text-slate-700">{i.ad}</span>
-              <label className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500" title={u.finaleDahilIpucu}>
+              <label className="inline-flex items-center gap-1 text-[0.6875rem] font-bold text-slate-500" title={u.finaleDahilIpucu}>
                 <input type="checkbox" checked={i.dahil} disabled={kilitli} onChange={(e) => onDahil(i.id, e.target.checked)} />
                 {u.finaleDahil}
               </label>

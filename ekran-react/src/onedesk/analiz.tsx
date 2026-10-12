@@ -15,7 +15,7 @@ export function Top10Paneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
   const q = useQuery({ queryKey: ["onedesk", "top10", yil], queryFn: () => oku<Top10>(`/api/v1/onedesk/top10?yil=${yil}`) })
   const seriler = turSerileri(t)
   return (
-    <Panel baslik={t.top10} aciklama={t.top10Alt(yil)} sag={<Lejant seriler={seriler} />}>
+    <Panel baslik={t.top10} aciklama={t.top10Alt(yil)} sag={<Lejant koyu seriler={seriler} />}>
       {q.isPending ? (
         <Yukleniyor metin="…" />
       ) : q.isError ? (
@@ -32,7 +32,7 @@ export function Top10Paneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
                   <p className="truncate text-sm font-black text-tl-navy" title={m.ad}>
                     {m.ad}
                   </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-bold text-slate-500">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.6875rem] font-bold text-slate-500">
                     {m.lokasyonlar.map((l, i) => (
                       <span key={l.ad} className={`inline-flex items-center gap-1 ${i === 0 ? "text-tl-blue" : ""}`}>
                         <MapPin aria-hidden className="size-3" />
@@ -81,7 +81,7 @@ export function RcaPaneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-gradient-to-r from-tl-blue to-tl-accent" style={{ width: `${Math.min(100, g.oran)}%` }} />
                 </div>
-                <p className="flex flex-wrap gap-x-3 text-[10px] font-bold text-slate-400">
+                <p className="flex flex-wrap gap-x-3 text-[0.625rem] font-bold text-slate-400">
                   <span>{t.musteriSayisi(g.musteri_sayisi)}</span>
                   <span>{t.lokasyonSayisi(g.lokasyon_sayisi)}</span>
                   {(Object.entries(g.turler) as [Tur, number][]).map(([tur, n]) => (
@@ -96,10 +96,10 @@ export function RcaPaneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
           </ol>
           {veri.anahtar_kelimeler.length > 0 ? (
             <div>
-              <p className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">{t.anahtarKelimeler}</p>
+              <p className="mb-1.5 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.anahtarKelimeler}</p>
               <ul className="flex flex-wrap gap-1.5">
                 {veri.anahtar_kelimeler.map((k) => (
-                  <li key={k.kelime} className="rounded-full bg-tl-blue/10 px-2.5 py-1 text-[11px] font-black text-tl-blue">
+                  <li key={k.kelime} className="rounded-full bg-tl-blue/10 px-2.5 py-1 text-[0.6875rem] font-black text-tl-blue">
                     {k.kelime} <span className="font-mono text-tl-blue/60">{k.adet}</span>
                   </li>
                 ))}
@@ -108,8 +108,8 @@ export function RcaPaneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
           ) : null}
           {veri.tekrar_lokasyonlar.length > 0 ? (
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.tekrarLokasyon}</p>
-              <p className="mb-1.5 text-[10px] font-bold text-slate-400">{t.tekrarLokasyonAlt}</p>
+              <p className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.tekrarLokasyon}</p>
+              <p className="mb-1.5 text-[0.625rem] font-bold text-slate-400">{t.tekrarLokasyonAlt}</p>
               <ul className="grid gap-1">
                 {veri.tekrar_lokasyonlar.map((l) => (
                   <li key={`${l.musteri}|${l.lokasyon}`} className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900">
@@ -150,7 +150,7 @@ export function OneriPaneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <div className="grid gap-3">
-            <p className="flex items-center gap-2 text-[11px] font-black text-tl-navy">
+            <p className="flex items-center gap-2 text-[0.6875rem] font-black text-tl-navy">
               <Lightbulb aria-hidden className="size-4 text-tl-yellow" />
               {t.yerlesik}
               <span className="font-bold text-slate-400">· {t.yerlesikAlt}</span>
@@ -176,10 +176,10 @@ export function OneriPaneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
             )}
           </div>
           <div className="grid content-start gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
-            <p className="flex items-center gap-2 text-[11px] font-black text-tl-navy">
+            <p className="flex items-center gap-2 text-[0.6875rem] font-black text-tl-navy">
               <Bot aria-hidden className="size-4 text-tl-blue" />
               {t.yz}
-              <span className={`ml-auto rounded-md px-2 py-0.5 text-[10px] font-black ${hazir ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
+              <span className={`ml-auto rounded-md px-2 py-0.5 text-[0.625rem] font-black ${hazir ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
                 {hazir ? t.yzHazir(veri.yz.model) : t.yzKapali}
               </span>
             </p>
@@ -187,7 +187,7 @@ export function OneriPaneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
               <>
                 <p className="text-xs font-bold leading-snug text-slate-500">{t.yzKapaliAciklama}</p>
                 {veri.yz.eksik.length > 0 ? (
-                  <p className="text-[10px] font-bold text-slate-400">
+                  <p className="text-[0.625rem] font-bold text-slate-400">
                     {t.yzEksik}: <code className="font-mono">{veri.yz.eksik.join(", ")}</code>
                   </p>
                 ) : null}
@@ -200,7 +200,7 @@ export function OneriPaneli({ yil, t }: { yil: number; t: OnedeskMetin }) {
             {yz.isError ? <Bildirim ton="kirmizi">{hataMesaji(yz.error, t.yzHata)}</Bildirim> : null}
             {yorum ? (
               <div className="rounded-xl border border-tl-blue/20 bg-white p-3">
-                <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-tl-blue">{t.yzYorum}</p>
+                <p className="mb-1 text-[0.625rem] font-black uppercase tracking-wide text-tl-blue">{t.yzYorum}</p>
                 <p className="whitespace-pre-wrap text-xs font-bold leading-relaxed text-slate-700">{yorum}</p>
               </div>
             ) : null}

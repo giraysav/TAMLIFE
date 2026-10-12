@@ -8,6 +8,7 @@ import { gelirMetin } from "@/gelir/gelir-metin"
 import { bugunYerel, para, tarih } from "@/lib/bicim"
 import { oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
+import { yilSecenekleri } from "@/lib/yillar"
 
 type Kurulum = { id: number; musteri: string; apn_adi: string; talep_tarihi: string | null; teslim_tarihi: string | null; tutar: number; tam: string }
 type KurulumListe = { items: Kurulum[]; toplam: number; teslim_edilen: number; bekleyen: number }
@@ -15,10 +16,9 @@ type Calisma = { id: number; musteri: string; toplanti_konusu: string; toplanti_
 type CalismaListe = { items: Calisma[]; yaklasan: number }
 type Sekme = "kurulum" | "calisma"
 
-function Kurulumlar({ dil }: { dil: Dil }) {
+function Kurulumlar({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = gelirMetin(dil)
   const qc = useQueryClient()
-  const buYil = new Date().getFullYear()
   const [yil, setYil] = useState("")
   const liste = useQuery({ queryKey: ["gelir", "apn-kurulum", yil], queryFn: () => oku<KurulumListe>(`/api/v1/gelir/apn/kurulum${sorguMetni({ yil })}`) })
   const adlar = useQuery({ queryKey: ["gelir", "musteri-adlari"], queryFn: () => oku<string[]>("/api/v1/gelir/musteri-adlari"), staleTime: 60_000 })
@@ -50,11 +50,11 @@ function Kurulumlar({ dil }: { dil: Dil }) {
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-end gap-2">
-          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wide text-slate-400">
+          <label className="flex items-center gap-2 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">
             {t.yil}
             <select className={`${GIRDI} !w-auto`} value={yil} onChange={(e) => setYil(e.target.value)}>
               <option value="">{t.tumYillar}</option>
-              {[buYil, buYil - 1, buYil - 2].map((y) => (
+              {yilSecenekleri().map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -72,6 +72,7 @@ function Kurulumlar({ dil }: { dil: Dil }) {
             satirlar={liste.data.items}
             metin={t.tablo}
             musteriAdlari={adlar.data}
+            saltOkunur={!yazabilir}
             bosKutu={<BosKutu ikon={Wifi} baslik={t.kurBos} aciklama={t.kurBosAlt} />}
             onKaydet={async (govde, id) => {
               await kaydet.mutateAsync({ govde, id })
@@ -86,7 +87,7 @@ function Kurulumlar({ dil }: { dil: Dil }) {
   )
 }
 
-function Calismalar({ dil }: { dil: Dil }) {
+function Calismalar({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = gelirMetin(dil)
   const qc = useQueryClient()
   const liste = useQuery({ queryKey: ["gelir", "apn-calisma"], queryFn: () => oku<CalismaListe>("/api/v1/gelir/apn/calisma") })
@@ -138,6 +139,7 @@ function Calismalar({ dil }: { dil: Dil }) {
             satirlar={liste.data.items}
             metin={t.tablo}
             musteriAdlari={adlar.data}
+            saltOkunur={!yazabilir}
             bosKutu={<BosKutu ikon={CircleCheck} baslik={t.calBos} aciklama={t.calBosAlt} />}
             onKaydet={async (govde, id) => {
               await kaydet.mutateAsync({ govde, id })
@@ -153,7 +155,7 @@ function Calismalar({ dil }: { dil: Dil }) {
 }
 
 /** APN Gelir ve Kurulum: iki ana baslik (Kurulum, Musteri Calismalari) dugme olarak. */
-export function ApnSayfasi({ dil }: { dil: Dil }) {
+export function ApnSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = gelirMetin(dil)
   const [sekme, setSekme] = useState<Sekme>("kurulum")
   return (
@@ -168,7 +170,7 @@ export function ApnSayfasi({ dil }: { dil: Dil }) {
           { id: "calisma", etiket: t.calismalar, ikon: Users },
         ]}
       />
-      {sekme === "kurulum" ? <Kurulumlar dil={dil} /> : <Calismalar dil={dil} />}
+      {sekme === "kurulum" ? <Kurulumlar dil={dil} yazabilir={yazabilir} /> : <Calismalar dil={dil} yazabilir={yazabilir} />}
     </div>
   )
 }

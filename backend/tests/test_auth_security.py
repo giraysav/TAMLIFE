@@ -106,9 +106,10 @@ def test_team_member_sees_only_allowed(monkeypatch, client):
     monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMember")
     login_ok(client)
     keys = {m["key"] for m in client.get("/api/v1/modules").json()["data"]}
-    assert {"utilizasyon", "roller", "talep"} <= keys  # varsayilan olarak hicbir modul kapali degil
-    assert client.get("/api/v1/modules/utilizasyon").status_code == 200
-    for path in ("/api/v1/yonetim/ozet", "/api/v1/tampon/kaynaklar"):
+    assert "talep" in keys and not keys & {"utilizasyon", "roller"}  # Yonetim alani (utilizasyon, roller) yalniz admin
+    for yol in ("/api/v1/modules/utilizasyon", "/api/v1/modules/roller"):
+        assert client.get(yol).status_code == 403, yol
+    for path in ("/api/v1/yonetim/ozet", "/api/v1/tampon/kaynaklar", "/api/v1/roller", "/api/v1/skor/agac"):
         assert client.get(path).status_code == 403, path
 
 
@@ -128,10 +129,10 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     data = client.get("/api/v1/session/me").json()["data"]
     ids = {item["id"] for item in data["navigation"]}
     assert {"musteri", "utilizasyon", "yonetim"} <= ids
-    assert not ids & {"roller", "admin", "integrations", "veri"}  # admin icin tek giris: Yonetim (yedi bolum); eski kimlikler yok
+    assert not ids & {"roller", "admin", "integrations", "veri"}  # admin icin tek giris: Yonetim (sekiz bolum); eski kimlikler yok
     yonetim = next(i for i in data["navigation"] if i["id"] == "yonetim")
     assert [c["id"] for c in yonetim["children"]] == [
-        f"yonetim/{b}" for b in ("durum", "utilizasyon", "tampon", "veritabani", "roller", "arizalar", "gunlukler")
+        f"yonetim/{b}" for b in ("durum", "utilizasyon", "tampon", "kurum", "veritabani", "roller", "arizalar", "gunlukler")
     ]
     assert yonetim["group"] == "admin"
     assert data["idle_timeout_minutes"] == get_settings().session_idle_minutes
@@ -141,8 +142,7 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     login_ok(client)
     ids = {item["id"] for item in client.get("/api/v1/session/me").json()["data"]["navigation"]}
     assert "talep" in ids and "musteri" in ids
-    assert {"utilizasyon", "roller"} <= ids  # varsayilan acik
-    assert not ids & {"admin", "integrations", "veri", "yonetim"}  # yonetim sayfalari yalniz admin
+    assert not ids & {"utilizasyon", "roller", "admin", "integrations", "veri", "yonetim"}  # yonetim sayfalari yalniz admin
 
 
 def test_forwarded_for_only_from_trusted_proxy(client, monkeypatch):

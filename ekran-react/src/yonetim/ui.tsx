@@ -18,9 +18,9 @@ const TON_SINIF = {
 export function Gosterge({ etiket, deger, alt, ton = "notr", href }: { etiket: string; deger: ReactNode; alt?: ReactNode; ton?: keyof typeof TON_SINIF; href?: string }) {
   const govde = (
     <div className={`h-full rounded-xl border border-l-4 border-slate-200 bg-white p-3 shadow-sm ${TON_SINIF[ton]} ${href ? "transition-colors hover:bg-slate-50" : ""}`}>
-      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{etiket}</div>
+      <div className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{etiket}</div>
       <div className="mt-0.5 font-mono text-2xl font-black leading-tight text-tl-navy">{deger}</div>
-      {alt ? <div className="mt-1 text-[11px] font-bold text-slate-500">{alt}</div> : null}
+      {alt ? <div className="mt-1 text-[0.6875rem] font-bold text-slate-500">{alt}</div> : null}
     </div>
   )
   return href ? (

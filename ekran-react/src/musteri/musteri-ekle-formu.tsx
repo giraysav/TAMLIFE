@@ -53,7 +53,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
   return (
     <form onSubmit={gonder} className="grid gap-5" aria-label={t.formBaslik}>
       <div className="grid gap-1.5">
-        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.onizleme}</p>
+        <p className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.onizleme}</p>
         <MusteriKarti
           onizleme
           dil={dil}
@@ -62,7 +62,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
       </div>
 
       <fieldset className="grid gap-1.5">
-        <legend className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500">{t.tur}</legend>
+        <legend className="mb-1 text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{t.tur}</legend>
         <div className="grid grid-cols-2 gap-2">
           {(
             [
@@ -104,7 +104,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
       </Alan>
 
       <fieldset className="grid gap-1.5">
-        <legend className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500">{t.segmentSec}</legend>
+        <legend className="mb-1 text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{t.segmentSec}</legend>
         <div className="flex flex-wrap gap-2">
           {["", ...secenek.segmentler].map((s) => (
             <button
@@ -120,7 +120,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
             </button>
           ))}
         </div>
-        {tur === "istirak" ? <p className="text-[10px] font-bold text-slate-400">{t.segmentCati}</p> : null}
+        {tur === "istirak" ? <p className="text-[0.625rem] font-bold text-slate-400">{t.segmentCati}</p> : null}
       </fieldset>
 
       <Alan etiket={t.tamSec}>

@@ -1,0 +1,251 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import type { ReactNode } from "react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { Bolum, Panel } from "@/components/sayfa-ui"
+import { yaziDegistir, yaziOku, yaziUygula } from "@/lib/yazi"
+import type { Kullanici } from "@/lib/oturum"
+import { MusteriKarti } from "@/musteri/musteri-karti"
+import type { Kart } from "@/musteri/musteri-karti"
+import { KullaniciKarti } from "@/shell/kullanici-karti"
+import { MusteriListesi } from "@/yonetim/utilizasyon/musteri-listesi"
+
+beforeEach(() => {
+  window.localStorage.clear()
+  delete document.documentElement.dataset.yazi
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+function sarmala(cocuk: ReactNode) {
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return render(<QueryClientProvider client={istemci}>{cocuk}</QueryClientProvider>)
+}
+
+type Cagri = { yol: string; yontem: string; govde: unknown }
+
+/** fetch'i yola gore cevaplar ({yol parcasi: data}, ilk eslesen); cagrilarin yontem ve govdesini kaydeder. */
+function sahteSunucu(cevaplar: Record<string, unknown>): Cagri[] {
+  const cagrilar: Cagri[] = []
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (girdi: string, ayar?: RequestInit) => {
+      cagrilar.push({ yol: String(girdi), yontem: ayar?.method ?? "GET", govde: typeof ayar?.body === "string" ? JSON.parse(ayar.body) : null })
+      const anahtar = Object.keys(cevaplar).find((k) => String(girdi).includes(k))
+      if (anahtar === undefined) return new Response(JSON.stringify({ detail: "yok" }), { status: 404, headers: { "Content-Type": "application/json" } })
+      return new Response(JSON.stringify({ status: "success", data: cevaplar[anahtar] }), { status: 200, headers: { "Content-Type": "application/json" } })
+    }),
+  )
+  return cagrilar
+}
+
+describe("Gorunum olcegi (yazi boyutu)", () => {
+  it("varsayilan 'buyuk'; secim <html data-yazi> ve tarayici deposuna yazilir", () => {
+    expect(yaziOku()).toBe("buyuk")
+    yaziUygula()
+    expect(document.documentElement.dataset.yazi).toBe("buyuk")
+    yaziDegistir("cok")
+    expect(document.documentElement.dataset.yazi).toBe("cok")
+    expect(window.localStorage.getItem("tamlife.yazi")).toBe("cok")
+    expect(yaziOku()).toBe("cok")
+    window.localStorage.setItem("tamlife.yazi", "gecersiz")
+    expect(yaziOku()).toBe("buyuk")
+  })
+
+  it("hesap menusunde Yazi boyutu secenekleri var; secim uygulanir", () => {
+    const kullanici: Kullanici = { username: "x", display_name: "X Y", profile: { username: "x", display_name: "X Y", ad_user: false, first_name: "X", last_name: "Y", phone: "", company: "", address: "", website: "" }, role: "TeamMember", is_admin: false, idle_timeout_minutes: 30, landing: "ozet", navigation: [] }
+    render(<KullaniciKarti kullanici={kullanici} dil="tr" onDil={() => {}} onGit={() => {}} onCikis={() => {}} talepVar={false} />)
+    fireEvent.click(screen.getByRole("button", { name: /Hesap menüsü/ }))
+    const grup = screen.getByRole("group", { name: "Yazı boyutu" })
+    expect(within(grup).getByRole("menuitemradio", { name: "Büyük" })).toHaveAttribute("aria-checked", "true")
+    fireEvent.click(within(grup).getByRole("menuitemradio", { name: "Çok büyük" }))
+    expect(document.documentElement.dataset.yazi).toBe("cok")
+    expect(within(screen.getByRole("group", { name: "Yazı boyutu" })).getByRole("menuitemradio", { name: "Çok büyük" })).toHaveAttribute("aria-checked", "true")
+  })
+})
+
+describe("Alan basliklari (Turkcell paleti)", () => {
+  it("Bolum ve Panel basliklari ayni lacivert-mavi gradyanli bandi kullanir", () => {
+    render(
+      <>
+        <Bolum anahtar="t-bolum" baslik="Birinci alan">
+          <p>icerik</p>
+        </Bolum>
+        <Panel baslik="Ikinci alan" aciklama="alt not">
+          <p>govde</p>
+        </Panel>
+      </>,
+    )
+    const bolumBandi = screen.getByRole("heading", { name: "Birinci alan" }).closest("summary")
+    const panelBandi = screen.getByRole("heading", { name: "Ikinci alan" }).closest("div[class*='from-tl-navy']")
+    for (const bant of [bolumBandi, panelBandi]) {
+      expect(bant).not.toBeNull()
+      expect(bant).toHaveClass("bg-gradient-to-r", "from-tl-navy", "to-tl-blue", "border-tl-yellow")
+    }
+    expect(screen.getByRole("heading", { name: "Birinci alan" })).toHaveClass("text-white", "uppercase")
+  })
+})
+
+describe("TAM Utilizasyon > Musteri Listesi: personel filtresi", () => {
+  const LISTE = {
+    total: 5,
+    items: [
+      { id: 1, name: "Alfa A.Ş.", parent_id: null, parent_name: null, segment: "MA", owner_id: 7, owner: "Ayşe TAM", score: 72.5, affiliates: 1 },
+      { id: 2, name: "Alfa Enerji", parent_id: 1, parent_name: "Alfa A.Ş.", segment: "MA", owner_id: 7, owner: "Ayşe TAM", score: null, affiliates: 0 },
+      { id: 3, name: "Beta Telekom", parent_id: null, parent_name: null, segment: "SA", owner_id: 8, owner: "Can TAM", score: 10, affiliates: 0 },
+      { id: 4, name: "Gama Gıda", parent_id: null, parent_name: null, segment: "", owner_id: null, owner: null, score: null, affiliates: 0 },
+      { id: 5, name: "Delta Yapı", parent_id: null, parent_name: null, segment: "SMB", owner_id: 8, owner: "Can TAM", score: null, affiliates: 0 },
+    ],
+  }
+
+  it("kisi secince yalniz o kisinin musterileri kalir; birden fazla kisi, Sorumlusuz ve temizleme calisir", async () => {
+    sahteSunucu({ "/api/v1/yonetim/musteriler": LISTE })
+    sarmala(<MusteriListesi dil="tr" />)
+    await screen.findByText("Beta Telekom")
+    expect(screen.getByText("5 müşteri")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Sorumlu TAM: Tüm personel" }))
+    const grup = screen.getByRole("group", { name: "Sorumlu TAM" })
+    // sayilarla birlikte: Ayse 2, Can 2, Sorumlusuz 1 (Sorumlusuz en sonda)
+    const etiketler = within(grup).getAllByRole("checkbox").map((k) => k.closest("label")?.textContent)
+    expect(etiketler).toEqual(["Ayşe TAM2", "Can TAM2", "Sorumlusuz1"])
+
+    fireEvent.click(within(grup).getByRole("checkbox", { name: /Ayşe TAM/ }))
+    expect(screen.getByText("2 / 5 müşteri")).toBeInTheDocument()
+    expect(screen.queryByText("Beta Telekom")).toBeNull()
+    expect(screen.getByRole("button", { name: "Sorumlu TAM: Ayşe TAM" })).toBeInTheDocument()
+
+    fireEvent.click(within(grup).getByRole("checkbox", { name: /Sorumlusuz/ }))
+    expect(screen.getByText("3 / 5 müşteri")).toBeInTheDocument()
+    expect(screen.getByText("Gama Gıda")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Sorumlu TAM: 2 kişi" })).toBeInTheDocument()
+
+    // "listelenen tumunu sec" yalniz suzulmus satirlari isaretler
+    fireEvent.click(screen.getByRole("checkbox", { name: "Listelenen tüm müşterileri seç" }))
+    expect(screen.getByText(/3 \/ 5 müşteri · 3 seçili/)).toBeInTheDocument()
+
+    fireEvent.click(within(grup).getByRole("button", { name: "Filtreyi temizle" }))
+    expect(screen.getByText(/5 müşteri · 3 seçili/)).toBeInTheDocument()
+    expect(screen.getByText("Beta Telekom")).toBeInTheDocument()
+  })
+
+  it("filtre arama ile birlikte calisir (kesisim)", async () => {
+    sahteSunucu({ "/api/v1/yonetim/musteriler": LISTE })
+    sarmala(<MusteriListesi dil="tr" />)
+    await screen.findByText("Beta Telekom")
+    fireEvent.click(screen.getByRole("button", { name: "Sorumlu TAM: Tüm personel" }))
+    fireEvent.click(within(screen.getByRole("group", { name: "Sorumlu TAM" })).getByRole("checkbox", { name: /Can TAM/ }))
+    fireEvent.change(screen.getByPlaceholderText("Müşteri ara…"), { target: { value: "delta" } })
+    expect(screen.getByText("1 / 5 müşteri")).toBeInTheDocument()
+    expect(screen.getByText("Delta Yapı")).toBeInTheDocument()
+    expect(screen.queryByText("Beta Telekom")).toBeNull()
+  })
+})
+
+describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
+  const KART: Kart = {
+    kimlik: { id: 9, unvan: "112 ACIL SERVIS", musteri_no: "M-1", ncst: "N-1", segment: "SA", sektor: "Kamu", envanter: 12, tam: "Ayşe TAM", tam_id: 7, ayri_rapor: null, cati: null, istirakler: [] },
+    operasyon: { ft_hacim: "1.5 M", tam_ft: "0.5 M", final_skor: 81.25, skor_talebi_bekliyor: false, kendi: { envanter: 12, alarm: 0, sikayet: 0, talep: 0, alarm_kapanan: 11, sikayet_kapanan: 2, talep_kapanan: 33 }, istirak_dahil: null },
+    iletisim: { sales_manager: "Selin Satış", presales_manager: "Pelin Pre", tac_name: "Tolga TAC", tac_gsm: "0532 111 22 33", tac_email: "tac@example.com", sol_kmt_name: "", sol_kmt_gsm: "", sol_kmt_email: "", mobil_kmt_name: "Mehmet Mobil", mobil_kmt_gsm: "", mobil_kmt_email: "", mobil_kmt_detail: "Hafta sonu ulaşılamaz" },
+    kritik_ci: { basliklar: ["Müşteri", "CI Adı"], satirlar: [["112 ACIL SERVIS", "Core Router 1"]] },
+    raporlar: { toplam: 0, son: [] },
+    erisim: { rapor: true, gelir: true, kimlik_duzenle: true, iletisim_duzenle: true, sil: true, tam_degistir: false, rapor_geri_al: true, ayri_rapor_sec: true, istirak_ekle: true },
+  }
+
+  it("Ekip (Destech), Gelirler ve Izleme (Cacti) yok; ekip ve iletisim musteri bilgileriyle ayni cercevede", async () => {
+    sahteSunucu({ "/api/v1/musteri/9": { ...KART, ekip: { basliklar: ["Ad"], satirlar: [["x"]] }, izleme: { cacti: ["http://c"], son_kazima: null, kazima_adedi: 0 }, gelirler: { ict: { toplam: {}, son: [] } } } })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    const baslik = await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    expect(baslik).toBeInTheDocument()
+    for (const yok of ["Ekip (Destech)", "Gelirler", "İzleme (Cacti)"]) expect(screen.queryByText(yok)).toBeNull()
+
+    const kimlik = screen.getByText("Müşteri No").closest("div.rounded-xl") as HTMLElement
+    expect(kimlik).not.toBeNull()
+    expect(within(kimlik).getByText("Ayşe TAM")).toBeInTheDocument() // sorumlu TAM
+    expect(within(kimlik).getByRole("heading", { name: "Ekip & İletişim" })).toBeInTheDocument()
+    expect(within(kimlik).getByText("Tolga TAC")).toBeInTheDocument()
+    expect(within(kimlik).getByRole("link", { name: "tac@example.com" })).toHaveAttribute("href", "mailto:tac@example.com")
+    expect(within(kimlik).getByRole("link", { name: "0532 111 22 33" })).toHaveAttribute("href", "tel:0532 111 22 33")
+    expect(within(kimlik).getByText("Selin Satış")).toBeInTheDocument()
+    expect(within(kimlik).getByText(/Hafta sonu ulaşılamaz/)).toBeInTheDocument()
+  })
+
+  it("Aylik Rapor dugmesi buyuk sari baglanti; Kritik CI ve Topo Maker Duzenle / Iştirak ekle / Sil ile ayni satirda", async () => {
+    sahteSunucu({ "/api/v1/musteri/9": KART })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    const rapor = screen.getByRole("link", { name: /Aylık Rapor Gönder/ })
+    expect(rapor).toHaveAttribute("href", "#/musteri?m=9&sekme=rapor")
+    expect(rapor).toHaveClass("from-tl-yellow")
+
+    const duzenle = screen.getByRole("button", { name: "Düzenle" })
+    const satir = duzenle.parentElement as HTMLElement
+    expect(within(satir).getByRole("button", { name: /İştirak ekle/ })).toBeInTheDocument()
+    expect(within(satir).getByRole("button", { name: /Kritik CI/ })).toBeInTheDocument()
+    expect(within(satir).getByRole("link", { name: /Topo Maker/ })).toHaveAttribute("href", "#/musteri?m=9&sekme=topoloji")
+    expect(within(satir).getByRole("button", { name: /Müşteriyi sil/ })).toBeInTheDocument()
+  })
+
+  it("Kritik CI dugmesi tabloyu cekmecede acar", async () => {
+    sahteSunucu({ "/api/v1/musteri/9": KART })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    expect(screen.queryByText("Core Router 1")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: /Kritik CI/ }))
+    const pencere = await screen.findByRole("dialog")
+    expect(within(pencere).getByText("Core Router 1")).toBeInTheDocument()
+    fireEvent.click(within(pencere).getByRole("button", { name: "Kapat" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  })
+
+  it("Operasyon penceresi mavi zeminli: Alarm, Talep, Sikayet yil ici kapanan adetleri", async () => {
+    sahteSunucu({ "/api/v1/musteri/9": KART })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    const pencere = screen.getByRole("region", { name: "Operasyon" })
+    expect(pencere).toHaveClass("rounded-3xl", "from-tl-navy", "to-tl-blue")
+    const kutular = ["Alarm", "Talep", "Şikayet"].map((e) => within(pencere).getByText(e).parentElement?.textContent)
+    expect(kutular).toEqual(["Alarm11Yıl içi kapanan", "Talep33Yıl içi kapanan", "Şikayet2Yıl içi kapanan"])
+  })
+
+  it("Duzenle tek formu acar (kimlik + ekip ve iletisim); tek Kaydet once iletisimi sonra kimligi gonderir", async () => {
+    const cagrilar = sahteSunucu({ "/api/v1/musteri/9/iletisim": { ok: true }, "/api/v1/musteri/9/kimlik": { ok: true }, "/api/v1/musteri/9": KART })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    fireEvent.click(screen.getByRole("button", { name: "Düzenle" }))
+    const form = screen.getByRole("form", { name: "Düzenle" })
+    fireEvent.change(within(form).getByLabelText("NCST"), { target: { value: "N-77" } })
+    fireEvent.change(within(form).getByLabelText("TAC · E-posta"), { target: { value: "yeni@example.com" } })
+    fireEvent.click(within(form).getByRole("button", { name: "Kaydet" }))
+
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Düzenle" })).toBeNull())
+    const yazmalar = cagrilar.filter((c) => c.yontem === "PUT")
+    expect(yazmalar.map((c) => c.yol.replace(/^.*\/musteri\/9/, ""))).toEqual(["/iletisim", "/kimlik"])
+    expect((yazmalar[0]!.govde as Record<string, string>).tac_email).toBe("yeni@example.com")
+    expect((yazmalar[1]!.govde as Record<string, string>).ncst).toBe("N-77")
+  })
+
+  it("iletisim reddedilirse kimlik gonderilmez ve form acik kalir", async () => {
+    const cagrilar: Cagri[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (girdi: string, ayar?: RequestInit) => {
+        cagrilar.push({ yol: String(girdi), yontem: ayar?.method ?? "GET", govde: null })
+        if (String(girdi).endsWith("/iletisim")) return new Response(JSON.stringify({ detail: "E-posta geçersiz" }), { status: 422, headers: { "Content-Type": "application/json" } })
+        return new Response(JSON.stringify({ status: "success", data: KART }), { status: 200, headers: { "Content-Type": "application/json" } })
+      }),
+    )
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    fireEvent.click(screen.getByRole("button", { name: "Düzenle" }))
+    const form = screen.getByRole("form", { name: "Düzenle" })
+    fireEvent.change(within(form).getByLabelText("TAC · E-posta"), { target: { value: "a@b" } })
+    fireEvent.click(within(form).getByRole("button", { name: "Kaydet" }))
+    expect(await within(form).findByRole("status")).toHaveTextContent(/Kaydedilemedi|geçersiz/i)
+    expect(cagrilar.some((c) => c.yontem === "PUT" && c.yol.endsWith("/kimlik"))).toBe(false)
+    expect(screen.getByRole("form", { name: "Düzenle" })).toBeInTheDocument()
+  })
+})

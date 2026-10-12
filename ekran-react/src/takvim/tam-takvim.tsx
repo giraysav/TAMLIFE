@@ -9,6 +9,7 @@ import { durumSerileri, TakvimGrafigi } from "@/takvim/takvim-grafigi"
 import type { Ozet } from "@/takvim/takvim-grafigi"
 import { DURUM_RENK, DURUM_SIRASI, takvimMetin } from "@/takvim/takvim-metin"
 import type { TakvimMetin } from "@/takvim/takvim-metin"
+import { varsayilanYil, yilSecenekleri } from "@/lib/yillar"
 
 type Uye = Ozet & { id: number; ad: string; kullanici: string; rol: string; son_giris: string | null }
 type Ekip = {
@@ -40,10 +41,10 @@ function AyIzgarasi({ yil, ay, gunler, yerel, t }: { yil: number; ay: number; gu
   const haftaGunleri = Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(yerel, { weekday: "short" }).format(new Date(2024, 0, 1 + i)))
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
-      <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-tl-navy">{new Intl.DateTimeFormat(yerel, { month: "long" }).format(new Date(yil, ay - 1, 1))}</p>
+      <p className="mb-2 text-[0.6875rem] font-black uppercase tracking-wide text-tl-navy">{new Intl.DateTimeFormat(yerel, { month: "long" }).format(new Date(yil, ay - 1, 1))}</p>
       <div className="grid grid-cols-7 gap-1 text-center">
         {haftaGunleri.map((g, i) => (
-          <span key={g + i} className={`text-[9px] font-black ${i >= 5 ? "text-slate-300" : "text-slate-400"}`}>
+          <span key={g + i} className={`text-[0.5625rem] font-black ${i >= 5 ? "text-slate-300" : "text-slate-400"}`}>
             {g}
           </span>
         ))}
@@ -59,7 +60,7 @@ function AyIzgarasi({ yil, ay, gunler, yerel, t }: { yil: number; ay: number; gu
             <span
               key={anahtar}
               title={g ? `${tarih(anahtar)} · ${durum}${g.online + g.yuzyuze ? ` · ${t.toplantiAlt(g.online, g.yuzyuze)}` : ""}` : undefined}
-              className={`relative flex h-7 items-center justify-center rounded-md font-mono text-[10px] font-bold ${g ? "text-white shadow-sm" : haftaSonu ? "text-slate-300" : "bg-slate-50 text-slate-500"}`}
+              className={`relative flex h-7 items-center justify-center rounded-md font-mono text-[0.625rem] font-bold ${g ? "text-white shadow-sm" : haftaSonu ? "text-slate-300" : "bg-slate-50 text-slate-500"}`}
               style={g ? { background: DURUM_RENK[g.durum] ?? "#64748b" } : undefined}
             >
               {i + 1}
@@ -83,7 +84,7 @@ function GunListesi({ yil, ceyrek, uyeId, dil }: { yil: number; ceyrek: number; 
   const yerel = dil === "en" ? "en-GB" : "tr-TR"
   return (
     <div className="grid gap-3">
-      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-600">
+      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[0.6875rem] font-bold text-slate-600">
         {sayilar.map(([d, n]) => (
           <li key={d} className="flex items-center gap-1.5">
             <span aria-hidden className="size-3 rounded" style={{ background: DURUM_RENK[d] }} />
@@ -113,8 +114,7 @@ function GunListesi({ yil, ceyrek, uyeId, dil }: { yil: number; ceyrek: number; 
 export function TamTakvim({ dil }: { dil: Dil }) {
   const t = takvimMetin(dil)
   const qc = useQueryClient()
-  const buYil = new Date().getFullYear()
-  const [yil, setYil] = useState(buYil)
+  const [yil, setYil] = useState(varsayilanYil())
   const [ceyrek, setCeyrek] = useState(ayniCeyrek())
   const [acik, setAcik] = useState<number | null>(null)
   const [grafik, setGrafik] = useState(false)
@@ -138,10 +138,10 @@ export function TamTakvim({ dil }: { dil: Dil }) {
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={CalendarCheck} baslik={t.tamBaslik} aciklama={t.tamAciklama}>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wide text-white/70">
+          <label className="flex items-center gap-2 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
             {t.yil}
             <select className={`${GIRDI} !w-auto !py-2`} value={yil} onChange={(e) => setYil(Number(e.target.value))}>
-              {[buYil, buYil - 1, buYil - 2].map((y) => (
+              {yilSecenekleri().map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -226,10 +226,10 @@ export function TamTakvim({ dil }: { dil: Dil }) {
                           <tr className="hover:bg-slate-50">
                             <td className="px-3 py-2.5">
                               <span className="flex items-center gap-2.5">
-                                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-tl-navy text-[11px] font-black text-tl-yellow">{baslangicHarfleri(u.ad)}</span>
+                                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-tl-navy text-[0.6875rem] font-black text-tl-yellow">{baslangicHarfleri(u.ad)}</span>
                                 <span className="grid min-w-0">
                                   <span className="truncate font-black text-tl-navy">{u.ad}</span>
-                                  <span className="text-[10px] font-bold text-slate-400">{u.rol}</span>
+                                  <span className="text-[0.625rem] font-bold text-slate-400">{u.rol}</span>
                                 </span>
                               </span>
                             </td>
@@ -249,7 +249,7 @@ export function TamTakvim({ dil }: { dil: Dil }) {
                               {u.online} / {u.yuzyuze}
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-600">{u.kayitli_gun}</td>
-                            <td className="whitespace-nowrap px-3 py-2.5 text-[11px] font-bold text-slate-400">{zaman(u.son_giris)}</td>
+                            <td className="whitespace-nowrap px-3 py-2.5 text-[0.6875rem] font-bold text-slate-400">{zaman(u.son_giris)}</td>
                             <td className="px-2 py-2.5 text-right">
                               <button
                                 type="button"
@@ -299,7 +299,7 @@ export function TamTakvim({ dil }: { dil: Dil }) {
                     </span>
                     <span className="text-xs font-bold text-slate-500">{t.sunumaGonderAlt}</span>
                     {!v.sunuma_gonderebilir ? <span className="text-xs font-bold text-amber-700">{t.sunumYetkisiYok}</span> : ceyrek === 0 ? <span className="text-xs font-bold text-amber-700">{t.sunumCeyrekGerekli}</span> : null}
-                    {v.sunumda ? <span className="text-xs font-black text-emerald-700">{t.sunumda(v.sunumda.gonderen, zaman(v.sunumda.zaman))}</span> : null}
+                    {v.sunumda ? <span className="text-xs font-black text-emerald-700">{t.sunumda(v.sunumda.gonderen || "—", zaman(v.sunumda.zaman))}</span> : null}
                   </span>
                 </label>
                 {bilgi ? (

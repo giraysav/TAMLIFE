@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, case, extract, func, literal, or_, select
+from sqlalchemy import and_, extract, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.authz import yonetici_mi
@@ -61,10 +61,8 @@ def _kosullar(idler: set[int] | None, *ek):
 
 
 def kaynak_bilgisi(db: Session) -> dict:
-    toplam, ornek, son = db.execute(
-        select(func.count(), func.coalesce(func.sum(case((OnedeskRecord.source == "ornek", 1), else_=0)), 0), func.max(func.coalesce(OnedeskRecord.closed_at, OnedeskRecord.opened_at)))
-    ).one()
-    return {"kayit": int(toplam), "ornek": int(ornek or 0) > 0, "son_kayit": iso(son)}
+    toplam, son = db.execute(select(func.count(), func.max(func.coalesce(OnedeskRecord.closed_at, OnedeskRecord.opened_at)))).one()
+    return {"kayit": int(toplam), "son_kayit": iso(son)}
 
 
 def durum(db: Session, user: Principal, kapsam: str, yil: int | None = None) -> dict:
@@ -135,10 +133,11 @@ def _aylik(db: Session, kosul) -> list[dict]:
     return [{"ay": m, **v} for m, v in aylar.items()]
 
 
-def top10(db: Session, user: Principal, yil: int | None = None) -> dict:
-    """Yil boyunca en cok alarm/talep/sikayet olusan 10 musteri ve her birinin en cok kayit olusan lokasyonlari."""
+def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[datetime, datetime] | None = None) -> dict:
+    """Yil boyunca (aralik verilirse o aralikta, ornek ceyrek) en cok alarm/talep/sikayet olusan 10 musteri ve en cok kayit olusan lokasyonlari.
+    toplam: araliktaki tum kayitlarin tur toplamlari."""
     yil = _yil(yil)
-    bas, son = _aralik(yil)
+    bas, son = aralik or _aralik(yil)
     idler = gorunen_musteriler(db, user)
     acilis = func.coalesce(OnedeskRecord.opened_at, OnedeskRecord.closed_at)
     kosul = _kosullar(idler, acilis >= bas, acilis < son)
@@ -175,7 +174,8 @@ def top10(db: Session, user: Principal, yil: int | None = None) -> dict:
                 "lokasyonlar": [{"ad": y, "adet": n} for y, n in yerler[:3]],
             }
         )
-    return {"yil": yil, "musteriler": musteriler}
+    toplam = {t: sum(v[t] for v in sayim.values()) for t in TURLER}
+    return {"yil": yil, "musteriler": musteriler, "toplam": {**toplam, "hepsi": sum(toplam.values())}, "musteri_sayisi": len(sayim)}
 
 
 def _kapananlar(db: Session, user: Principal, yil: int) -> list[dict]:

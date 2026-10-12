@@ -37,7 +37,11 @@ _SORGU = re.compile(r"\s*(select|with)\b", re.IGNORECASE)
 _IPUCLARI = (
     ("DPY-3015", ("Hesabın parola kaydı eski türde (10G); kurulumsuz sürücü açamıyor. Sunucuya Oracle Client kurulup "
                   ".env'e ORACLE_CLIENT_DIR yazılmalı ya da DBA parolayı yeniden atamalı.")),
+    ("ORA-20099", ("Parola doğru ve oturum açıldı; ancak veritabanının giriş tetikleyicisi bu DB kullanıcısı, işletim sistemi kullanıcısı ve "
+                   "makine için erişimi reddetti. Parola sıfırlamak çözmez; DBA'dan bu erişim için izin istenmeli.")),
+    ("ORA-04088", "Veritabanının giriş tetikleyicisi hata verdi (parola sorunu değil); DBA'dan erişim izni istenmeli."),
     ("ORA-01017", "Kullanıcı adı ya da parola hatalı."),
+    ("ORA-28001", "Parolanın süresi dolmuş; DBA ya da hesap sahibi yeni parola atamalı."),
     ("ORA-01045", "Hesabın veritabanına bağlanma yetkisi (CREATE SESSION) yok; DBA vermeli."),
     ("ORA-28000", "Hesap kilitli; DBA açmalı."),
     ("ORA-12514", "Servis adı (SERVICE_NAME) bulunamadı."),
@@ -189,10 +193,11 @@ def maskele(metin: str, gizliler: tuple[str, ...] = ()) -> str:
 
 
 def hata_metni(hata: BaseException, gizliler: tuple[str, ...] = ()) -> tuple[str, str]:
-    """Hata -> (kisa mesaj, ipucu). Yalniz hata kodu ve ilk satir (kirpilmis); parola, adres, servis adi, kullanici maskeli."""
+    """Hata -> (kisa mesaj, ipucu). Yalniz hata kodu ve ilk satir (kirpilmis); parola, adres, servis adi, kullanici maskeli.
+    Ipucu tum metindeki kodlara bakar (giris tetikleyicisi hatasinda ORA-20099 ilk satirda degil, ORA-00604 altindadir)."""
     ham = str(hata.args[0] if hata.args else hata) if str(hata) else type(hata).__name__
     ilk = maskele((ham.splitlines() or [type(hata).__name__])[0], gizliler)[:220]
-    return ilk, next((m for kod, m in _IPUCLARI if kod in ilk), "")
+    return ilk, next((m for kod, m in _IPUCLARI if kod in ham), "")
 
 
 def deger(v: Any) -> Any:
@@ -248,6 +253,58 @@ def baglanti_testi(anahtar: str, senkron: bool = False) -> dict[str, Any]:
         _log.warning("%s baglanti testi basarisiz: %s", anahtar, mesaj)
         return {"ok": False, "mesaj": mesaj, "ipucu": ipucu}
     return {"ok": sonuc == 1, "mesaj": "SELECT 1 FROM DUAL → 1" if sonuc == 1 else "Beklenmeyen yanıt.", "ipucu": ""}
+
+
+def bilgiler(anahtar: str) -> dict[str, Any]:
+    """Kurum Baglantilari karti (yalniz admin): AD karti gibi sunucu, port, servis adi ve kullanici gorunur (kullanici karari
+    2026-10-11); parola ASLA verilmez, yalniz var/yok."""
+    a = ayar(anahtar)
+    d = durum(anahtar)
+    return {
+        "sunucu": a.HOST,
+        "port": a.PORT,
+        "servis": a.SERVICE_NAME,
+        "kullanici": a.USER,
+        "parola": bool(a.PASSWORD),
+        "zaman_asimi": a.TIMEOUT,
+        "oracle_istemci": d["oracle_istemci"],
+        "sorgu_tamam": d["sorgu_tamam"],
+        "sorgu_hata": d["sorgu_hata"],
+    }
+
+
+def erisim_adimlari(anahtar: str) -> list[dict[str, str]]:
+    """AD erisim testiyle ayni kalip: ayar -> DNS -> TCP -> Oracle oturumu (SELECT 1 FROM DUAL, AYRI surecte); ilk kirilan halkada
+    durur. Adim: {'adim', 'durum' ('ok'|'hata'), 'baslik', 'ayrinti'}. Ipucunda sunucu adi yazilir (AD testi gibi); IP ve parola yazilmaz."""
+    import socket
+
+    a = ayar(anahtar)
+    adimlar: list[dict[str, str]] = []
+
+    def ekle(adim: str, durum_: str, baslik: str, ayrinti: str = "") -> list[dict[str, str]]:
+        adimlar.append({"adim": adim, "durum": durum_, "baslik": baslik, "ayrinti": ayrinti})
+        return adimlar
+
+    if not a.ENABLED:
+        return ekle("ayar", "hata", f"{a.kaynak.enabled_key}=true değil", "backend/.env içindeki satırı true yapıp paneli yeniden başlatın.")
+    eksik = a.eksikler()
+    if eksik:
+        return ekle("ayar", "hata", "Bağlantı ayarı eksik", ", ".join(eksik))
+    ekle("ayar", "ok", "Ayarlar tamam", f"port {a.PORT} · zaman aşımı {a.TIMEOUT} sn" + (" · Oracle Client (thick)" if os.environ.get("ORACLE_CLIENT_DIR", "").strip() else ""))
+    sure = max(1, min(a.TIMEOUT, 5))
+    try:
+        adres = {x[4][0] for x in socket.getaddrinfo(a.HOST, None)}
+        ekle("dns", "ok", "Sunucu adı çözüldü", f"{len(adres)} adres")
+    except OSError as exc:
+        return ekle("dns", "hata", "Sunucu adı çözülemedi", f"{type(exc).__name__}\nnslookup {a.HOST}")
+    try:
+        socket.create_connection((a.HOST, a.PORT), timeout=sure).close()
+        ekle("tcp", "ok", f"Porta ulaşıldı ({a.PORT})")
+    except OSError as exc:
+        return ekle("tcp", "hata", f"Porta ulaşılamadı ({a.PORT})", f"{type(exc).__name__}\nTest-NetConnection {a.HOST} -Port {a.PORT} · güvenlik duvarı / VPN")
+    sonuc = baglanti_testi(anahtar)
+    ekle("oturum", "ok" if sonuc["ok"] else "hata", "Oracle oturumu (SELECT 1 FROM DUAL)", "\n".join(x for x in (sonuc["mesaj"], sonuc["ipucu"]) if x))
+    return adimlar
 
 
 def _ayri_surecte_test(anahtar: str, timeout: int) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-"""Kaynaklar: tampona veri getiren yollar. CSV yukleme, ornek veri (yalniz gelistirme) ve Oracle kaynaklari (ReportDB, Onent, Urun-Tutar).
+"""Kaynaklar: tampona veri getiren yollar. CSV yukleme ve Oracle kaynaklari (REPORTDB, ONENTDB, GALAPAGOSDB).
 
 Oracle: <ON EK>_ENABLED=true + zorunlu anahtarlar doluyken 'hazir'. Cekimi panel DEGIL isci surec yapar (python -m app.isci; uretimde de
 boyleydi: surucu web surecine yuklenmez, panel kimligi Oracle giris tetikleyicisinden gecmez). Panel yalniz durumu gosterir ve
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import csv
 import io
-import random
 import re
 from collections import Counter
 from collections.abc import Iterator
@@ -19,22 +18,26 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import Customer, IngestBatch
+from app.dil import m
+from app.models import IngestBatch
 from app.ortak import UygulamaHatasi, iso
 from app.tampon import depo, oracle, reportdb
-from app.tampon.eslestirme import musteri_anahtarlari
+from app.tampon.musteri_ham import KAYNAK
 
-ORNEK = "ornek"
 CSV_ON_EK = "csv_"
 _AYRACLAR = (";", ",", "\t", "|")
 _SLUG = re.compile(r"[^a-z0-9]+")
 
 
 _ASCII = str.maketrans("ıİşŞğĞüÜöÖçÇ", "iIsSgGuUoOcC")
-ORACLE_PARTI_ADLARI = {
-    reportdb.KAYIT_KAYNAGI: "ReportDB alarm kayıtları (Onedesk'e)",
-    **{f"{k}_import": f"{s.label} · içeri alma sorgusu" for k, s in oracle.KAYNAKLAR.items()},
-}
+def _parti_adi(anahtar: str) -> str:
+    """Oracle kaynakli parti adi (istegin dilinde)."""
+    if anahtar == reportdb.KAYIT_KAYNAGI:
+        return m("REPORTDB alarm kayıtları (Onedesk'e)", "REPORTDB alarm records (to Onedesk)")
+    for k, s in oracle.KAYNAKLAR.items():
+        if anahtar == f"{k}_import":
+            return f"{s.label} · " + m("içeri alma sorgusu", "import query")
+    return anahtar
 
 
 def kaynak_anahtari(ad: str) -> str:
@@ -113,22 +116,9 @@ def _oracle_durum(db: Session) -> list[dict[str, Any]]:
 
 def durumlar(db: Session) -> list[dict[str, Any]]:
     """Kaynak listesi + her kaynagin son partisi ve parti sayisi."""
-    ayar = get_settings()
     liste: list[dict[str, Any]] = [
-        {"anahtar": "csv", "ad": "CSV yükleme", "tur": "dosya", "hazir": True, "neden": "", "yapilandirma": "tamam", "eksik": []},
+        {"anahtar": KAYNAK, "ad": m("Ham Müşteri Verisi", "Raw Customer Data"), "tur": "dosya", "hazir": True, "neden": "", "yapilandirma": "tamam", "eksik": []},
     ]
-    if ayar.env in {"dev", "test"}:
-        liste.append(
-            {
-                "anahtar": ORNEK,
-                "ad": "Örnek veri (yalnız geliştirme)",
-                "tur": "ornek",
-                "hazir": True,
-                "neden": "",
-                "yapilandirma": "tamam",
-                "eksik": [],
-            }
-        )
     liste.extend(_oracle_durum(db))
     anahtarlar = db.scalars(select(IngestBatch.source_key).distinct()).all()
     for k in anahtarlar:
@@ -137,7 +127,7 @@ def durumlar(db: Session) -> list[dict[str, Any]]:
             liste.append(
                 {
                     "anahtar": k,
-                    "ad": f"CSV · {k[len(CSV_ON_EK) :]}" if csv_mi else ORACLE_PARTI_ADLARI.get(k, k),
+                    "ad": f"CSV · {k[len(CSV_ON_EK) :]}" if csv_mi else _parti_adi(k),
                     "tur": "dosya" if csv_mi else "oracle_parti",
                     "hazir": True,
                     "neden": "",
@@ -157,41 +147,6 @@ def durumlar(db: Session) -> list[dict[str, Any]]:
             else {"id": son.id, "durum": son.status, "satir": son.row_count, "zaman": iso(son.received_at), "hata": son.error}
         )
     return liste
-
-
-def ornek_parti(db: Session, kullanici: str) -> IngestBatch:
-    """Yerel ornek veri: panelde Musteri No'su dolu kartlardan turetilmis OLAY satirlari (alarm/sikayet/talep, acik/kapali) +
-    kartlarda olmayan birkac numara. Deterministik (ayni kartlar -> ayni veri). Yalniz dev/test; gercek musteri verisi degildir."""
-    if get_settings().env not in {"dev", "test"}:
-        raise UygulamaHatasi(404, "Örnek veri yalnız geliştirme ortamında üretilir.")
-    rng = random.Random(20261007)
-    numaralar: list[tuple[str, str]] = []
-    for no, ad in db.execute(select(Customer.customer_no, Customer.name).where(Customer.customer_no.isnot(None)).limit(60)):
-        anahtarlar = musteri_anahtarlari(no)
-        if anahtarlar:
-            numaralar.append((anahtarlar[0].zfill(8), ad))
-    ek = [(f"9{rng.randint(1000000, 9999999)}", f"Kartı olmayan müşteri {i}") for i in range(1, 4)]
-    if not numaralar:
-        numaralar = [(f"1{rng.randint(1000000, 9999999)}", f"Örnek müşteri {i}") for i in range(1, 13)]
-    basliklar = ["Müşteri No", "Müşteri Ünvanı", "Kayıt Türü", "Durum", "Açılış"]
-    satirlar: list[list[Any]] = []
-    for no, ad in numaralar + ek:
-        for tur, azami in (("Alarm", 6), ("Şikayet", 3), ("Talep", 3)):
-            for _ in range(rng.randint(0, azami)):
-                durum = rng.choice(("Açık", "Kapalı", "Kapalı"))
-                satirlar.append(
-                    [
-                        no,
-                        ad,
-                        tur,
-                        durum,
-                        f"2026-{rng.randint(1, 10):02d}-{rng.randint(1, 28):02d} {rng.randint(0, 23):02d}:{rng.randint(0, 59):02d}:00",
-                    ]
-                )
-    if not satirlar:
-        satirlar.append([numaralar[0][0], numaralar[0][1], "Alarm", "Açık", "2026-10-01 09:00:00"])
-    parti = depo.parti_olustur(db, ORNEK, "Örnek veri (yerel üretim, gerçek değil)", kullanici)
-    return depo.ice_al(db, parti, basliklar, satirlar)
 
 
 def oracle_parti(db: Session, anahtar: str, kullanici: str) -> IngestBatch:

@@ -25,4 +25,4 @@ dist-ssr
 
 test-results/
 playwright-report/
-.ekran/*.png
+.ekran/

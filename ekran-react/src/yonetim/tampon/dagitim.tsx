@@ -140,7 +140,7 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
   return (
     <Bolum anahtar="yonetim-tampon-dagitim" baslik={`${t.adim.dagitim} · ${t.dagitimKurallari}`}>
       <div className="grid gap-4">
-        <p className="text-[11px] font-bold text-slate-400">{t.adimAciklama.dagitim}</p>
+        <p className="text-[0.6875rem] font-bold text-slate-400">{t.adimAciklama.dagitim}</p>
         <div>
           <button
             type="button"
@@ -183,7 +183,7 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
             { baslik: t.hedef, hucre: (k) => hedefAdi(k.hedef) },
             { baslik: t.islem, hucre: (k) => islemAdi(k.islem) },
             { baslik: t.anahtarSutunu, hucre: (k) => `${k.anahtar_sutunu} → ${t.alanAdi[k.eslesme_alani] ?? k.eslesme_alani}` },
-            { baslik: t.kaynaklar, hucre: (k) => <code className="text-[11px]">{k.kaynak}</code> },
+            { baslik: t.kaynaklar, hucre: (k) => <code className="text-[0.6875rem]">{k.kaynak}</code> },
             {
               baslik: t.durum,
               hucre: (k) => (
@@ -243,7 +243,7 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
 
         {onizleme ? (
           <section aria-label={t.onizlemeBaslik} className="grid gap-3 rounded-xl border border-tl-blue/40 bg-white p-4 shadow-sm">
-            <h4 className="text-[11px] font-black uppercase tracking-widest text-tl-navy">
+            <h4 className="text-[0.6875rem] font-black uppercase tracking-widest text-tl-navy">
               {t.onizlemeBaslik} · {onizleme.kural.ad} · #{onizleme.partiId}
             </h4>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -285,7 +285,7 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
         ) : null}
 
         <div className="grid gap-2">
-          <h4 className="text-[11px] font-black uppercase tracking-widest text-tl-navy">{t.uygulamaGecmisi}</h4>
+          <h4 className="text-[0.6875rem] font-black uppercase tracking-widest text-tl-navy">{t.uygulamaGecmisi}</h4>
           {gecmis.isPending ? (
             <Yukleniyor metin={t.yukleniyor} iskelet />
           ) : gecmis.isError ? (

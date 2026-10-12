@@ -4,7 +4,7 @@ Revision ID: 0002_ad_kimlik
 Revises: 0001_baslangic
 Create Date: 2026-10-10
 
-0001 canli modelden create_all yaptigi icin taze veritabaninda sutunlar zaten vardir; yalniz eksik olan eklenir.
+Eski 0001 (create_all) ile kurulmus DB'de sutunlar zaten vardir; bu yuzden yalniz eksik olan eklenir.
 """
 
 from collections.abc import Sequence
@@ -19,7 +19,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 SUTUNLAR = (
-    sa.Column("is_ad_user", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+    sa.Column("is_ad_user", sa.Boolean(), nullable=False, server_default=sa.false()),  # SQLite 0, PostgreSQL false
     sa.Column("ad_domain", sa.String(120), nullable=False, server_default=""),
     sa.Column("password_hash", sa.String(255), nullable=True),
 )

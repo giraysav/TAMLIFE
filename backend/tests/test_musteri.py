@@ -1,7 +1,10 @@
 """Musteri karti ve aylik rapor: kapsam, kart semasi, kimlik/iletisim duzenleme, rapor taslak/gonderim/geri alma."""
 
 import base64
+import re
 from datetime import UTC, datetime
+from email import message_from_bytes
+from email.policy import default
 
 import pytest
 from sqlalchemy.orm import Session
@@ -139,17 +142,25 @@ def test_ekle_tam_degistir_sil_kurallari(veri, monkeypatch):
     assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 2}, headers=hdr).status_code == 200
     _cikis(veri, hdr)
 
-    hdr2 = _giris(veri, monkeypatch, "TeamMember")  # 'admin' satirina bagli Member
+    hdr2 = _giris(veri, monkeypatch, "TeamMember")  # 'admin' satirina bagli Member: veri ekleme / degistirme / silme yalniz admin
     assert veri.post("/api/v1/musteri", json={"name": "Baskasi", "owner_id": 2}, headers=hdr2).status_code == 403
-    assert veri.post("/api/v1/musteri", json={"name": "Kendi Musterim"}, headers=hdr2).status_code == 200
+    assert veri.post("/api/v1/musteri", json={"name": "Kendi Musterim"}, headers=hdr2).status_code == 403
     assert veri.put("/api/v1/musteri/2/sorumlu", json={"owner_id": 2}, headers=hdr2).status_code == 403
+    assert veri.put("/api/v1/musteri/2/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 403
+    assert veri.put("/api/v1/musteri/2/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 403
     assert veri.delete("/api/v1/musteri/2", headers=hdr2).status_code == 403
+    kart = veri.get("/api/v1/musteri/2")
+    assert kart.status_code == 200  # okuma serbest; yazma dugmeleri arayuzde kapali
+    assert not any(kart.json()["data"]["erisim"][k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "tam_degistir", "ayri_rapor_sec"))
+    assert "tam_secenekleri" not in kart.json()["data"]
     _cikis(veri, hdr2)
 
     hdr3 = _giris(veri, monkeypatch, "admin")
     with Session(engine()) as db:
         db.add(Report(customer_id=2, user_id=1, report_month=1, report_year=2026, is_submitted=True))
         db.commit()
+    erisim = veri.get("/api/v1/musteri/2").json()["data"]["erisim"]
+    assert all(erisim[k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "tam_degistir", "ayri_rapor_sec"))
     r = veri.delete("/api/v1/musteri/1", headers=hdr3)
     assert r.status_code == 200 and r.json()["data"]["silinen"] == 3  # cati + 2 istirak
     assert veri.get("/api/v1/musteri/1").status_code == 404 and veri.get("/api/v1/musteri/2").status_code == 404
@@ -220,6 +231,41 @@ def test_gonderim_onay_ayda_tek_kilit_geri_alma(veri, monkeypatch, tmp_path):
         assert db.get(Customer, 1).report_count == 0 and db.query(Report).filter_by(customer_id=1).count() == 0
         assert db.get(ReportDispatch, g["id"]).status == "reverted"  # arsivde kalir
     assert veri.post(f"{url}/gonder", json={"onay": True}, headers=hdr3).status_code == 200  # ay yeniden acildi
+
+
+def test_gonderim_outlook_taslagi_eml(veri, monkeypatch, tmp_path):
+    """Gonderim .eml taslagi dondurur: X-Unsent, alicilar, konu, kacislanmis HTML govde, gomulu logolar, PDF eki."""
+    monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(tmp_path / "raporlar"))
+    monkeypatch.setenv("AD_DOMAIN", "turkcell.com.tr")
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    hdr = login_ok(veri)
+    url = "/api/v1/musteri/1/rapor"
+    # kayitli taslak: govde ve imza buradan gelir, istek yalniz dili degistirir
+    alanlar = {"govde": "Sayın <b>Müşterimiz</b>,\n\nRapor ekte.\nİkinci satır", "imza": "Ad Soyad\nTAM"}
+    assert veri.put(f"{url}/taslak", json={"alanlar": alanlar}, headers=hdr).status_code == 200
+    pdf = base64.b64encode(b"%PDF-1.4 test").decode()
+    govde = {"onay": True, "to": "giray.sav@turkcell.com.tr", "cc": "b@example.com", "subject": "Konu", "lang": "en", "pdf_base64": pdf}
+    r = veri.post(f"{url}/gonder", json=govde, headers=hdr)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["eml_adi"].startswith("TAM_Aylik_Rapor_") and d["eml_adi"].endswith(".eml")
+    msg = message_from_bytes(base64.b64decode(d["eml_base64"]), policy=default)
+    assert msg["X-Unsent"] == "1" and msg["Subject"] == "Konu" and msg["From"] == "admin@turkcell.com.tr"
+    assert msg["To"] == "GIRAY SAV <giray.sav@turkcell.com.tr>" and msg["Cc"] == "b@example.com"  # musteri adresine ad uydurulmaz
+    html = msg.get_body(("html",)).get_content()
+    assert "Sayın &lt;b&gt;Müşterimiz&lt;/b&gt;," in html and "<b>Müşterimiz" not in html  # personel metni kacislanir
+    assert "Rapor ekte.<br>İkinci satır" in html and ">Ad Soyad</span><br>TAM" in html
+    assert "TAM Monthly Report" in html and "${" not in html and "<!--" not in html
+    assert "CORPORATE CUSTOMER" not in html and "Monthly Technical Account Report" not in html  # sade baslik
+    assert re.search(r"TAM Monthly Report <span[^>]*>&nbsp;\|&nbsp;</span> \w+ \d{4}</div>\s*<div[^>]*>Alfa Test A.S.</div>", html)  # altinda musteri
+    assert html.count("cid:teknocan@tamlife") == 2 and "imzalogo" not in html  # baslik + imza bandi
+    assert html.count('width="144" height="144"') == 2 and 'width="72"' not in html  # logo iki bantta da 144 px
+    assert re.search(r'align="left"[^>]*text-align:left;">\s*<div[^>]*>TAM Monthly Report', html) and "text-align:center" not in html  # baslik sola yasli
+    cidler = {p["Content-ID"] for p in msg.walk() if p.get_content_maintype() == "image"}
+    assert cidler == {"<teknocan@tamlife>"}
+    ekler = list(msg.iter_attachments())
+    assert [e.get_filename() for e in ekler] == [d["eml_adi"][:-4] + ".pdf"] and ekler[0].get_content() == b"%PDF-1.4 test"
+    assert msg.get_body(("plain",)).get_content().rstrip().endswith("Ad Soyad\nTAM")
 
 
 def test_ayri_rapor_ve_durum_ozeti(veri):

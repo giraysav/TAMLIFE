@@ -16,14 +16,15 @@ function useHazir(): boolean {
   return hazir
 }
 
-export function Lejant({ seriler, sayilar }: { seriler: Seri[]; sayilar?: Record<string, number> }) {
+/** `koyu`: lacivert baslik bandinda (Panel `sag`) beyaz yazi. */
+export function Lejant({ seriler, sayilar, koyu = false }: { seriler: Seri[]; sayilar?: Record<string, number>; koyu?: boolean }) {
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
       {seriler.map((s) => (
-        <li key={s.anahtar} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
-          <span aria-hidden className="size-2.5 rounded-sm" style={{ background: s.renk }} />
+        <li key={s.anahtar} className={`flex items-center gap-1.5 text-[0.6875rem] font-bold ${koyu ? "text-white" : "text-slate-600"}`}>
+          <span aria-hidden className="size-2.5 rounded-sm ring-1 ring-white/60" style={{ background: s.renk }} />
           {s.ad}
-          {sayilar ? <span className="font-mono text-slate-400">{sayi(sayilar[s.anahtar] ?? 0)}</span> : null}
+          {sayilar ? <span className={`font-mono ${koyu ? "text-white/70" : "text-slate-400"}`}>{sayi(sayilar[s.anahtar] ?? 0)}</span> : null}
         </li>
       ))}
     </ul>
@@ -71,7 +72,7 @@ export function Halka({ dilimler, baslik, alt, boyut = 176, kalinlik = 22 }: { d
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
         <div className="font-mono text-2xl font-black leading-none text-tl-navy">{baslik}</div>
-        {alt ? <div className="mt-1 max-w-[70%] text-[10px] font-bold uppercase tracking-wide text-slate-400">{alt}</div> : null}
+        {alt ? <div className="mt-1 max-w-[70%] text-[0.625rem] font-bold uppercase tracking-wide text-slate-400">{alt}</div> : null}
       </div>
     </div>
   )
@@ -124,7 +125,7 @@ export function Sutunlar({ sutunlar, seriler, yukseklik = 168 }: { sutunlar: Sut
         const t = toplam(s)
         return (
           <div key={s.etiket} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${s.etiket}: ${t}`}>
-            <span className="font-mono text-[10px] font-black text-slate-500">{t > 0 ? t : ""}</span>
+            <span className="font-mono text-[0.625rem] font-black text-slate-500">{t > 0 ? t : ""}</span>
             <div className="flex w-full max-w-9 flex-col-reverse overflow-hidden rounded-t-md bg-slate-50" style={{ height: yukseklik - 16 }}>
               <div className="flex w-full flex-col-reverse motion-reduce:transition-none" style={{ height: hazir ? `${(t / enBuyuk) * 100}%` : 0, transition: `height 800ms cubic-bezier(.22,1,.36,1) ${i * 30}ms` }}>
                 {seriler.map((x) => {
@@ -133,7 +134,7 @@ export function Sutunlar({ sutunlar, seriler, yukseklik = 168 }: { sutunlar: Sut
                 })}
               </div>
             </div>
-            <span className="truncate text-[10px] font-bold text-slate-400">{s.etiket}</span>
+            <span className="truncate text-[0.625rem] font-bold text-slate-400">{s.etiket}</span>
           </div>
         )
       })}

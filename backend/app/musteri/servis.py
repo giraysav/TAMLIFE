@@ -13,28 +13,22 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import Column, Table, delete, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app.authz import is_admin, yonetici_mi
 from app.gelir.servis import tum_gelirler, unvan_tasi
 from app.kullanicilar import kullanici_kaydi
 from app.models import (
-    AffiliateFinalFlag,
     ApnRevenue,
     AppUser,
+    Base,
     Customer,
     CustomerTeam,
     MatrixConfig,
     Report,
-    ReportDispatch,
-    ReportDraft,
-    ReportRecipient,
     ScoreApprovalRequest,
-    ScoreDetail,
-    ScoreHistory,
     SmsRevenue,
-    UrunTutarOzet,
 )
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
@@ -365,20 +359,20 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         if apn_izni:
             kart["gelirler"]["apn"] = _gelirler(db, ApnRevenue, adlar, ek=("installation_pct",))
 
-    yonetici = yonetici_mi(user)
+    yazma = is_admin(user)  # veri ekleme/degistirme/silme yalniz admin (deps.require_veri_yazma ile ayni kural)
     kart["erisim"] = {
         "rapor": rapor_izni,
         "gelir": sms_izni or apn_izni,
         "aylik_rapor": True,  # Musteri Yonetimi'ni goren, gorebildigi musterinin aylik raporunu hazirlar
-        "kimlik_duzenle": eylem_yetkisi(user, "duzenle"),
-        "iletisim_duzenle": True,
-        "istirak_ekle": eylem_yetkisi(user, "add"),
-        "sil": eylem_yetkisi(user, "delete"),
-        "tam_degistir": yonetici,
+        "kimlik_duzenle": yazma and eylem_yetkisi(user, "duzenle"),
+        "iletisim_duzenle": yazma,
+        "istirak_ekle": yazma and eylem_yetkisi(user, "add"),
+        "sil": yazma and eylem_yetkisi(user, "delete"),
+        "tam_degistir": yazma,
         "rapor_geri_al": is_admin(user),
-        "ayri_rapor_sec": musteri.parent_id is not None,
+        "ayri_rapor_sec": yazma and musteri.parent_id is not None,
     }
-    if yonetici:
+    if yazma:
         kart["tam_secenekleri"] = sorted(
             ({"id": u.id, "ad": u.display_name or u.username} for u in db.scalars(select(AppUser).where(AppUser.active.is_not(False)))),
             key=lambda u: (u["ad"] or "").lower(),
@@ -449,7 +443,7 @@ def kimlik_guncelle(db: Session, user: Principal, musteri_id: int, govde: dict) 
     if "ncst" in govde:
         musteri.ncst = _metin(govde, "ncst", "Müşteri NCST", 50) or ""
     if "customer_no" in govde:
-        musteri.customer_no = _metin(govde, "customer_no", "Müşteri No", 50)
+        musteri.customer_no = _metin(govde, "customer_no", "Müşteri No", 200)
     if "segment" in govde:
         musteri.segment = segment_oku(govde, mevcut=musteri.segment) or ""
     if "sector" in govde:
@@ -574,21 +568,66 @@ def tam_degistir(db: Session, user: Principal, musteri_id: int, yeni_tam_id: obj
     return {"owner_id": tam.id, "full_name": tam.display_name or tam.username}
 
 
+def musteriye_bagli_tablolar() -> list[tuple[Table, Column]]:
+    """customer.id'ye yabanci anahtarla bagli tum tablolar (yeni model eklenince silme kendiliginden kapsar), cocuklar once:
+    rapora bagli gonderim, raporun kendisinden once silinir."""
+    bagli = []
+    for tablo in reversed(Base.metadata.sorted_tables):
+        if tablo.name == "customer":
+            continue
+        bagli += [(tablo, fk.parent) for fk in tablo.foreign_keys if fk.column.table.name == "customer"]
+    return bagli
+
+
+def _parcalar(kimlikler: list[int], boyut: int = 500):
+    """IN listesi sinirini (SQLite/PostgreSQL parametre siniri) asmamak icin."""
+    for i in range(0, len(kimlikler), boyut):
+        yield kimlikler[i : i + boyut]
+
+
+def agaci_sil(db: Session, kokler: list[int]) -> int:
+    """Verilen musterileri ve butun istiraklerini siler; silinen musteri adedini doner. Yetki ve gorunurluk CAGIRANDA denetlenir.
+    Bagli kayitlar: zorunlu baglar (rapor, taslak, gonderim, skor, dagitim gunlugu ...) silinir, istege bagli baglar (Onedesk kaydi,
+    sunum ogesi) kopar (musteri_id bosalir, kayit kalir). Alt musteriler ustlerinden once silinir."""
+    tum = list(dict.fromkeys(kokler))
+    gorulen = set(tum)
+    kuyruk = list(tum)
+    while kuyruk:
+        yeni: list[int] = []
+        for parca in _parcalar(kuyruk):
+            for k in db.scalars(select(Customer.id).where(Customer.parent_id.in_(parca))):
+                if k not in gorulen:
+                    gorulen.add(k)
+                    yeni.append(k)
+        tum += yeni
+        kuyruk = yeni
+    ust: dict[int, int | None] = {}
+    for parca in _parcalar(tum):
+        ust.update({k: p for k, p in db.execute(select(Customer.id, Customer.parent_id).where(Customer.id.in_(parca))).all()})
+    tum = [k for k in tum if k in ust]  # veritabaninda olmayan kimlik sayilmaz
+
+    def derinlik(k: int) -> int:
+        n, ata = 0, ust.get(k)
+        while ata in ust and n <= len(ust):
+            ata = ust[ata]
+            n += 1
+        return n
+
+    for tablo, sutun in musteriye_bagli_tablolar():
+        for parca in _parcalar(tum):
+            if sutun.nullable:
+                db.execute(update(tablo).where(sutun.in_(parca)).values({sutun.name: None}))
+            else:
+                db.execute(delete(tablo).where(sutun.in_(parca)))
+    for parca in _parcalar(sorted(tum, key=derinlik, reverse=True)):  # en derin istirak once: yabanci anahtar sirasi
+        db.execute(delete(Customer).where(Customer.id.in_(parca)))
+    db.flush()
+    return len(tum)
+
+
 def sil(db: Session, user: Principal, musteri_id: int) -> dict:
     """Musteriyi ve istiraklerini (bagli rapor, taslak, gonderim, skor kayitlariyla) siler. Yalniz yonetici."""
     if not eylem_yetkisi(user, "delete"):
         raise MusteriHata(403, "Yetki yok.")
     musteri = musteri_getir(db, user, musteri_id)
-    kimlikler = [musteri.id]
-    kuyruk = [musteri.id]
-    while kuyruk:
-        cocuklar = list(db.scalars(select(Customer.id).where(Customer.parent_id.in_(kuyruk))))
-        kimlikler += cocuklar
-        kuyruk = cocuklar
-    # Once gonderimler (rapora bagli), sonra raporlar ve digerleri; en son musteriler (altlar ustten once).
-    for tablo in (ReportDispatch, ReportDraft, ReportRecipient, Report, CustomerTeam, ScoreHistory, ScoreDetail, ScoreApprovalRequest, AffiliateFinalFlag, UrunTutarOzet):
-        db.execute(delete(tablo).where(tablo.customer_id.in_(kimlikler)))
-    for kimlik in reversed(kimlikler):
-        db.execute(delete(Customer).where(Customer.id == kimlik))
-    db.flush()
-    return {"silinen": len(kimlikler)}
+    return {"silinen": agaci_sil(db, [musteri.id])}

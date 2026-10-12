@@ -1,0 +1,58 @@
+<!-- AYLIK RAPOR E-POSTASI - TASARIM DOSYASI (uretim templates/mail/rapor_mail.html'den uyarlandi)
+
+     Bu dosya yalnizca GORUNUMdur. Yeni tasarim (Stripo vb.) gelince yalniz bu dosya ve
+     rapor_mail_imza.html degisir; Python tarafina (rapor/eposta.py) dokunulmaz.
+     Yer tutucular (string.Template, ${ad}); HTML olanlar Python'da KACISLANMIS gelir:
+
+       ${yazi}           ortak font-family tanimi
+       ${baslik}         "TAM Aylik Rapor" / "TAM Monthly Report" (dile gore)
+       ${musteri_adi}    musteri unvani (baslik satirinin altinda, solda)
+       ${donem}          "Eylul 2026" (rapor dilinde)
+       ${paragraflar}    personelin yazdigi govde: her paragraf ayri <p>, satirlar <br>
+       ${imza}           rapor_mail_imza.html'in doldurulmus hali (imza bossa bos)
+       ${altbilgi}       altbilgi cumlesi (dile gore)
+
+     Gomulu gorseller (src="cid:<ad>"; kimlikler ALAN ADLI, Outlook duz kimligi cozemiyor):
+       teknocan@tamlife   baslik ve imza bantlarindaki yuvarlak logo (ayni gorsel)
+
+     Baslik bandi: "TAM Aylik Rapor | Eylul 2026" ve altinda musteri unvani SOLA yasli, dikeyde ortada; logo sagda (144 px).
+     Imza bandi ayni lacivert zemin ve 640 px genislikte; logo solda, ayni boyutta (144 px). Logo boyutu iki dosyada
+     (img width/height ve hucre width) birlikte degisir; kaynak gorsel 256 px, 144 px'te keskin kalir.
+
+     KURALLAR (Outlook masaustu HTML'i Word motoruyla cizer):
+       - Duzen TABLO ile kurulur; flex, grid, float calismaz.
+       - Stil SATIR ICI yazilir; <style> blogu ve harici CSS uygulanmaz.
+       - max-width yok sayilir: govde genisligi sabit (640 px) verilir.
+       - Arka plan renkleri icin bgcolor ozniteligi de yazilir; ic tablo ve HER hucre ayrica boyanir (Outlook
+         bos hucreyi beyaz cizer). font-size:0 ile bos hucre YAPILMAZ: Word motoru onu beyaz kutu olarak gosterdi.
+       - Yalniz sistemde kurulu yazi tipleri (web fontu Outlook'ta calismaz).
+       - Dolar isareti metinde $$ yazilir (string.Template kurali).
+-->
+<html><body style="margin:0;padding:0;background:#ffffff;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff">
+<tr><td align="left" style="padding:0;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:640px;">
+
+ <tr><td bgcolor="#002855" style="padding:18px 28px;">
+ <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#002855" style="background:#002855;"><tr>
+ <td valign="middle" align="left" bgcolor="#002855" style="background:#002855;padding-right:16px;${yazi}text-align:left;">
+ <div style="${yazi}font-size:20px;font-weight:700;color:#ffffff;white-space:nowrap;text-align:left;">${baslik} <span style="color:#FFC72C;">&nbsp;|&nbsp;</span> ${donem}</div>
+ <div style="${yazi}font-size:14px;font-weight:600;color:#c9d6e6;padding-top:6px;text-align:left;">${musteri_adi}</div>
+ </td>
+ <td valign="middle" align="right" width="144" bgcolor="#002855" style="width:144px;background:#002855;">
+ <img src="cid:teknocan@tamlife" alt="" width="144" height="144" style="width:144px;height:144px;display:block;border:0;">
+ </td>
+ </tr></table>
+ </td></tr>
+ <tr><td bgcolor="#FFC72C" style="height:4px;line-height:4px;font-size:0;">&nbsp;</td></tr>
+
+ <tr><td style="padding:26px 28px 18px 28px;${yazi}font-size:14px;line-height:1.65;color:#243447;">
+ ${paragraflar}
+ </td></tr>
+
+${imza}
+ <tr><td bgcolor="#ffffff" style="padding:14px 28px 20px 28px;${yazi}font-size:11px;color:#7d8ba1;">${altbilgi}</td></tr>
+
+</table>
+</td></tr></table>
+</body></html>

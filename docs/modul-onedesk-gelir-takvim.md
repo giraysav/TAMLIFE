@@ -36,9 +36,9 @@ Kaynak (yalnız okundu): `kutucuklar/onedesk`, `kutucuklar/ictapn`, `kutucuklar/
 - Grafikler yeni bağımlılık olmadan SVG/CSS (`components/grafik.tsx`).
 - **Üst bar** Turkcell mavi paletinde (lacivert → mavi gradyan, beyaz başlık/simge, sarı alt çizgi); **sol üstte TAM Life logosu** (`src/assets/tam_life_logo.png`, üretim login ekranındaki logo). Genel bakışta büyük başlık cümlesi yoktur; yayın altında yalnız küçük ipucu satırı durur.
 
-## 6. Dev örnek verisi
+## 6. Örnek veri
 
-`python -m app.ornek_veri [--temizle|--yenile]` (yalnız `TAMLIFE_ENV=dev`): 10 çatı + 5 iştirak müşteri, 6 TAM, 480 Onedesk kaydı (RCA gruplarının belirgin çıkması için ağırlıklı kök sebepler), SMS/APN/çalışma kayıtları, takvim günleri. Hepsi uydurma ve işaretli (`ORNEK-*`, `ornek.*`, `source='ornek'`, `created_by='ornek'`); `--temizle` yalnız bunları siler. Onedesk ekranı örnek veri varken sarı uyarı gösterir.
+Kaldırıldı (2026-10-11 kullanıcı kararı): panelde uydurma veri üreten ya da gösteren yol yoktur; veri dosya yüklemesi ve kurum DB'lerinden gelir.
 
 ## 7. Bilerek yapılmayanlar
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,12 +16,13 @@ from app.audit import audit_log
 from app.config import get_settings
 from app.db import get_db, oturum
 from app.deps import require_admin
+from app.dil import m
 from app.models import IngestBatch
 from app.ortak import KimlikTipi, UygulamaHatasi, iso, ok, sayfa_bilgisi
 from app.session import Principal
-from app.tampon import analiz, dagitim, depo, kaynak, oracle
+from app.tampon import analiz, dagitim, depo, kaynak, musteri_aktar, musteri_ham, oracle
 
-router = APIRouter(prefix="/api/v1/tampon", tags=["tampon"])
+router = APIRouter(prefix="/api/v1/tampon", tags=["tampon"], dependencies=[Depends(require_admin)])  # Yonetim alani: yeni uc eklense de admin disi giremez
 
 
 
@@ -57,6 +58,18 @@ class OnizleGovde(BaseModel):
 
 class UygulaGovde(BaseModel):
     parti_id: KimlikTipi
+    onay: bool = False
+
+
+class HamOnizleGovde(BaseModel):
+    parti_id: KimlikTipi
+    yeni_olustur: bool = False
+
+
+class HamUygulaGovde(BaseModel):
+    parti_id: KimlikTipi
+    yeni_olustur: bool = False
+    plan_ozeti: str = Field(default="", max_length=64)
     onay: bool = False
 
 
@@ -118,6 +131,95 @@ def _yukle(veri: bytes, kaynak_adi: str, dosya: str, kullanici: str) -> dict[str
         return _parti_satiri(parti)
 
 
+async def _govde_oku(request: Request) -> bytes:
+    """Ham dosya govdesi; boyut siniri akis sirasinda uygulanir."""
+    sinir = get_settings().ingest_max_mb * 1024 * 1024
+    mesaj = m(f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).", f"File too large (max {get_settings().ingest_max_mb} MB).")
+    bildirilen = request.headers.get("content-length", "")
+    if bildirilen.isdigit() and int(bildirilen) > sinir:
+        raise HTTPException(status_code=413, detail=mesaj)
+    parcalar: list[bytes] = []
+    boyut = 0
+    async for parca in request.stream():
+        boyut += len(parca)
+        if boyut > sinir:
+            raise HTTPException(status_code=413, detail=mesaj)
+        parcalar.append(parca)
+    return b"".join(parcalar)
+
+
+# --- Ham Musteri Verisi (Kaynaklar'daki dosya yuklemesi) -------------------------------------------------------------
+def _ham_yukle(veri: bytes, dosya: str, kullanici: str) -> dict[str, Any]:
+    tablo = musteri_ham.dosya_oku(veri, dosya)
+    with oturum() as db:
+        etiket = (dosya or "musteri.xlsx") + (f" · {tablo['sayfa']}" if tablo["sayfa"] else "")
+        parti = depo.parti_olustur(db, musteri_ham.KAYNAK, etiket, kullanici)
+        db.commit()
+        try:
+            parti = depo.ice_al(db, parti, tablo["basliklar"], tablo["satirlar"])
+        except UygulamaHatasi:
+            raise
+        except Exception as hata:
+            kayit = ariza.kaydet("TL-TAM-01", exc=hata, kaynak="tampon.musteri_ham", kullanici=kullanici)
+            raise UygulamaHatasi(500, ariza.mesaj("TL-TAM-01", kayit)) from hata
+        return {**_parti_satiri(parti), "uyum": musteri_ham.uyum_raporu(tablo["basliklar"])}
+
+
+@router.put("/musteri-ham/yukle")
+async def ham_yukle(
+    request: Request, dosya: str = Query(default="", max_length=200), admin: Principal = Depends(require_admin)
+) -> dict[str, Any]:
+    """Ham Musteri Verisi (.xlsx / .csv): sayfa ve baslik satiri kendiliginden bulunur, parti olarak tampona alinir."""
+    sonuc = await run_in_threadpool(_ham_yukle, await _govde_oku(request), dosya, admin.username)
+    _denetim(admin, "tampon.musteri_ham_yukle", f"parti={sonuc['id']} satir={sonuc['satir']} durum={sonuc['durum']}")
+    return ok(sonuc)
+
+
+@router.get("/musteri-ham/sablon.xlsx")
+def ham_sablon(dolu: bool = False, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> Response:
+    """Bos sablon ya da paneldeki kartlarin GERCEK degerleriyle dolu sablon."""
+    ad = musteri_ham.DOSYA_ADI.replace(".xlsx", "_dolu.xlsx") if dolu else musteri_ham.DOSYA_ADI
+    return Response(
+        musteri_ham.sablon_olustur(db, dolu),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{ad}"'},
+    )
+
+
+@router.get("/musteri-ham/partiler/{parti_id}/uyum")
+def ham_uyum(parti_id: KimlikTipi, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(musteri_ham.uyum_raporu(list(_parti(db, parti_id).columns or [])))
+
+
+@router.post("/musteri-ham/onizle")
+def ham_onizle(govde: HamOnizleGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(musteri_aktar.onizleme(db, govde.parti_id, govde.yeni_olustur))
+
+
+@router.post("/musteri-ham/uygula")
+def ham_uygula(govde: HamUygulaGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not govde.onay:
+        raise HTTPException(status_code=400, detail=m("Uygulamak için onay gerekir.", "Confirmation is required to apply."))
+    sonuc = musteri_aktar.uygula(db, govde.parti_id, govde.yeni_olustur, govde.plan_ozeti, admin.username)
+    db.commit()
+    o = sonuc["ozet"]
+    _denetim(admin, "tampon.musteri_ham_uygula", f"parti={govde.parti_id} kayit={sonuc['kayit_id']} guncellenen={o['guncellenen']} olusturulan={o['olusturulan']}")
+    return ok(sonuc)
+
+
+@router.get("/musteri-ham/aktarimlar")
+def ham_aktarimlar(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(musteri_aktar.kayitlar(db))
+
+
+@router.post("/musteri-ham/aktarimlar/{kayit_id}/geri-al")
+def ham_geri_al(kayit_id: KimlikTipi, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    sonuc = musteri_aktar.geri_al(db, kayit_id, admin.username)
+    db.commit()
+    _denetim(admin, "tampon.musteri_ham_geri_al", f"kayit={kayit_id} geri={sonuc['geri_alinan_alan']} silinen={sonuc['silinen_musteri']}")
+    return ok(sonuc)
+
+
 @router.put("/yukle")
 async def yukle(
     request: Request,
@@ -125,28 +227,10 @@ async def yukle(
     dosya: str = Query(default="", max_length=200),
     admin: Principal = Depends(require_admin),
 ) -> dict[str, Any]:
-    """Ham CSV govdesi (cok parcali form yok: yeni bagimlilik gerektirmez). Boyut siniri akis sirasinda uygulanir."""
-    sinir = get_settings().ingest_max_mb * 1024 * 1024
-    bildirilen = request.headers.get("content-length", "")
-    if bildirilen.isdigit() and int(bildirilen) > sinir:
-        raise HTTPException(status_code=413, detail=f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).")
-    parcalar: list[bytes] = []
-    boyut = 0
-    async for parca in request.stream():
-        boyut += len(parca)
-        if boyut > sinir:
-            raise HTTPException(status_code=413, detail=f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).")
-        parcalar.append(parca)
-    sonuc = await run_in_threadpool(_yukle, b"".join(parcalar), kaynak_adi, dosya, admin.username)
+    """Genel CSV yuklemesi (API; arayuzde yerini Ham Musteri Verisi aldi). Cok parcali form yok: yeni bagimlilik gerektirmez."""
+    sonuc = await run_in_threadpool(_yukle, await _govde_oku(request), kaynak_adi, dosya, admin.username)
     _denetim(admin, "tampon.yukle", f"parti={sonuc['id']} kaynak={sonuc['kaynak']} satir={sonuc['satir']} durum={sonuc['durum']}")
     return ok(sonuc)
-
-
-@router.post("/ornek")
-def ornek(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
-    parti = kaynak.ornek_parti(db, admin.username)
-    _denetim(admin, "tampon.ornek", f"parti={parti.id} satir={parti.row_count}")
-    return ok(_parti_satiri(parti))
 
 
 @router.get("/partiler")

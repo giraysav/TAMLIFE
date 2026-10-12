@@ -26,8 +26,7 @@ import { metin, yerelMenu } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { ModulSayfasi } from "@/shell/modul-sayfasi"
 import { ProfilSayfasi } from "@/shell/profil-sayfasi"
-import { RollerSayfasi } from "@/shell/roller-sayfasi"
-import { hashParcala } from "@/shell/rota"
+import { aktifSayfa, hashParcala } from "@/shell/rota"
 
 /** Modul sayfalari ayri JS parcalaridir: yalniz acildiginda indirilir (Yonetim yalniz admin icin). */
 const YonetimSayfasi = lazy(() => import("@/yonetim/yonetim-sayfasi"))
@@ -39,6 +38,10 @@ const ApnSayfasi = lazy(() => import("@/gelir/apn-sayfasi").then((m) => ({ defau
 const IzinTakvim = lazy(() => import("@/takvim/izin-takvim").then((m) => ({ default: m.IzinTakvim })))
 const TamTakvim = lazy(() => import("@/takvim/tam-takvim").then((m) => ({ default: m.TamTakvim })))
 const SunumSayfasi = lazy(() => import("@/sunum/sunum-sayfasi").then((m) => ({ default: m.SunumSayfasi })))
+const TalepSayfasi = lazy(() => import("@/talep/talep-sayfasi").then((m) => ({ default: m.TalepSayfasi })))
+const RadarSayfasi = lazy(() => import("@/radar/radar-sayfasi").then((m) => ({ default: m.RadarSayfasi })))
+const ProjeSayfasi = lazy(() => import("@/proje/proje-sayfasi").then((m) => ({ default: m.ProjeSayfasi })))
+const EkipOzeti = lazy(() => import("@/ekip/ekip-ozeti").then((m) => ({ default: m.EkipOzeti })))
 
 /** Eski yonetim adresleri (yer imleri, gecmis) ve Yonetim'e katlanan modul (utilizasyon) tek Yonetim alaninin bolumlerine yonlenir. */
 const ESKI_ADRESLER: Record<string, string> = {
@@ -203,9 +206,9 @@ function Menu({ kullanici, dil, secili, onSec, onDil, onCikis, talepVar }: MenuP
   )
 }
 
-type Props = { kullanici: Kullanici; dil: Dil; onDil: (dil: Dil) => void; onCikis: () => void }
+type Props = { kullanici: Kullanici; dil: Dil; onDil: (dil: Dil) => void; onCikis: () => void; onProfilDegisti?: () => void }
 
-export function Panel({ kullanici: oturum, dil, onDil, onCikis }: Props) {
+export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti }: Props) {
   const t = metin(dil)
   /** Sunucu etiketleri (modul adi, aciklama) bir kez dile cevrilir; asagidaki her kullanim bu listeyi gorur. */
   const kullanici = useMemo(() => ({ ...oturum, navigation: yerelMenu(oturum.navigation, dil) }), [oturum, dil])
@@ -223,13 +226,13 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis }: Props) {
   }, [kullanici.navigation])
   // Admin icin eski adresler (admin, veri, integrations, roller) yeni Yonetim bolumune cevrilir.
   const normal = kullanici.is_admin ? (ESKI_ADRESLER[secili] ?? secili) : secili
-  const aktif = izinli.has(normal) ? normal : "ozet"
+  const aktif = aktifSayfa(normal, izinli, kullanici.is_admin)
   const [ustId, altId] = aktif.split("/")
   const oge = kullanici.navigation.find((o) => o.id === ustId)
   const alt = altId ? oge?.children?.find((c) => c.id === aktif) : undefined
   const baslik =
     aktif === "ozet"
-      ? t.hosgeldin(kullanici.username)
+      ? t.hosgeldin(kullanici.profile?.first_name || kullanici.display_name || kullanici.username)
       : aktif === "profil"
         ? t.profil
         : ustId === "yonetim"
@@ -298,16 +301,21 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis }: Props) {
             <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} dugmeSinifi={UST_BAR_DUGME} />
           </div>
         </header>
-        <main className={`flex flex-1 flex-col gap-6 p-4 sm:p-6 ${aktif === "ozet" ? "!pb-3" : ""}`}>
+        <main className={`flex flex-1 flex-col gap-6 p-4 sm:p-6 ${aktif === "ozet" ? "min-h-0 !gap-0 !py-3" : ""}`}>
           <Suspense fallback={<p className="text-sm text-muted-foreground">{t.yukleniyor}</p>}>
           {aktif === "ozet" ? (
-            <OzetOrbit dil={dil} onGit={sec} />
+            <div className="mx-auto flex min-h-0 w-full max-w-[87.5rem] flex-1 flex-col justify-center-safe gap-3">
+              <OzetOrbit dil={dil} onGit={sec} />
+              <Suspense fallback={null}>
+                <EkipOzeti dil={dil} onGit={sec} sikisik />
+              </Suspense>
+            </div>
           ) : aktif === "profil" ? (
-            <ProfilSayfasi kullanici={kullanici} dil={dil} />
+            <ProfilSayfasi kullanici={kullanici} dil={dil} onKaydedildi={onProfilDegisti} />
           ) : ustId === "yonetim" && kullanici.is_admin ? (
             <YonetimSayfasi dil={dil} bolum={altId ?? ""} digerleri={digerYonetim} />
           ) : aktif === "musteri" ? (
-            <MusteriSayfasi dil={dil} />
+            <MusteriSayfasi dil={dil} yazabilir={kullanici.is_admin} />
           ) : aktif === "onedesk" ? (
             <OnedeskSayfasi dil={dil} admin={kullanici.is_admin} />
           ) : aktif === "takvim" ? (
@@ -316,14 +324,18 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis }: Props) {
             <TamTakvim dil={dil} />
           ) : aktif === "sunum" ? (
             <SunumSayfasi dil={dil} />
+          ) : aktif === "talep" ? (
+            <TalepSayfasi dil={dil} />
+          ) : aktif === "radar" ? (
+            <RadarSayfasi dil={dil} />
+          ) : aktif === "proje" ? (
+            <ProjeSayfasi dil={dil} yazabilir={kullanici.is_admin} />
           ) : aktif === "tamsms" ? (
-            <SmsSayfasi dil={dil} />
+            <SmsSayfasi dil={dil} yazabilir={kullanici.is_admin} />
           ) : aktif === "tamapn" ? (
-            <ApnSayfasi dil={dil} />
+            <ApnSayfasi dil={dil} yazabilir={kullanici.is_admin} />
           ) : aktif === "rapor" ? (
             <RaporSayfasi dil={dil} />
-          ) : aktif === "roller" ? (
-            <RollerSayfasi dil={dil} saltOkunur={!kullanici.is_admin} />
           ) : alt && oge ? (
             <ModulSayfasi baslik={alt.label} aciklama={alt.description} hazir={alt.ready} ust={oge.label} dil={dil} onGit={sec} />
           ) : oge ? (

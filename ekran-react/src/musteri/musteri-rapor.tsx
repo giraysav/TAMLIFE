@@ -26,7 +26,7 @@ export function MusteriRapor({ id, dil }: { id: number; dil: Dil }) {
       <div className="relative flex flex-wrap items-center gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-tl-navy to-[#003b80] px-5 py-3 text-white shadow-sm">
         <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-tl-yellow" />
         <div className="min-w-0 flex-1 pl-2">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-white/70">{t.aylikRapor}</p>
+          <p className="text-[0.625rem] font-bold uppercase tracking-wide text-white/70">{t.aylikRapor}</p>
           <h2 className="break-words text-lg font-black leading-tight">{kart.kimlik.unvan}</h2>
         </div>
         {kart.kimlik.segment ? <Rozet ton="sari">{kart.kimlik.segment}</Rozet> : null}
@@ -38,7 +38,7 @@ export function MusteriRapor({ id, dil }: { id: number; dil: Dil }) {
           {t.musteriKartinaDon}
         </a>
       </div>
-      <AylikRapor musteriId={id} dil={dil} geriAlabilir={kart.erisim.rapor_geri_al} />
+      <AylikRapor musteriId={id} musteriAdi={kart.kimlik.unvan} dil={dil} geriAlabilir={kart.erisim.rapor_geri_al} />
     </div>
   )
 }

@@ -24,7 +24,7 @@ type Portfoy = {
 const SAYFA_ADEDI = 24
 
 /** Musteri Yonetimi portfoyu: cati musteri kartlari, KPI seridi, segment/TAM/arama filtreleri, sagdan acilan "Musteri ekle" formu. */
-export function MusteriListesi({ dil }: { dil: Dil }) {
+export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = portfoyMetin(dil)
   const [arama, setArama] = useState("")
   const [segment, setSegment] = useState("")
@@ -50,10 +50,12 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={Briefcase} baslik={t.baslik} aciklama={t.aciklama}>
-        <button type="button" className={DUGME_SARI} onClick={() => setFormAcik(true)} disabled={!secenek.data}>
-          <Plus aria-hidden className="size-4" />
-          {t.musteriEkle}
-        </button>
+        {yazabilir ? (
+          <button type="button" className={DUGME_SARI} onClick={() => setFormAcik(true)} disabled={!secenek.data}>
+            <Plus aria-hidden className="size-4" />
+            {t.musteriEkle}
+          </button>
+        ) : null}
       </SayfaKabi>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -150,9 +152,11 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
         </nav>
       ) : null}
 
-      <Cekmece acik={formAcik} onKapat={() => setFormAcik(false)} baslik={t.formBaslik} aciklama={t.formAciklama} kapatEtiketi={t.kapat}>
-        {secenek.data ? <MusteriEkleFormu dil={dil} secenek={secenek.data} onBitti={() => setFormAcik(false)} /> : null}
-      </Cekmece>
+      {yazabilir ? (
+        <Cekmece acik={formAcik} onKapat={() => setFormAcik(false)} baslik={t.formBaslik} aciklama={t.formAciklama} kapatEtiketi={t.kapat}>
+          {secenek.data ? <MusteriEkleFormu dil={dil} secenek={secenek.data} onBitti={() => setFormAcik(false)} /> : null}
+        </Cekmece>
+      ) : null}
     </div>
   )
 }

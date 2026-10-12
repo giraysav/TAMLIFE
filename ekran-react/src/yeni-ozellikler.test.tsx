@@ -111,6 +111,14 @@ describe("DuzenlenebilirTablo", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sil" }))
     await waitFor(() => expect(onSil).toHaveBeenCalledWith(7))
   })
+
+  it("saltOkunur: ekle, duzenle ve sil dugmeleri ile islem sutunu gorunmez", () => {
+    const satir = { id: 7, musteri: "Beta Ltd", proje: "Kampanya", tutar: 500, para_birimi: "USD" }
+    render(<DuzenlenebilirTablo kolonlar={KOLONLAR} satirlar={[satir]} metin={TABLO_METIN} bosKutu={null} onKaydet={vi.fn()} onSil={vi.fn()} saltOkunur />)
+    expect(screen.getByText("Beta Ltd")).toBeInTheDocument()
+    expect(screen.queryByRole("button")).not.toBeInTheDocument()
+    expect(screen.queryByText("İşlemler")).not.toBeInTheDocument()
+  })
 })
 
 describe("Sekmeler", () => {
@@ -133,15 +141,19 @@ describe("Sekmeler", () => {
   })
 })
 
-const KULLANICI: Kullanici = { username: "admin", role: "admin", is_admin: true, idle_timeout_minutes: 30, landing: "ozet", navigation: [] }
+const PROFIL = { username: "admin", display_name: "Ayşe Yılmaz", ad_user: false, first_name: "Ayşe", last_name: "Yılmaz", phone: "", company: "", address: "", website: "" }
+const KULLANICI: Kullanici = { username: "admin", display_name: "Ayşe Yılmaz", profile: PROFIL, role: "admin", is_admin: true, idle_timeout_minutes: 30, landing: "ozet", navigation: [] }
 
 describe("KullaniciKarti (sol alt)", () => {
   it("admin: rol rozeti, Yonetim kisayolu, cikis", () => {
     const onGit = vi.fn()
     const onCikis = vi.fn()
     render(<KullaniciKarti kullanici={KULLANICI} dil="tr" onDil={vi.fn()} onGit={onGit} onCikis={onCikis} talepVar />)
-    const dugme = screen.getByRole("button", { name: /Hesap menüsü: admin/ })
+    const dugme = screen.getByRole("button", { name: /Hesap menüsü: Ayşe Yılmaz/ })
     expect(dugme).toHaveAttribute("aria-expanded", "false")
+    // Karttaki ad kisa kullanici adi (admin) degil personelin ad soyadi; bas harfleri de ondan turetilir.
+    expect(screen.getByText("Ayşe Yılmaz")).toBeInTheDocument()
+    expect(screen.getByText("AY")).toBeInTheDocument()
     expect(screen.getByText("Admin")).toBeInTheDocument()
     fireEvent.click(dugme)
     expect(dugme).toHaveAttribute("aria-expanded", "true")
@@ -151,6 +163,12 @@ describe("KullaniciKarti (sol alt)", () => {
     fireEvent.click(dugme)
     fireEvent.click(screen.getByRole("menuitem", { name: "Çıkış" }))
     expect(onCikis).toHaveBeenCalled()
+  })
+
+  it("Yonetim konsolu yalniz admin rolune: yonetici (TeamMngr) eski is_admin isaretiyle de goremez", () => {
+    render(<KullaniciKarti kullanici={{ ...KULLANICI, username: "mudur", role: "TeamMngr", is_admin: true }} dil="tr" onDil={vi.fn()} onGit={vi.fn()} onCikis={vi.fn()} talepVar={false} />)
+    fireEvent.click(screen.getByRole("button", { name: /Hesap menüsü/ }))
+    expect(screen.queryByRole("menuitem", { name: /Yönetim/ })).not.toBeInTheDocument()
   })
 
   it("member: Yonetim kisayolu yok; Esc menuyu kapatir; dil secilir", () => {

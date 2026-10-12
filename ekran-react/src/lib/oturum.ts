@@ -17,8 +17,24 @@ export type MenuOgesi = AltOge & {
   children: AltOge[]
 }
 
+/** Kisinin kendi profili (PUT /session/profile). `username` AD/LDAP kullanici adidir, degistirilemez. */
+export type Profil = {
+  username: string
+  display_name: string
+  ad_user: boolean
+  first_name: string
+  last_name: string
+  phone: string
+  company: string
+  address: string
+  website: string
+}
+
 export type Kullanici = {
   username: string
+  /** Personelin ad soyadi (kisa kullanici adi degil); ekranda bu gosterilir. */
+  display_name: string
+  profile: Profil
   role: string
   is_admin: boolean
   idle_timeout_minutes: number
@@ -130,5 +146,5 @@ export function useOturum() {
     }
   }, [])
 
-  return { durum, kullanici, giris, cikis }
+  return { durum, kullanici, giris, cikis, yenile: yukle }
 }

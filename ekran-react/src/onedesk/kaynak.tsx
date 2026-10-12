@@ -25,11 +25,11 @@ function PartiSatiri({ parti, t }: { parti: Parti; t: OnedeskMetin }) {
           <p className="truncate text-xs font-black text-tl-navy">
             #{parti.id} · {parti.etiket || parti.kaynak}
           </p>
-          <p className="text-[10px] font-bold text-slate-400">
+          <p className="text-[0.625rem] font-bold text-slate-400">
             <code>{parti.kaynak}</code> · {sayi(parti.satir)} {t.satir} · {zaman(parti.zaman)}
           </p>
         </div>
-        <label className="flex items-center gap-1.5 text-[10px] font-black uppercase text-slate-400">
+        <label className="flex items-center gap-1.5 text-[0.625rem] font-black uppercase text-slate-400">
           {t.turSec}
           <select className={`${GIRDI} !w-auto`} value={tur} onChange={(e) => setTur(e.target.value)}>
             <option value="">{t.turOtomatik}</option>
@@ -63,31 +63,30 @@ export function KaynakPaneli({ t }: { t: OnedeskMetin }) {
         <div className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-              <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
+              <p className="flex items-center gap-1.5 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">
                 <PlugZap aria-hidden className="size-3.5" />
                 {t.canli}
               </p>
               <p className="mt-1 text-xs font-black text-slate-600">{t.canliKapali}</p>
-              <p className="mt-0.5 text-[10px] font-bold text-slate-400">
+              <p className="mt-0.5 text-[0.625rem] font-bold text-slate-400">
                 {t.yuva}: <code>{v.canli_baglanti.yuva}</code> · {v.canli_baglanti.yapilandirildi ? t.yuvaVar : t.yuvaYok}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-              <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
+              <p className="flex items-center gap-1.5 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">
                 <Database aria-hidden className="size-3.5" />
                 {t.kayitSayisi}
               </p>
               <p className="mt-1 font-mono text-xl font-black text-tl-navy">{sayi(v.kayit)}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.sonKayit}</p>
+              <p className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.sonKayit}</p>
               <p className="mt-1 text-xs font-black text-slate-600">{zaman(v.son_kayit)}</p>
             </div>
           </div>
-          {v.ornek ? <Bildirim ton="amber">{t.ornekUyari}</Bildirim> : null}
           <div>
-            <p className="text-[11px] font-black text-tl-navy">{t.aktarilabilir}</p>
-            <p className="mb-2 text-[10px] font-bold text-slate-400">{t.aktarilabilirAlt}</p>
+            <p className="text-[0.6875rem] font-black text-tl-navy">{t.aktarilabilir}</p>
+            <p className="mb-2 text-[0.625rem] font-bold text-slate-400">{t.aktarilabilirAlt}</p>
             {v.partiler.length === 0 ? (
               <BosKutu baslik={t.partiYok} />
             ) : (

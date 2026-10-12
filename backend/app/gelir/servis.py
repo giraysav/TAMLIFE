@@ -74,7 +74,7 @@ def _tarih(govde: dict, alan: str, etiket: str, zorunlu: bool = False) -> date |
     metin = str(ham).strip()
     try:
         tr = _TARIH_TR.match(metin)
-        return date(int(tr.group(3)), int(tr.group(2)), int(tr.group(1))) if tr else datetime.strptime(metin[:10], "%Y-%m-%d").date()  # noqa: DTZ007
+        return date(int(tr.group(3)), int(tr.group(2)), int(tr.group(1))) if tr else datetime.strptime(metin[:10], "%Y-%m-%d").date()
     except ValueError:
         raise GelirHata(400, f"{etiket} geçerli bir tarih olmalı (GG.AA.YYYY).") from None
 

@@ -1,0 +1,79 @@
+"""Ceyrek Bazli Sunum HTTP katmani. Gorme: 'sunum' modulu (rol gorunumu). Yonetme: admin ya da rolgorunum.SUNUM_YETKISI.
+
+  GET  /sunum/donem       -> secilen ceyregin ogeleri (gecmis ceyrekte ilk goruntulemede dondurulur)
+  GET  /sunum/kaynaklar   -> sunuma kendiliginden akan kaynaklar ('sunum' ya da 'roller' modulu)
+  PUT  /sunum/kaynaklar   -> kaynak secimini kaydet (yetkili)
+  POST /sunum/gonder      -> kaynagin ceyrek goruntusunu sabitle / kaldir (yetkili); TAM Takvim kutusu /takvim/sunuma-gonder'i kullanir
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.audit import audit_log
+from app.db import get_db
+from app.erisim import Erisim, modul_erisim
+from app.ortak import ok
+from app.rolgorunum import SUNUM_YETKISI
+from app.sunum import servis
+from app.sunum.servis import SunumHata
+
+router = APIRouter(prefix="/api/v1/sunum", tags=["sunum"])
+sunum_erisim = modul_erisim("sunum")
+ayar_erisim = modul_erisim("sunum", "roller")
+YETKISIZ = "Çeyrek bazlı sunumu yönetme yetkiniz yok; yönetici Rol Yönetimi › Çeyrek Bazlı Sunum'dan verir."
+
+
+class KaynakGovde(BaseModel):
+    kaynaklar: list[str] = Field(max_length=50)
+
+
+class GonderGovde(BaseModel):
+    kaynak: str = Field(max_length=30)
+    yil: int = Field(ge=2000, le=2100)
+    ceyrek: int = Field(ge=1, le=4)
+    gonder: bool
+
+
+def yetkili_olmali(e: Erisim) -> None:
+    if not e.yetkili_mi(SUNUM_YETKISI):
+        raise SunumHata(403, YETKISIZ)
+
+
+@router.get("/donem")
+def donem(yil: int | None = Query(default=None, ge=2000, le=2100), ceyrek: int | None = Query(default=None, ge=1, le=4), e: Erisim = Depends(sunum_erisim), db: Session = Depends(get_db)):
+    vy, vc = servis.bu_ceyrek()
+    sonuc = servis.donem(db, yil or vy, ceyrek or vc, e.user.username)
+    db.commit()  # ilk goruntulemede dondurulenler
+    return ok({**sonuc, "yonetebilir": e.yetkili_mi(SUNUM_YETKISI)})
+
+
+@router.get("/kaynaklar")
+def kaynaklar(e: Erisim = Depends(ayar_erisim), db: Session = Depends(get_db)):
+    return ok({"kaynaklar": servis.kaynak_listesi(db), "duzenleyebilir": e.yetkili_mi(SUNUM_YETKISI)})
+
+
+@router.put("/kaynaklar")
+def kaynaklar_kaydet(body: KaynakGovde, e: Erisim = Depends(ayar_erisim), db: Session = Depends(get_db)):
+    yetkili_olmali(e)
+    secili = servis.kaynaklar_kaydet(db, body.kaynaklar, e.user.username)
+    db.commit()
+    audit_log.remember(actor=e.user.username, action="sunum.kaynaklar", outcome="allow", module_key="sunum", detail=f"kaynaklar={','.join(secili)}")
+    return ok({"kaynaklar": servis.kaynak_listesi(db)})
+
+
+@router.post("/gonder")
+def gonder(body: GonderGovde, e: Erisim = Depends(sunum_erisim), db: Session = Depends(get_db)):
+    yetkili_olmali(e)
+    sonuc = servis.gonder(db, e.user, body.kaynak, body.yil, body.ceyrek, body.gonder)
+    db.commit()
+    audit_log.remember(
+        actor=e.user.username,
+        action="sunum.gonder" if body.gonder else "sunum.kaldir",
+        outcome="allow",
+        module_key="sunum",
+        detail=f"kaynak={body.kaynak} donem={sonuc['donem']}",
+    )
+    return ok(sonuc)

@@ -184,3 +184,194 @@ def test_hesap_komut_satiri(client, monkeypatch, capsys):
     with Session(engine()) as db:
         assert kullanicilar.parola_dogru("Yeni-Acil-Parola-1", kullanicilar.bul(db, "acil").password_hash)
     assert hesap.main(["liste"]) == 0 and "yeni.mudur" in capsys.readouterr().out
+
+
+# --- Kurum Baglantilari: AD erisim testi (bind YOK). Gercek ag yok: DNS / TCP / TLS taklit edilir. ------------------------
+@pytest.fixture
+def sahte_ag(monkeypatch):
+    """socket.getaddrinfo / create_connection ve ssl.create_default_context taklidi; durum[...] ile halka kirilir."""
+    import socket
+    import ssl
+
+    durum: dict[str, BaseException | None] = {"dns": None, "tcp": None, "tls": None, "ca": None}
+
+    class Soket:
+        def close(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class Tls(Soket):
+        def getpeercert(self):
+            return {"subject": ((("commonName", "dc.ornek.local"),),), "issuer": ((("commonName", "Ornek Kurum CA"),),), "notAfter": "Jan  1 00:00:00 2030 GMT"}
+
+        def version(self):
+            return "TLSv1.3"
+
+    class Baglam:
+        def load_verify_locations(self, yol):
+            if durum["ca"]:
+                raise durum["ca"]
+
+        def wrap_socket(self, ham, server_hostname):
+            if durum["tls"]:
+                raise durum["tls"]
+            return Tls()
+
+    def adres_coz(host, port):
+        if durum["dns"]:
+            raise durum["dns"]
+        return [(2, 1, 6, "", ("10.0.0.5", 0))]
+
+    def baglan(adres, timeout):
+        if durum["tcp"]:
+            raise durum["tcp"]
+        return Soket()
+
+    monkeypatch.setattr(socket, "getaddrinfo", adres_coz)
+    monkeypatch.setattr(socket, "create_connection", baglan)
+    monkeypatch.setattr(ssl, "create_default_context", Baglam)
+    for k, v in AD_ORTAM.items():
+        monkeypatch.setenv(k, v)
+    return durum
+
+
+def test_ad_erisim_adimlari_ilk_kirilan_halkada_durur(sahte_ag, monkeypatch):
+    import ssl
+
+    adimlar = ad.erisim_adimlari()
+    assert [(x["adim"], x["durum"]) for x in adimlar] == [("dns", "ok"), ("tcp", "ok"), ("tls", "ok")]
+    assert "10.0.0.5" in adimlar[0]["ayrinti"] and "TLSv1.3" in adimlar[2]["ayrinti"] and "Ornek Kurum CA" in adimlar[2]["ayrinti"]
+    sahte_ag["tcp"] = ConnectionRefusedError("reddedildi")
+    assert [(x["adim"], x["durum"]) for x in ad.erisim_adimlari()] == [("dns", "ok"), ("tcp", "hata")]
+    sahte_ag["tcp"], sahte_ag["tls"] = None, ssl.SSLCertVerificationError("unable to get local issuer certificate")
+    son = ad.erisim_adimlari()[-1]
+    assert son["adim"] == "tls" and son["durum"] == "hata" and son["baslik"] == "SERTIFIKA DOGRULANAMADI"
+    sahte_ag["dns"] = OSError("isim cozulemedi")
+    assert [(x["adim"], x["durum"]) for x in ad.erisim_adimlari()] == [("dns", "hata")]
+    monkeypatch.setenv("AD_ENABLED", "false")
+    assert [(x["adim"], x["durum"]) for x in ad.erisim_adimlari()] == [("ayar", "hata")]
+
+
+def test_ad_tani_ayni_adimlari_yazar(sahte_ag, capsys, monkeypatch):
+    assert ad.tani() == 0
+    cikti = capsys.readouterr().out
+    assert "[OK]" in cikti and "DNS: dc.ornek.local" in cikti and "TLS ve sertifika dogrulandi" in cikti
+    sahte_ag["ca"] = OSError("dosya yok")
+    monkeypatch.setenv("AD_CA_CERT_FILE", "olmayan.pem")
+    assert ad.tani() == 2 and "CA dosyasi okunamadi" in capsys.readouterr().out
+
+
+def test_kurum_baglantilari_ucu_sir_vermez_ad_testi_admin_ve_csrf(client, monkeypatch):
+    from app.external import source_key_names
+
+    assert client.get("/api/v1/yonetim/kurum").status_code == 401
+    hdr = login_ok(client)
+    r = client.get("/api/v1/yonetim/kurum")
+    assert r.status_code == 200 and r.json()["data"]["baglantilar"][0]["state"] == "disabled"  # AD kapali: yarim sayilmaz
+    for k, v in {**AD_ORTAM, "AD_CA_CERT_FILE": "C:/kurulum/kurum-zinciri.pem", "AD_IZINLI_GRUPLAR": "CN=TAM-Grubu,OU=G,DC=ornek,DC=local",
+                 "AD_ARAMA_KOKU": "DC=ornek,DC=local", "ORACLE_REPORTDB_ENABLED": "true", "ORACLE_REPORTDB_PASSWORD": "cok-gizli-parola"}.items():
+        monkeypatch.setenv(k, v)
+    r = client.get("/api/v1/yonetim/kurum")
+    b = r.json()["data"]["baglantilar"]
+    assert [x["id"] for x in b] == ["ad", "oracle_reportdb", "oracle_onent", "oracle_galapagos"]
+    assert b[0]["state"] == "ready" and b[0]["missing"] == [] and b[0]["tur"] == "dizin"
+    assert b[0]["bilgiler"] == {"sunucu": "dc.ornek.local", "port": 636, "ldaps": True, "ssl": True, "alan": "ornek.local",
+                                "ca_dosyasi": True, "grup_kisiti": True, "otomatik_ac": True}  # fmt: skip
+    assert "kurum-zinciri" not in r.text and "TAM-Grubu" not in r.text and "cok-gizli-parola" not in r.text
+    assert "GALAPAGOSDB_DB_IMPORT_QUERY" in source_key_names() and not any(k.startswith("URUNTUTAR") for k in source_key_names())
+
+    from app.yonetim import router as yonetim_router
+
+    monkeypatch.setattr(yonetim_router.ad, "erisim_adimlari", lambda: [{"adim": "dns", "durum": "hata", "baslik": "DNS: dc", "ayrinti": ""}])
+    assert client.post("/api/v1/yonetim/kurum/ad-testi").status_code == 403  # CSRF'siz
+    r = client.post("/api/v1/yonetim/kurum/ad-testi", headers=hdr)
+    assert r.status_code == 200 and r.json()["data"] == {"tamam": False, "adimlar": [{"adim": "dns", "durum": "hata", "baslik": "DNS: dc", "ayrinti": ""}]}
+    client.post("/api/v1/session/logout", headers=hdr)
+    monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMember")
+    hdr = login_ok(client)
+    assert client.get("/api/v1/yonetim/kurum").status_code == 403
+    assert client.post("/api/v1/yonetim/kurum/ad-testi", headers=hdr).status_code == 403
+
+
+def test_kurum_ad_testi_ucu_taklit_soketle(client, sahte_ag):
+    hdr = login_ok(client)
+    r = client.post("/api/v1/yonetim/kurum/ad-testi", headers=hdr)
+    assert r.status_code == 200
+    d = r.json()["data"]
+    assert d["tamam"] is True and [x["adim"] for x in d["adimlar"]] == ["dns", "tcp", "tls"]
+
+
+ORACLE_ORTAM = {
+    "ORACLE_REPORTDB_ENABLED": "true",
+    "ORACLE_REPORTDB_HOST": "rapor-db.ornek.invalid",
+    "ORACLE_REPORTDB_PORT": "1522",
+    "ORACLE_REPORTDB_SERVICE_NAME": "GIZLISERVIS",
+    "ORACLE_REPORTDB_USER": "gizli_kullanici",
+    "ORACLE_REPORTDB_PASSWORD": "cok-gizli-parola",
+    "ORACLE_REPORTDB_IMPORT_QUERY": "DELETE FROM x",
+}
+
+
+def test_kurum_oracle_kartlari_sir_vermez(client, monkeypatch):
+    for k, v in ORACLE_ORTAM.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("ONENTDB_DB_ENABLED", "true")
+    login_ok(client)
+    r = client.get("/api/v1/yonetim/kurum")
+    b = {x["id"]: x for x in r.json()["data"]["baglantilar"]}
+    rdb = b["oracle_reportdb"]
+    assert rdb["tur"] == "oracle" and rdb["state"] == "ready" and rdb["label"] == "REPORTDB" and rdb["acma_anahtari"] == "ORACLE_REPORTDB_ENABLED"
+    assert rdb["bilgiler"] == {"sunucu": "rapor-db.ornek.invalid", "port": 1522, "servis": "GIZLISERVIS", "kullanici": "gizli_kullanici", "parola": True, "zaman_asimi": 10,
+                               "oracle_istemci": False, "sorgu_tamam": False, "sorgu_hata": rdb["bilgiler"]["sorgu_hata"]}  # fmt: skip
+    assert "SELECT" in rdb["bilgiler"]["sorgu_hata"] and rdb["son_parti"] is None and rdb["reportdb"]["kartlara_yaz"] is False
+    assert b["oracle_onent"]["state"] == "incomplete" and "ONENTDB_DB_HOST" in b["oracle_onent"]["missing"]
+    assert b["oracle_galapagos"]["state"] == "disabled" and b["oracle_galapagos"]["bilgiler"]["sunucu"] == ""
+    for gizli in ("cok-gizli-parola", "DELETE"):  # parola ve sorgu metni hic verilmez
+        assert gizli not in r.text
+
+
+def test_kurum_oracle_testi_adimlari_ilk_kirilan_halkada_durur(client, sahte_ag, monkeypatch):
+    from app.tampon import oracle
+
+    hdr = login_ok(client)
+    r = client.post("/api/v1/yonetim/kurum/oracle_reportdb/test", headers=hdr)  # kapali
+    assert r.json()["data"] == {"tamam": False, "adimlar": [{"adim": "ayar", "durum": "hata", "baslik": "ORACLE_REPORTDB_ENABLED=true değil", "ayrinti": r.json()["data"]["adimlar"][0]["ayrinti"]}]}
+    for k, v in ORACLE_ORTAM.items():
+        monkeypatch.setenv(k, v)
+    cagri: list[str] = []
+    monkeypatch.setattr(oracle, "baglanti_testi", lambda k: cagri.append(k) or {"ok": False, "mesaj": "ORA-01017: ***", "ipucu": "Kullanıcı adı ya da parola hatalı."})
+    sahte_ag["tcp"] = TimeoutError("timed out")
+    d = client.post("/api/v1/yonetim/kurum/oracle_reportdb/test", headers=hdr).json()["data"]
+    assert d["tamam"] is False and [(x["adim"], x["durum"]) for x in d["adimlar"]] == [("ayar", "ok"), ("dns", "ok"), ("tcp", "hata")]
+    assert d["adimlar"][2]["baslik"] == "Porta ulaşılamadı (1522)" and cagri == []  # TCP kirilinca oturum denenmez
+    sahte_ag["tcp"] = None
+    r = client.post("/api/v1/yonetim/kurum/oracle_reportdb/test", headers=hdr)
+    d = r.json()["data"]
+    assert [x["adim"] for x in d["adimlar"]] == ["ayar", "dns", "tcp", "oturum"] and d["adimlar"][3]["durum"] == "hata"
+    assert "parola hatalı" in d["adimlar"][3]["ayrinti"] and cagri == ["oracle_reportdb"]
+    assert "10.0.0.5" not in r.text and "rapor-db" not in r.text  # IP ve adres yazilmaz
+    monkeypatch.setattr(oracle, "baglanti_testi", lambda k: {"ok": True, "mesaj": "SELECT 1 FROM DUAL → 1", "ipucu": ""})
+    assert client.post("/api/v1/yonetim/kurum/oracle_reportdb/test", headers=hdr).json()["data"]["tamam"] is True
+    assert client.post("/api/v1/yonetim/kurum/ad/test", headers=hdr).status_code == 404
+    assert client.post("/api/v1/yonetim/kurum/oracle_reportdb/test").status_code == 403  # CSRF'siz
+
+
+def test_admin_yalniz_admin_rolunden_gelir(client, sahte_ad):
+    """Yonetim konsolu: elle olusturulup admin rolu verilen kullanici admin; rolu degismis eski is_admin isareti admin yapmaz."""
+    with Session(engine()) as db:
+        db.add(AppUser(username="elle.admin", display_name="Elle", role="admin", is_admin=False, password_hash=kullanicilar.parola_ozeti("Elle-Admin-Parola-1")))
+        db.add(AppUser(username="eski.admin", display_name="Eski", role="TeamMember", is_admin=True, password_hash=kullanicilar.parola_ozeti("Eski-Admin-Parola-1")))
+        db.commit()
+    r = _giris(client, "elle.admin", "Elle-Admin-Parola-1")
+    assert r.status_code == 200 and client.get("/api/v1/session/me").json()["data"]["is_admin"] is True
+    client.post("/api/v1/session/logout", headers={"X-CSRF-Token": client.cookies.get("tamlife_csrf") or ""})
+    r = _giris(client, "eski.admin", "Eski-Admin-Parola-1")
+    assert r.status_code == 200 and client.get("/api/v1/session/me").json()["data"]["is_admin"] is False
+    assert client.get("/api/v1/yonetim/ozet").status_code == 403
+    with Session(engine()) as db:
+        assert kullanicilar.bul(db, "eski.admin").is_admin is False  # giriste rolle uyumlu hale gelir

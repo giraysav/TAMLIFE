@@ -212,19 +212,21 @@ def test_kaynaklar_listesi(veri):
     hdr = login_ok(veri)
     _yukle(veri, hdr)
     k = {x["anahtar"]: x for x in veri.get("/api/v1/tampon/kaynaklar").json()["data"]}
-    assert {"csv", "ornek", "oracle_reportdb", "oracle_onent", "oracle_urun_tutar", "csv_alarm"} <= set(k)
+    assert "ornek" not in k and "csv" not in k and {"musteri_ham", "oracle_reportdb", "oracle_onent", "oracle_galapagos", "csv_alarm"} <= set(k)
     assert k["csv_alarm"]["son"]["durum"] == "ready" and k["csv_alarm"]["parti_sayisi"] == 1
     assert k["oracle_reportdb"]["hazir"] is False and "kapalı" in k["oracle_reportdb"]["neden"]
     assert all("password" not in str(v).lower() for v in k.values())
 
 
-def test_ornek_parti_yerel_veriden_turetilir(veri):
+def test_ornek_veri_ucu_yok(veri):
+    """Panelde uydurma veri yolu kalmadi (kullanici karari 2026-10-11): veri yalniz dosya ve kurum DB'lerinden gelir."""
     hdr = login_ok(veri)
-    r = veri.post("/api/v1/tampon/ornek", headers=hdr)
-    assert r.status_code == 200 and r.json()["data"]["durum"] == "ready" and r.json()["data"]["kaynak"] == "ornek"
-    pid = r.json()["data"]["id"]
-    d = veri.get(f"/api/v1/tampon/partiler/{pid}").json()["data"]
-    assert "gerçek değil" in d["etiket"]
+    assert veri.post("/api/v1/tampon/ornek", headers=hdr).status_code in (404, 405)
+
+
+def test_analiz_numarayi_unvandan_once_onerir(veri):
+    hdr = login_ok(veri)
+    pid = _yukle(veri, hdr, "Müşteri No;Müşteri Ünvanı;Kayıt Türü\n00012345;Alfa A.S.;Alarm\n222;Beta Ltd;Alarm\n444;Gama;Alarm\n").json()["data"]["id"]
     a = veri.post(f"/api/v1/tampon/partiler/{pid}/analiz", headers=hdr).json()["data"]
     ilk = a["oneriler"][0]
     assert (ilk["kolon"], ilk["alan"]) == ("Müşteri No", "customer_no") and ilk["oran"] > 50  # numara, unvandan once

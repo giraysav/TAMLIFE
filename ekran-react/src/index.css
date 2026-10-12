@@ -94,6 +94,20 @@
   --sidebar-ring: hsl(240 5.9% 10%);
 }
 
+/*
+  Gorunum olcegi: arayuz rem tabanlidir; kok yazi boyutu harf, dugme, bosluk ve simgeleri birlikte orantili buyutur.
+  Varsayilan 112.5% (onceki boyuttan bir basamak buyuk); kullanici hesap menusunden secer (src/lib/yazi.ts).
+*/
+html {
+  font-size: 112.5%;
+}
+html[data-yazi="normal"] {
+  font-size: 100%;
+}
+html[data-yazi="cok"] {
+  font-size: 125%;
+}
+
 html,
 body,
 #root {

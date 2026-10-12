@@ -26,7 +26,7 @@ export function Partiler({ dil, seciliId, onSec }: { dil: Dil; seciliId: number 
   return (
     <Bolum anahtar="yonetim-tampon-partiler" baslik={`${t.adim.tampon} · ${t.partiler}`}>
       <div className="grid gap-3">
-        <p className="text-[11px] font-bold text-slate-400">{t.adimAciklama.tampon}</p>
+        <p className="text-[0.6875rem] font-bold text-slate-400">{t.adimAciklama.tampon}</p>
         <Alan etiket={t.durum} sinif="max-w-48">
           <select
             className={GIRDI}
@@ -65,13 +65,13 @@ export function Partiler({ dil, seciliId, onSec }: { dil: Dil; seciliId: number 
                       aria-pressed={p.id === seciliId}
                       aria-label={`${t.sec}: #${p.id}`}
                       onClick={() => onSec(p.id)}
-                      className="font-mono text-[11px] font-black text-tl-blue underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+                      className="font-mono text-[0.6875rem] font-black text-tl-blue underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
                     >
                       #{p.id}
                     </button>
                   ),
                 },
-                { baslik: t.kaynaklar, hucre: (p) => <code className="text-[11px]">{p.kaynak}</code> },
+                { baslik: t.kaynaklar, hucre: (p) => <code className="text-[0.6875rem]">{p.kaynak}</code> },
                 { baslik: t.etiket, hucre: (p) => <span className="line-clamp-1 max-w-56 break-all font-normal">{p.etiket || "—"}</span> },
                 { baslik: t.durum, hucre: (p) => <Rozet ton={PARTI_TON[p.durum]}>{t.partiDurum[p.durum]}</Rozet> },
                 { baslik: t.satir, hucre: (p) => sayi(p.satir), sinif: "text-right font-mono" },

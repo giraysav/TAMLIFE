@@ -6,6 +6,16 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 /** Ortak arayuz ogeleri (tek kaynak). Gorsel dil: lacivert baslik, mavi vurgu, sari serit; katlanir bolumler, buyuk harf basliklar. */
 
+/**
+ * Alan basligi standardi (Turkcell paleti): 1. seviye = lacivert->mavi gradyanli bant, beyaz buyuk harf baslik, sari dikey serit ve
+ * sari alt cizgi (ust cubukla ayni dil); 2. seviye (ic ice katlananlar) = acik mavi bant, lacivert baslik, sari serit.
+ * Bolum, Panel ve Veri Girisi rehberi bu sabitleri kullanir; yeni bir alan basligi icin de bunlar kullanilir.
+ */
+export const BASLIK_BANDI = "flex items-center gap-2 border-b-2 border-tl-yellow bg-gradient-to-r from-tl-navy via-[#003a7a] to-tl-blue px-4 py-2.5 text-white"
+export const BASLIK_YAZISI = "min-w-0 text-[0.75rem] font-black uppercase tracking-widest text-white"
+export const ALT_BASLIK_BANDI = "flex items-center gap-2 bg-gradient-to-r from-tl-blue/15 to-tl-blue/5 px-3 py-2 text-tl-navy"
+export const ALT_BASLIK_YAZISI = "min-w-0 text-[0.6875rem] font-black uppercase tracking-widest text-tl-navy"
+
 export const GIRDI =
   "w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-tl-blue focus-visible:ring-2 focus-visible:ring-tl-yellow/60 disabled:opacity-60"
 
@@ -44,10 +54,10 @@ export function Bolum({ anahtar, baslik, children, ek = "", varsayilanAcik = tru
       }}
       className={`group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${ek}`}
     >
-      <summary className="flex cursor-pointer select-none list-none items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 hover:bg-slate-100/80 [details:not([open])_&]:border-b-transparent [&::-webkit-details-marker]:hidden">
+      <summary className={`${BASLIK_BANDI} cursor-pointer select-none list-none transition-[filter] hover:brightness-110 [details:not([open])_&]:border-b-transparent [&::-webkit-details-marker]:hidden`}>
         <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-tl-yellow" />
-        <h3 className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-widest text-tl-navy">{baslik}</h3>
-        <ChevronDown aria-hidden className="size-4 shrink-0 text-tl-navy/60 transition-transform duration-200 group-open:rotate-180" />
+        <h3 className={`flex-1 ${BASLIK_YAZISI}`}>{baslik}</h3>
+        <ChevronDown aria-hidden className="size-4 shrink-0 text-tl-yellow transition-transform duration-200 group-open:rotate-180" />
       </summary>
       <div className="p-4">{children}</div>
     </details>
@@ -76,7 +86,7 @@ export function Rozet({ children, ton = "gri" }: { children: ReactNode; ton?: "g
     amber: "bg-amber-500/20 text-amber-800",
     kirmizi: "bg-rose-500/10 text-rose-600",
   }[ton]
-  return <span className={`whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-bold ${sinif}`}>{children}</span>
+  return <span className={`whitespace-nowrap rounded-md px-2 py-0.5 text-[0.625rem] font-bold ${sinif}`}>{children}</span>
 }
 
 export function SayfaKabi({ ikon: Ikon, baslik, aciklama, children }: { ikon: LucideIcon; baslik: string; aciklama?: string; children?: ReactNode }) {
@@ -121,7 +131,7 @@ export function Sekmeler<T extends string>({ secenekler, deger, onDegis, etiket 
             {Ikon ? <Ikon aria-hidden className="size-4" /> : null}
             {s.etiket}
             {s.sayi !== undefined ? (
-              <span className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] ${aktif ? "bg-tl-navy text-tl-yellow" : "bg-slate-100 text-slate-500"}`}>{s.sayi}</span>
+              <span className={`rounded-md px-1.5 py-0.5 font-mono text-[0.6875rem] ${aktif ? "bg-tl-navy text-tl-yellow" : "bg-slate-100 text-slate-500"}`}>{s.sayi}</span>
             ) : null}
           </button>
         )
@@ -139,33 +149,36 @@ const KPI_TON = {
   gri: "from-slate-200/60 text-slate-600",
 } as const
 
-export function Kpi({ etiket, deger, alt, ikon: Ikon, ton = "mavi" }: { etiket: string; deger: ReactNode; alt?: ReactNode; ikon?: LucideIcon; ton?: keyof typeof KPI_TON }) {
+/** `kucuk`: alcak yer (Genel Bakis Ekip Ozeti): dolgu, sayi ve simge kucultulur. */
+export function Kpi({ etiket, deger, alt, ikon: Ikon, ton = "mavi", kucuk = false }: { etiket: string; deger: ReactNode; alt?: ReactNode; ikon?: LucideIcon; ton?: keyof typeof KPI_TON; kucuk?: boolean }) {
+  const uzun = typeof deger === "string" && deger.length > 9
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br to-white p-4 shadow-sm ${KPI_TON[ton]}`}>
-      {Ikon ? <Ikon aria-hidden className="absolute right-3 top-3 size-7 opacity-30" /> : null}
-      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">{etiket}</div>
-      <div className={`mt-1 font-mono font-black leading-none text-tl-navy ${typeof deger === "string" && deger.length > 9 ? "text-xl" : "text-3xl"}`}>{deger}</div>
-      {alt ? <div className="mt-1.5 text-[11px] font-bold text-slate-500">{alt}</div> : null}
+    <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br to-white shadow-sm ${kucuk ? "px-3 py-2.5" : "p-4"} ${KPI_TON[ton]}`}>
+      {Ikon ? <Ikon aria-hidden className={`absolute opacity-30 ${kucuk ? "right-2.5 top-2.5 size-5" : "right-3 top-3 size-7"}`} /> : null}
+      <div className="text-[0.625rem] font-black uppercase tracking-widest text-slate-500">{etiket}</div>
+      <div className={`mt-1 font-mono font-black leading-none text-tl-navy ${uzun ? "text-xl" : kucuk ? "text-2xl" : "text-3xl"}`}>{deger}</div>
+      {alt ? <div className={`font-bold text-slate-500 ${kucuk ? "mt-1 text-[0.625rem]" : "mt-1.5 text-[0.6875rem]"}`}>{alt}</div> : null}
     </div>
   )
 }
 
-export function Panel({ baslik, aciklama, sag, children, sinif = "" }: { baslik?: string; aciklama?: string; sag?: ReactNode; children: ReactNode; sinif?: string }) {
+/** `govdeSinif`: baslik bandinin altindaki icerik alani (varsayilan p-4); sıkışık yerlesimler dolgu ya da flex ekler. */
+export function Panel({ baslik, aciklama, sag, children, sinif = "", govdeSinif = "p-4" }: { baslik?: string; aciklama?: string; sag?: ReactNode; children: ReactNode; sinif?: string; govdeSinif?: string }) {
   return (
-    <section className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${sinif}`}>
+    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${sinif}`}>
       {baslik ? (
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className={`${BASLIK_BANDI} shrink-0 flex-wrap justify-between`}>
           <div className="min-w-0">
-            <h3 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-tl-navy">
-              <span aria-hidden className="h-4 w-1 rounded-full bg-tl-yellow" />
+            <h3 className={`flex items-center gap-2 ${BASLIK_YAZISI}`}>
+              <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-tl-yellow" />
               {baslik}
             </h3>
-            {aciklama ? <p className="mt-0.5 text-[11px] font-bold text-slate-400">{aciklama}</p> : null}
+            {aciklama ? <p className="mt-0.5 pl-3 text-[0.6875rem] font-bold text-white/70">{aciklama}</p> : null}
           </div>
           {sag}
         </div>
       ) : null}
-      {children}
+      <div className={govdeSinif}>{children}</div>
     </section>
   )
 }
@@ -234,9 +247,9 @@ export function Bildirim({ ton = "gri", children }: { ton?: "gri" | "yesil" | "a
 export function Alan({ etiket, children, ipucu, sinif = "" }: { etiket: string; children: ReactNode; ipucu?: string; sinif?: string }) {
   return (
     <label className={`grid gap-1 ${sinif}`}>
-      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">{etiket}</span>
+      <span className="text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{etiket}</span>
       {children}
-      {ipucu ? <span className="text-[10px] font-bold text-slate-400">{ipucu}</span> : null}
+      {ipucu ? <span className="text-[0.625rem] font-bold text-slate-400">{ipucu}</span> : null}
     </label>
   )
 }
@@ -251,6 +264,7 @@ export function VeriTablosu<T>({
   anahtar,
   vurgulu,
   bos,
+  kaydirmali = false,
 }: {
   baslik: string
   kolonlar: Kolon<T>[]
@@ -258,13 +272,15 @@ export function VeriTablosu<T>({
   anahtar?: (satir: T) => string | number
   vurgulu?: (satir: T) => boolean
   bos?: ReactNode
+  /** true: tablo ust kutunun kalan yuksekligini doldurur, satirlar kutunun icinde kayar, baslik sabit kalir (sayfa kaymaz) */
+  kaydirmali?: boolean
 }) {
   if (satirlar.length === 0 && bos) return <>{bos}</>
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
+    <div className={`rounded-xl border border-slate-200 ${kaydirmali ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto"}`}>
       <table className="w-full text-left text-xs">
         <caption className="sr-only">{baslik}</caption>
-        <thead className="bg-tl-navy text-white">
+        <thead className={`bg-tl-navy text-white ${kaydirmali ? "sticky top-0 z-[1]" : ""}`}>
           <tr>
             {kolonlar.map((k, i) => (
               <th key={i} scope="col" className={`whitespace-nowrap px-3 py-2 font-black ${k.sinif ?? ""}`}>

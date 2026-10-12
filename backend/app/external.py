@@ -1,9 +1,8 @@
-"""Dis kaynaklar: uretimdeki anahtar adlari (ORACLE_REPORTDB_*, ONENTDB_DB_*, URUNTUTAR_DB_*).
+"""Dis kaynaklar (Oracle): REPORTDB (ORACLE_REPORTDB_*), ONENTDB (ONENTDB_DB_*), GALAPAGOSDB (GALAPAGOSDB_DB_*).
 
 Burada yalniz *_ENABLED bayragi okunur (acik_mi); surucu yuklenmez, baglanti acilmaz (baglanti: app.tampon.oracle, isci surecte).
-Onedesk DB, canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski
-kodun ONEDESK_DB_* adi artik yok). Onent ve Urun-Tutar anahtarlari
-api_services.OracleSourceConfig ile integrations.py kaydindan gelir.
+REPORTDB (Onedesk DB), canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski kodun ONEDESK_DB_* adi artik yok). ONENTDB
+anahtarlari api_services.OracleSourceConfig'ten gelir; GALAPAGOSDB ayni kalibi kullanir (2026-10-10, Urun-Tutar DB'nin yerine).
 """
 
 from __future__ import annotations
@@ -43,35 +42,35 @@ SOURCES: tuple[Source, ...] = (
     Source(
         "oracle_reportdb",
         "oracle",
-        "Onedesk / REPORTDB",
+        "REPORTDB",
         "ORACLE_REPORTDB_ENABLED",
         _oracle("ORACLE_REPORTDB", "ORACLE_REPORTDB_URL", "ONEDESK_BASE_URL", "ONEDESK_API_KEY"),
     ),
     Source(
         "oracle_onent",
         "oracle",
-        "Onent / Oracle",
+        "ONENTDB",
         "ONENTDB_DB_ENABLED",
         _oracle("ONENTDB_DB", "ONENT_DB_URL"),
     ),
     Source(
-        "oracle_urun_tutar",
+        "oracle_galapagos",
         "oracle",
-        "Urun-Tutar / Oracle",
-        "URUNTUTAR_DB_ENABLED",
-        _oracle("URUNTUTAR_DB", "URUN_TUTAR_DB_URL"),
+        "GALAPAGOSDB",
+        "GALAPAGOSDB_DB_ENABLED",
+        _oracle("GALAPAGOSDB_DB"),
     ),
     Source(
         "oracle_reportdb_import",
         "oracle",
-        "Onedesk / REPORTDB veri iceri alma",
+        "REPORTDB veri iceri alma",
         "ORACLE_REPORTDB_IMPORT_QUERY",
         _oracle("ORACLE_REPORTDB", "ORACLE_REPORTDB_URL"),
     ),
     Source(
         "oracle_onent_import",
         "oracle",
-        "Onent / veri iceri alma",
+        "ONENTDB veri iceri alma",
         "ONENTDB_DB_IMPORT_QUERY",
         _oracle("ONENTDB_DB", "ONENT_DB_URL"),
     ),

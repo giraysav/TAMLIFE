@@ -6,6 +6,15 @@ export const apiYolu = (yol: string) => TABAN + yol
 /** Oturum yok: sunucu 401 dondu. */
 export const oturumYok = (cevap: Response) => cevap.status === 401
 
+/** Sunucu metinlerinin dili (X-Dil): arayuzun secili dili; okunamazsa Turkce. */
+export function dilBasligi(): Record<string, string> {
+  try {
+    return { "X-Dil": window.localStorage.getItem("tamlife.dil") === "en" ? "en" : "tr" }
+  } catch {
+    return { "X-Dil": "tr" }
+  }
+}
+
 /** Durum degistiren isteklerde CSRF basligi (cift gonderim cerezi). */
 export function csrfBasliklari(ekstra: Record<string, string> = {}): Record<string, string> {
   const eslesme = document.cookie.match(/(?:^|;\s*)tamlife_csrf=([^;]+)/)

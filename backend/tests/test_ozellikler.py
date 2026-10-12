@@ -10,9 +10,17 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import ornek_veri
 from app.db import dis_kimlik, engine, kimlik_coz, kullanici_oturumu
-from app.models import ApnRevenue, ApnWork, AppUser, CalendarDay, Customer, OnedeskRecord, Presentation, SmsRevenue
+from app.models import (
+    ApnRevenue,
+    ApnWork,
+    AppUser,
+    CalendarDay,
+    Customer,
+    OnedeskRecord,
+    Presentation,
+    SmsRevenue,
+)
 from app.onedesk import yz
 from app.tampon import depo
 from tests.conftest import kisi_say, login_ok
@@ -71,13 +79,14 @@ def _kayit(db, **alan):
 def test_rol_yetkileri_kaydedilir_ve_korunur(veri):
     hdr = login_ok(veri)
     ilk = veri.get("/api/v1/roller").json()["data"]
-    assert ilk["permission_catalog"] == [
-        {"id": "takvim.sunuma_gonder", "label": "TAM Takvim: çeyrek bazlı sunuma gönder", "label_en": "TAM Calendar: send to quarterly presentation"}
-    ]
+    katalog = {y["id"]: y for y in ilk["permission_catalog"]}  # her ek yetki duz dilde ne sagladigini ve nerede kullanildigini tasir (TR+EN)
+    assert list(katalog) == ["sunum.gonder", "talep.yonet"]
+    assert katalog["sunum.gonder"]["area"] == "sunum" and katalog["talep.yonet"]["area"] == ""
+    assert all(y[k] for y in katalog.values() for k in ("label", "label_en", "description", "description_en", "where", "where_en"))
     assert next(r for r in ilk["roles"] if r["role"] == "TeamMember")["permissions"] == []  # varsayilan kapali
-    assert next(r for r in ilk["roles"] if r["role"] == "admin")["permissions"] == ["takvim.sunuma_gonder"]
-    assert _rol_ver(veri, hdr, yetkiler=["takvim.sunuma_gonder"])["permissions"] == ["takvim.sunuma_gonder"]
-    assert _rol_ver(veri, hdr)["permissions"] == ["takvim.sunuma_gonder"]  # permissions verilmezse mevcut yetki korunur
+    assert next(r for r in ilk["roles"] if r["role"] == "admin")["permissions"] == ["sunum.gonder", "talep.yonet"]
+    assert _rol_ver(veri, hdr, yetkiler=["sunum.gonder"])["permissions"] == ["sunum.gonder"]
+    assert _rol_ver(veri, hdr)["permissions"] == ["sunum.gonder"]  # permissions verilmezse mevcut yetki korunur
     assert _rol_ver(veri, hdr, yetkiler=[])["permissions"] == []
     r = veri.put("/api/v1/roller/TeamMember", json={"modules": TUM_MODULLER, "landing": "ozet", "permissions": ["yok.boyle.yetki"]}, headers=hdr)
     assert r.status_code == 400
@@ -85,11 +94,11 @@ def test_rol_yetkileri_kaydedilir_ve_korunur(veri):
 
 def test_me_eylem_yetkilerini_dondurur(veri, monkeypatch):
     hdr = login_ok(veri)
-    assert veri.get("/api/v1/session/me").json()["data"]["permissions"]["actions"] == ["takvim.sunuma_gonder"]  # admin hepsine sahip
-    _rol_ver(veri, hdr, yetkiler=["takvim.sunuma_gonder"])
+    assert veri.get("/api/v1/session/me").json()["data"]["permissions"]["actions"] == ["sunum.gonder", "talep.yonet"]  # admin hepsine sahip
+    _rol_ver(veri, hdr, yetkiler=["sunum.gonder"])
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")
-    assert veri.get("/api/v1/session/me").json()["data"]["permissions"]["actions"] == ["takvim.sunuma_gonder"]
+    assert veri.get("/api/v1/session/me").json()["data"]["permissions"]["actions"] == ["sunum.gonder"]
 
 
 # --- Onedesk -------------------------------------------------------------------------------------------
@@ -300,8 +309,12 @@ def test_gelir_member_baskasinin_kaydini_goremez(veri, monkeypatch):
     _cikis(veri, hdr)
     hdr = _giris(veri, monkeypatch, "TeamMember")
     assert [i["proje"] for i in veri.get("/api/v1/gelir/sms").json()["data"]["items"]] == ["Y"]
-    assert veri.put(f"/api/v1/gelir/sms/{diger}", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 404
-    assert veri.delete(f"/api/v1/gelir/sms/{diger}", headers=hdr).status_code == 404
+    # veri ekleme / degistirme / silme yalniz admin: Member baskasinin kaydina da kendi adina da yazamaz
+    assert veri.put(f"/api/v1/gelir/sms/{diger}", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 403
+    assert veri.delete(f"/api/v1/gelir/sms/{diger}", headers=hdr).status_code == 403
+    assert veri.post("/api/v1/gelir/sms", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 403
+    assert veri.post("/api/v1/gelir/apn/kurulum", json={"musteri": "B", "apn_adi": "x"}, headers=hdr).status_code == 403
+    assert veri.post("/api/v1/gelir/apn/calisma", json={"musteri": "B"}, headers=hdr).status_code == 403
 
 
 def test_gelir_tam_dosyasina_yazilir_ve_tam_degisince_tasinir(veri):
@@ -417,7 +430,7 @@ def test_sunuma_gonder_yalniz_yetkili_rol_ve_admin(veri, monkeypatch):
     _cikis(veri, hdr)
 
     hdr = login_ok_admin(veri, monkeypatch)
-    _rol_ver(veri, hdr, yetkiler=["takvim.sunuma_gonder"])  # admin Rol Yonetimi'nden verir
+    _rol_ver(veri, hdr, yetkiler=["sunum.gonder"])  # admin Rol Yonetimi'nden verir
     _cikis(veri, hdr)
     hdr = _giris(veri, monkeypatch, "TeamMember")
     assert veri.get("/api/v1/takvim/ekip", params={"yil": YIL, "ceyrek": 1}).json()["data"]["sunuma_gonderebilir"] is True
@@ -437,11 +450,13 @@ def test_sunuma_gonderilen_ogeler_ceyrek_basina_tek_kayit(veri):
         k.commit()
     for _ in range(2):  # tekrar gonderim gunceller
         assert veri.post("/api/v1/takvim/sunuma-gonder", json={"yil": YIL, "ceyrek": 3, "gonder": True}, headers=hdr).status_code == 200
-    ogeler = veri.get("/api/v1/sunum/ogeler").json()["data"]
-    assert len(ogeler) == 1 and ogeler[0]["donem"] == f"{YIL}-Q3" and ogeler[0]["kaynak"] == "takvim"
+    sunum = veri.get("/api/v1/sunum/donem", params={"yil": YIL, "ceyrek": 3}).json()["data"]
+    ogeler = sunum["ogeler"]
+    assert sunum["donem"] == f"{YIL}-Q3" and len(ogeler) == 1 and ogeler[0]["kaynak"] == "takvim" and ogeler[0]["durum"] == "kayitli"
+    assert ogeler[0]["gonderen"] == "Admin Kisi"
     ayse = next(u for u in ogeler[0]["veri"]["uyeler"] if u["ad"] == "Ayse Test")
     assert ayse["durumlar"]["raporlu"] == 1 and ogeler[0]["veri"]["genel"]["durumlar"]["raporlu"] == 1
-    assert veri.get("/api/v1/sunum/ogeler", params={"yil": YIL - 5}).json()["data"] == []
+    assert veri.get("/api/v1/sunum/donem", params={"yil": YIL - 5, "ceyrek": 3}).json()["data"]["ogeler"] == []  # akan kaynak secilmedi
     veri.post("/api/v1/takvim/sunuma-gonder", json={"yil": YIL, "ceyrek": 3, "gonder": False}, headers=hdr)
     with Session(engine()) as db:
         assert db.scalar(select(func.count()).select_from(Presentation)) == 0
@@ -484,30 +499,6 @@ def test_portfoy_member_yalniz_istiraki_varsa_catiyi_gorur(veri, monkeypatch):
     _giris(veri, monkeypatch, "TeamMember")  # 'admin' kullanicisi (id 1) yalniz istirakin sahibi
     m = veri.get("/api/v1/musteri/portfoy").json()["data"]
     assert [c["name"] for c in m["items"]] == ["Alfa Test A.S."] and [i["name"] for i in m["items"][0]["istirakler"]] == ["Alfa Istirak"]
-
-
-# --- Dev ornek verisi ----------------------------------------------------------------------------------
-def test_ornek_veri_tohumla_ve_yalniz_isaretlileri_temizle(client, monkeypatch):
-    with Session(engine()) as db:
-        db.add(Customer(external_key="gercek-1", name="Gercek Musteri"))
-        db.add(OnedeskRecord(kind="alarm", status="open", source="import", customer_label="Gercek"))
-        db.commit()
-        sayilar = ornek_veri.tohumla(db)
-        assert sayilar["musteri"] == 15 and sayilar["onedesk"] == 480 and sayilar["kisi"] == 6 and sayilar["takvim_gunu"] > 100
-        assert ornek_veri.var_mi(db)
-        # sayaclar kayitlardan hesaplanir; top10'a yetecek cesitlilik
-        assert db.scalar(select(func.count()).select_from(OnedeskRecord).where(OnedeskRecord.source == "ornek", OnedeskRecord.status == "closed")) > 250
-        assert db.scalar(select(func.count(Customer.id)).where(Customer.alarm_count > 0)) >= 5
-        assert kisi_say(SmsRevenue) == 12 and kisi_say(ApnWork) == 10 and kisi_say(CalendarDay) == sayilar["takvim_gunu"]
-        silinen = ornek_veri.temizle(db)
-        assert silinen["musteri"] == 15 and silinen["kisi"] == 6
-        assert db.scalar(select(func.count()).select_from(Customer)) == 1  # gercek kayit dokunulmaz
-        assert db.scalar(select(func.count()).select_from(OnedeskRecord)) == 1
-        assert kisi_say(CalendarDay) == 0 and kisi_say(SmsRevenue) == 0 and not ornek_veri.var_mi(db)
-    monkeypatch.setenv("TAMLIFE_ENV", "uretim")
-    assert ornek_veri.main([]) == 2  # dev disinda reddedilir
-    monkeypatch.setenv("TAMLIFE_ENV", "test")
-    assert ornek_veri.main([]) == 2
 
 
 def test_tutar_bicimleri(veri):

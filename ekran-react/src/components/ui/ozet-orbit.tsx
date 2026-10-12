@@ -3,7 +3,6 @@ import type { LucideIcon } from "lucide-react"
 import { Briefcase, CalendarCheck, CalendarDays, Circle, FileText, FolderKanban, LifeBuoy, Link2, MessageSquare, Presentation, Radar, TrendingUp, Wifi } from "lucide-react"
 import teknocan from "@/assets/teknocan.png"
 import { oku } from "@/lib/sorgu"
-import { useHareket } from "@/lib/hareket"
 import { ModulYayi } from "@/components/ui/modul-yayi"
 import type { YayOgesi } from "@/components/ui/modul-yayi"
 
@@ -45,7 +44,6 @@ const VARSAYILAN_RENK: readonly [string, string] = ["#64748b", "#334155"]
 export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string) => void }) {
   const { data: kartlar = [] } = useQuery({ queryKey: ["home"], queryFn: () => oku<Kart[]>("/api/v1/home") })
 
-  const hareket = useHareket()
   const ogeler: YayOgesi[] = kartlar.slice(0, 12).map((kart) => {
     const Ikon = IKON[kart.key] ?? Circle
     const etiket = dil === "en" ? kart.title_en || kart.title : kart.title
@@ -56,13 +54,15 @@ export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string
     <ModulYayi
       ogeler={ogeler}
       alt={
-        <img
-          src={teknocan}
-          alt="Teknocan"
-          draggable={false}
-          className="tl-hareket h-[clamp(130px,20vh,220px)] w-auto select-none drop-shadow-[0_14px_18px_rgba(0,40,85,0.25)]"
-          style={hareket ? { animation: "tl-yuz 6s ease-in-out infinite" } : undefined}
-        />
+        <div className="relative flex h-full w-full items-end justify-center">
+          <span aria-hidden className="absolute inset-x-[-18%] bottom-[-3%] h-[9%] rounded-[50%] bg-tl-navy/15 blur-[3px]" />
+          <img
+            src={teknocan}
+            alt="Teknocan"
+            draggable={false}
+            className="relative h-full w-auto max-w-full select-none object-contain drop-shadow-[0_8px_10px_rgba(0,40,85,0.2)]"
+          />
+        </div>
       }
     />
   )

@@ -125,7 +125,8 @@ def test_gecerli_kimlikler_aynen_calisir(veri):
     assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 99}, headers=hdr).status_code == 404  # sinir icinde ama kayit yok
     assert veri.get("/api/v1/musteri/99").status_code == 404
     assert veri.get(f"/api/v1/musteri/{SINIR}").status_code == 404
-    parti = veri.post("/api/v1/tampon/ornek", headers=hdr).json()["data"]
+    csv = "Müşteri No;Kayıt Türü\n1;Alarm\n".encode()
+    parti = veri.put("/api/v1/tampon/yukle?kaynak=kimlik&dosya=k.csv", content=csv, headers={**hdr, "Content-Type": "text/csv"}).json()["data"]
     assert veri.get(f"/api/v1/tampon/partiler/{parti['id']}").status_code == 200
 
 

@@ -24,7 +24,7 @@ export function TakvimGrafigi({ genel, uyeler, t }: { genel: Ozet; uyeler: Grafi
   return (
     <div className="grid gap-6 lg:grid-cols-[auto_1fr]">
       <div className="grid justify-items-center gap-3">
-        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{t.durumToplami}</p>
+        <p className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.durumToplami}</p>
         <Halka
           dilimler={seriler.map((s) => ({ anahtar: s.anahtar, ad: s.ad, deger: genel.durumlar[s.anahtar] ?? 0, renk: s.renk }))}
           baslik={sayi(izinToplam)}
@@ -34,11 +34,11 @@ export function TakvimGrafigi({ genel, uyeler, t }: { genel: Ozet; uyeler: Grafi
       </div>
       <div className="grid gap-5">
         <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">{t.kisiBazinda}</p>
+          <p className="mb-2 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.kisiBazinda}</p>
           <YatayCubuklar satirlar={uyeler.map((u) => ({ anahtar: u.ad, etiket: u.ad, degerler: u.durumlar, sag: sayi(u.izin_gun) }))} seriler={seriler} yukseklik={12} />
         </div>
         <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">{t.toplantilar}</p>
+          <p className="mb-2 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.toplantilar}</p>
           <YatayCubuklar
             satirlar={uyeler.map((u) => ({ anahtar: u.ad, etiket: u.ad, degerler: { online: u.online, yuzyuze: u.yuzyuze }, sag: `${u.online} / ${u.yuzyuze}` }))}
             seriler={toplanti}

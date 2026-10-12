@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -41,9 +42,9 @@ TABLE_OWNER = {
     "report_dispatch": "rapor",
     "report_recipient": "rapor",
     "calendar_day": "takvim",
-    "project": "proje",
     "project_item": "proje",
     "project_action": "proje",
+    "project_customer_work": "proje",
     "onedesk_record": "onedesk",
     "util_criteria_set": "utilizasyon",
     "score_detail": "utilizasyon",
@@ -61,10 +62,12 @@ TABLE_OWNER = {
     "presentation": "sunum",
     "income_production": "gelir_uretim",
     "role_view": "roller",
+    "app_setting": "core",
     "ingest_batch": "ingest",
     "ingest_block": "ingest",
     "distribution_rule": "ingest",
     "distribution_log": "ingest",
+    "customer_import_run": "ingest",
     "fault_event": "yonetim",
 }
 
@@ -80,9 +83,17 @@ class AppUser(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # panele son giris; TAM Takvim listesi
-    is_ad_user: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))  # giris yalniz AD'den; yerel parolaya dusmez
+    is_ad_user: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())  # giris yalniz AD'den; yerel parolaya dusmez
     ad_domain: Mapped[str] = mapped_column(String(120), default="", server_default="")
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)  # yalniz yerel acil hesap (scrypt); AD kullanicisinda bos
+    # Profil (kisinin kendi duzenledigi alanlar; kullanici adi AD'den gelir, degistirilemez). Bos ad/soyad display_name'den turetilir.
+    first_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    last_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    phone: Mapped[str] = mapped_column(String(40), default="", server_default="")
+    company: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    address: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    website: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    permissions: Mapped[list | None] = mapped_column(JSON, nullable=True)  # kisiye verilen ek yetkiler (rolgorunum.YETKILER); role eklenir
 
 
 class AuditEvent(Base):
@@ -107,7 +118,7 @@ class Customer(Base):
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)  # bos = cati
     score: Mapped[float | None] = mapped_column(Float, nullable=True)  # final skor, yalniz cati
     # --- Musteri karti (uretim customers). Tutarlar uretimdeki gibi metin: "0,00 TL" bicimi
-    customer_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    customer_no: Mapped[str | None] = mapped_column(String(200), nullable=True)  # birden cok numara virgulle
     ncst: Mapped[str] = mapped_column(String(50), default="")  # uretimde pinned_entries JSON icindeydi
     sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
     inventory_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -241,28 +252,46 @@ class CalendarDay(KullaniciBase):
     face_count: Mapped[int] = mapped_column(Integer, default=0)  # yuz yuze toplanti
 
 
-class Project(Base):
-    __tablename__ = "project"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)
-    title: Mapped[str] = mapped_column(String(200), default="")
-    status: Mapped[str] = mapped_column(String(40), default="")
-
-
 class ProjectItem(Base):
+    """Takip edilen proje (uretim project_items): TAM'in tekil isi, 5 sabit kategoriden biri. Durum/oncelik degisimi aksiyon olarak yazilir."""
+
     __tablename__ = "project_item"
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"))
-    title: Mapped[str] = mapped_column(String(200), default="")
-    state: Mapped[str] = mapped_column(String(40), default="")
+    owner_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"), index=True)  # sorumlu TAM
+    category: Mapped[str] = mapped_column(String(20))  # proje / calisma / ddos / dc_tasima / topoloji
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="acik", index=True)  # acik / devam / beklemede / kapandi
+    priority: Mapped[str] = mapped_column(String(20), default="orta")
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    closed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ProjectAction(Base):
+    """Proje aksiyon gecmisi: kim, ne zaman, ne yapti (acilis ve durum/oncelik degisimi dahil)."""
+
     __tablename__ = "project_action"
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"))
-    note: Mapped[str] = mapped_column(String(500), default="")
-    acted_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("project_item.id"), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    actor: Mapped[str] = mapped_column(String(200), default="")
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ProjectCustomerWork(Base):
+    """Musteri bazli calisma isareti (uretim analiz.db proje_musteri_calisma): musteri + kategori basina tek kayit."""
+
+    __tablename__ = "project_customer_work"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    category: Mapped[str] = mapped_column(String(20), primary_key=True)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    detail: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[str] = mapped_column(String(200), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class OnedeskRecord(Base):
@@ -376,19 +405,37 @@ class UrunTutarOzet(Base):
 
 
 class Demand(Base):
+    """Gelistirme talebi / oneri (uretim gelistirme_talepleri). Mevcut ve beklenen durum ayri ayri zorunlu."""
+
     __tablename__ = "demand"
     id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String(200), default="")
-    status: Mapped[str] = mapped_column(String(40), default="")
-    opened_by: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(160))
+    kind: Mapped[str] = mapped_column(String(20), default="ozellik")  # ozellik / iyilestirme / hata
+    priority: Mapped[str] = mapped_column(String(20), default="orta")  # dusuk / orta / yuksek / kritik
+    module: Mapped[str] = mapped_column(String(40), default="")  # ilgili ekran
+    current_state: Mapped[str] = mapped_column(Text)
+    expected_state: Mapped[str] = mapped_column(Text)
+    acceptance: Mapped[str] = mapped_column(Text, default="")
+    opened_by_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"), index=True)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), default="yeni", index=True)
+    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
+    target_version: Mapped[str] = mapped_column(String(40), default="")
+    admin_note: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class DemandLog(Base):
+    """Talep degisiklik gecmisi: kim, ne zaman, hangi alan, eski -> yeni ('olusturma' satiri acilisi kaydeder)."""
+
     __tablename__ = "demand_log"
     id: Mapped[int] = mapped_column(primary_key=True)
-    demand_id: Mapped[int] = mapped_column(ForeignKey("demand.id"))
-    at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    note: Mapped[str] = mapped_column(String(500), default="")
+    demand_id: Mapped[int] = mapped_column(ForeignKey("demand.id"), index=True)
+    field: Mapped[str] = mapped_column(String(30))
+    old_value: Mapped[str] = mapped_column(String(200), default="")
+    new_value: Mapped[str] = mapped_column(String(200), default="")
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class SmsRevenue(KullaniciBase):
@@ -446,7 +493,8 @@ class RadarProspect(Base):
 
 
 class Presentation(Base):
-    """Ceyrek bazli sunum ogesi. source='takvim': TAM Takvim ozetinin o ceyrekteki goruntusu (period '2026-Q4'); ceyrek+kaynak basina tek kayit."""
+    """Ceyrek bazli sunum ogesi: kaynagin (app.sunum.servis.KAYNAKLAR, ornek 'takvim') o ceyrekteki donmus goruntusu (period '2026-Q4').
+    Ceyrek+kaynak basina tek kayit. Elle gonderimde sent_by kisinin adi; ceyrek bitince kendiliginden dondurulende bos."""
 
     __tablename__ = "presentation"
     __table_args__ = (
@@ -477,7 +525,17 @@ class RoleView(Base):
     role: Mapped[str] = mapped_column(String(40), primary_key=True)
     modules: Mapped[list] = mapped_column(JSON, default=list)
     landing: Mapped[str] = mapped_column(String(80), default="ozet")
-    permissions: Mapped[list] = mapped_column(JSON, default=list)  # ek yetkiler (rolgorunum.YETKILER), ornek takvim.sunuma_gonder
+    permissions: Mapped[list] = mapped_column(JSON, default=list)  # ek yetkiler (rolgorunum.YETKILER), ornek sunum.gonder
+    updated_by: Mapped[str] = mapped_column(String(120), default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AppSetting(Base):
+    """Panel geneli ayar (anahtar -> JSON). Ornek 'sunum.kaynaklar': ceyrek bazli sunuma kendiliginden akan kaynaklar."""
+
+    __tablename__ = "app_setting"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[list | dict] = mapped_column(JSON, default=list)
     updated_by: Mapped[str] = mapped_column(String(120), default="")
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

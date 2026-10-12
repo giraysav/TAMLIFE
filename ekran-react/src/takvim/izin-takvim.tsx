@@ -9,6 +9,7 @@ import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
 import type { Ozet } from "@/takvim/takvim-grafigi"
 import { DURUM_RENK, DURUM_SIRASI, takvimMetin } from "@/takvim/takvim-metin"
+import { ILK_TARIH, ILK_YIL } from "@/lib/yillar"
 
 type Gun = { tarih: string; durum: string; online: number; yuzyuze: number }
 type Ay = { yil: number; ay: number; gunler: Gun[]; ozet: Ozet }
@@ -21,7 +22,7 @@ function DurumSecici({ deger, onDegis, dil, etiket }: { deger: string; onDegis: 
   const t = takvimMetin(dil)
   return (
     <fieldset className="grid gap-1.5">
-      <legend className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500">{etiket}</legend>
+      <legend className="mb-1 text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{etiket}</legend>
       <div className="grid grid-cols-2 gap-2">
         {DURUM_SIRASI.map((k) => (
           <button
@@ -105,7 +106,7 @@ function TopluFormu({ dil, baslangic, onBitti }: { dil: Dil; baslangic: string; 
       <p className="text-xs font-bold text-slate-500">{t.topluAciklama}</p>
       <div className="grid grid-cols-2 gap-3">
         <Alan etiket={t.baslangic}>
-          <input type="date" required className={`${GIRDI} !py-2.5`} value={bas} onChange={(e) => setBas(e.target.value)} />
+          <input type="date" required min={ILK_TARIH} className={`${GIRDI} !py-2.5`} value={bas} onChange={(e) => setBas(e.target.value)} />
         </Alan>
         <Alan etiket={t.bitis}>
           <input type="date" required min={bas} className={`${GIRDI} !py-2.5`} value={son} onChange={(e) => setSon(e.target.value)} />
@@ -146,8 +147,10 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
   const gunSayisi = new Date(yil, ay, 0).getDate()
   const hucreler: (number | null)[] = [...Array<null>(ilkGun).fill(null), ...Array.from({ length: gunSayisi }, (_, i) => i + 1)]
 
+  const ilkAy = yil === ILK_YIL && ay === 1 // 2026 oncesine gidilmez
   function git(fark: number) {
     const d = new Date(yil, ay - 1 + fark, 1)
+    if (d.getFullYear() < ILK_YIL) return
     setYil(d.getFullYear())
     setAy(d.getMonth() + 1)
   }
@@ -175,7 +178,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
             {t.aylar[ay - 1]} {yil}
           </h3>
           <div className="flex items-center gap-2">
-            <button type="button" className={`${DUGME} !px-2.5`} onClick={() => git(-1)} aria-label={t.oncekiAy}>
+            <button type="button" className={`${DUGME} !px-2.5`} onClick={() => git(-1)} disabled={ilkAy} aria-label={t.oncekiAy}>
               <ChevronLeft aria-hidden className="size-4" />
             </button>
             <button
@@ -200,7 +203,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
           <HataKutu metin={t.yuklenemedi} tekrar={() => void q.refetch()} tekrarEtiket={t.tekrar} />
         ) : (
           <>
-            <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-black uppercase tracking-wide text-slate-400">
+            <div className="grid grid-cols-7 gap-1.5 text-center text-[0.625rem] font-black uppercase tracking-wide text-slate-400">
               {t.gunler.map((g) => (
                 <span key={g}>{g}</span>
               ))}
@@ -226,12 +229,12 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
                   >
                     <span className={`font-mono text-xs font-black ${tarih === bugun ? "text-tl-navy" : haftaSonu ? "text-slate-400" : "text-slate-600"}`}>{g}</span>
                     {renkli ? (
-                      <span className="line-clamp-1 rounded px-1 text-[9px] font-black leading-tight text-white" style={{ background: DURUM_RENK[durum] }}>
+                      <span className="line-clamp-1 rounded px-1 text-[0.5625rem] font-black leading-tight text-white" style={{ background: DURUM_RENK[durum] }}>
                         {t.durumlar[durum]}
                       </span>
                     ) : null}
                     {kayit && kayit.online + kayit.yuzyuze > 0 ? (
-                      <span className="mt-auto flex items-center gap-1 font-mono text-[10px] font-black text-tl-blue">
+                      <span className="mt-auto flex items-center gap-1 font-mono text-[0.625rem] font-black text-tl-blue">
                         <Video aria-hidden className="size-3" />
                         {kayit.online}/{kayit.yuzyuze}
                       </span>
@@ -242,7 +245,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
             </div>
             <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
               {DURUM_SIRASI.map((k) => (
-                <li key={k} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                <li key={k} className="flex items-center gap-1.5 text-[0.6875rem] font-bold text-slate-500">
                   <span aria-hidden className="size-2.5 rounded-sm" style={{ background: DURUM_RENK[k] }} />
                   {t.durumlar[k]}
                 </li>
