@@ -30,6 +30,7 @@ DURUMLAR: dict[str, str] = {
 IZIN_DURUMLARI = ("yillik_izin", "sirket_izni", "raporlu")
 EN_COK_TOPLU_GUN = 62
 EN_COK_TOPLANTI = 50
+EN_COK_OZET = 4000  # toplanti ozeti karakter siniri
 SUNUM_KAYNAK = "takvim"
 
 
@@ -77,6 +78,16 @@ def _sayi(deger: object, etiket: str) -> int:
     return n
 
 
+def _ozet(deger: object) -> str:
+    """Toplanti ozeti: satir sonlari LF olur, satir sonu bosluklari ile bastaki/sondaki bos satirlar atilir."""
+    if deger is not None and not isinstance(deger, str):
+        raise TakvimHata(400, "Toplantı özeti metin olmalı.")
+    metin = "\n".join(s.rstrip() for s in str(deger or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
+    if len(metin) > EN_COK_OZET:
+        raise TakvimHata(400, f"Toplantı özeti en fazla {EN_COK_OZET} karakter olabilir.")
+    return metin
+
+
 def _durum(deger: object) -> str:
     d = str(deger or "calisiyor")
     if d not in DURUMLAR:
@@ -84,8 +95,12 @@ def _durum(deger: object) -> str:
     return d
 
 
-def _gun(r: CalendarDay) -> dict:
-    return {"tarih": r.day.isoformat(), "durum": r.status, "online": r.online_count, "yuzyuze": r.face_count}
+def _gun(r: CalendarDay, ozetli: bool = False) -> dict:
+    """ozetli: toplanti ozeti de gider; yalniz kisinin kendi takvimi icin (TAM Takvim baskasinin ozetini gostermez)."""
+    gun = {"tarih": r.day.isoformat(), "durum": r.status, "online": r.online_count, "yuzyuze": r.face_count}
+    if ozetli:
+        gun["toplanti_ozeti"] = r.meeting_notes or ""
+    return gun
 
 
 def _gunler(kullanici: str, bas: date, son: date) -> list[CalendarDay]:
@@ -101,29 +116,33 @@ def ay_oku(user: Principal, yil: int, ay: int) -> dict:
     if not 1 <= ay <= 12:
         raise TakvimHata(400, "Ay 1-12 arasında olmalı.")
     gunler = _gunler(user.username, date(yil, ay, 1), date(yil, ay, monthrange(yil, ay)[1]))
-    return {"yil": yil, "ay": ay, "gunler": [_gun(g) for g in gunler], "ozet": _ozet_olustur(gunler), "durumlar": [{"kod": k, "ad": v} for k, v in DURUMLAR.items()]}
+    return {"yil": yil, "ay": ay, "gunler": [_gun(g, True) for g in gunler], "ozet": _ozet_olustur(gunler), "durumlar": [{"kod": k, "ad": v} for k, v in DURUMLAR.items()]}
 
 
 def gun_kaydet(user: Principal, govde: dict) -> dict:
+    """Govdede toplanti_ozeti yoksa mevcut ozet korunur (eski istemci yazmaz, silmez); '' gonderilirse temizlenir."""
     gun = _tarih(govde.get("tarih"))
     durum, online, yuzyuze = _durum(govde.get("durum")), _sayi(govde.get("online"), "Online toplantı"), _sayi(govde.get("yuzyuze"), "Yüz yüze toplantı")
+    ozet = _ozet(govde["toplanti_ozeti"]) if "toplanti_ozeti" in govde else None
     with kullanici_oturumu(user.username) as k:
         kayit = k.scalar(select(CalendarDay).where(CalendarDay.day == gun))
-        if durum == "calisiyor" and online == 0 and yuzyuze == 0:
+        if ozet is None:
+            ozet = (kayit.meeting_notes if kayit is not None else None) or ""
+        if durum == "calisiyor" and online == 0 and yuzyuze == 0 and not ozet:
             if kayit is not None:
                 k.delete(kayit)  # varsayilan gun kayit tutmaz
                 k.commit()
-            return {"tarih": gun.isoformat(), "durum": "calisiyor", "online": 0, "yuzyuze": 0}
+            return {"tarih": gun.isoformat(), "durum": "calisiyor", "online": 0, "yuzyuze": 0, "toplanti_ozeti": ""}
         if kayit is None:
             kayit = CalendarDay(day=gun)
             k.add(kayit)
-        kayit.status, kayit.online_count, kayit.face_count = durum, online, yuzyuze
+        kayit.status, kayit.online_count, kayit.face_count, kayit.meeting_notes = durum, online, yuzyuze, ozet or None
         k.commit()
-        return _gun(kayit)
+        return _gun(kayit, True)
 
 
 def toplu_kaydet(user: Principal, govde: dict) -> dict:
-    """Tarih araligina ayni durumu atar (hafta sonlari istege bagli atlanir). Toplanti sayilari korunur."""
+    """Tarih araligina ayni durumu atar (hafta sonlari istege bagli atlanir). Toplanti sayilari ve ozetleri korunur."""
     bas, son = _tarih(govde.get("baslangic"), "Başlangıç"), _tarih(govde.get("bitis"), "Bitiş")
     if son < bas:
         raise TakvimHata(400, "Bitiş başlangıçtan önce olamaz.")
@@ -138,7 +157,7 @@ def toplu_kaydet(user: Principal, govde: dict) -> dict:
             if not (atla and gun.weekday() >= 5):
                 kayit = mevcut.get(gun)
                 if durum == "calisiyor":
-                    if kayit is not None and kayit.online_count == 0 and kayit.face_count == 0:
+                    if kayit is not None and kayit.online_count == 0 and kayit.face_count == 0 and not kayit.meeting_notes:
                         k.delete(kayit)  # varsayilan gun kayit tutmaz
                     elif kayit is not None:
                         kayit.status = durum

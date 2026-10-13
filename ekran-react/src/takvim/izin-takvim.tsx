@@ -1,7 +1,7 @@
-import { useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Presentation, Umbrella, Users, Video } from "lucide-react"
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, FileText, Presentation, Umbrella, Users, Video } from "lucide-react"
 import { Cekmece } from "@/components/cekmece"
 import { Alan, Bildirim, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, SayfaKabi, Yukleniyor } from "@/components/sayfa-ui"
 import { bugunYerel, sayi } from "@/lib/bicim"
@@ -11,7 +11,9 @@ import type { Ozet } from "@/takvim/takvim-grafigi"
 import { DURUM_RENK, DURUM_SIRASI, takvimMetin } from "@/takvim/takvim-metin"
 import { ILK_TARIH, ILK_YIL } from "@/lib/yillar"
 
-type Gun = { tarih: string; durum: string; online: number; yuzyuze: number }
+type Gun = { tarih: string; durum: string; online: number; yuzyuze: number; toplanti_ozeti?: string }
+
+const EN_COK_OZET = 4000 // sunucudaki sinirla ayni (takvim/servis.py EN_COK_OZET)
 type Ay = { yil: number; ay: number; gunler: Gun[]; ozet: Ozet }
 
 function iso(y: number, a: number, g: number): string {
@@ -43,14 +45,37 @@ function DurumSecici({ deger, onDegis, dil, etiket }: { deger: string; onDegis: 
   )
 }
 
+/** Yazdikca ve Enter'a basildikca asagi uzayan metin kutusu (kaydiran cekmecenin icinde: kutu buyur, Kaydet yerinde kalir). */
+function BuyuyenKutu({ deger, onDegis, ornek }: { deger: string; onDegis: (d: string) => void; ornek: string }) {
+  const kutu = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const el = kutu.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${el.scrollHeight}px`
+  }, [deger])
+  return (
+    <textarea
+      ref={kutu}
+      rows={3}
+      maxLength={EN_COK_OZET}
+      placeholder={ornek}
+      className={`${GIRDI} resize-none overflow-hidden !py-2.5 !font-medium leading-relaxed`}
+      value={deger}
+      onChange={(e) => onDegis(e.target.value)}
+    />
+  )
+}
+
 function GunFormu({ tarih, gun, dil, onBitti }: { tarih: string; gun: Gun | undefined; dil: Dil; onBitti: () => void }) {
   const t = takvimMetin(dil)
   const qc = useQueryClient()
   const [durum, setDurum] = useState(gun?.durum ?? "calisiyor")
   const [online, setOnline] = useState(String(gun?.online ?? 0))
   const [yuzyuze, setYuzyuze] = useState(String(gun?.yuzyuze ?? 0))
+  const [ozet, setOzet] = useState(gun?.toplanti_ozeti ?? "")
   const kaydet = useMutation({
-    mutationFn: (govde: { durum: string; online: number; yuzyuze: number }) => yaz("PUT", "/api/v1/takvim/gun", { tarih, ...govde }),
+    mutationFn: (govde: { durum: string; online: number; yuzyuze: number; toplanti_ozeti: string }) => yaz("PUT", "/api/v1/takvim/gun", { tarih, ...govde }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["takvim"] })
       onBitti()
@@ -58,7 +83,7 @@ function GunFormu({ tarih, gun, dil, onBitti }: { tarih: string; gun: Gun | unde
   })
   function gonder(olay: FormEvent) {
     olay.preventDefault()
-    kaydet.mutate({ durum, online: Number(online) || 0, yuzyuze: Number(yuzyuze) || 0 })
+    kaydet.mutate({ durum, online: Number(online) || 0, yuzyuze: Number(yuzyuze) || 0, toplanti_ozeti: ozet })
   }
   return (
     <form onSubmit={gonder} className="grid gap-5">
@@ -76,10 +101,13 @@ function GunFormu({ tarih, gun, dil, onBitti }: { tarih: string; gun: Gun | unde
         <button type="submit" className={`${DUGME_SARI} !min-w-0 flex-1`} disabled={kaydet.isPending}>
           {kaydet.isPending ? t.kaydediliyor : t.kaydet}
         </button>
-        <button type="button" className={DUGME} disabled={kaydet.isPending} onClick={() => kaydet.mutate({ durum: "calisiyor", online: 0, yuzyuze: 0 })}>
+        <button type="button" className={DUGME} disabled={kaydet.isPending} onClick={() => kaydet.mutate({ durum: "calisiyor", online: 0, yuzyuze: 0, toplanti_ozeti: "" })}>
           {t.varsayilanaDon}
         </button>
       </div>
+      <Alan etiket={t.toplantiOzeti} ipucu={t.toplantiOzetiIpucu}>
+        <BuyuyenKutu deger={ozet} onDegis={setOzet} ornek={t.toplantiOzetiOrnek} />
+      </Alan>
     </form>
   )
 }
@@ -221,7 +249,8 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
                     key={tarih}
                     type="button"
                     onClick={() => setSecili(tarih)}
-                    aria-label={`${g} ${t.aylar[ay - 1]}: ${t.durumlar[durum]}${kayit && kayit.online + kayit.yuzyuze > 0 ? `, ${kayit.online}/${kayit.yuzyuze}` : ""}`}
+                    aria-label={`${g} ${t.aylar[ay - 1]}: ${t.durumlar[durum]}${kayit && kayit.online + kayit.yuzyuze > 0 ? `, ${kayit.online}/${kayit.yuzyuze}` : ""}${kayit?.toplanti_ozeti ? `, ${t.toplantiOzeti}` : ""}`}
+                    title={kayit?.toplanti_ozeti || undefined}
                     className={`group relative flex min-h-[4.5rem] flex-col items-start gap-1 rounded-xl border p-1.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
                       tarih === bugun ? "border-tl-navy ring-2 ring-tl-yellow/70" : "border-slate-200"
                     } ${haftaSonu && !renkli ? "bg-slate-50" : "bg-white"}`}
@@ -233,10 +262,15 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
                         {t.durumlar[durum]}
                       </span>
                     ) : null}
-                    {kayit && kayit.online + kayit.yuzyuze > 0 ? (
-                      <span className="mt-auto flex items-center gap-1 font-mono text-[0.625rem] font-black text-tl-blue">
-                        <Video aria-hidden className="size-3" />
-                        {kayit.online}/{kayit.yuzyuze}
+                    {kayit && (kayit.online + kayit.yuzyuze > 0 || kayit.toplanti_ozeti) ? (
+                      <span className="mt-auto flex w-full items-center gap-1 font-mono text-[0.625rem] font-black text-tl-blue">
+                        {kayit.online + kayit.yuzyuze > 0 ? (
+                          <>
+                            <Video aria-hidden className="size-3" />
+                            {kayit.online}/{kayit.yuzyuze}
+                          </>
+                        ) : null}
+                        {kayit.toplanti_ozeti ? <FileText aria-hidden className="ml-auto size-3 text-slate-400" /> : null}
                       </span>
                     ) : null}
                   </button>

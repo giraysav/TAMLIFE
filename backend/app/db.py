@@ -2,7 +2,8 @@
 
 panel     : TAMLIFE_DATABASE_URL (PostgreSQL; SQLite yalniz dev/test ya da TAMLIFE_SQLITE_IZIN) -> models.Base, Alembic ile.
 kullanici : <TAMLIFE_KULLANICI_DB_DIZINI>/<kullanici>.db -> models.KullaniciBase (takvim gunleri, gelir kayitlari).
-            Dosya ilk acilista olusur; tablolar create_all(checkfirst) ile eklenir, Alembic gerekmez.
+            Dosya ilk acilista olusur; tablolar create_all(checkfirst) ile eklenir, Alembic gerekmez. Modele sonradan eklenen
+            bos olabilen sutunlari eski dosyalara _eksik_sutunlari_ekle ekler.
 Kullanici dosyasindaki kayitlarin disariya verilen kimligi dosyalar arasi tekildir: app_user.id * KIMLIK_CARPANI + yerel id.
 """
 
@@ -13,7 +14,7 @@ import threading
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -70,6 +71,21 @@ def get_db() -> Iterator[Session]:
 
 
 # --- kullanici dosyalari ----------------------------------------------------------------------------
+def _eksik_sutunlari_ekle(motor: Engine) -> None:
+    """create_all mevcut tabloya dokunmaz; modele sonradan eklenen sutunlari eski kullanici dosyalarina ekler.
+    Yalniz bos olabilen (nullable) sutun eklenir; zorunlu sutun icin bu yol yetmez, hata verir."""
+    mevcut = inspect(motor)
+    with motor.begin() as baglanti:
+        for tablo in KullaniciBase.metadata.sorted_tables:
+            var = {s["name"] for s in mevcut.get_columns(tablo.name)}
+            for sutun in tablo.columns:
+                if sutun.name in var:
+                    continue
+                if not sutun.nullable:
+                    raise RuntimeError(f"{tablo.name}.{sutun.name}: kullanici dosyasina zorunlu sutun eklenemez, sutunu nullable yapin")
+                baglanti.exec_driver_sql(f'ALTER TABLE "{tablo.name}" ADD COLUMN "{sutun.name}" {sutun.type.compile(dialect=motor.dialect)}')
+
+
 def kullanici_dizini() -> Path:
     """Ayar bos ise SQLite panel dosyasinin yanindaki kullanicilar/, PostgreSQL'de var/kullanicilar."""
     ayar = get_settings()
@@ -91,6 +107,7 @@ def kullanici_oturumu(kullanici: str) -> Session:
     if str(dosya) not in _HAZIR:
         dosya.parent.mkdir(parents=True, exist_ok=True)
         KullaniciBase.metadata.create_all(motor)
+        _eksik_sutunlari_ekle(motor)
         _HAZIR.add(str(dosya))
     return Session(motor, autoflush=False)
 

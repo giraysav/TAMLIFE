@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import io
 import json
+import sqlite3
+from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db import dis_kimlik, engine, kimlik_coz, kullanici_oturumu
+from app.db import dis_kimlik, engine, kimlik_coz, kullanici_dosyasi, kullanici_oturumu
 from app.models import (
     ApnRevenue,
     ApnWork,
@@ -408,6 +410,62 @@ def test_gun_ve_toplu_kayit_ile_ekip_ozeti(veri):
     veri.put("/api/v1/takvim/gun", json={"tarih": f"{YIL}-02-02", "durum": "calisiyor"}, headers=hdr)
     with kullanici_oturumu("admin") as k:
         assert k.scalar(select(CalendarDay).where(CalendarDay.day == date(YIL, 2, 2))) is None
+
+
+def test_toplanti_ozeti_yazilir_korunur_ve_baskasina_gitmez(veri):
+    hdr = login_ok(veri)
+    gun = f"{YIL}-02-02"
+    ben = {"yil": YIL, "ay": 2}
+    ozet = "10:00 - 11:00 XXXXX musteri ile sdwan cozumu uzerine toplanildi.  \r\n\r\n14:00 - 14:30 YYYYY ile fiyat gorusuldu.\r\n"
+    temiz = "10:00 - 11:00 XXXXX musteri ile sdwan cozumu uzerine toplanildi.\n\n14:00 - 14:30 YYYYY ile fiyat gorusuldu."
+
+    def yaz(**g):
+        return veri.put("/api/v1/takvim/gun", json={"tarih": gun, "durum": "calisiyor", **g}, headers=hdr)
+
+    # satir sonlari LF, satir sonu bosluklari ve bastaki/sondaki bos satirlar atilir; sayi 0 + calisiyor olsa da ozet kaydi tutar
+    r = yaz(toplanti_ozeti=ozet)
+    assert r.status_code == 200 and r.json()["data"]["toplanti_ozeti"] == temiz
+    gunler = veri.get("/api/v1/takvim/ben", params=ben).json()["data"]["gunler"]
+    assert [(g["tarih"], g["durum"], g["toplanti_ozeti"]) for g in gunler] == [(gun, "calisiyor", temiz)]
+    # govdede toplanti_ozeti yoksa (eski istemci) ozet korunur; sayilar degisir
+    r = yaz(online=2)
+    assert r.json()["data"]["toplanti_ozeti"] == temiz and r.json()["data"]["online"] == 2
+    # toplu atama ozetli gunu silmez, ozetini de degistirmez
+    toplu = {"baslangic": gun, "bitis": gun, "hafta_sonu_atla": False}
+    assert veri.put("/api/v1/takvim/toplu", json={**toplu, "durum": "yillik_izin"}, headers=hdr).status_code == 200
+    assert veri.put("/api/v1/takvim/toplu", json={**toplu, "durum": "calisiyor"}, headers=hdr).status_code == 200
+    gunler = veri.get("/api/v1/takvim/ben", params=ben).json()["data"]["gunler"]
+    assert gunler[0]["durum"] == "calisiyor" and gunler[0]["online"] == 2 and gunler[0]["toplanti_ozeti"] == temiz
+    # TAM Takvim baskasinin ozetini gostermez
+    admin_id = next(u["id"] for u in veri.get("/api/v1/takvim/ekip", params={"yil": YIL, "ceyrek": 1}).json()["data"]["uyeler"] if u["kullanici"] == "admin")
+    tam = veri.get(f"/api/v1/takvim/ekip/{admin_id}", params={"yil": YIL, "ceyrek": 1}).json()["data"]["gunler"]
+    assert len(tam) == 1 and "toplanti_ozeti" not in tam[0]
+    # sinir ve tur
+    assert yaz(toplanti_ozeti="a" * 4001).status_code == 400
+    assert yaz(toplanti_ozeti="a" * 4000).status_code == 200
+    assert yaz(toplanti_ozeti=["x"]).status_code == 400
+    # bos metin ozeti temizler; sayilar da 0 + calisiyor ise varsayilan gun kaydi silinir
+    yaz(online=0, toplanti_ozeti="")
+    assert veri.get("/api/v1/takvim/ben", params=ben).json()["data"]["gunler"] == []
+    with kullanici_oturumu("admin") as k:
+        assert k.scalar(select(CalendarDay)) is None
+
+
+def test_eski_kullanici_dosyasina_ozet_sutunu_eklenir(client):
+    """Canli kullanici dosyalari ozet sutunu yokken olusmustu: create_all onlara dokunmaz, ilk acilista sutun eklenir, kayitlar korunur."""
+    dosya = kullanici_dosyasi("eski")
+    dosya.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(dosya)) as b:
+        b.execute("CREATE TABLE calendar_day (id INTEGER PRIMARY KEY, day DATE UNIQUE, status VARCHAR(30), online_count INTEGER, face_count INTEGER)")
+        b.execute("INSERT INTO calendar_day (day, status, online_count, face_count) VALUES ('2026-02-03', 'yillik_izin', 1, 2)")
+        b.commit()
+    with kullanici_oturumu("eski") as k:
+        g = k.scalar(select(CalendarDay))
+        assert (g.status, g.online_count, g.face_count, g.meeting_notes) == ("yillik_izin", 1, 2, None)
+        g.meeting_notes = "10:00 toplanti"
+        k.commit()
+    with kullanici_oturumu("eski") as k:
+        assert k.scalar(select(CalendarDay)).meeting_notes == "10:00 toplanti"
 
 
 def test_sunuma_gonder_yalniz_yetkili_rol_ve_admin(veri, monkeypatch):

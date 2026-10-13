@@ -250,6 +250,7 @@ class CalendarDay(KullaniciBase):
     status: Mapped[str] = mapped_column(String(30), default="calisiyor")
     online_count: Mapped[int] = mapped_column(Integer, default=0)
     face_count: Mapped[int] = mapped_column(Integer, default=0)  # yuz yuze toplanti
+    meeting_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # toplanti ozeti (serbest metin, satir satir); eski dosyalara db._eksik_sutunlari_ekle ekler
 
 
 class ProjectItem(Base):
