@@ -26,8 +26,8 @@ from sqlalchemy.orm import Session
 from app import ariza
 from app.catalog import get as modul
 from app.gelir.servis import PARA_BIRIMLERI, tum_gelirler
-from app.kullanicilar import kullanici_kaydi
-from app.models import ApnRevenue, AppSetting, AppUser, Customer, Demand, Presentation, ProjectItem, SmsRevenue
+from app.kullanicilar import kullanici_kaydi, personel
+from app.models import ApnRevenue, AppSetting, Customer, Demand, Presentation, ProjectItem, SmsRevenue
 from app.musteri.servis import portfoy
 from app.navigation import PRESENTATION as MENU
 from app.onedesk.servis import top10
@@ -197,10 +197,11 @@ def _proje(db: Session, yil: int, ceyrek: int) -> dict:
     acilan = [k for k in kalemler if k.created_at and bas <= k.created_at.date() <= son]
     kapanan = [k for k in kalemler if k.closed_date and bas <= k.closed_date <= son]
     suren = [k for k in kalemler if k.status != "kapandi"]
-    adlar = {u.id: (u.display_name or u.username) for u in db.scalars(select(AppUser))}
-    tamlar: dict[int, list] = {}
+    adlar = {u.id: (u.display_name or u.username) for u in personel(db)}  # tek personel kumesi; yonetici/admin sahipli isler tek '—' satirinda
+    tamlar: dict[int | None, list] = {}
     for k in kalemler:
-        s = tamlar.setdefault(k.owner_id, [adlar.get(k.owner_id, "—"), 0, 0, 0])
+        sahip = k.owner_id if k.owner_id in adlar else None
+        s = tamlar.setdefault(sahip, [adlar.get(sahip, "—"), 0, 0, 0])
         s[1] += k in acilan
         s[2] += k in kapanan
         s[3] += k.status != "kapandi"

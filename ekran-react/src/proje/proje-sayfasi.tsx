@@ -25,7 +25,7 @@ type Kalem = {
   kapanis: string | null
   aksiyonlar: Aksiyon[]
 }
-type Ekran = { yonetici: boolean; kendi_id: number; ozet: Ozet[]; genel_toplam: number; tamlar: { id: number; ad: string }[]; kalemler: Kalem[] }
+type Ekran = { yonetici: boolean; kendi_id: number; varsayilan_sorumlu?: number; ozet: Ozet[]; genel_toplam: number; tamlar: { id: number; ad: string }[]; kalemler: Kalem[] }
 type Musteri = { id: number; ad: string; tam: string; tam_id: number | null; istirak: boolean }
 type Isaret = { yapildi: boolean; detay: string; guncelleyen: string; zaman: string | null }
 type Calisma = { musteriler: Musteri[]; isaretler: Record<string, Partial<Record<Kategori, Isaret>>> }
@@ -104,7 +104,7 @@ function OzetTablosu({ v, dil }: { v: Ekran; dil: Dil }) {
 function YeniProje({ v, dil, kapat }: { v: Ekran; dil: Dil; kapat: () => void }) {
   const t = projeMetin(dil)
   const qc = useQueryClient()
-  const [f, setF] = useState({ owner_id: v.kendi_id, category: "proje" as Kategori, priority: "orta" as Oncelik, target_date: "", title: "", description: "" })
+  const [f, setF] = useState({ owner_id: v.varsayilan_sorumlu ?? v.kendi_id, category: "proje" as Kategori, priority: "orta" as Oncelik, target_date: "", title: "", description: "" })
   const [uyari, setUyari] = useState("")
   const ekle = useMutation({
     mutationFn: () => yaz("POST", "/api/v1/proje/kalem", { ...f, target_date: f.target_date || null }),

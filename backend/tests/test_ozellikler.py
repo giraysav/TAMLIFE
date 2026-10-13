@@ -368,16 +368,33 @@ def test_apn_musteri_calismalari(veri):
 
 
 # --- Takvim ---------------------------------------------------------------------------------------------
-def test_giris_yapan_kisi_takvim_listesine_dusar(client):
-    hdr = login_ok(client)
-    uyeler = client.get("/api/v1/takvim/ekip").json()["data"]["uyeler"]
-    assert [u["kullanici"] for u in uyeler] == ["admin"] and uyeler[0]["son_giris"] and uyeler[0]["rol"] == "admin"
-    assert client.get("/api/v1/takvim/ekip", params={"ceyrek": 9}).status_code == 422
-    assert hdr  # oturum acik
+def test_takvim_listesi_yalniz_etkin_team_member_personelidir(veri):
+    login_ok(veri)  # admin: listede satir olmaz, kendi takvim modulunu de acamaz
+    liste = lambda: veri.get("/api/v1/takvim/ekip").json()["data"]["uyeler"]
+    assert [u["kullanici"] for u in liste()] == ["ayse"] and liste()[0]["rol"] == "TeamMember"
+    # hic giris yapmamis personel bos takvimiyle listelenir; yonetici (TeamMngr) ve pasif kisi listelenmez
+    with Session(engine()) as db:
+        db.add_all(
+            [
+                AppUser(username="yeni", display_name="Yeni Kisi", role="TeamMember"),
+                AppUser(username="mudur", display_name="Mudur Kisi", role="TeamMngr", last_login_at=SIMDI),
+                AppUser(username="pasif", display_name="Pasif Kisi", role="TeamMember", active=False, last_login_at=SIMDI),
+            ]
+        )
+        db.commit()
+        kimlik = {u.username: u.id for u in db.scalars(select(AppUser))}
+    uyeler = liste()
+    assert [u["kullanici"] for u in uyeler] == ["ayse", "yeni"] and uyeler[1]["kayitli_gun"] == 0
+    assert veri.get("/api/v1/takvim/ekip", params={"ceyrek": 9}).status_code == 422
+    q = {"yil": YIL, "ceyrek": 1}
+    assert veri.get(f"/api/v1/takvim/ekip/{kimlik['yeni']}", params=q).status_code == 200
+    for ad in ("admin", "mudur", "pasif"):  # personel olmayan icin satir acilmaz
+        assert veri.get(f"/api/v1/takvim/ekip/{kimlik[ad]}", params=q).status_code == 404
+    assert veri.get("/api/v1/takvim/ben", params={"yil": YIL, "ay": 2}).status_code == 403  # admin kendi takvimini tutmaz
 
 
-def test_gun_ve_toplu_kayit_ile_ekip_ozeti(veri):
-    hdr = login_ok(veri)  # 'admin' kisisi (id 1) kendi takvimini yazar
+def test_gun_ve_toplu_kayit_ile_ekip_ozeti(veri, monkeypatch):
+    hdr = _giris(veri, monkeypatch, "TeamMember")  # 'admin' satirina bagli Member (id 1) kendi takvimini yazar; yonetici/admin takvim tutmaz
     with kullanici_oturumu("ayse") as k:  # gunler kisinin kendi dosyasinda
         k.add(CalendarDay(day=date(YIL, 2, 3), status="yillik_izin"))
         k.add(CalendarDay(day=date(YIL, 2, 4), status="arife_tatili"))
@@ -412,8 +429,8 @@ def test_gun_ve_toplu_kayit_ile_ekip_ozeti(veri):
         assert k.scalar(select(CalendarDay).where(CalendarDay.day == date(YIL, 2, 2))) is None
 
 
-def test_toplanti_ozeti_yazilir_korunur_ve_baskasina_gitmez(veri):
-    hdr = login_ok(veri)
+def test_toplanti_ozeti_yazilir_korunur_ve_baskasina_gitmez(veri, monkeypatch):
+    hdr = _giris(veri, monkeypatch, "TeamMember")
     gun = f"{YIL}-02-02"
     ben = {"yil": YIL, "ay": 2}
     ozet = "10:00 - 11:00 XXXXX musteri ile sdwan cozumu uzerine toplanildi.  \r\n\r\n14:00 - 14:30 YYYYY ile fiyat gorusuldu.\r\n"
@@ -538,7 +555,7 @@ def test_portfoy_cati_kartlari_istirak_ve_filtreler(veri, monkeypatch):
     assert veri.get("/api/v1/musteri/portfoy", params={"q": "%"}).json()["data"]["total"] == 0
     sec = veri.get("/api/v1/musteri/secenekler").json()["data"]
     assert sec["yonetici"] is True and sec["segmentler"] == ["SMB", "SA", "MA", "PA", "WHOLESALE"]
-    assert {t["ad"] for t in sec["tam"]} == {"Admin Kisi", "Ayse Test"} and {c["ad"] for c in sec["catilar"]} == {"Alfa Test A.S.", "Beta Test Ltd"}
+    assert {t["ad"] for t in sec["tam"]} == {"Ayse Test"} and {c["ad"] for c in sec["catilar"]} == {"Alfa Test A.S.", "Beta Test Ltd"}
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")  # 'admin' kullanicisi member olarak
     m = veri.get("/api/v1/musteri/portfoy").json()["data"]

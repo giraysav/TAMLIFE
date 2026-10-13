@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.authz import is_admin, yonetici_mi
 from app.gelir.servis import tum_gelirler, unvan_tasi
-from app.kullanicilar import kullanici_kaydi
+from app.kullanicilar import kullanici_kaydi, personel, personel_mi
 from app.models import (
     ApnRevenue,
     AppUser,
@@ -151,7 +151,7 @@ def secenekler(db: Session, user: Principal) -> dict:
     """Form ve filtre secenekleri: segmentler, TAM listesi (yalniz yonetici secer), iştirak icin cati musteriler."""
     uid = kullanici_id(db, user)
     yonetici = yonetici_mi(user)
-    kisiler = db.scalars(select(AppUser).where(AppUser.active.is_(True)).order_by(AppUser.display_name, AppUser.username)).all()
+    kisiler = personel(db)  # tum modullerle ayni kisi kumesi: yonetici ve admin sorumlu TAM listesinde yer almaz
     if not yonetici:
         kisiler = [k for k in kisiler if k.id == uid]
     catilar = select(Customer.id, Customer.name).where(Customer.parent_id.is_(None)).order_by(Customer.name)
@@ -373,8 +373,13 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "ayri_rapor_sec": yazma and musteri.parent_id is not None,
     }
     if yazma:
+        secenek = {u.id: u for u in personel(db)}
+        if musteri.owner_id and musteri.owner_id not in secenek:  # eski kayit: personel olmayan sahip secili gorunsun
+            eski = db.get(AppUser, musteri.owner_id)
+            if eski is not None:
+                secenek[eski.id] = eski
         kart["tam_secenekleri"] = sorted(
-            ({"id": u.id, "ad": u.display_name or u.username} for u in db.scalars(select(AppUser).where(AppUser.active.is_not(False)))),
+            ({"id": u.id, "ad": u.display_name or u.username} for u in secenek.values()),
             key=lambda u: (u["ad"] or "").lower(),
         )
     return kart
@@ -531,16 +536,17 @@ def musteri_ekle(db: Session, user: Principal, govde: dict) -> dict:
         raise MusteriHata(404, "Üst müşteri bulunamadı.")
     if segment is None and ust is not None and ust.segment in SEGMENTLER:
         segment = ust.segment  # istirak segment gondermezse catinin segmentini alir
-    uid = kullanici_kaydi(db, user).id  # yazan kisinin app_user satiri yoksa olusturulur (yerel/dev oturumu)
+    ben = kullanici_kaydi(db, user)  # yazan kisinin app_user satiri yoksa olusturulur (yerel/dev oturumu)
+    uid = ben.id
     if not yonetici_mi(user):
         if istenen_tam and istenen_tam != uid:
             raise MusteriHata(403, "Başka bir personel adına müşteri ekleyemezsiniz.")
         if ust is not None and not gorunur_mu(db, user, ust):
             raise MusteriHata(403, "Bu müşteri başka bir TAM temsilcisine ait.")
-    tam_id = istenen_tam or (ust.owner_id if ust else uid)
+    tam_id = istenen_tam or (ust.owner_id if ust else (uid if personel_mi(ben) else None))  # yonetici/admin kendi adina musteri sahibi olmaz
     if istenen_tam:
         tam = db.get(AppUser, istenen_tam)
-        if tam is None or tam.active is False:
+        if not personel_mi(tam):
             raise MusteriHata(404, "Personel bulunamadı veya pasif.")
     anahtar = eslestirme_anahtari(ad)
     if any(eslestirme_anahtari(c.name or "") == anahtar for c in db.scalars(select(Customer))):
@@ -561,7 +567,7 @@ def tam_degistir(db: Session, user: Principal, musteri_id: int, yeni_tam_id: obj
     if isinstance(yeni_tam_id, bool) or not isinstance(yeni_tam_id, int):
         raise MusteriHata(400, "Personel geçersiz.")
     tam = db.get(AppUser, yeni_tam_id)
-    if tam is None or tam.active is False:
+    if not personel_mi(tam):
         raise MusteriHata(404, "Personel bulunamadı veya pasif.")
     musteri.owner_id = tam.id
     db.flush()

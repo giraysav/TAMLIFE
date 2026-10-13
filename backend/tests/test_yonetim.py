@@ -151,10 +151,15 @@ def test_tablo_sahipligi_metadata_ile_ayni():
 
 
 def test_yedek_al_dogrula_ve_koruma(client, tmp_path, monkeypatch):
-    from datetime import UTC, datetime, timedelta
+    from datetime import UTC, date, datetime, timedelta
+
+    from app.db import kullanici_oturumu
+    from app.models import CalendarDay
 
     hdr = login_ok(client)
-    client.put("/api/v1/takvim/gun", json={"tarih": "2026-02-02", "durum": "raporlu"}, headers=hdr)  # admin'in kullanici dosyasi olusur
+    with kullanici_oturumu("admin") as k:  # admin takvim tutmaz (API 403); kullanici dosyasi dogrudan olusturulur
+        k.add(CalendarDay(day=date(2026, 2, 2), status="raporlu"))
+        k.commit()
     monkeypatch.setenv("TAMLIFE_BACKUP_KEEP", "2")
     sayac = iter(range(1, 100))
     # ad saniye cozunurlugunde: ard arda alinan yedeklerin adi cakismasin diye saat ilerletilir

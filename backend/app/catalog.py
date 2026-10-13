@@ -32,6 +32,7 @@ class Module:
     kind: str
     title_en: str = ""  # arayuz dili English iken gosterilen ad
     admin_only: bool = False
+    personel_only: bool = False  # yalniz TeamMember kendi kaydini tutar; admin ve TeamMngr bu modulde yer almaz (2026-10-13)
     public: bool = False
     in_nav: bool = True
     permission: str | None = None
@@ -58,10 +59,10 @@ MODULES: tuple[Module, ...] = (
         table="customers",
     ),
     Module(
-        "takvim", "İzin&Takvim Yönetimi", "modul", title_en="Leave & Calendar Management",
+        "takvim", "İzin&Takvim Yönetimi", "modul", title_en="Leave & Calendar Management", personel_only=True,
         i18n="tab.takvim", card_id="dash-card-modul-takvim",
         box_id="mod_takvim", permission_group="modules",
-        note="kişinin kendi takvimi",
+        note="kişinin kendi takvimi; yalnız TeamMember (yönetici ve admin takvim tutmaz)",
         registry_status="aktif", modal_id="mgmtTakvimModal",
         table="calendar_records",
     ),

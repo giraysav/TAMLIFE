@@ -190,8 +190,9 @@ def test_grup_yerlesimi_ve_tam_ozet_yok(client):
     assert "ekip" not in grup and "ekip" not in catalog.HOME_ORDER
     for k in ("proje", "sunum", "radar", "rapor", "takvim_ozet", "gelir_uretim"):
         assert grup[k] == "insights", k
-    for k in ("musteri", "takvim", "onedesk", "tamsms", "tamapn", "baglantili"):
+    for k in ("musteri", "onedesk", "tamsms", "tamapn", "baglantili"):
         assert grup[k] == "work", k
+    assert "takvim" not in grup  # kisisel takvim yalniz TeamMember'in: admin ve yonetici takvim tutmaz
 
 
 def test_ingilizce_etiketler(client):
@@ -204,7 +205,7 @@ def test_ingilizce_etiketler(client):
     assert nav["yonetim"]["label_en"] == "Administration"
     assert all(c["label_en"] and c["description_en"] for c in nav["yonetim"]["children"])
     kartlar = {c["key"]: c for c in client.get("/api/v1/home").json()["data"]}
-    assert (kartlar["takvim"]["title"], kartlar["takvim"]["title_en"]) == ("İzin&Takvim Yönetimi", "Leave & Calendar Management")
+    assert (catalog.get("takvim").title, catalog.get("takvim").title_en) == ("İzin&Takvim Yönetimi", "Leave & Calendar Management") and "takvim" not in kartlar
     assert all(c["title_en"] for c in kartlar.values())
     assert all(m["title_en"] for m in client.get("/api/v1/modules").json()["data"])
     roller = client.get("/api/v1/roller").json()["data"]

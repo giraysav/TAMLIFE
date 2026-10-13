@@ -28,8 +28,8 @@ from sqlalchemy.orm import Session
 
 from app.authz import yonetici_mi
 from app.dil import m, secili
-from app.kullanicilar import kullanici_kaydi
-from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
+from app.kullanicilar import kullanici_kaydi, personel
+from app.models import Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
 from app.musteri.servis import MusteriHata, musteri_getir, rapor_birimi_mi
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
@@ -538,7 +538,8 @@ def gonderimler(db: Session, user: Principal, musteri_id: int | None = None, yil
 
 def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
     """TAM basina rapor birimi sayisi ve bu ayin atilan/bekleyen rapor sayisi (uretim _build_rapor_durumu).
-    Catisina dahil bir istirak icin hazirlanan rapor CATININ raporu sayilir."""
+    Catisina dahil bir istirak icin hazirlanan rapor CATININ raporu sayilir. Satirlar tek personel kumesidir (app.kullanicilar.personel):
+    yonetici icin raporu olmayan personel de 0 satiridir; sahibi yonetici/admin ya da bos olan birimler tek '-' satirinda toplanir."""
     from app.musteri.servis import gorunur_mu
 
     musteriler = [c for c in db.scalars(select(Customer)) if gorunur_mu(db, user, c)]
@@ -548,13 +549,17 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
         c = tum.get(kimlik)
         if c is not None:
             atilanlar.add(c.id if rapor_birimi_mi(c) else (c.parent_id or c.id))
-    sahipler = {u.id: (u.display_name or u.username) for u in db.scalars(select(AppUser))}
+    kisiler = {u.id: (u.display_name or u.username) for u in personel(db)}
     satirlar: dict[int | None, dict] = {}
+    if yonetici_mi(user):
+        for kimlik, ad in kisiler.items():
+            satirlar[kimlik] = {"id": kimlik, "ad": ad, "musteri": 0, "atilan": 0, "bekleyen": 0}
     for c in musteriler:
         if not rapor_birimi_mi(c):
             continue
-        satir = satirlar.setdefault(c.owner_id, {"id": c.owner_id, "ad": sahipler.get(c.owner_id, "-") if c.owner_id else "-", "musteri": 0, "atilan": 0, "bekleyen": 0})
+        sahip = c.owner_id if c.owner_id in kisiler else None
+        satir = satirlar.setdefault(sahip, {"id": sahip, "ad": kisiler[sahip] if sahip else "-", "musteri": 0, "atilan": 0, "bekleyen": 0})
         satir["musteri"] += 1
         satir["atilan" if c.id in atilanlar else "bekleyen"] += 1
-    sirali = sorted(satirlar.values(), key=lambda s: tr_kucuk(s["ad"]))
+    sirali = sorted(satirlar.values(), key=lambda s: (s["id"] is None, tr_kucuk(s["ad"])))  # "-" satiri hep sonda
     return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen")}}

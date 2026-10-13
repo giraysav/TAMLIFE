@@ -279,7 +279,8 @@ def test_ayri_rapor_ve_durum_ozeti(veri):
     d = veri.get("/api/v1/rapor/durum", params={"yil": yil, "ay": ay}).json()["data"]
     assert d["toplam"] == {"musteri": 3, "atilan": 1, "bekleyen": 2}
     satirlar = {s["ad"]: s for s in d["satirlar"]}
-    assert satirlar["Admin Kisi"] == {"id": 1, "ad": "Admin Kisi", "musteri": 2, "atilan": 1, "bekleyen": 1}
+    assert satirlar["-"] == {"id": None, "ad": "-", "musteri": 2, "atilan": 1, "bekleyen": 1}  # admin sahipli birimler tek '-' satirinda: yonetici TAM satiri olmaz
+    assert satirlar["Ayse Test"] == {"id": 2, "ad": "Ayse Test", "musteri": 1, "atilan": 0, "bekleyen": 1} and "Admin Kisi" not in satirlar
     assert veri.put("/api/v1/musteri/2/ayri-rapor", json={"ayri_rapor": False}, headers=hdr).status_code == 200
     assert veri.get("/api/v1/rapor/durum").json()["data"]["toplam"]["musteri"] == 2
 
@@ -306,7 +307,7 @@ def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):
     mid = client.post("/api/v1/musteri", json={"name": "Satirsiz Test"}, headers=hdr).json()["data"]["id"]
     with Session(engine()) as db:
         kisi = db.query(AppUser).filter_by(username="admin").one()
-        assert db.get(Customer, mid).owner_id == kisi.id
+        assert db.get(Customer, mid).owner_id is None  # yonetici/admin kendi adina musteri sahibi olmaz (tek personel kumesi, 2026-10-13)
     assert client.post(f"/api/v1/musteri/{mid}/rapor/gonder", json={"onay": True}, headers=hdr).status_code == 200
     with Session(engine()) as db:
         r = db.query(Report).filter_by(customer_id=mid).one()

@@ -72,8 +72,8 @@ def test_ekip_ozeti_yonetici_tum_ekibi_gorur(client, monkeypatch):
     veri = r.json()["data"]
     assert veri["kapsam"] == "ekip" and veri["risk_var"] is True
     s = {x["ad"]: x for x in veri["satirlar"]}
-    assert set(s) == {"ayse", "mehmet", "mudur"}
-    # siralama agirlik puanina gore; puanlama disi (mehmet) ve skorsuz (mudur) en altta
+    assert set(s) == {"ayse", "mehmet"}  # yonetici (mudur) ekip satiri olmaz: tek personel kumesi yalniz TeamMember
+    # siralama agirlik puanina gore; puanlama disi (mehmet) en altta
     assert veri["satirlar"][0]["ad"] == "ayse"
     a = s["ayse"]
     assert a["musteri"] == 2 and a["rapor_beklenen"] == 3 and a["rapor_atilan"] == 1 and a["uyum"] == 33
@@ -87,7 +87,7 @@ def test_ekip_ozeti_yonetici_tum_ekibi_gorur(client, monkeypatch):
     m = s["mehmet"]
     assert m["puanlama_disi"] is True and m["final_skor"] is None and m["risk"] == 17 and m["bugun"] is None
     assert "takvim kaydı yok" in m["cumle"]
-    assert veri["sayilar"] == {"kisi": 3, "kritik_uyum": 2, "yuksek_risk": 1, "acik_proje": 2, "bugun_izinli": 1}
+    assert veri["sayilar"] == {"kisi": 2, "kritik_uyum": 2, "yuksek_risk": 1, "acik_proje": 2, "bugun_izinli": 1}
     assert veri["cumle"] == "2 TAM'ın rapor uyumu kritik seviyede (%50 altı) · 1 TAM yüksek risk yükü taşıyor."
 
 

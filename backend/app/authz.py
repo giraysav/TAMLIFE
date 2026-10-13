@@ -23,6 +23,8 @@ def can_open(
         return False
     if module.admin_only and not is_admin(user):
         return False  # admin_only (Yonetim alani): hicbir rol gorunumuyle acilmaz, yalniz admin (kullanici karari 2026-10-12)
+    if module.personel_only and (is_admin(user) or user.role != "TeamMember"):
+        return False  # personel_only (kisisel takvim): yalniz TeamMember; admin ve TeamMngr bu alanda yer almaz (kullanici karari 2026-10-13)
     if module.public:
         return True
     if user.is_admin or user.role == "admin":

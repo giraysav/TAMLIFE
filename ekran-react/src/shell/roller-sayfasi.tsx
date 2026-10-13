@@ -14,7 +14,7 @@ type Rol = { role: string; label: string; editable: boolean; modules: string[]; 
 /** Panelde kaydi olan personel (AD ile giren ya da yoneticinin actigi). `permissions` yalniz kisiye ozel verilenlerdir; rolden gelenler `roles` icindedir. */
 type Kisi = { id: number; username: string; display_name: string; role: string; auth: string; ad_domain: string; last_login_at: string | null; permissions: string[]; deletable?: boolean }
 type Etiket = { id: string; label: string; label_en?: string }
-type Katalog = Etiket & { children: Etiket[] }
+type Katalog = Etiket & { children: Etiket[]; personel_only?: boolean }
 /** Eylem yetkisi: duz dilde ne sagladigi ve nerede kullanildigi. Rol kartindaki "Ek yetkiler" kaldirildi (2026-10-11, amaci belirsizdi);
  * yalniz kendi bolumu olan yetkiler (ornek "sunum") Rol Yonetimi'nde duzenlenir. Kayitli yetkiler rol kaydedilince korunur. */
 type Yetki = Etiket & { description: string; description_en: string; where: string; where_en: string; area: string }
@@ -409,7 +409,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
                   <fieldset className="grid gap-2">
                     <legend className="mb-1 text-xs font-medium text-muted-foreground">{t.rolGorecegiSayfalar}</legend>
                     <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {veri.catalog.map((m) => (
+                      {veri.catalog.filter((m) => !m.personel_only || r.role === "TeamMember").map((m) => (
                         <div key={m.id} className="grid content-start gap-1">
                           <label className="flex items-center gap-2 text-sm font-medium">
                             <input type="checkbox" checked={!!tas?.modules.has(m.id)} onChange={(e) => degistir(r.role, m.id, e.target.checked)} />

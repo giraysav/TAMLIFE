@@ -141,7 +141,7 @@ def test_bu_ceyrek_canli_hesaplanir_ve_saklanmaz(veri):
     assert kpi("sms", "Toplam TRY") == 1500 and ogeler["sms"]["veri"]["tablo"]["satirlar"] == [["Ayse Test", 1500]]
     assert kpi("apn", "Kurulum talebi") == 1 and kpi("apn", "Bekleyen") == 1 and kpi("apn", "Toplam tutar") == 800
     assert kpi("portfoy", "Çatı müşteri") == 2 and kpi("portfoy", "İştirak") == 1 and kpi("portfoy", "Ortalama skor") == 60
-    assert kpi("utilizasyon", "Sıralamadaki TAM") == 2 and ogeler["utilizasyon"]["veri"]["tablo"]["satirlar"][0][1] == "Admin Kisi"
+    assert kpi("utilizasyon", "Sıralamadaki TAM") == 1 and ogeler["utilizasyon"]["veri"]["tablo"]["satirlar"][0][1] == "Ayse Test"  # admin (skor 70) siralamada yok
     rapor = ogeler["rapor"]["veri"]
     if rapor_donemi(simdi()) >= (YIL, ILK_AY):
         assert rapor["kpi"][0]["deger"] == 1 and rapor["kpi"][0]["alt"] == "/ 2"  # ilk ay: 2 rapor biriminden 1'i atildi

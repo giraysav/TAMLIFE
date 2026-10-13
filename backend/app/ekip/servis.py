@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.authz import yonetici_mi
 from app.db import mevcut_oturumlar
 from app.dil import ingilizce, m
-from app.kullanicilar import kullanici_kaydi
+from app.kullanicilar import kullanici_kaydi, personel
 from app.models import AppUser, CalendarDay, Customer, ProjectItem, Report, ScoringExclusion
 from app.musteri.servis import rapor_birimi_mi
 from app.ortak import rapor_donemi, tr_kucuk
@@ -26,7 +26,6 @@ from app.session import Principal
 from app.skor.servis import tam_skor_ozeti
 from app.takvim.servis import DURUMLAR
 
-EKIP_ROLLERI = ("TeamMember", "TeamMngr")
 KRITIK_UYUM = 50  # % alti kritik (uretim)
 ORTA_UYUM = 80
 YUKSEK_RISK = 16  # acik alarm + sikayet (uretim)
@@ -41,8 +40,7 @@ def _bugun() -> date:
 def _uyeler(db: Session, user: Principal) -> list[AppUser]:
     if not yonetici_mi(user):
         return [kullanici_kaydi(db, user)]
-    sorgu = select(AppUser).where(AppUser.active.is_not(False), AppUser.role.in_(EKIP_ROLLERI), AppUser.is_admin.is_not(True))
-    return list(db.scalars(sorgu))
+    return personel(db)
 
 
 def _takvim(uyeler: list[AppUser], bugun: date) -> dict[str, tuple[str | None, int, int]]:

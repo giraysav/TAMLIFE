@@ -93,6 +93,14 @@ def varsayilan_moduller() -> list[str]:
     return tum_kimlikler()
 
 
+def _rol_icin(rol: str, kimlikler: list[str]) -> list[str]:
+    """personel_only moduller (kisisel takvim) yalniz TeamMember'a verilir; TeamMngr kaydinda varsa dusurulur."""
+    if rol == "TeamMember":
+        return kimlikler
+    kapali = {m.key for m in MODULES if m.personel_only}
+    return [k for k in kimlikler if k.split("/")[0] not in kapali]
+
+
 def etkin(db: Session, user: Principal) -> Gorunum:
     if is_admin(user):
         return Gorunum(None, GIRIS_VARSAYILAN, yetkiler=frozenset(YETKILER))
@@ -146,7 +154,7 @@ def gorunumler(db: Session) -> list[dict]:
                 "role": rol,
                 "label": ROL_ETIKET[rol],
                 "editable": True,
-                "modules": [k for k in satir.modules if k in evren] if satir else varsayilan_moduller(),
+                "modules": _rol_icin(rol, [k for k in satir.modules if k in evren] if satir else varsayilan_moduller()),
                 "landing": satir.landing if satir else GIRIS_VARSAYILAN,
                 "permissions": sorted(_gecerli_yetkiler(satir.permissions) if satir else []),
                 "saved": satir is not None,
@@ -202,6 +210,7 @@ def katalog() -> list[dict]:
             "label": m.title,
             "label_en": m.title_en,
             "admin_only": m.admin_only,
+            "personel_only": m.personel_only,
             "children": [{"id": f"{m.key}/{c.key}", "label": c.title, "label_en": c.title_en} for c in m.children],
         }
         for m in MODULES
@@ -218,7 +227,7 @@ def kaydet(db: Session, rol: str, moduller: object, landing: object, actor: str,
     evren = set(tum_kimlikler())
     if any(k not in evren for k in moduller):
         raise RolHata(400, "Gecersiz modul.")  # admin_only (Yonetim) kimlikleri de buraya duser
-    temiz = sorted(set(moduller), key=tum_kimlikler().index)
+    temiz = _rol_icin(rol, sorted(set(moduller), key=tum_kimlikler().index))
     if not isinstance(landing, str) or (landing != GIRIS_VARSAYILAN and landing not in temiz):
         raise RolHata(400, "Giris sayfasi verilen modullerden biri olmali.")
     if yetkiler is not None and (not isinstance(yetkiler, list) or not all(isinstance(x, str) and x in YETKILER for x in yetkiler)):

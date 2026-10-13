@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.authz import yonetici_mi
-from app.kullanicilar import kullanici_kaydi
+from app.kullanicilar import kullanici_kaydi, personel_kosulu
 from app.models import (
     AffiliateFinalFlag,
     AppUser,
@@ -419,8 +419,8 @@ def personel_agirlik_dagilimi(personel: list[AppUser], catilar: list[Customer], 
 
 
 def _tam_personel(db: Session) -> list[AppUser]:
-    """Aktif TeamMember'lar (agac, TAM sayisi ve personel agirligi ile ayni kume)."""
-    return list(db.scalars(select(AppUser).where(AppUser.active.is_not(False), AppUser.role == "TeamMember").order_by(AppUser.id)))
+    """Aktif TeamMember'lar (agac, TAM sayisi, personel agirligi ve siralama ile ayni kume: kullanicilar.personel_kosulu)."""
+    return list(db.scalars(select(AppUser).where(*personel_kosulu()).order_by(AppUser.id)))
 
 
 def final_dahil_kimlikleri(db: Session) -> set[int]:
@@ -428,8 +428,8 @@ def final_dahil_kimlikleri(db: Session) -> set[int]:
 
 
 def agac(db: Session) -> dict:
-    """Skorlari Dagit agaci + Personel Agirlik ve Dagilim - hicbir sey yazmaz. personel: TAM personeli (musterisi olmasa da) + musteri
-    sahibi diger kullanicilar (tam=False); agirliga gore buyukten kucuge. Istirak "Final skoruna dahil" ise cati kurallari ona da
+    """Skorlari Dagit agaci + Personel Agirlik ve Dagilim - hicbir sey yazmaz. personel: yalniz TAM personeli (TeamMember; musterisi olmasa da);
+    sahibi yonetici/admin olan (ya da sahipsiz) musteriler "atanmamis" grubunda toplanir (2026-10-13); agirliga gore buyukten kucuge. Istirak "Final skoruna dahil" ise cati kurallari ona da
     uygulanir ve skoru gosterilir; istirak skoru hicbir yere YAZILMAZ, finale eklenmez (katsayi sonra belirlenecek)."""
     catilar = cati_musteriler(db)
     istirakler: dict[int, list[Customer]] = {}
@@ -443,12 +443,8 @@ def agac(db: Session) -> dict:
     # Puanlamaya GIRMEYEN personel ne agacta, ne TAM sayisinda, ne agirlik hesabinda; musterileri "atanmamis" grubunda.
     disi = set(db.scalars(select(ScoringExclusion.user_id)))
     tum_tam = _tam_personel(db)
-    tum_tam_idler = {u.id for u in tum_tam}
     tamlar = [u for u in tum_tam if u.id not in disi]
     tam_idler = {u.id for u in tamlar}
-    sahip_idler = {c.owner_id for c in catilar if c.owner_id is not None and c.owner_id not in tum_tam_idler}
-    tum_sahipler = {u.id: u for u in db.scalars(select(AppUser).where(AppUser.id.in_(sahip_idler)))} if sahip_idler else {}
-    sahipler = {k: v for k, v in tum_sahipler.items() if k not in disi}
     by_sahip: dict[int | None, list[Customer]] = {}
     for c in catilar:
         by_sahip.setdefault(c.owner_id, []).append(c)
@@ -473,7 +469,7 @@ def agac(db: Session) -> dict:
         return d
 
     personel = []
-    for u, tam_mi in [(u, True) for u in tamlar] + [(u, False) for u in sahipler.values()]:
+    for u, tam_mi in [(u, True) for u in tamlar]:
         ms = by_sahip.get(u.id, [])
         ozet = tam_skor_ozeti(ms)
         personel.append(
@@ -489,11 +485,11 @@ def agac(db: Session) -> dict:
             }
         )
     personel.sort(key=lambda p: (p["tam"], p["agirlik_puani"] if p["agirlik_puani"] is not None else -1, p["toplam_puan"]), reverse=True)
-    atanmamis = [c for c in catilar if c.owner_id is None or (c.owner_id not in tam_idler and c.owner_id not in sahipler)]
+    atanmamis = [c for c in catilar if c.owner_id not in tam_idler]
     tum_personel = sorted(
         (
             {"id": u.id, "ad": u.display_name or u.username, "tam": tam_mi, "dahil": u.id not in disi, "musteri_sayisi": len(by_sahip.get(u.id, []))}
-            for u, tam_mi in [(u, True) for u in tum_tam] + [(u, False) for u in tum_sahipler.values()]
+            for u, tam_mi in [(u, True) for u in tum_tam]
         ),
         key=lambda p: (p["ad"] or "").lower(),
     )
@@ -519,7 +515,7 @@ def agac(db: Session) -> dict:
 def siralama(db: Session) -> list[dict]:
     """TAM Utilizasyon Siralamasi (uretim _build_util_ranking): her kullanicinin cati musterilerinin ortalama final skoru; skoru
     hic atanmamis kisi listede yok. bar_pct = en yuksege gore yuzde."""
-    kullanicilar = db.scalars(select(AppUser).where(AppUser.active.is_not(False), func.lower(AppUser.username) != ACIL_HESAP)).all()
+    kullanicilar = [u for u in _tam_personel(db) if u.username.lower() != ACIL_HESAP]  # yonetici ve admin siralamada yer almaz (2026-10-13)
     by_tam: dict[int | None, list[Customer]] = {}
     for c in cati_musteriler(db):
         by_tam.setdefault(c.owner_id, []).append(c)

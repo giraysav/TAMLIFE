@@ -34,12 +34,16 @@ def _ekran(client) -> dict:
 
 def test_proje_acilis_durum_oncelik_aksiyon_ve_ozet(client, monkeypatch):
     _giris(client, monkeypatch, "ayse", "TeamMember")
+    _giris(client, monkeypatch, "mehmet", "TeamMember")  # projesi olmayacak: ozette yine satir olur (0)
     hdr = _giris(client, monkeypatch, "mudur", "admin")  # kalem ekleme / guncelleme / silme yalniz admin
-    ayse = _kisiler()["ayse"]
+    ayse, mudur = _kisiler()["ayse"], _kisiler()["mudur"]
     r = client.post("/api/v1/proje/kalem", json={"owner_id": ayse, "category": "ddos", "title": "DDoS eşik ayarı", "target_date": "2026-12-31"}, headers=hdr)
     assert r.status_code == 200, r.text
     kimlik = r.json()["data"]["id"]
-    client.post("/api/v1/proje/kalem", json={"category": "proje", "title": "SD-WAN geçişi"}, headers=hdr)
+    # sorumlu yalniz TAM personeli: secilmezse (admin personel degil) ya da yonetici secilirse reddedilir
+    assert client.post("/api/v1/proje/kalem", json={"category": "proje", "title": "SD-WAN geçişi"}, headers=hdr).json()["detail"] == "Sorumlu TAM seçin."
+    assert client.post("/api/v1/proje/kalem", json={"owner_id": mudur, "category": "proje", "title": "SD-WAN geçişi"}, headers=hdr).status_code == 400
+    assert client.post("/api/v1/proje/kalem", json={"owner_id": ayse, "category": "proje", "title": "SD-WAN geçişi"}, headers=hdr).status_code == 200
 
     assert client.patch(f"/api/v1/proje/kalem/{kimlik}", json={"status": "kapandi", "priority": "kritik"}, headers=hdr).json()["data"]["degisen"] == ["status", "priority"]
     assert client.patch(f"/api/v1/proje/kalem/{kimlik}", json={"status": "kapandi"}, headers=hdr).json()["data"]["degisen"] == []
@@ -57,9 +61,10 @@ def test_proje_acilis_durum_oncelik_aksiyon_ve_ozet(client, monkeypatch):
     ]
     assert kalem["aksiyonlar"][0]["yapan"] == "mudur"
     ozet = {d["tam"]: d for d in veri["ozet"]}
-    assert ozet["ayse"]["ddos"] == 1 and ozet["ayse"]["kapanan"] == 1 and ozet["ayse"]["toplam"] == 1
-    assert ozet["mudur"]["proje"] == 1 and ozet["mudur"]["devam_eden"] == 1 and veri["genel_toplam"] == 2
-    assert veri["yonetici"] is True and {t["ad"] for t in veri["tamlar"]} >= {"ayse", "mudur"}
+    assert ozet["ayse"]["ddos"] == 1 and ozet["ayse"]["kapanan"] == 1 and ozet["ayse"]["toplam"] == 2
+    assert ozet["ayse"]["proje"] == 1 and ozet["ayse"]["devam_eden"] == 1 and veri["genel_toplam"] == 2
+    assert ozet["mehmet"]["toplam"] == 0 and "mudur" not in ozet  # projesi olmayan personel de satir; yonetici satir olmaz
+    assert veri["yonetici"] is True and {t["ad"] for t in veri["tamlar"]} == {"ayse", "mehmet"} and veri["varsayilan_sorumlu"] in {ayse, _kisiler()["mehmet"]}
 
     # hedef tarih temizlenir; gecersiz deger 422
     assert client.patch(f"/api/v1/proje/kalem/{kimlik}", json={"target_date": None}, headers=hdr).json()["data"]["degisen"] == ["target_date"]

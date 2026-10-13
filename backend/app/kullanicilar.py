@@ -138,8 +138,26 @@ def giris_isle(db: Session, user: Principal) -> None:
     db.commit()
 
 
+PERSONEL_ROLU = "TeamMember"
+
+
+def personel_kosulu() -> list:
+    """TAM personeli: etkin, rolu TeamMember, admin degil. Takvim, ekip ozeti, utilizasyon, proje ve musteri listelerinin TEK kumesi;
+    TeamMngr ve admin hicbir kisi listesinde satir olmaz (kullanici karari 2026-10-13). Yeni bir 'personel listesi' bunu kullanir."""
+    return [AppUser.active.is_not(False), AppUser.role == PERSONEL_ROLU, AppUser.is_admin.is_not(True)]
+
+
+def personel_mi(kisi: AppUser | None) -> bool:
+    return bool(kisi is not None and kisi.active is not False and kisi.role == PERSONEL_ROLU and not kisi.is_admin)
+
+
+def personel(db: Session) -> list[AppUser]:
+    """Etkin TAM personeli (gorunen ada gore)."""
+    return list(db.scalars(select(AppUser).where(*personel_kosulu()).order_by(AppUser.display_name, AppUser.username)))
+
+
 def giris_yapmislar(db: Session) -> list[AppUser]:
-    """Panele en az bir kez giris yapmis, etkin kisiler (ada gore)."""
+    """Panele en az bir kez giris yapmis, etkin kisiler (ada gore). Kisi listeleri icin `personel` kullanilir; bu yalniz hesap denetimi icindir."""
     return list(db.scalars(select(AppUser).where(AppUser.last_login_at.is_not(None), AppUser.active.is_(True)).order_by(AppUser.display_name, AppUser.username)))
 
 

@@ -232,23 +232,26 @@ def test_agac_personel_agirligi_ve_siralama(veri):
     a = veri.get("/api/v1/skor/agac").json()["data"]
     assert a["ozet"] == {"toplam": 5, "cati": 4, "hazir": 0, "istirak": 2, "istirak_dahil": 1}  # varsayilan 7 kriter: Urun-Tutar eksik
     adlar = [(p["ad"], p["tam"]) for p in a["personel"]]
-    assert adlar[:2] == [("ORNEK TAM Bir", True), ("ORNEK TAM Iki", True)] and ("ORNEK Yonetici", False) in adlar
+    assert adlar == [("ORNEK TAM Bir", True), ("ORNEK TAM Iki", True)]  # yonetici (ORNEK Yonetici) agacta dugum olmaz: yalniz TeamMember
     tam1 = a["personel"][0]
     ist = {i["id"]: i for i in tam1["musteriler"][0]["istirakler"]}
     assert ist[5]["dahil"] is True and ist[5]["yeni"] is not None and ist[6]["dahil"] is False and ist[6]["yeni"] is None
-    assert [m["id"] for m in a["atanmamis"]] == [4]
+    assert [m["id"] for m in a["atanmamis"]] == [4, 3]  # sahipsiz (4) ve sahibi yonetici olan (3) musteri atanmamis grubunda
     assert {k["ad"] for k in a["kaynaklar"]} >= {"Panel (kart + aylık rapor)"} and len(a["kriterler"]) == 7
     d = a["dagilim"]
     assert d["ozet"]["tam_sayisi"] == 2 and d["ozet"]["musteri_sayisi"] == 2 and d["satirlar"][0]["istirakli_musteri"] in (0, 1)
     # puanlamaya girmeyen TAM agacta yok, musterisi atanmamis grubunda
     veri.put("/api/v1/skor/puanlama-disi", json={"disi": [2]}, headers=hdr)
     a = veri.get("/api/v1/skor/agac").json()["data"]
-    assert "ORNEK TAM Bir" not in [p["ad"] for p in a["personel"]] and {m["id"] for m in a["atanmamis"]} == {1, 4}
+    assert "ORNEK TAM Bir" not in [p["ad"] for p in a["personel"]] and {m["id"] for m in a["atanmamis"]} == {1, 3, 4}
     assert next(p for p in a["tum_personel"] if p["id"] == 2)["dahil"] is False and a["dagilim"]["ozet"]["tam_sayisi"] == 1
     with Session(engine()) as db:
         assert db.get(Customer, 5).score is None and db.get(ScoreDetail, 5) is None  # istirak skoru yazilmaz
+    with Session(engine()) as db:
+        db.get(Customer, 2).score = 55.0
+        db.commit()
     s = veri.get("/api/v1/skor/siralama").json()["data"]
-    assert [(r["full_name"], r["avg_score"], r["rank"], r["bar_pct"]) for r in s] == [("ORNEK Yonetici", 40.0, 1, 100)]
+    assert [(r["full_name"], r["avg_score"], r["rank"], r["bar_pct"]) for r in s] == [("ORNEK TAM Iki", 55.0, 1, 100)]  # yoneticinin (skor 40) siralamada yeri yok
 
 
 def test_dagilim_ve_ozet_formulleri():

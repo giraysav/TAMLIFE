@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import kullanici_oturumu, mevcut_oturumlar
-from app.kullanicilar import giris_yapmislar
+from app.kullanicilar import personel, personel_mi
 from app.models import AppUser, CalendarDay, Presentation
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.session import Principal
@@ -206,9 +206,9 @@ def _uye(u: AppUser, o: dict) -> dict:
 
 
 def ekip(db: Session, yil: int, ceyrek: int) -> dict:
-    """Panele giris yapmis herkes; her kisi icin izin/gun durumu ve toplanti toplamlari (TAM Takvim)."""
+    """Etkin TAM personelinin tamami (TeamMember; hic giris yapmamis olsa da, bos takvimiyle); her kisi icin izin/gun durumu ve toplanti toplamlari (TAM Takvim)."""
     bas, son = donem_araligi(yil, ceyrek)
-    liste = [_uye(u, _ozet_olustur(_gunler(u.username, bas, son))) for u in giris_yapmislar(db)]
+    liste = [_uye(u, _ozet_olustur(_gunler(u.username, bas, son))) for u in personel(db)]
     genel = _bos_ozet()
     for u in liste:
         genel["kayitli_gun"] += u["kayitli_gun"]
@@ -232,7 +232,7 @@ def uye_gunleri(db: Session, yil: int, ceyrek: int, uye_id: int) -> dict:
     """Bir uyenin donemdeki kayitli gunleri (TAM Takvim'de satir acilinca)."""
     bas, son = donem_araligi(yil, ceyrek)
     uye = db.get(AppUser, uye_id)
-    if uye is None or uye.last_login_at is None:
+    if not personel_mi(uye):
         raise TakvimHata(404, "Kişi bulunamadı.")
     gunler = _gunler(uye.username, bas, son)
     return {"uye": uye.display_name or uye.username, "gunler": [_gun(g) for g in gunler]}

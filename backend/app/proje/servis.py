@@ -18,8 +18,9 @@ from datetime import date
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, aliased
 
+from app import dil
 from app.authz import yonetici_mi
-from app.kullanicilar import kullanici_kaydi
+from app.kullanicilar import kullanici_kaydi, personel, personel_mi
 from app.models import AppUser, Customer, ProjectAction, ProjectCustomerWork, ProjectItem
 from app.ortak import UygulamaHatasi, eslestirme_anahtari, iso, simdi
 from app.session import Principal
@@ -53,10 +54,11 @@ def _aksiyon(db: Session, kalem_id: int, metin: str, yapan: str) -> None:
 def kalem_ekle(db: Session, user: Principal, veri: dict) -> int:
     ben = kullanici_kaydi(db, user)
     sahip_id = ben.id
-    if yonetici_mi(user) and veri.get("owner_id"):
-        sahip = db.get(AppUser, veri["owner_id"])
-        if sahip is None or not sahip.active:
-            raise ProjeHata(400, "Sorumlu TAM bulunamadı.")
+    if yonetici_mi(user):
+        # Sorumlu yalniz TAM personeli olabilir (yonetici ve admin kisi listelerinde yer almaz); secilmediyse kendisi, o da personel degilse hata.
+        sahip = db.get(AppUser, veri["owner_id"]) if veri.get("owner_id") else ben
+        if not personel_mi(sahip):
+            raise ProjeHata(400, "Sorumlu TAM bulunamadı." if veri.get("owner_id") else "Sorumlu TAM seçin.")
         sahip_id = sahip.id
     baslik = (veri.get("title") or "").strip()
     if not baslik:
@@ -137,23 +139,26 @@ def ekran(db: Session, user: Principal) -> dict:
         for a in db.scalars(select(ProjectAction).where(ProjectAction.item_id.in_([k.id for k in kalemler])).order_by(ProjectAction.at.desc(), ProjectAction.id.desc())):
             aksiyonlar.setdefault(a.item_id, []).append(a)
 
-    ozet: dict[int, dict] = {}
+    personeller = personel(db) if yonetici else [ben]
+    kimlikler = {p.id for p in personeller}
+    ozet: dict[int | None, dict] = {}
+    for p in personeller:  # projesi olmayan personel de satir olur (0); tum modullerle ayni kisi kumesi
+        ozet[p.id] = {"tam": _ad(p), **dict.fromkeys(KATEGORILER, 0), "kapanan": 0, "devam_eden": 0}
     for k in kalemler:
-        d = ozet.setdefault(k.owner_id, {"tam": _ad(kisiler.get(k.owner_id)), **dict.fromkeys(KATEGORILER, 0), "kapanan": 0, "devam_eden": 0})
+        sahip = k.owner_id if k.owner_id in kimlikler else None  # personel olmayan sahip (yonetici/admin): tek 'Atanmamis' satiri
+        d = ozet.setdefault(sahip, {"tam": _ad(kisiler.get(k.owner_id)) if sahip else dil.m("Atanmamış", "Unassigned"), **dict.fromkeys(KATEGORILER, 0), "kapanan": 0, "devam_eden": 0})
         if k.category in KATEGORILER:
             d[k.category] += 1
         d["kapanan" if k.status == "kapandi" else "devam_eden"] += 1
     for d in ozet.values():
         d["toplam"] = sum(d[c] for c in KATEGORILER)
-    ozet_listesi = sorted(ozet.values(), key=lambda d: (-d["toplam"], eslestirme_anahtari(d["tam"])))
+    ozet_listesi = [d for _, d in sorted(ozet.items(), key=lambda kv: (kv[0] is None, -kv[1]["toplam"], eslestirme_anahtari(kv[1]["tam"])))]
 
-    if yonetici:
-        secenek = list(db.scalars(select(AppUser).where(AppUser.active.is_(True)).order_by(AppUser.display_name, AppUser.username)))
-    else:
-        secenek = [ben]
+    secenek = personeller
     return {
         "yonetici": yonetici,
         "kendi_id": ben.id,
+        "varsayilan_sorumlu": ben.id if personel_mi(ben) else (secenek[0].id if secenek else ben.id),
         "ozet": ozet_listesi,
         "genel_toplam": sum(d["toplam"] for d in ozet_listesi),
         "tamlar": [{"id": k.id, "ad": _ad(k)} for k in secenek],

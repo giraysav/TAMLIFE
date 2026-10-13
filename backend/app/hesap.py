@@ -1,6 +1,8 @@
 """Hesap yonetimi (komut satiri; Yonetim > Kullanicilar ekrani gelene kadar). cd backend; ..\\.venv\\Scripts\\python.exe -m app.hesap ...
 
   liste                         kullanicilari listeler
+  personel                      takvim, ekip ozeti, utilizasyon, proje ve musteri listelerinin ORTAK kisi kumesini (etkin TeamMember) ve
+                                disarida kalanlari nedeniyle gosterir; ayni gorunen ada sahip birden cok hesabi isaretler
   rol <kullanici> <rol>         admin | TeamMngr | TeamMember; kayit yoksa AD kullanicisi olarak acar (ilk girisi beklemeden yetki)
   aktif|pasif <kullanici>       pasif kullanici giris yapamaz (AD kullanicisi silinmez, pasife alinir)
   parola <kullanici>            YEREL ACIL HESAP parolasi (en az 12 karakter, gizli sorulur); AD kullanicisina verilmez
@@ -16,17 +18,53 @@ from __future__ import annotations
 
 import getpass
 import sys
+from collections import Counter
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import kullanicilar
 from app.config import env_dosyasi_yukle
 from app.db import oturum
-from app.models import AppUser
-from app.ortak import UygulamaHatasi
+from app.models import AppUser, Customer, ProjectItem
+from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
 
 ROLLER = ("admin", "TeamMngr", "TeamMember")
+
+
+def _personel(db) -> int:
+    """personel: tum modullerin ortak kisi kumesi ve disarida kalanlar; ayni kisi gibi gorunen hesaplar (silme/devir adayi)."""
+    tum = list(db.scalars(select(AppUser).order_by(AppUser.display_name, AppUser.username)))
+    ici = [u for u in tum if kullanicilar.personel_mi(u)]
+    print(f"PERSONEL ({len(ici)} kisi; takvim, ekip ozeti, utilizasyon, proje ve musteri listelerinde ayni kume):")
+    for u in ici:
+        print(f"  {u.username:<24} {u.display_name or u.username}")
+    print("DISARIDA:")
+    for u in tum:
+        if kullanicilar.personel_mi(u):
+            continue
+        neden = "PASIF hesap" if u.active is False else ("admin" if u.is_admin or u.role == "admin" else f"rol {u.role}")
+        print(f"  {u.username:<24} {u.display_name or u.username}  -> {neden}")
+    dis = {u.id: u for u in tum if not kullanicilar.personel_mi(u)}
+    musteri = Counter(db.scalars(select(Customer.owner_id).where(Customer.owner_id.in_(dis))))
+    proje = Counter(db.scalars(select(ProjectItem.owner_id).where(ProjectItem.owner_id.in_(dis))))
+    sahipsiz = db.scalar(select(func.count()).select_from(Customer).where(Customer.owner_id.is_(None))) or 0
+    if musteri or proje or sahipsiz:
+        print("SAHIBI PERSONEL OLMAYAN KAYITLAR (listelerde 'Atanmamis' satirina duser; Musteri Karti > Sorumlu TAM ile personele devredin):")
+        for kimlik in sorted(set(musteri) | set(proje)):
+            u = dis[kimlik]
+            print(f"  {u.username:<24} {u.display_name or u.username}  -> musteri: {musteri[kimlik]}, proje: {proje[kimlik]}")
+        if sahipsiz:
+            print(f"  (sahibi bos)             -> musteri: {sahipsiz}")
+    gruplar: dict[str, list[AppUser]] = {}
+    for u in tum:
+        gruplar.setdefault(eslestirme_anahtari(u.display_name or u.username), []).append(u)
+    ayni = [g for g in gruplar.values() if len(g) > 1]
+    if ayni:
+        print("AYNI KISI OLABILIR (ayni gorunen ad, birden cok hesap):")
+        for g in ayni:
+            print("  " + " | ".join(f"{u.username} ({u.role}, {'aktif' if u.active is not False else 'pasif'})" for u in g))
+    return 0
 
 
 def _sil(db, arg: list[str]) -> int:
@@ -88,7 +126,7 @@ def main(argv: list[str]) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")  # Windows konsol kod sayfasinda olmayan harf (orn. ı) cokertmesin
     env_dosyasi_yukle()
-    if not argv or argv[0] not in {"liste", "rol", "aktif", "pasif", "parola", "sil"}:
+    if not argv or argv[0] not in {"liste", "personel", "rol", "aktif", "pasif", "parola", "sil"}:
         print(__doc__)
         return 2
     komut, *arg = argv
@@ -98,6 +136,8 @@ def main(argv: list[str]) -> int:
                 tur = "AD" if u.is_ad_user else ("yerel" if u.password_hash else "-")
                 print(f"{u.username:<24} {u.role:<11} {'aktif' if u.active else 'PASIF':<6} {tur:<6} {u.display_name}")
             return 0
+        if komut == "personel":
+            return _personel(db)
         if komut == "sil":
             return _sil(db, arg)
         if not arg:
