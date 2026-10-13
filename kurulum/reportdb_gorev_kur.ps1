@@ -54,9 +54,6 @@ if (-not ([Security.Principal.WindowsPrincipal]$kimlik).IsInRole([Security.Princ
     Dur "Yonetici (yukseltilmis) PowerShell gerekli. Su an: $($kimlik.Name)"
 }
 if ($Dakika -lt 2 -or $Dakika -gt 60) { Dur "Dakika 2 ile 60 arasinda olmali" }
-if (Get-ScheduledTask -TaskName 'TAM_Life_ReportDB_6dk' -ErrorAction SilentlyContinue) {
-    Uyari "Uretim gorevi (TAM_Life_ReportDB_6dk) de kurulu: ikisi birlikte ReportDB'ye iki kat sorgu gonderir."
-}
 
 Adim "$Kullanici icin parola isteniyor (gorev kaydina yazilir; dosyaya yazilmaz)"
 $sifre = Read-Host "$Kullanici parolasi" -AsSecureString

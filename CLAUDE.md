@@ -5,8 +5,8 @@ Değişiklikleri tam dosya yerine yalnız değişen blok/diff olarak göster. Do
 
 ## Kapsam ve yön (2026-10-07 kararı — aşağıdaki eski bölümlerin önüne geçer)
 
-- **Durum (2026-10-12): bu depo CANLIDIR.** Sunucuda `E:\TAMLIFE_Dev\TAMLIFE_v3.5` olarak `https://tamlife/` adresinden yayında; eski Flask paneli (`E:\TAMLIFE`) durduruldu, görevleri (`TAM_Life_AutoStart`, `TAM_Life_Izleme`) pasif. Aşağıdaki "eski üretim" cümleleri eski panelin arşiv/referans klasörü için geçerlidir. Canlı panel DB'si `backend\var\dev.db`dir (adı yanıltıcı; sunucu `.env` `TAMLIFE_DATABASE_URL=sqlite:///./var/dev.db`).
-- **`E:\TAMLIFE` (eski panel, artık durdurulmuş arşiv) kapsam dışıdır:** ona bağlantı, API, vekil, SSO, dosya kopyası kurma/önerme. Tek istisna (2026-10-07, kullanıcı izni): **yalnız OKUMA** — panelin ihtiyacı olan kod/şema/mantık referans için okunup yeni yapıya uyarlanabilir. Yazma, çalıştırma, `.env`/DB/anahtar dosyası okuma, müşteri satırı kopyalama yok. Aşağıdaki "Üretime dokunma kuralları" üretimi korumak için geçerliliğini sürdürür.
+- **Durum (2026-10-12): bu depo CANLIDIR.** Sunucuda `E:\TAMLIFE_Dev\TAMLIFE_v3.5` olarak `https://tamlife/` adresinden yayında; eski Flask paneli (`E:\TAMLIFE`) kullanıcı kararıyla (2026-10-12) silindi, görevleri (`TAM_Life_AutoStart`, `TAM_Life_Izleme`) kaldırıldı; kod ve git geçmişi projedeki `TAMLIFE.zip` arşivinde durur. Aşağıdaki "eski üretim" cümleleri bu arşiv için geçerlidir. Canlı panel DB'si `backend\var\dev.db`dir (adı yanıltıcı; sunucu `.env` `TAMLIFE_DATABASE_URL=sqlite:///./var/dev.db`).
+- **`E:\TAMLIFE` (eski panel) silindi (kullanıcı kararı, 2026-10-12); eski kodun tek kopyası projedeki `TAMLIFE.zip` arşividir:** ona bağlantı, API, vekil, SSO, dosya kopyası kurma/önerme. Tek istisna (2026-10-07, kullanıcı izni): **yalnız OKUMA** — panelin ihtiyacı olan kod/şema/mantık arşivden okunup yeni yapıya uyarlanabilir. Yazma, çalıştırma, `.env`/DB/anahtar dosyası okuma, müşteri satırı kopyalama yok. Aşağıdaki "Üretime dokunma kuralları" üretimi korumak için geçerliliğini sürdürür.
 - Üretim paneline gömme (Flask vekili, SSO ucu, `/admin/dev`, `deploy/prod/`, `build:prod`) 2026-10-07'de koddan **kaldırıldı**; geri dönüş yalnız git geçmişinde. Üretimde kalıntı: `backend/app/blueprints/dev_panel_bp.py` dosyası (`__init__.py`'de kayıtlı değil, zararsız); kaldırmak üretim tarafında kullanıcının işidir.
 - Yerel çalıştırma: `backend\dev.ps1` (API `127.0.0.1:8117`, SQLite `backend/var/dev.db`). Arayüz: `cd ekran-react; npm run dev` (Vite `/api`'yi 8117'ye yönlendirir) ya da `backend\dev.ps1 -Arayuz` (derler, aynı portta sunar).
 - Çalışma kimliği bu oturumda `TURKCELL\tamlifeadlog` (yerel yönetici); `E:\TAMLIFE_Dev` ağacının sahibi ve tam yetkilisidir.
@@ -15,7 +15,7 @@ Değişiklikleri tam dosya yerine yalnız değişen blok/diff olarak göster. Do
 
 - Bu sunucu kurumsal (AD/LDAP) mimaridedir. **`TURKCELL\tcgsav` LDAP kullanıcısıdır; sunucuya yalnız onunla RDP login olunur.**
 - **`ladinadmin` servis hesabıdır, yerel admin yetkisi vardır.** Tüm işlemlerde (yazma, git, süreç, servis, `.env`) `ladinadmin` kimliği kullanılır. Başka kullanıcıyla sunucuya login olunmaz/önerilmez.
-- Oturum başında `whoami` ve yazma yetkisini doğrula. `E:\TAMLIFE` altında mevcut dosya değiştirilemiyorsa (EPERM) kimlik atlatmaya çalışma; **komutu veya betiği kullanıcıya ver**, kullanıcı `ladinadmin` ile çalıştırır. Yetki/izin gerekiyorsa aynı kural.
+- Oturum başında `whoami` ve yazma yetkisini doğrula. `E:\TAMLIFE_Dev` altında mevcut dosya değiştirilemiyorsa (EPERM) kimlik atlatmaya çalışma; **komutu veya betiği kullanıcıya ver**, kullanıcı `ladinadmin` ile çalıştırır. Yetki/izin gerekiyorsa aynı kural.
 - `ladinadmin` parolasını isteme, yazma, saklama. Kimlik bilgisi deposunu (cmdkey vb.) araştırma.
 - **Sır** (`.env` değerleri, parola, anahtar): ben üretmem/yazmam/göstermem.
 
@@ -24,12 +24,12 @@ Değişiklikleri tam dosya yerine yalnız değişen blok/diff olarak göster. Do
 | | Yol | Rol |
 |---|---|---|
 | **Canlı (2026-10-12'den, bu depo)** | `E:\TAMLIFE_Dev\TAMLIFE_v3.5` (FastAPI + React, `https://tamlife/`, ≤20 eşzamanlı kullanıcı) | Tek canlı klasör. Birinci kriter stabilite; kalıcı görevler `TAMLIFE_v35_Panel` ve `TAMLIFE_v35_TLS_Vekil`. |
-| **Eski panel** | `E:\TAMLIFE` (Flask) | Durduruldu; yalnız arşiv ve okuma referansı. Silme/yazma yok. |
+| **Eski panel** | `E:\TAMLIFE` (Flask) | Silindi (2026-10-12, kullanıcı kararı); yalnız `TAMLIFE.zip` arşivi okuma referansıdır. |
 
 ### Üretime dokunma kuralları
 - Üretimi **onay almadan** durdurma/başlatma/yeniden başlatma (`yonet.bat`), süreç öldürme, dosya silme, `pip install`, zamanlanmış görev/güvenlik duvarı değişikliği, `.env` düzenleme yok. Yapmadan önce komutu ve etkisini yaz.
 - Üretim kodunu "ileride lazım olur" diye değiştirme. Şüphede kalırsan değiştirmeden sor.
-- `_eski`, `_yeni`, `_onceki`, `_yedek` adlı klasör/dosya oluşturma (`E:\TAMLIFE` içinde). Sürüm numarası artırma, etiket (tag) atma yok; "sürüm" yalnız klasör adıdır.
+- `_eski`, `_yeni`, `_onceki`, `_yedek` adlı klasör/dosya oluşturma (`E:\TAMLIFE_Dev` içinde). Sürüm numarası artırma, etiket (tag) atma yok; "sürüm" yalnız klasör adıdır.
 - `.env`, veritabanı (`E:\Secure_DB`, `C:\Secure_DB`), `*.pfx/*.key/*.p12` taşınmaz ve içeriği paylaşılmaz. `.bat` dosyaları CRLF + saf ASCII, `.ps1` betikleri saf ASCII.
 - AD/LDAP ile giren kullanıcı hiçbir yolla veritabanından silinmez. Acil durum hesabı `ladinadmin`; parolasına dokunma.
 - Serbest (salt okuma): `yonet.bat durum|log`, `logs\` okuma, `isletim\saglik_kontrolu.ps1`.

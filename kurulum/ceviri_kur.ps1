@@ -1,6 +1,6 @@
 # TAMLIFE v3.5 aylik rapor "Ingilizceye cevir" dugmesi icin cevrimdisi TR->EN ceviri modelini kurar ve dener.
 # Eski panelin isletim\guncelle_indir.ps1 -Model uyarlamasi. Betik saf ASCII (PS 5.1). Panel/API'ye dokunmaz; bitince API yeniden baslatilir.
-#   .\ceviri_kur.ps1                       : model yoksa once -Kaynak klasorunden kopyalar, o da yoksa argos-net.com'dan indirir;
+#   .\ceviri_kur.ps1                       : model yoksa -Kaynak (varsayilan bos; eski panel klasoru silindi) verildiyse oradan kopyalar, yoksa argos-net.com'dan indirir;
 #                                            kutuphane (ctranslate2, sentencepiece) yoksa pip ile kurar; sonra deneme cevirisi yapar
 #   .\ceviri_kur.ps1 -Paket C:\x\translate-tr_en-1_5.argosmodel : internetsiz sunucu: baska makinede indirilmis paketi acar
 #   .\ceviri_kur.ps1 -Wheels C:\x\wheels   : internetsiz sunucu: kutuphaneleri yerel wheel klasorunden kurar (pip --no-index)
@@ -8,7 +8,7 @@
 # Model ~126 MB, git'te DEGIL (.gitignore: ceviri_modeli/). Varsayilan yer: TAMLIFE_v3.5\ceviri_modeli\tr_en.
 # backend\.env icinde TAMLIFE_CEVIRI_MODEL_DIZINI verildiyse ayni yolu -Hedef ile verin.
 # Indirme adresi ve SHA256 uretim dokuman\INTERNETTEN_ALINACAKLAR.md ile aynidir; tarayici benzeri User-Agent gerekir (yoksa 403).
-param([string]$Kaynak = 'E:\TAMLIFE\ceviri_modeli\tr_en',
+param([string]$Kaynak = '',
       [string]$Paket = '',
       [string]$Wheels = '',
       [string]$Hedef = '',
@@ -106,11 +106,11 @@ if (Model-Tam) {
     if (-not (Test-Path $Paket)) { Dur "Paket yok: $Paket" }
     Adim "Paket aciliyor: $Paket"
     Paketi-Ac $Paket
-} elseif (Test-Path (Join-Path $Kaynak 'model\model.bin')) {
+} elseif ($Kaynak -and (Test-Path (Join-Path $Kaynak 'model\model.bin'))) {
     Adim "Kopyalaniyor: $Kaynak"
     Kopyala-Kokten $Kaynak
 } else {
-    Uyari "Kaynak klasor yok ($Kaynak); internetten indirilecek."
+    Uyari "Kaynak klasor verilmedi ya da yok; internetten indirilecek."
     $tmp = Join-Path $env:TEMP ('tamlife_argos_' + [guid]::NewGuid().ToString('N') + '.argosmodel')
     try {
         try { Indir $tmp }

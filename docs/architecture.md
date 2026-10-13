@@ -1,6 +1,6 @@
 # TAMLIFE v3.5 — güncel mimari (2026-10-12, canlı)
 
-TAMLIFE, Turkcell TAM ekipleri için iç kullanım paneldir. v3.5, eski Flask panelinin (`E:\TAMLIFE`, durduruldu) FastAPI + React ile yeniden yazımıdır ve 2026-10-12'den beri `https://tamlife/` adresinde canlıdır (≤20 eşzamanlı kullanıcı). Bu belge kodun bugünkü halini anlatır; ayrıntılı tasarım notları `docs/` altındaki diğer dosyalardadır.
+TAMLIFE, Turkcell TAM ekipleri için iç kullanım paneldir. v3.5, eski Flask panelinin (`E:\TAMLIFE`, silindi; arşiv: `TAMLIFE.zip`) FastAPI + React ile yeniden yazımıdır ve 2026-10-12'den beri `https://tamlife/` adresinde canlıdır (≤20 eşzamanlı kullanıcı). Bu belge kodun bugünkü halini anlatır; ayrıntılı tasarım notları `docs/` altındaki diğer dosyalardadır.
 
 ## 1. Çalışma düzeni (sunucu LADIN01, `E:\TAMLIFE_Dev\TAMLIFE_v3.5`)
 
@@ -90,4 +90,4 @@ Git dışı, sunucuda kalıcı: `backend\.env`, `backend\var\`, `ekran-react\dis
 - REPORTDB: logon tetikleyicisi izni (DBA) gelince `TAM_Life_v35_ReportDB_6dk` görevi açılır (`kurulum\reportdb_gorev_kur.ps1`).
 - 114 çatı müşterinin segmenti boş (eski panelde de boştu): Veri Girişi › ham müşteri yüklemesiyle doldurulur.
 - GALAPAGOSDB anahtarları ve ONENTDB/Ürün-Tutar bağlantıları sunucu `.env`'inde doğrulanacak.
-- Çeviri modeli yeni klasöre alınmalı (`kurulum\ceviri_kur.ps1`, kaynak eski panel klasörü) ki canlı panel `E:\TAMLIFE`'a bağımlı kalmasın.
+- Çeviri modeli `ceviri_modeli\tr_en` altında olmalı; `kurulum\ceviri_kur.ps1 -Dogrula` dosyayı, SHA256'yı ve deneme çevirisini denetler (eski panel klasörü silindi; internetsiz sunucuda `-Paket`).

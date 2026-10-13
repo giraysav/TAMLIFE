@@ -6,7 +6,7 @@
 # Bu betik parola / kimlik bilgisi sormaz, yazmaz. Gerekli: YONETICI (yukseltilmis) PowerShell.
 #   .\canli_gorev_kur.ps1                  : iki gorevi kaydeder (baslatmaz; bir sonraki acilista calisir)
 #   .\canli_gorev_kur.ps1 -Hemen           : kaydeder ve hemen baslatir, panel saglik denetimini yapar
-#   .\canli_gorev_kur.ps1 -Durum           : gorevleri, panel portunu ve gunluklerin son satirlarini gosterir
+#   .\canli_gorev_kur.ps1 -Durum           : gorevleri (panel, vekil ve ReportDB 6 dk), panel portunu ve gunluklerin son satirlarini gosterir
 #   .\canli_gorev_kur.ps1 -Kaldir          : iki gorevi durdurur ve siler
 #   -VekilAd '+'                           : eski panel kapaliyken tum adlari (tamlife, FQDN, IP) yeni panele alir (varsayilan: tamlife)
 #   -PanelPort 8117 -VekilPort 443         : portlar
@@ -25,6 +25,7 @@ $Kok = Split-Path -Parent $PSScriptRoot
 $LogKlasoru = Join-Path $Kok 'var\log'
 $GorevPanel = 'TAMLIFE_v35_Panel'
 $GorevVekil = 'TAMLIFE_v35_TLS_Vekil'
+$GorevRapor = 'TAM_Life_v35_ReportDB_6dk'   # kurulum\reportdb_gorev_kur.ps1 kurar; Oracle izni gelene kadar Disabled olabilir
 
 function Adim($m) { Write-Host "[*] $m" -ForegroundColor Cyan }
 function Tamam($m) { Write-Host "[+] $m" -ForegroundColor Green }
@@ -77,8 +78,8 @@ function Gorev-Sil($ad) {
     }
 }
 
-function Log-Sonu($dosya) {
-    $yol = Join-Path $LogKlasoru $dosya
+function Log-Sonu($dosya, $klasor = $LogKlasoru) {
+    $yol = Join-Path $klasor $dosya
     if (Test-Path $yol) {
         Write-Host "    --- $dosya (son 6 satir) ---"
         Get-Content -Path $yol -Tail 6 | ForEach-Object { Write-Host "    $_" }
@@ -88,7 +89,7 @@ function Log-Sonu($dosya) {
 }
 
 if ($Durum) {
-    foreach ($ad in $GorevPanel, $GorevVekil) {
+    foreach ($ad in $GorevPanel, $GorevVekil, $GorevRapor) {
         $g = Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue
         if ($g) {
             $b = Get-ScheduledTaskInfo -TaskName $ad
@@ -101,6 +102,7 @@ if ($Durum) {
     if ($tutan) { Write-Host "Panel portu $PanelPort dinleniyor (surec $($tutan.OwningProcess))." } else { Write-Host "Panel portu $PanelPort dinlenmiyor." }
     Log-Sonu 'canli_panel.log'
     Log-Sonu 'canli_vekil.log'
+    Log-Sonu 'isci.log' (Join-Path $Kok 'backend\var\logs')
     exit 0
 }
 
