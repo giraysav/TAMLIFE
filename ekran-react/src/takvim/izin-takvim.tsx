@@ -202,7 +202,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-base font-black text-tl-navy">
+          <h3 className="text-lg font-black text-tl-navy">
             {t.aylar[ay - 1]} {yil}
           </h3>
           <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
           <HataKutu metin={t.yuklenemedi} tekrar={() => void q.refetch()} tekrarEtiket={t.tekrar} />
         ) : (
           <>
-            <div className="grid grid-cols-7 gap-1.5 text-center text-[0.625rem] font-black uppercase tracking-wide text-slate-400">
+            <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-black uppercase tracking-wide text-slate-500">
               {t.gunler.map((g) => (
                 <span key={g}>{g}</span>
               ))}
@@ -251,26 +251,45 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
                     onClick={() => setSecili(tarih)}
                     aria-label={`${g} ${t.aylar[ay - 1]}: ${t.durumlar[durum]}${kayit && kayit.online + kayit.yuzyuze > 0 ? `, ${kayit.online}/${kayit.yuzyuze}` : ""}${kayit?.toplanti_ozeti ? `, ${t.toplantiOzeti}` : ""}`}
                     title={kayit?.toplanti_ozeti || undefined}
-                    className={`group relative flex min-h-[4.5rem] flex-col items-start gap-1 rounded-xl border p-1.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
+                    className={`group relative flex min-h-[5.5rem] flex-col items-stretch gap-1.5 rounded-xl border p-1 text-left transition-all sm:p-2 sm:min-h-[7rem] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
                       tarih === bugun ? "border-tl-navy ring-2 ring-tl-yellow/70" : "border-slate-200"
                     } ${haftaSonu && !renkli ? "bg-slate-50" : "bg-white"}`}
                     style={renkli ? { background: `${DURUM_RENK[durum]}1a`, borderColor: `${DURUM_RENK[durum]}66` } : undefined}
                   >
-                    <span className={`font-mono text-xs font-black ${tarih === bugun ? "text-tl-navy" : haftaSonu ? "text-slate-400" : "text-slate-600"}`}>{g}</span>
+                    <span className="flex items-center justify-between gap-1">
+                      <span className={`font-mono text-base font-black leading-none ${tarih === bugun ? "text-tl-navy" : haftaSonu ? "text-slate-400" : "text-slate-700"}`}>{g}</span>
+                      {kayit?.toplanti_ozeti ? <FileText aria-hidden className="hidden size-4 text-slate-500 sm:block" /> : null}
+                    </span>
+                    <span aria-hidden className="size-3 shrink-0 rounded-full sm:hidden" style={{ background: DURUM_RENK[durum] }} />
                     {renkli ? (
-                      <span className="line-clamp-1 rounded px-1 text-[0.5625rem] font-black leading-tight text-white" style={{ background: DURUM_RENK[durum] }}>
+                      <span className="hidden w-fit max-w-full truncate rounded-md px-2 py-0.5 text-xs font-black leading-tight text-white sm:block" style={{ background: DURUM_RENK[durum] }}>
                         {t.durumlar[durum]}
                       </span>
-                    ) : null}
-                    {kayit && (kayit.online + kayit.yuzyuze > 0 || kayit.toplanti_ozeti) ? (
-                      <span className="mt-auto flex w-full items-center gap-1 font-mono text-[0.625rem] font-black text-tl-blue">
-                        {kayit.online + kayit.yuzyuze > 0 ? (
-                          <>
-                            <Video aria-hidden className="size-3" />
-                            {kayit.online}/{kayit.yuzyuze}
-                          </>
+                    ) : (
+                      <span className="hidden items-center gap-1.5 text-xs font-bold leading-tight text-slate-500 sm:flex">
+                        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: DURUM_RENK[durum] }} />
+                        <span className="truncate">{t.durumlar[durum]}</span>
+                      </span>
+                    )}
+                    {kayit && kayit.online + kayit.yuzyuze > 0 ? (
+                      <span className="flex flex-col gap-0.5 font-mono text-sm font-black sm:flex-row sm:gap-3">
+                        {kayit.online > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-tl-blue">
+                            <Video aria-hidden className="size-4" />
+                            {kayit.online}
+                          </span>
                         ) : null}
-                        {kayit.toplanti_ozeti ? <FileText aria-hidden className="ml-auto size-3 text-slate-400" /> : null}
+                        {kayit.yuzyuze > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-600">
+                            <Users aria-hidden className="size-4" />
+                            {kayit.yuzyuze}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                    {kayit?.toplanti_ozeti ? (
+                      <span className="mt-auto hidden sm:block">
+                        <span className="line-clamp-3 whitespace-pre-line text-xs font-medium leading-snug text-slate-600">{kayit.toplanti_ozeti}</span>
                       </span>
                     ) : null}
                   </button>
@@ -279,11 +298,25 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
             </div>
             <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
               {DURUM_SIRASI.map((k) => (
-                <li key={k} className="flex items-center gap-1.5 text-[0.6875rem] font-bold text-slate-500">
+                <li key={k} className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
                   <span aria-hidden className="size-2.5 rounded-sm" style={{ background: DURUM_RENK[k] }} />
                   {t.durumlar[k]}
                 </li>
               ))}
+            </ul>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
+              <li className="flex items-center gap-1.5">
+                <Video aria-hidden className="size-4 text-tl-blue" />
+                {t.toplantiOnline}
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Users aria-hidden className="size-4 text-emerald-600" />
+                {t.toplantiYuzYuze}
+              </li>
+              <li className="flex items-center gap-1.5">
+                <FileText aria-hidden className="size-4 text-slate-500" />
+                {t.toplantiOzeti}
+              </li>
             </ul>
           </>
         )}

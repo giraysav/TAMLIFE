@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { IzinTakvim } from "@/takvim/izin-takvim"
 
@@ -13,12 +13,16 @@ type Cagri = { yol: string; yontem: string; govde: unknown }
 
 const simdi = new Date()
 const ay = simdi.getMonth() + 1
-const GUN = `${simdi.getFullYear()}-${String(ay).padStart(2, "0")}-10`
+const AY_ONEKI = `${simdi.getFullYear()}-${String(ay).padStart(2, "0")}`
+const GUN = `${AY_ONEKI}-10`
 const OZET = "10:00 - 11:00 XXXXX müşteri ile SD-WAN çözümü üzerine toplantı yapıldı."
 const AY_VERISI = {
   yil: simdi.getFullYear(),
   ay,
-  gunler: [{ tarih: GUN, durum: "calisiyor", online: 0, yuzyuze: 0, toplanti_ozeti: OZET }],
+  gunler: [
+    { tarih: GUN, durum: "calisiyor", online: 0, yuzyuze: 0, toplanti_ozeti: OZET },
+    { tarih: `${AY_ONEKI}-11`, durum: "yillik_izin", online: 2, yuzyuze: 0, toplanti_ozeti: "" },
+  ],
   ozet: { durumlar: {}, online: 0, yuzyuze: 0, kayitli_gun: 1, izin_gun: 0, toplanti: 0 },
 }
 
@@ -46,6 +50,25 @@ async function cekmeceyiAc() {
   fireEvent.click(await screen.findByRole("button", { name: /^10 \S+: Çalışıyor, Toplantı özeti$/ }))
   return await screen.findByRole("textbox", { name: /Toplantı özeti/ })
 }
+
+describe("Takvim günü kutusu", () => {
+  it("durum etiketini, toplantı sayılarını ve özetin ilk satırlarını gösterir; sıfır sayıyı yazmaz", async () => {
+    sahteSunucu()
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={istemci}>
+        <IzinTakvim dil="tr" />
+      </QueryClientProvider>,
+    )
+    const ozetli = await screen.findByRole("button", { name: /^10 \S+: Çalışıyor, Toplantı özeti$/ })
+    expect(within(ozetli).getByText("Çalışıyor")).toBeInTheDocument()
+    expect(within(ozetli).getByText(OZET)).toBeInTheDocument()
+    const izinli = screen.getByRole("button", { name: /^11 \S+: Yıllık İzin, 2\/0$/ })
+    expect(within(izinli).getByText("Yıllık İzin")).toBeInTheDocument()
+    expect(within(izinli).getByText("2")).toBeInTheDocument()
+    expect(within(izinli).queryByText("0")).not.toBeInTheDocument()
+  })
+})
 
 describe("Gün düzenle: toplantı özeti", () => {
   it("kutu Kaydet düğmesinin altında, kayıtlı özeti gösterir ve Kaydet gövdeye özeti ekler", async () => {
