@@ -43,6 +43,12 @@ def musteri_adlari(e: Erisim = Depends(herhangi_erisim), db: Session = Depends(g
     return ok(gs.musteri_adlari(db, e.user))
 
 
+@router.get("/tamlar")
+def tamlar(e: Erisim = Depends(herhangi_erisim), db: Session = Depends(get_db)):
+    """Kayitta secilebilir TAM'lar (yalniz ortak personel kumesi); Member'a yalniz kendisi doner."""
+    return ok(gs.tam_adlari(db, e.user))
+
+
 # --- ICT SMS ---------------------------------------------------------------------------------------
 @router.get("/sms")
 def sms_liste(yil: int | None = Yil, e: Erisim = Depends(sms_erisim), db: Session = Depends(get_db)):

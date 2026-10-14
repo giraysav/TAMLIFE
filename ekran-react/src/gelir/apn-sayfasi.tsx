@@ -22,6 +22,7 @@ function Kurulumlar({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const [yil, setYil] = useState("")
   const liste = useQuery({ queryKey: ["gelir", "apn-kurulum", yil], queryFn: () => oku<KurulumListe>(`/api/v1/gelir/apn/kurulum${sorguMetni({ yil })}`) })
   const adlar = useQuery({ queryKey: ["gelir", "musteri-adlari"], queryFn: () => oku<string[]>("/api/v1/gelir/musteri-adlari"), staleTime: 60_000 })
+  const tamlar = useQuery({ queryKey: ["gelir", "tamlar"], queryFn: () => oku<string[]>("/api/v1/gelir/tamlar"), staleTime: 60_000 })
   const yenile = () => qc.invalidateQueries({ queryKey: ["gelir", "apn-kurulum"] })
   const kaydet = useMutation({
     mutationFn: ({ govde, id }: { govde: Record<string, unknown>; id: number | null }) =>
@@ -40,6 +41,7 @@ function Kurulumlar({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
       goster: (s) => (s.teslim_tarihi ? tarih(String(s.teslim_tarihi)) : <Rozet ton="amber">{t.beklemede}</Rozet>),
     },
     { anahtar: "tutar", baslik: t.gelirTl, tip: "tutar", sag: true },
+    { anahtar: "tam", baslik: t.tam, tip: "secim", secenekler: tamlar.data ?? [], yer: t.tamYer },
   ]
   return (
     <div className="grid grid-cols-1 gap-4">

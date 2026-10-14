@@ -149,14 +149,16 @@ const KPI_TON = {
   gri: "from-slate-200/60 text-slate-600",
 } as const
 
-/** `kucuk`: alcak yer (Genel Bakis Ekip Ozeti): dolgu, sayi ve simge kucultulur. */
-export function Kpi({ etiket, deger, alt, ikon: Ikon, ton = "mavi", kucuk = false }: { etiket: string; deger: ReactNode; alt?: ReactNode; ikon?: LucideIcon; ton?: keyof typeof KPI_TON; kucuk?: boolean }) {
-  const uzun = typeof deger === "string" && deger.length > 9
+/** `kucuk`: alcak yer (Genel Bakis Ekip Ozeti): dolgu, sayi ve simge kucultulur. `sans`: sayi tek aralikli (mono) yazi yerine duz yazi tipiyle (binlik ayraci ve virgul genis bosluk birakmaz). */
+export function Kpi({ etiket, deger, alt, ikon: Ikon, ton = "mavi", kucuk = false, sans = false }: { etiket: string; deger: ReactNode; alt?: ReactNode; ikon?: LucideIcon; ton?: keyof typeof KPI_TON; kucuk?: boolean; sans?: boolean }) {
+  const uzunluk = typeof deger === "string" ? deger.length : 0
+  // uzun degerler (para tutari) karoya sigsin diye kuculur; kucuk karoda esikler daha dusuktur
+  const boyut = kucuk ? (uzunluk > 9 ? "text-base" : uzunluk > 6 ? "text-xl" : "text-2xl") : uzunluk > 9 ? "text-xl" : "text-3xl"
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br to-white shadow-sm ${kucuk ? "px-3 py-2.5" : "p-4"} ${KPI_TON[ton]}`}>
       {Ikon ? <Ikon aria-hidden className={`absolute opacity-30 ${kucuk ? "right-2.5 top-2.5 size-5" : "right-3 top-3 size-7"}`} /> : null}
       <div className="text-[0.625rem] font-black uppercase tracking-widest text-slate-500">{etiket}</div>
-      <div className={`mt-1 font-mono font-black leading-none text-tl-navy ${uzun ? "text-xl" : kucuk ? "text-2xl" : "text-3xl"}`}>{deger}</div>
+      <div className={`mt-1 font-black leading-none text-tl-navy ${sans ? "font-sans tabular-nums" : "font-mono"} ${boyut}`}>{deger}</div>
       {alt ? <div className={`font-bold text-slate-500 ${kucuk ? "mt-1 text-[0.625rem]" : "mt-1.5 text-[0.6875rem]"}`}>{alt}</div> : null}
     </div>
   )

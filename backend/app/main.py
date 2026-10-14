@@ -15,6 +15,7 @@ from app.config import env_dosyasi_yukle, get_settings
 from app.dil import DilAraKatmani
 from app.ekip.api import router as ekip_router
 from app.gelir.api import router as gelir_router
+from app.gelir_uretim.api import router as gelir_uretim_router
 from app.katalog_api import router as katalog_router
 from app.musteri.api import router as musteri_router
 from app.onedesk.api import router as onedesk_router
@@ -61,7 +62,7 @@ def create_app() -> FastAPI:
     audit_log.sink = kalici_yaz  # denetim olaylari audit_event'e KALICI yazilir
     if settings.env != "test":
         dosya_gunlugu.kur()
-    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, onedesk_router, gelir_router, takvim_router, sunum_router, talep_router, radar_router, proje_router, topoloji_router, ekip_router, yonetim_router, tampon_router):
+    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, onedesk_router, gelir_router, gelir_uretim_router, takvim_router, sunum_router, talep_router, radar_router, proje_router, topoloji_router, ekip_router, yonetim_router, tampon_router):
         app.include_router(router)
 
     @app.get("/api/v1/health")

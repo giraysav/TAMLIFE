@@ -19,7 +19,7 @@ PRESENTATION: dict[str, tuple[str, str, str, str]] = {
     "proje": ("insights", "layers", "Projeler ve müşteri bazlı çalışmalar", "Projects and customer-based work"),
     "tamsms": ("work", "message", "ICT SMS gelir ve üretim kayıtları", "ICT SMS revenue and production records"),
     "tamapn": ("work", "network", "APN gelir ve kurulum kayıtları", "APN revenue and installation records"),
-    "gelir_uretim": ("insights", "chart", "Gelir faydası sağlanan işler", "Work that delivered revenue benefit"),
+    "gelir_uretim": ("insights", "chart", "Gelir, tasarruf ve verimlilik faydası sağlayan işler", "Work that delivered revenue, savings or efficiency benefit"),
     "sunum": ("insights", "presentation", "Çeyrek bazlı sunumları hazırlayın", "Prepare quarterly presentations"),
     "radar": ("insights", "radar", "Müşteri fırsatları ve takip kayıtları", "Customer opportunities and follow-ups"),
     "baglantili": ("work", "link", "Kurum içi bağlantılı araçlar", "Internal connected tools"),

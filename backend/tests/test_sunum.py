@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,11 +12,13 @@ from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session
 
 from alembic import command
+from app import catalog
 from app.db import engine, kullanici_oturumu
-from app.models import ApnRevenue, AppUser, Customer, OnedeskRecord, Presentation, Report, RoleView, SmsRevenue
+from app.gelir_uretim.models import RevenueBenefit, RevenueBenefitPerson
+from app.models import ApnRevenue, AppUser, CalendarDay, Customer, OnedeskRecord, Presentation, ProjectItem, Report, RoleView, SmsRevenue
 from app.ortak import rapor_donemi, simdi
-from app.sunum import servis
-from app.takvim.servis import bu_ceyrek
+from app.sunum import servis, tanitim
+from app.takvim.servis import bu_ceyrek, donem_araligi
 from tests.conftest import login_ok
 
 YIL, CEYREK = bu_ceyrek()
@@ -97,7 +99,7 @@ def test_kaynak_listesi_ve_yalniz_yetkili_degistirir(veri, monkeypatch):
     assert {k["id"] for k in liste["kaynaklar"]} == set(servis.KAYNAKLAR)
     assert all(k["ad_en"] and k["aciklama"] and k["aciklama_en"] and k["modul"] for k in liste["kaynaklar"])
     acik = _kaynak_sec(veri, hdr, ["rapor", "takvim", "rapor"])
-    assert [k["id"] for k in acik if k["acik"]] == ["takvim", "rapor"]  # kayit sirasi, tekrar yok
+    assert [k["id"] for k in acik if k["acik"]] == ["rapor", "takvim"]  # kaynak (sunum akis) sirasi, tekrar yok
     assert veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": ["yok"]}, headers=hdr).status_code == 400
     veri.put("/api/v1/roller/TeamMember", json={"modules": TUM_MODULLER, "landing": "ozet", "permissions": []}, headers=hdr)
     _cikis(veri, hdr)
@@ -144,7 +146,7 @@ def test_bu_ceyrek_canli_hesaplanir_ve_saklanmaz(veri):
     assert kpi("utilizasyon", "Sıralamadaki TAM") == 1 and ogeler["utilizasyon"]["veri"]["tablo"]["satirlar"][0][1] == "Ayse Test"  # admin (skor 70) siralamada yok
     rapor = ogeler["rapor"]["veri"]
     if rapor_donemi(simdi()) >= (YIL, ILK_AY):
-        assert rapor["kpi"][0]["deger"] == 1 and rapor["kpi"][0]["alt"] == "/ 2"  # ilk ay: 2 rapor biriminden 1'i atildi
+        assert rapor["kpi"][0]["deger"] == 1 and rapor["kpi"][0]["alt"] == "/ 2 · %50"  # ilk ay: 2 rapor biriminden 1'i atildi
     else:  # ceyregin ilk ayindayiz: rapor donemi (onceki ay) onceki ceyrekte, bu ceyrekte beklenen rapor henuz yok
         assert rapor["kpi"] == [] and all(len(s) == 2 for s in rapor["tablo"]["satirlar"])
     assert ogeler["takvim"]["veri"]["ceyrek"] == CEYREK and any(u["ad"] == "Ayse Test" for u in ogeler["takvim"]["veri"]["uyeler"])
@@ -156,7 +158,7 @@ def test_gecmis_ceyrek_ilk_goruntulemede_dondurulur(veri, monkeypatch):
     onceki, eski, gelecek = _geri(YIL, CEYREK, 1), _geri(YIL, CEYREK, 2), (YIL + 1, CEYREK)
 
     ilk = _donem(veri, *onceki)
-    assert ilk["zaman"] == "gecmis" and [(o["kaynak"], o["durum"], o["gonderen"]) for o in ilk["ogeler"]] == [("takvim", "kayitli", ""), ("portfoy", "kayitli", "")]
+    assert ilk["zaman"] == "gecmis" and [(o["kaynak"], o["durum"], o["gonderen"]) for o in ilk["ogeler"]] == [("portfoy", "kayitli", ""), ("takvim", "kayitli", "")]
     assert _sunum_sayisi() == 2
     # sonradan degisen veri dondurulmus goruntuyu degistirmez
     with Session(engine()) as db:
@@ -167,7 +169,7 @@ def test_gecmis_ceyrek_ilk_goruntulemede_dondurulur(veri, monkeypatch):
 
     # anlik kaynak yalniz bir onceki ceyrek icin dondurulur; daha eski ceyrege bugunku durum yazilmaz
     d = _donem(veri, *eski)
-    assert [(o["kaynak"], o["durum"]) for o in d["ogeler"]] == [("takvim", "kayitli"), ("portfoy", "yok")]
+    assert [(o["kaynak"], o["durum"]) for o in d["ogeler"]] == [("portfoy", "yok"), ("takvim", "kayitli")]
     assert _sunum_sayisi() == 3
     g = _donem(veri, *gelecek)
     assert g["zaman"] == "gelecek" and g["ogeler"] == [] and _sunum_sayisi() == 3
@@ -178,7 +180,7 @@ def test_gecmis_ceyrek_ilk_goruntulemede_dondurulur(veri, monkeypatch):
     portfoy = next(o for o in _donem(veri, *onceki)["ogeler"] if o["kaynak"] == "portfoy")
     assert next(k["deger"] for k in portfoy["veri"]["kpi"] if k["ad"] == "Çatı müşteri") == 3
     assert veri.post("/api/v1/sunum/gonder", json={"kaynak": "takvim", "yil": eski[0], "ceyrek": eski[1], "gonder": False}, headers=hdr).json()["data"]["sunumda"] is None
-    assert [o["durum"] for o in _donem(veri, *eski)["ogeler"]] == ["kayitli", "yok"]
+    assert [o["durum"] for o in _donem(veri, *eski)["ogeler"]] == ["yok", "kayitli"]
 
 
 def test_isaretsiz_kaynak_elle_gonderilir_ve_kaldirilir(veri):
@@ -249,3 +251,157 @@ def test_benim_yerim_ve_raporlar_kaynaklari_gruplu(veri):
     ogeler = {o["kaynak"]: o for o in _donem(veri, YIL, CEYREK)["ogeler"]}
     assert ogeler["talep"]["veri"]["kpi"][0]["ad"] == "Açılan talep" and ogeler["proje"]["veri"]["kpi"][0]["ad_en"] == "Opened in quarter"
     assert ogeler["radar"]["veri"]["tablo"]["satirlar"] == []  # ReportDB verisi yok: uydurma aday yok
+
+
+def _kalem(kimlik, sahip, kategori, olusma: date, durum="devam", kapanis: date | None = None, guncelleme: date | None = None) -> ProjectItem:
+    an = datetime(olusma.year, olusma.month, olusma.day, 12, tzinfo=UTC)
+    son = datetime(guncelleme.year, guncelleme.month, guncelleme.day, 12, tzinfo=UTC) if guncelleme else an
+    return ProjectItem(id=kimlik, owner_id=sahip, category=kategori, title=f"Is {kimlik}", status=durum, closed_date=kapanis, created_at=an, updated_at=son)
+
+
+def test_sayilarla_tam_ekibi_kategori_ve_toplanti_sayilari(veri):
+    """Ceyrekte yurutulen is = ceyrek sonundan once acilmis, ceyrek basindan once kapanmamis; onceki ceyrek ayni olcuyle; toplantilar takvimden."""
+    bas, son = donem_araligi(YIL, CEYREK)
+    onceki_bas, _ = donem_araligi(*_geri(YIL, CEYREK, 1))
+    eski = onceki_bas - timedelta(days=100)
+    with Session(engine()) as db:
+        db.add_all(
+            [
+                _kalem(1, 2, "proje", bas),  # bu ceyrekte acildi, suruyor
+                _kalem(2, 2, "proje", onceki_bas, durum="kapandi", kapanis=bas - timedelta(days=1)),  # onceki ceyrekte kapandi: yalniz onceki ceyrekte aktif
+                _kalem(3, 2, "proje", eski),  # eskiden acildi, suruyor: iki ceyrekte de aktif
+                _kalem(4, 1, "ddos", bas, durum="kapandi", kapanis=bas + timedelta(days=1)),  # sahibi admin: '—' satiri; bu ceyrekte acildi ve kapandi
+                _kalem(5, 2, "calisma", eski, durum="kapandi", guncelleme=bas + timedelta(days=2)),  # kapanis tarihi bos: son guncelleme gununde kapanmis sayilir
+                _kalem(6, 2, "topoloji", son + timedelta(days=1)),  # ceyrek sonrasinda acildi: sayilmaz
+            ]
+        )
+        db.commit()
+    with kullanici_oturumu("ayse") as k:
+        k.add(CalendarDay(day=bas, status="calisiyor", online_count=3, face_count=2))
+        k.add(CalendarDay(day=onceki_bas, status="calisiyor", online_count=5, face_count=1))
+        k.commit()
+    hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, ["sayilar"])
+    (oge,) = _donem(veri, YIL, CEYREK)["ogeler"]
+    v = oge["veri"]
+    kpi = {k["kod"]: k for k in v["kpi"]}
+    assert v["stil"] == "sayilar" and list(kpi) == ["proje", "ddos", "topoloji", "dc_tasima", "calisma", "yuz_yuze", "online"]
+    assert (kpi["proje"]["deger"], kpi["proje"]["onceki"], kpi["proje"]["alt"], kpi["proje"]["alt_en"]) == (2, 2, "1 açıldı · 0 kapandı", "1 opened · 0 closed")
+    assert (kpi["ddos"]["deger"], kpi["ddos"]["alt"]) == (1, "1 açıldı · 1 kapandı")
+    assert (kpi["calisma"]["deger"], kpi["calisma"]["alt"]) == (1, "0 açıldı · 1 kapandı")
+    assert kpi["topoloji"]["deger"] == 0 and kpi["dc_tasima"]["deger"] == 0
+    assert (kpi["yuz_yuze"]["deger"], kpi["yuz_yuze"]["onceki"], kpi["online"]["deger"], kpi["online"]["onceki"]) == (2, 1, 3, 5)
+    assert [s["ad"] for s in v["tablo"]["sutunlar"]] == ["TAM", "Proje", "DDoS optimizasyonu", "Topoloji iyileştirme", "DC taşıma", "Çalışma", "Toplam"]
+    assert v["tablo"]["satirlar"] == [["Ayse Test", 2, 0, 0, 0, 1, 3], ["—", 0, 1, 0, 0, 0, 1]]  # admin sahipli is tek '—' satirinda, sonda
+
+
+def test_tanitim_olculmus_sayilar_verir(veri):
+    hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, ["tanitim"])
+    (oge,) = _donem(veri, YIL, CEYREK)["ogeler"]
+    v = oge["veri"]
+    assert oge["durum"] == "canli" and oge["anlik"] is True and v["stil"] == "tanitim"
+    kod = v["kod"]
+    assert kod["satir"] > 1000 and kod["dosya"] > 10 and 0 < kod["test_satir"] < kod["satir"]
+    assert sum(d["satir"] for d in kod["diller"]) == kod["satir"] and abs(sum(d["pay"] for d in kod["diller"]) - 100) <= 0.3
+    assert [d["dil"] for d in kod["diller"]][:2] == ["Python", "TypeScript"] and all(d["rol"] and d["rol_en"] for d in kod["diller"])
+    sayi = {s["kod"]: s["deger"] for s in v["sayilar"]}
+    assert sayi["modul"] == len(v["kapsam"]) == sum(1 for m in catalog.MODULES if m.ready)
+    assert sayi["uc"] > 50 and sayi["tablo"] > 20 and sayi["goc"] >= 8 and sayi["test"] > 100 and sayi["dosya"] == kod["dosya"]
+    canli = {x["ad_en"]: x["deger"] for x in v["canli"]}
+    assert canli["Parent customers"] == 2 and canli["Affiliates"] == 1 and canli["TAMs"] == 1 and canli["Monthly report records"] == 1 and canli["Onedesk records"] == 2
+    assert v["amac"]["tr"] and v["amac"]["en"] and len(v["fayda"]) == 4 and all(f["aciklama"] and f["aciklama_en"] for f in v["fayda"])
+    assert [k["kod"] for k in v["kpi"]] == ["satir", "modul", "uc", "test"]  # eski arayuzun de cizebilecegi genel KPI listesi
+
+
+def test_kod_olcumu_yalniz_yazilan_dolu_satirlari_dile_gore_sayar(tmp_path):
+    def yaz(yol: str, metin: str) -> None:
+        p = tmp_path / yol
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(metin, encoding="utf-8")
+
+    assert tanitim.kod_olc(tmp_path) is None  # hic kod dosyasi yok
+    yaz("backend/app/a.py", "x = 1\n\n\ny = 2\n")  # 2 dolu satir
+    yaz("backend/tests/test_a.py", "def test_a():\n    pass\n\n")  # 2 dolu satir, test
+    yaz("backend/var/gecici.py", "x = 1\n")  # calisma verisi: sayilmaz
+    yaz("ekran-react/src/x.ts", "const a = 1\n")
+    yaz("ekran-react/src/y.tsx", "export const Y = () => null\n\nexport const Z = 1\nexport const W = 2\n")  # 3 dolu satir
+    yaz("ekran-react/src/x.test.ts", "it('a', () => {})\n")  # test
+    yaz("ekran-react/src/index.css", "a { color: red }\nb { color: blue }\n")
+    yaz("ekran-react/src/components/ui/button.tsx", "\n".join(["x"] * 50))  # hazir bilesen: sayilmaz
+    yaz("ekran-react/node_modules/z/i.ts", "x\n" * 100)
+    yaz("ekran-react/public/lib.ts", "x\n" * 100)  # ucuncu taraf: sayilmaz
+    yaz("kurulum/k.ps1", "Write-Host 1\nWrite-Host 2\nWrite-Host 3\n")
+    yaz("README.md", "# oku\n")  # kod degil
+    o = tanitim.kod_olc(tmp_path)
+    assert o is not None
+    assert [(d["dil"], d["satir"], d["dosya"]) for d in o["diller"]] == [("TypeScript", 5, 3), ("Python", 4, 2), ("PowerShell", 3, 1), ("CSS", 2, 1)]  # satira gore azalan
+    assert (o["satir"], o["dosya"], o["test_satir"]) == (14, 7, 3)  # test: test_a.py (2) + x.test.ts (1)
+    assert abs(sum(d["pay"] for d in o["diller"]) - 100) <= 0.3
+
+
+def test_uc_ve_revizyon_sayimi(tmp_path, client):
+    api = tmp_path / "backend" / "app" / "x"
+    api.mkdir(parents=True)
+    (api / "api.py").write_text(
+        '@router.get("/a")\n@router.post("/b")\n    @router.delete("/c")\n# @router.get("/yorum")\n@app.get("/", include_in_schema=False)\nx = "@router.get(" \n',
+        encoding="utf-8",
+    )
+    (tmp_path / "backend" / "alembic" / "versions").mkdir(parents=True)
+    for ad in ("0001_a.py", "0002_b.py", "env.py", "__init__.py"):
+        (tmp_path / "backend" / "alembic" / "versions" / ad).write_text("", encoding="utf-8")
+    assert tanitim.uc_say(tmp_path) == 3 and tanitim.revizyon_say(tmp_path) == 2
+    # gercek uygulamada sayim OpenAPI'deki yol+yontem sayisiyla ayni (kodla ayrisirsa bu test uyarir)
+    openapi = sum(len(yontemler) for yontemler in client.app.openapi()["paths"].values())
+    assert tanitim.uc_say() == openapi
+
+
+def test_kisa_kart_onizleme_ipuclari_sutunlara_uyar(veri):
+    """Her kaynagin yuku genel bicimde: kpi alanlari tam, tablo.onizleme sutun numaralari tablo icinde; eski arayuz icin 'kpi' her zaman var."""
+    hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, list(servis.KAYNAKLAR))
+    for oge in _donem(veri, YIL, CEYREK)["ogeler"]:
+        v = oge["veri"]
+        if oge["kaynak"] == "takvim":
+            continue  # kendi grafigi
+        assert isinstance(v["kpi"], list), oge["kaynak"]
+        assert all({"ad", "ad_en", "deger", "birim", "alt", "alt_en", "onceki", "kod"} <= set(k) for k in v["kpi"]), oge["kaynak"]
+        tablo = v.get("tablo")
+        if tablo and "onizleme" in tablo:
+            onizleme, kolonlar = tablo["onizleme"], len(tablo["sutunlar"])
+            assert onizleme["adet"] >= 1 and all(onizleme[a] < kolonlar for a in ("sira", "etiket", "deger") if a in onizleme), oge["kaynak"]
+    liste = {o["kaynak"]: o["veri"]["tablo"].get("onizleme") for o in _donem(veri, YIL, CEYREK)["ogeler"] if o["kaynak"] in {"utilizasyon", "onedesk", "radar", "portfoy"}}
+    assert liste == {"utilizasyon": {"adet": 3, "sira": 0, "etiket": 1, "deger": 3, "tavan": 100}, "onedesk": {"adet": 3, "sira": 0, "etiket": 1, "deger": 5}, "radar": {"adet": 3, "sira": 0, "etiket": 1, "deger": 2}, "portfoy": {"adet": 6, "etiket": 0, "deger": 1}}
+
+
+def test_test_sayilari_dosyasi_gercek_sayidan_az_olamaz():
+    """test_sayilari.json her teslimde guncellenir; kaynak koddaki test islevi sayisindan kucukse unutulmus demektir."""
+    kok = Path(__file__).resolve().parents[1]
+    islev = sum(len([s for s in p.read_text(encoding="utf-8").splitlines() if s.lstrip().startswith(("def test_", "async def test_"))]) for p in (kok / "tests").glob("test_*.py"))
+    v = __import__("json").loads(tanitim.TEST_SAYILARI.read_text(encoding="utf-8"))
+    assert v["backend"] >= islev and v["arayuz"] > 100 and tanitim.otomatik_test_say() == v["backend"] + v["arayuz"]
+
+
+def test_gelir_faydasi_kaynagi_kisa_kart_ozeti_verir(veri):
+    """Gelir Faydasi Saglanan Isler: ceyrekte suren isler, iptal haric; aylik tutar para birimi basina, kisi adlari ortak personel kumesinden."""
+    bas, _ = donem_araligi(YIL, CEYREK)
+    simdi_ = simdi()
+    with Session(engine()) as db:
+        db.add_all(
+            [
+                RevenueBenefit(id=1, title="Kampanya otomasyonu", status="devam", revenue_amount=50000, revenue_currency="TRY", revenue_period="ay", hours_per_month=20, start_date=bas, created_at=simdi_, updated_at=simdi_),
+                RevenueBenefit(id=2, title="Rapor otomasyonu", status="tamamlandi", year_revenue=120000, start_date=bas, end_date=bas + timedelta(days=5), created_at=simdi_, updated_at=simdi_),
+                RevenueBenefit(id=3, title="Vazgecilen is", status="iptal", revenue_amount=999, revenue_period="ay", start_date=bas, created_at=simdi_, updated_at=simdi_),
+            ]
+        )
+        db.flush()
+        db.add(RevenueBenefitPerson(item_id=1, user_id=2))
+        db.commit()
+    hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, ["gelir_uretim"])
+    (oge,) = _donem(veri, YIL, CEYREK)["ogeler"]
+    v = oge["veri"]
+    kpi = {k["ad_en"]: k["deger"] for k in v["kpi"]}
+    assert kpi["Work delivering benefit"] == 2 and kpi["Completed"] == 1 and kpi["Monthly revenue TRY"] == 50000 and kpi["In-year revenue"] == 120000
+    assert [s[0] for s in v["tablo"]["satirlar"]] == ["Kampanya otomasyonu", "Rapor otomasyonu"] and v["tablo"]["satirlar"][0][1] == "Ayse Test"
+    assert v["tablo"]["onizleme"] == {"adet": 3, "etiket": 0, "deger": 4} and v["tablo"]["sutunlar"][4]["ad_en"] == "Monthly revenue TRY"

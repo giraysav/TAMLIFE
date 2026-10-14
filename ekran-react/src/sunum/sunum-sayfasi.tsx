@@ -1,65 +1,27 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Pin, Presentation, RefreshCw, Trash2 } from "lucide-react"
-import { Bildirim, Bolum, BosKutu, DUGME, GIRDI, HataKutu, Kpi, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
-import { para, sayi, zaman } from "@/lib/bicim"
+import { ChevronsDownUp, ChevronsUpDown, Info, Pin, Presentation, RefreshCw, Trash2 } from "lucide-react"
+import { Bildirim, Bolum, BosKutu, DUGME, GIRDI, HataKutu, SayfaKabi, Yukleniyor } from "@/components/sayfa-ui"
+import { zaman } from "@/lib/bicim"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
+import { varsayilanYil, yilSecenekleri } from "@/lib/yillar"
 import { yerel } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
+import { SayilarSeridi } from "@/sunum/sayilar-seridi"
+import { AyrintiTablosu, BantRozeti, GenelOzet, SunumKarti, TakvimAyrinti, TakvimOzet, ayrintiSayisi, bosMu } from "@/sunum/sunum-kartlari"
 import { SunumKaynaklari } from "@/sunum/sunum-kaynaklari"
 import { sunumMetin } from "@/sunum/sunum-metin"
-import { TakvimGrafigi } from "@/takvim/takvim-grafigi"
-import type { GrafikUyesi, Ozet } from "@/takvim/takvim-grafigi"
+import { sayilarMi, takvimMi, tanitimMi } from "@/sunum/sunum-tipleri"
+import type { Donem, Oge } from "@/sunum/sunum-tipleri"
+import { TanitimIcerigi } from "@/sunum/tanitim-karti"
 import { takvimMetin } from "@/takvim/takvim-metin"
-import { varsayilanYil, yilSecenekleri } from "@/lib/yillar"
 
-type Hucre = string | number | null
-type GenelVeri = {
-  kpi: { ad: string; ad_en: string; deger: number | null; birim: string; alt: string }[]
-  tablo?: { sutunlar: { ad: string; ad_en: string; birim: string }[]; satirlar: Hucre[][] }
-}
-type TakvimVeri = { genel: Ozet; uyeler: GrafikUyesi[] }
-type Oge = {
-  kaynak: string
-  ad: string
-  ad_en: string
-  anlik: boolean
-  durum: "canli" | "kayitli" | "yok" | "hata"
-  gonderen: string
-  zaman: string | null
-  veri: GenelVeri | TakvimVeri | null
-  kayit_no: string
-}
-type Donem = { yil: number; ceyrek: number; donem: string; zaman: "guncel" | "gecmis" | "gelecek"; ogeler: Oge[]; yonetebilir: boolean }
-
-const hucre = (v: Hucre | undefined, birim: string) => (v === null || v === undefined ? "—" : typeof v === "number" ? (birim ? para(v, birim) : sayi(v)) : v)
-
-/** Modul/rapor kaynaklarinin genel karti: sunucunun verdigi KPI'lar ve tablo (etiketler TR/EN sunucudan). */
-function GenelKart({ veri, dil, baslik }: { veri: GenelVeri; dil: Dil; baslik: string }) {
-  const t = sunumMetin(dil)
-  const tablo = veri.tablo
-  return (
-    <div className="grid gap-3">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {veri.kpi.map((k) => (
-          <Kpi key={k.ad} etiket={yerel(dil, k.ad, k.ad_en)} deger={k.birim ? para(k.deger, k.birim) : sayi(k.deger)} alt={k.alt || undefined} />
-        ))}
-      </div>
-      {tablo ? (
-        <VeriTablosu
-          baslik={baslik}
-          kolonlar={tablo.sutunlar.map((s, i) => ({ baslik: yerel(dil, s.ad, s.ad_en), hucre: (satir: Hucre[]) => hucre(satir[i], s.birim) }))}
-          satirlar={tablo.satirlar}
-          bos={<p className="text-xs font-bold text-slate-400">{t.tabloBos}</p>}
-        />
-      ) : null}
-    </div>
-  )
-}
+const KUCUK_DUGME = `${DUGME} !px-2.5 !py-1`
 
 /**
- * Ceyrek Bazli Sunum: secilen ceyregin ogeleri kaynak basina bir kart. Bu ceyrekte isaretli kaynaklar canli, gecmis ceyrekte
- * dondurulmus/gonderilmis kayitlar. Yetkili rol kaynaklari secer ve ogeyi sabitler/gunceller/kaldirir (sunucu zorlar).
+ * Ceyrek Bazli Sunum: ust yonetim icin KISA ozet. Secilen ceyregin ogeleri kaynak basina bir kart: KPI'lar ve ilk satirlar gorunur,
+ * tablolar kartin "Ayrinti" bolumunde (tek tikla ya da "Tum ayrintilari ac" ile) acilir. Bu ceyrekte isaretli kaynaklar canli, gecmis
+ * ceyrekte dondurulmus/gonderilmis kayitlar. Yetkili rol kaynaklari secer ve ogeyi sabitler/gunceller/kaldirir (sunucu zorlar).
  */
 export function SunumSayfasi({ dil }: { dil: Dil }) {
   const t = sunumMetin(dil)
@@ -69,6 +31,7 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
   const [yil, setYil] = useState(varsayilanYil(simdi))
   const [ceyrek, setCeyrek] = useState(Math.floor(simdi.getMonth() / 3) + 1)
   const [bilgi, setBilgi] = useState("")
+  const [acik, setAcik] = useState<Record<string, boolean>>({})
 
   const q = useQuery({ queryKey: ["sunum", "donem", yil, ceyrek], queryFn: () => oku<Donem>(`/api/v1/sunum/donem?yil=${yil}&ceyrek=${ceyrek}`) })
   const islem = useMutation({
@@ -83,6 +46,15 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
   const v = q.data
   const gorunen = v?.ogeler.filter((o) => o.durum !== "yok") ?? []
   const kayitsiz = v?.ogeler.filter((o) => o.durum === "yok") ?? []
+  const bosOgeler = gorunen.filter(bosMu)
+  const dolu = gorunen.filter((o) => !bosMu(o))
+  const ayrintili = dolu.filter((o) => ayrintiSayisi(o) > 0)
+  const hepsiAcik = ayrintili.length > 0 && ayrintili.every((o) => acik[o.kaynak])
+  const hepsiniDegistir = () => setAcik(Object.fromEntries(ayrintili.map((o) => [o.kaynak, !hepsiAcik])))
+
+  const oncekiYil = v && v.ceyrek === 1 ? v.yil - 1 : (v?.yil ?? 0)
+  const oncekiCeyrek = v ? (v.ceyrek === 1 ? 4 : v.ceyrek - 1) : 0
+  const oncekiEtiket = v && oncekiYil !== v.yil ? `${t.ceyrekKisa(oncekiCeyrek)} ${oncekiYil}` : t.ceyrekKisa(oncekiCeyrek)
 
   function alt(o: Oge): string {
     const ek = o.anlik ? ` · ${t.anlikNot}` : ""
@@ -91,26 +63,74 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
     return ""
   }
 
-  function sag(o: Oge) {
-    const rozet =
-      o.durum === "canli" ? <Rozet ton="yesil">{t.canli}</Rozet> : o.durum === "hata" ? <Rozet ton="kirmizi">{t.hata}</Rozet> : o.gonderen ? <Rozet ton="sari">{t.gonderildi}</Rozet> : <Rozet>{t.donduruldu}</Rozet>
+  /** Altbilgideki kisa durum: canli kartta rozet yeter (yalniz 'anlik durum'), kayitlida tarih, gonderilmiste kim ve ne zaman. */
+  function kisa(o: Oge): string {
+    const ek = o.anlik ? t.anlikNot : ""
+    if (o.durum === "kayitli") return [o.gonderen || null, zaman(o.zaman), ek || null].filter(Boolean).join(" · ")
+    return ek
+  }
+
+  function rozet(o: Oge) {
+    return o.durum === "canli" ? <BantRozeti ton="yesil">{t.canli}</BantRozeti> : o.durum === "hata" ? <BantRozeti ton="kirmizi">{t.hata}</BantRozeti> : o.gonderen ? <BantRozeti ton="sari">{t.gonderildi}</BantRozeti> : <BantRozeti ton="gri">{t.donduruldu}</BantRozeti>
+  }
+
+  function eylem(o: Oge) {
+    if (!v?.yonetebilir) return null
     const dugme = (etiket: string, Ikon: typeof Pin, gonder: boolean, ipucu?: string) => (
-      <button type="button" className={DUGME} title={ipucu} disabled={islem.isPending} onClick={() => islem.mutate({ kaynak: o.kaynak, gonder })}>
+      <button type="button" className={KUCUK_DUGME} title={ipucu} disabled={islem.isPending} onClick={() => islem.mutate({ kaynak: o.kaynak, gonder })}>
         <Ikon aria-hidden className="size-3.5" />
         {etiket}
       </button>
     )
+    if (o.durum === "canli") return dugme(t.sabitle, Pin, true, t.sabitleIpucu)
+    if (o.durum === "kayitli") {
+      return (
+        <>
+          {dugme(t.guncelle, RefreshCw, true)}
+          {dugme(t.kaldir, Trash2, false)}
+        </>
+      )
+    }
+    return null
+  }
+
+  function kart(o: Oge) {
+    const ad = yerel(dil, o.ad, o.ad_en)
+    const ortak = { baslik: ad, rozet: rozet(o), zaman: kisa(o), zamanAciklama: alt(o), eylem: eylem(o), acik: !!acik[o.kaynak], onAc: (a: boolean) => setAcik((s) => ({ ...s, [o.kaynak]: a })) }
+    const veri = o.veri
+    if (o.durum === "hata" || !veri) {
+      return (
+        <SunumKarti {...ortak} zaman="" ayrinti={undefined}>
+          <HataKutu metin={t.kaynakHata(o.kayit_no)} />
+        </SunumKarti>
+      )
+    }
+    if (tanitimMi(veri)) {
+      return (
+        <SunumKarti {...ortak} genis bantsiz>
+          <TanitimIcerigi veri={veri} dil={dil} rozet={ortak.rozet} />
+        </SunumKarti>
+      )
+    }
+    if (takvimMi(o.kaynak, veri)) {
+      return (
+        <SunumKarti {...ortak} ayrinti={{ etiket: t.ayrintiKisi(veri.uyeler.length), icerik: <TakvimAyrinti veri={veri} t={tt} /> }}>
+          <TakvimOzet veri={veri} t={tt} />
+        </SunumKarti>
+      )
+    }
+    const ayrinti = veri.tablo && veri.tablo.satirlar.length > 0 ? { etiket: t.ayrintiSatir(veri.tablo.satirlar.length), icerik: <AyrintiTablosu tablo={veri.tablo} dil={dil} baslik={ad} /> } : undefined
+    if (sayilarMi(veri)) {
+      return (
+        <SunumKarti {...ortak} genis ayrinti={ayrinti}>
+          <SayilarSeridi veri={veri} dil={dil} oncekiEtiket={oncekiEtiket} farkli={v?.zaman === "gecmis"} />
+        </SunumKarti>
+      )
+    }
     return (
-      <div className="flex flex-wrap items-center gap-2">
-        {rozet}
-        {v?.yonetebilir && o.durum === "canli" ? dugme(t.sabitle, Pin, true, t.sabitleIpucu) : null}
-        {v?.yonetebilir && o.durum === "kayitli" ? (
-          <>
-            {dugme(t.guncelle, RefreshCw, true)}
-            {dugme(t.kaldir, Trash2, false)}
-          </>
-        ) : null}
-      </div>
+      <SunumKarti {...ortak} ayrinti={ayrinti}>
+        <GenelOzet veri={veri} dil={dil} />
+      </SunumKarti>
     )
   }
 
@@ -156,26 +176,29 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
         <HataKutu metin={t.yuklenemedi} tekrar={() => void q.refetch()} tekrarEtiket={t.tekrar} />
       ) : (
         <>
-          <Bildirim>{v.zaman === "guncel" ? t.zamanGuncel : v.zaman === "gecmis" ? t.zamanGecmis : t.zamanGelecek}</Bildirim>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p className="flex items-center gap-2 text-xs font-bold text-slate-500" title={v.zaman === "guncel" ? t.zamanGuncel : v.zaman === "gecmis" ? t.zamanGecmis : t.zamanGelecek}>
+              <Info aria-hidden className="size-4 shrink-0 text-tl-blue" />
+              {v.zaman === "guncel" ? t.durumGuncel : v.zaman === "gecmis" ? t.durumGecmis : t.durumGelecek}
+            </p>
+            {ayrintili.length > 0 ? (
+              <button type="button" className={DUGME} onClick={hepsiniDegistir}>
+                {hepsiAcik ? <ChevronsDownUp aria-hidden className="size-4" /> : <ChevronsUpDown aria-hidden className="size-4" />}
+                {hepsiAcik ? t.hepsiniKapat : t.hepsiniAc}
+              </button>
+            ) : null}
+          </div>
           {bilgi ? <Bildirim ton="kirmizi">{bilgi}</Bildirim> : null}
           {gorunen.length === 0 ? (
             <BosKutu ikon={Presentation} baslik={t.bos} aciklama={v.zaman === "gelecek" ? t.gelecekAlt : v.yonetebilir ? t.bosAltYetkili : t.bosAlt} />
           ) : (
-            gorunen.map((o) => {
-              const ad = yerel(dil, o.ad, o.ad_en)
-              return (
-                <Panel key={o.kaynak} baslik={ad} aciklama={alt(o)} sag={sag(o)}>
-                  {o.durum === "hata" || !o.veri ? (
-                    <HataKutu metin={t.kaynakHata(o.kayit_no)} />
-                  ) : o.kaynak === "takvim" ? (
-                    <TakvimGrafigi genel={(o.veri as TakvimVeri).genel} uyeler={(o.veri as TakvimVeri).uyeler} t={tt} />
-                  ) : (
-                    <GenelKart veri={o.veri as GenelVeri} dil={dil} baslik={ad} />
-                  )}
-                </Panel>
-              )
-            })
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {dolu.map((o) => (
+                <Fragment key={o.kaynak}>{kart(o)}</Fragment>
+              ))}
+            </div>
           )}
+          {bosOgeler.length > 0 ? <Bildirim>{t.bosAlanlar(bosOgeler.map((o) => yerel(dil, o.ad, o.ad_en)).join(", "))}</Bildirim> : null}
           {kayitsiz.length > 0 ? <Bildirim ton="amber">{t.kayitYok(kayitsiz.map((o) => yerel(dil, o.ad, o.ad_en)).join(", "))}</Bildirim> : null}
         </>
       )}

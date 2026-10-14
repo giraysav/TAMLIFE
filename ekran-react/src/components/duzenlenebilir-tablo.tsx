@@ -12,11 +12,13 @@ import { para, tarih } from "@/lib/bicim"
 export type Kolon = {
   anahtar: string
   baslik: string
-  tip: "metin" | "musteri" | "tarih" | "tutar" | "tutarPara"
+  tip: "metin" | "musteri" | "tarih" | "tutar" | "tutarPara" | "secim"
   zorunlu?: boolean
   yer?: string
   /** metin/musteri icin azami uzunluk */
   azami?: number
+  /** secim: secilebilir degerler; bos secenegin etiketi `yer` (ornek "Müşterinin TAM'i") */
+  secenekler?: string[]
   sag?: boolean
   /** okuma gorunumu (varsayilan: tipe gore bicim) */
   goster?: (satir: Record<string, unknown>) => ReactNode
@@ -140,6 +142,20 @@ export function DuzenlenebilirTablo({
           ) : null}
         </span>
       )
+    if (k.tip === "secim") {
+      const mevcut = taslak[k.anahtar] ?? ""
+      const secenekler = mevcut && !(k.secenekler ?? []).includes(mevcut) ? [mevcut, ...(k.secenekler ?? [])] : (k.secenekler ?? []) // eski kayitta listede olmayan deger silinmesin
+      return (
+        <select {...ortak} value={mevcut} onChange={(e) => set(k.anahtar, e.target.value)}>
+          <option value="">{k.yer ?? "—"}</option>
+          {secenekler.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      )
+    }
     return (
       <input
         {...ortak}

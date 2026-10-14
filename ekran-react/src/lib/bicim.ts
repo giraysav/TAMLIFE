@@ -11,12 +11,17 @@ export function sayi(n: number | null | undefined): string {
   return n === null || n === undefined ? "—" : n.toLocaleString(yerel)
 }
 
+/** Sabit ondalikli sayi (yuzde gibi): 45 -> "45,0". */
+export function ondalik(n: number, basamak = 1): string {
+  return n.toLocaleString(yerel, { minimumFractionDigits: basamak, maximumFractionDigits: basamak })
+}
+
 const SEMBOL: Record<string, string> = { TRY: "₺", USD: "$", EUR: "€" }
 
-/** 12500.5 -> "12.500,50 ₺" (para birimi kodu bilinmiyorsa kod yazilir). */
-export function para(n: number | null | undefined, birim = "TRY"): string {
+/** 12500.5 -> "12.500,50 ₺" (para birimi kodu bilinmiyorsa kod yazilir). `kisa`: kurussuz ("12.501 ₺"; ozet kartlari icin). */
+export function para(n: number | null | undefined, birim = "TRY", kisa = false): string {
   if (n === null || n === undefined) return "—"
-  const tutar = n.toLocaleString(yerel, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const tutar = n.toLocaleString(yerel, kisa ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const s = SEMBOL[birim]
   return s ? `${tutar} ${s}` : `${tutar} ${birim}`
 }

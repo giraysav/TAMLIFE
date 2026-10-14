@@ -16,6 +16,8 @@ const TR = {
   tumYillar: "Tüm yıllar",
   musteri: "Müşteri adı",
   musteriKisa: "Müşteri",
+  tam: "TAM",
+  tamYer: "Müşterinin TAM'i",
   // sms
   smsBaslik: "ICT Sms & Gelir",
   smsAciklama: "Müşteri, proje ve gelir kayıtları",
@@ -66,6 +68,8 @@ const EN: typeof TR = {
   tumYillar: "All years",
   musteri: "Customer name",
   musteriKisa: "Customer",
+  tam: "TAM",
+  tamYer: "Customer's TAM",
   smsBaslik: "ICT SMS & Revenue",
   smsAciklama: "Customer, project and revenue records",
   proje: "Project",

@@ -1,7 +1,8 @@
 """ICT SMS gelirleri, APN kurulum gelirleri ve APN musteri calismalari.
 
 Kayitlar TAM'in kendi DB dosyasindadir (app.db.kullanici_oturumu). Gorunurluk (uretim ad_benim): admin ve Manager tum dosyalari;
-Member yalniz kendi dosyasini gorur ve degistirir. Disariya verilen kimlik dosyalar arasi tekildir (app.db.dis_kimlik). Tutarlar: SMS icin TRY/USD/EUR, APN kurulum icin TL.
+Member yalniz kendi dosyasini gorur ve degistirir. Kaydin TAM'i yalniz ortak personel kumesinden (kullanicilar.personel) olur: acik secilir,
+secilmediyse musterinin sorumlu TAM'inden turetilir, o da yoksa bos kalir (admin TAM degildir, sunumda tek '—' satiri); duzenlemede mevcut TAM korunur. Disariya verilen kimlik dosyalar arasi tekildir (app.db.dis_kimlik). Tutarlar: SMS icin TRY/USD/EUR, APN kurulum icin TL.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.authz import yonetici_mi
 from app.db import dis_kimlik, kimlik_coz, kullanici_dosyasi, kullanici_oturumu, mevcut_oturumlar
-from app.kullanicilar import kullanici_kaydi
+from app.kullanicilar import kullanici_kaydi, personel, personel_mi
 from app.models import ApnRevenue, ApnWork, AppUser, Customer, SmsRevenue
 from app.ortak import UygulamaHatasi, eslestirme_anahtari, simdi
 from app.session import Principal
@@ -94,12 +95,33 @@ def _tamsayi(govde: dict, alan: str, etiket: str, en_az: int, en_cok: int, varsa
 
 # --- gorunurluk ve dosya secimi ------------------------------------------------------------------------
 def _sahip(db: Session, user: Principal, tam_adi: str = "") -> AppUser:
-    """Kaydin yazilacagi dosyanin sahibi: yonetici baska bir TAM sectiyse o kisi, degilse kaydi giren."""
+    """Kaydin yazilacagi dosyanin sahibi: yonetici bir TAM sectiyse (ya da musteriden turediyse) o kisi, degilse kaydi giren."""
     if tam_adi and yonetici_mi(user):
         kisi = db.scalar(select(AppUser).where(or_(AppUser.display_name == tam_adi, AppUser.username == tam_adi)).limit(1))
         if kisi is not None:
             return kisi
     return kullanici_kaydi(db, user)
+
+
+def tam_adlari(db: Session, user: Principal) -> list[str]:
+    """Secilebilir TAM'lar: yalniz ortak personel kumesi (etkin TeamMember; yonetici ve admin TAM degildir). Member yalniz kendisini gorur."""
+    kisiler = personel(db) if yonetici_mi(user) else [k for k in personel(db) if k.username == user.username]
+    return [k.display_name or k.username for k in kisiler]
+
+
+def _musteri_tami(db: Session, musteri: str) -> str:
+    """Musterinin sorumlu TAM'i (kart sahibi; istirakte catinin sahibi); personel degilse ya da musteri yoksa bos."""
+    anahtar = eslestirme_anahtari(musteri)
+    musteriler = {c.id: c for c in db.scalars(select(Customer))}
+    for c in musteriler.values():
+        if eslestirme_anahtari(c.name or "") != anahtar:
+            continue
+        cati = musteriler.get(c.parent_id) if c.parent_id else None
+        for uid in (c.owner_id, cati.owner_id if cati else None):
+            kisi = db.get(AppUser, uid) if uid else None
+            if personel_mi(kisi):
+                return kisi.display_name or kisi.username
+    return ""
 
 
 def _ad(db: Session, user: Principal) -> str:
@@ -138,14 +160,17 @@ def _ekle(db: Session, user: Principal, model: Any, alanlar: dict, cikti: Callab
         return cikti(sahip.id, kayit)
 
 
-def _guncelle(db: Session, user: Principal, model: Any, kimlik: int, alanlar: dict, cikti: Callable[[int, Any], dict]) -> dict:
-    if not yonetici_mi(user):
-        alanlar.pop("tam_name", None)  # Member TAM adini degistiremez
+def _guncelle(db: Session, user: Principal, model: Any, kimlik: int, uret: Callable[[str | None], dict], cikti: Callable[[int, Any], dict]) -> dict:
+    """uret(onceki_tam): dogrulanmis alanlar; onceki_tam kayitta saklanan TAM (TAM'i olmayan model icin None)."""
     with _kayit(db, user, model, kimlik) as (sahip, k, kayit):
+        onceki = getattr(kayit, "tam_name", None)
+        alanlar = uret(onceki)
+        if not yonetici_mi(user):
+            alanlar.pop("tam_name", None)  # Member TAM adini degistiremez
         for alan, deger in alanlar.items():
             setattr(kayit, alan, deger)
         yeni = _sahip(db, user, alanlar.get("tam_name", ""))
-        if "tam_name" not in alanlar or yeni.id == sahip.id:
+        if "tam_name" not in alanlar or alanlar["tam_name"] == onceki or yeni.id == sahip.id:  # TAM ayni kaldiysa dosya degismez
             k.commit()
             return cikti(sahip.id, kayit)
         degerler = {c.key: getattr(kayit, c.key) for c in model.__table__.columns if c.key != "id"}
@@ -182,8 +207,22 @@ def _toplamlar(ciftler) -> dict[str, float]:
     return {p: round(v, 2) for p, v in t.items()}
 
 
-def _tam(db: Session, user: Principal, govde: dict) -> str:
-    return (_metin(govde, "tam", "TAM", 100) if yonetici_mi(user) else "") or _ad(db, user)[:100]
+def _tam(db: Session, user: Principal, govde: dict, musteri: str, onceki: str | None = None) -> str:
+    """Kaydin TAM'i. Member yalniz kendisi. Yonetici: secilen kisi personel olmali (onceki kayitla ayniysa degismemis sayilir); secilmediyse
+    duzenlemede mevcut TAM korunur, yeni kayitta musterinin sorumlu TAM'i, o da yoksa bos ('—')."""
+    if not yonetici_mi(user):
+        return _ad(db, user)[:100]
+    secilen = _metin(govde, "tam", "TAM", 100)
+    if secilen:
+        if secilen == onceki:
+            return secilen
+        eslesen = next((k for k in personel(db) if eslestirme_anahtari(secilen) in (eslestirme_anahtari(k.display_name or ""), eslestirme_anahtari(k.username))), None)
+        if eslesen is None:
+            raise GelirHata(400, "TAM, personel listesinden seçilmeli.")
+        return (eslesen.display_name or eslesen.username)[:100]
+    if onceki is not None:
+        return onceki
+    return _musteri_tami(db, musteri)[:100]
 
 
 # --- ICT SMS ----------------------------------------------------------------------------------------
@@ -198,19 +237,20 @@ def sms_liste(db: Session, user: Principal, yil: int | None = None) -> dict:
     return {"items": [_sms(u, r) for u, r in satirlar], "toplam": _toplamlar((r.currency, r.amount) for _, r in satirlar), "yillar": yillar}
 
 
-def _sms_alanlari(db: Session, user: Principal, govde: dict) -> dict:
+def _sms_alanlari(db: Session, user: Principal, govde: dict, onceki: str | None = None) -> dict:
     para = str(govde.get("para_birimi") or "TRY").upper()
     if para not in PARA_BIRIMLERI:
         raise GelirHata(400, "Para birimi TRY, USD ya da EUR olmalı.")
     an = simdi()
+    musteri = _metin(govde, "musteri", "Müşteri adı", 200, zorunlu=True)
     return {
-        "customer_name": _metin(govde, "musteri", "Müşteri adı", 200, zorunlu=True),
+        "customer_name": musteri,
         "project": _metin(govde, "proje", "Proje bilgisi", 200, zorunlu=True),
         "amount": _tutar(govde),
         "currency": para,
         "year": _tamsayi(govde, "yil", "Yıl", 2000, 2100, an.year),
         "month": _tamsayi(govde, "ay", "Ay", 1, 12, an.month),
-        "tam_name": _tam(db, user, govde),
+        "tam_name": _tam(db, user, govde, musteri, onceki),
     }
 
 
@@ -219,7 +259,7 @@ def sms_ekle(db: Session, user: Principal, govde: dict) -> dict:
 
 
 def sms_guncelle(db: Session, user: Principal, kayit_id: int, govde: dict) -> dict:
-    return _guncelle(db, user, SmsRevenue, kayit_id, _sms_alanlari(db, user, govde), _sms)
+    return _guncelle(db, user, SmsRevenue, kayit_id, lambda onceki: _sms_alanlari(db, user, govde, onceki), _sms)
 
 
 def sms_sil(db: Session, user: Principal, kayit_id: int) -> dict:
@@ -246,14 +286,15 @@ def kurulum_liste(db: Session, user: Principal, yil: int | None = None) -> dict:
     return {"items": [_kurulum(u, r) for u, r in satirlar], "toplam": round(sum(r.amount or 0 for _, r in satirlar), 2), "teslim_edilen": teslim, "bekleyen": len(satirlar) - teslim}
 
 
-def _kurulum_alanlari(db: Session, user: Principal, govde: dict) -> dict:
+def _kurulum_alanlari(db: Session, user: Principal, govde: dict, onceki: str | None = None) -> dict:
     talep = _tarih(govde, "talep_tarihi", "Talep tarihi", zorunlu=True)
     teslim = _tarih(govde, "teslim_tarihi", "Teslim tarihi")
     if teslim and talep and teslim < talep:
         raise GelirHata(400, "Teslim tarihi talep tarihinden önce olamaz.")
     donem = teslim or talep or simdi().date()
+    musteri = _metin(govde, "musteri", "Müşteri adı", 200, zorunlu=True)
     return {
-        "customer_name": _metin(govde, "musteri", "Müşteri adı", 200, zorunlu=True),
+        "customer_name": musteri,
         "apn_name": _metin(govde, "apn_adi", "APN adı", 200, zorunlu=True),
         "request_date": talep,
         "delivery_date": teslim,
@@ -261,7 +302,7 @@ def _kurulum_alanlari(db: Session, user: Principal, govde: dict) -> dict:
         "currency": "TRY",
         "year": donem.year,
         "month": donem.month,
-        "tam_name": _tam(db, user, govde),
+        "tam_name": _tam(db, user, govde, musteri, onceki),
     }
 
 
@@ -270,7 +311,7 @@ def kurulum_ekle(db: Session, user: Principal, govde: dict) -> dict:
 
 
 def kurulum_guncelle(db: Session, user: Principal, kayit_id: int, govde: dict) -> dict:
-    return _guncelle(db, user, ApnRevenue, kayit_id, _kurulum_alanlari(db, user, govde), _kurulum)
+    return _guncelle(db, user, ApnRevenue, kayit_id, lambda onceki: _kurulum_alanlari(db, user, govde, onceki), _kurulum)
 
 
 def kurulum_sil(db: Session, user: Principal, kayit_id: int) -> dict:
@@ -317,7 +358,7 @@ def calisma_ekle(db: Session, user: Principal, govde: dict) -> dict:
 
 
 def calisma_guncelle(db: Session, user: Principal, kayit_id: int, govde: dict) -> dict:
-    return _guncelle(db, user, ApnWork, kayit_id, _calisma_alanlari(govde), _calisma)
+    return _guncelle(db, user, ApnWork, kayit_id, lambda _onceki: _calisma_alanlari(govde), _calisma)
 
 
 def calisma_sil(db: Session, user: Principal, kayit_id: int) -> dict:

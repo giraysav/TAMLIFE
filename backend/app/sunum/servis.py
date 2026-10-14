@@ -9,7 +9,9 @@ Gosterim kurali (donem):
      - gelecek ceyrek hesaplanmaz.
 Goruntu ekip geneli kapsamla (yonetici gorunumu) tek kez hesaplanir, 'sunum' modulunu goren herkese aynidir.
 Yonetim (gonder/sabitle/kaldir, kaynak secimi) admin ya da rolgorunum.SUNUM_YETKISI ister; kontrol api katmanindadir.
-Yuk bicimi: 'takvim' kendi grafigi icin (takvim.servis.sunum_ozeti); digerleri {"kpi": [...], "tablo": {...}} (arayuz tek genel kartla cizer).
+Yuk bicimi: 'takvim' kendi grafigi icin (takvim.servis.sunum_ozeti); digerleri {"kpi": [...], "tablo": {...}}. Arayuz her kaynagi KISA
+bir kartla cizer (KPI'lar + ilk satirlar; tablonun tamami 'Ayrinti' altinda). tablo.onizleme (opsiyonel) ilk satirlarin hangi sutunlardan
+cizilecegini soyler. 'stil' alani ozel cizim ister: 'sayilar' (Sayilarla TAM Ekibi) ve 'tanitim' (TAMLIFE tanitim sayfasi).
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -26,6 +28,7 @@ from sqlalchemy.orm import Session
 from app import ariza
 from app.catalog import get as modul
 from app.gelir.servis import PARA_BIRIMLERI, tum_gelirler
+from app.gelir_uretim.servis import sunum_ozeti as gelir_uretim_ozeti
 from app.kullanicilar import kullanici_kaydi, personel
 from app.models import ApnRevenue, AppSetting, Customer, Demand, Presentation, ProjectItem, SmsRevenue
 from app.musteri.servis import portfoy
@@ -36,7 +39,9 @@ from app.radar.servis import adaylar as radar_adaylari
 from app.rapor.servis import durum_ozeti
 from app.session import Principal
 from app.skor.servis import siralama
+from app.sunum import tanitim
 from app.takvim.servis import bu_ceyrek, donem_adi, donem_araligi, sunum_ozeti
+from app.takvim.servis import ekip as takvim_ekibi
 
 AYAR_ANAHTARI = "sunum.kaynaklar"
 EKIP = Principal("sunum", "TeamMngr", False)  # ekip geneli kapsam (yonetici gorunumu); kullanici kaydi acan fonksiyona verilmez
@@ -47,12 +52,22 @@ class SunumHata(UygulamaHatasi):
 
 
 # --- genel kart yuku -------------------------------------------------------------------------------
-def _kpi(ad: str, ad_en: str, deger: float | None, birim: str = "", alt: str = "") -> dict:
-    return {"ad": ad, "ad_en": ad_en, "deger": deger, "birim": birim, "alt": alt}
+def _kpi(ad: str, ad_en: str, deger: float | None, birim: str = "", alt: str = "", alt_en: str = "", onceki: float | None = None, kod: str = "") -> dict:
+    """alt/alt_en: degerin altindaki kisa not; onceki: bir onceki ceyregin degeri (arayuz farki gosterir); kod: ozel cizimde simge anahtari."""
+    return {"ad": ad, "ad_en": ad_en, "deger": deger, "birim": birim, "alt": alt, "alt_en": alt_en or alt, "onceki": onceki, "kod": kod}
 
 
 def _sutun(ad: str, ad_en: str, birim: str = "") -> dict:
     return {"ad": ad, "ad_en": ad_en, "birim": birim}
+
+
+def _onizleme(adet: int, sira: int | None = None, etiket: int | None = None, deger: int | None = None, tavan: float | None = None) -> dict:
+    """Kisa kartin ilk satirlari: gosterilecek satir sayisi ve tablo sutun numaralari (sira, etiket, deger); tavan: cubuk tam doluluk degeri (ornek skor 100)."""
+    return {k: v for k, v in {"adet": adet, "sira": sira, "etiket": etiket, "deger": deger, "tavan": tavan}.items() if v is not None}
+
+
+def _bir_onceki(yil: int, ceyrek: int) -> tuple[int, int]:
+    return (yil, ceyrek - 1) if ceyrek > 1 else (yil - 1, 4)
 
 
 # --- kaynaklar: (db, yil, ceyrek) -> goruntu -----------------------------------------------------------
@@ -72,8 +87,13 @@ def _utilizasyon(db: Session, yil: int, ceyrek: int) -> dict:
         "tablo": {
             "sutunlar": [_sutun("Sıra", "Rank"), _sutun("TAM", "TAM"), _sutun("Çatı müşteri", "Parent customers"), _sutun("Ortalama skor", "Average score")],
             "satirlar": [[r["rank"], r["full_name"], r["customer_count"], r["avg_score"]] for r in liste],
+            "onizleme": _onizleme(3, sira=0, etiket=1, deger=3, tavan=100),
         },
     }
+
+
+def _yuzde(parca: int, tam: int) -> str:
+    return f" · %{round(100 * parca / tam)}" if tam else ""
 
 
 def _rapor(db: Session, yil: int, ceyrek: int) -> dict:
@@ -88,7 +108,7 @@ def _rapor(db: Session, yil: int, ceyrek: int) -> dict:
             satir[1] = s["musteri"]  # son ayin rapor birimi sayisi
             satir[2 + i] = f"{s['atilan']}/{s['musteri']}"
     return {
-        "kpi": [_kpi(f"{ay_adi(a)} · atılan", f"{ay_adi(a, 'en')} · sent", o["toplam"]["atilan"], alt=f"/ {o['toplam']['musteri']}") for a, o in zip(aylar, ozetler, strict=True)],
+        "kpi": [_kpi(f"{ay_adi(a)} · atılan", f"{ay_adi(a, 'en')} · sent", o["toplam"]["atilan"], alt=f"/ {o['toplam']['musteri']}{_yuzde(o['toplam']['atilan'], o['toplam']['musteri'])}") for a, o in zip(aylar, ozetler, strict=True)],
         "tablo": {
             "sutunlar": [_sutun("TAM", "TAM"), _sutun("Rapor birimi", "Report units"), *(_sutun(f"{ay_adi(a)} atılan/birim", f"{ay_adi(a, 'en')} sent/units") for a in aylar)],
             "satirlar": list(tamlar.values()),
@@ -118,6 +138,7 @@ def _onedesk(db: Session, yil: int, ceyrek: int) -> dict:
                 _sutun("En çok kayıt olan lokasyon", "Top location"),
             ],
             "satirlar": [[m["sira"], m["ad"], m["alarm"], m["talep"], m["sikayet"], m["toplam"], m["lokasyon"]] for m in v["musteriler"]],
+            "onizleme": _onizleme(3, sira=0, etiket=1, deger=5),
         },
     }
 
@@ -133,9 +154,9 @@ def _sms(db: Session, yil: int, ceyrek: int) -> dict:
     birimler = [b for b in PARA_BIRIMLERI if b in toplam]
     return {
         "kpi": [
+            *(_kpi(f"Toplam {b}", f"Total {b}", round(toplam[b], 2), birim=b) for b in birimler),
             _kpi("Gelir kaydı", "Revenue records", len(kayitlar)),
             _kpi("Müşteri", "Customers", len({r.customer_name for r in kayitlar})),
-            *(_kpi(f"Toplam {b}", f"Total {b}", round(toplam[b], 2), birim=b) for b in birimler),
         ],
         "tablo": {
             "sutunlar": [_sutun("TAM", "TAM"), *(_sutun(b, b, b) for b in birimler)],
@@ -187,6 +208,7 @@ def _portfoy(db: Session, yil: int, ceyrek: int) -> dict:
         "tablo": {
             "sutunlar": [_sutun("Segment", "Segment"), _sutun("Çatı müşteri", "Parent customers"), _sutun("Skorlu", "Scored"), _sutun("Ortalama skor", "Average score")],
             "satirlar": [[a, n, k, round(t / k, 1) if k else None] for a, n, k, t in sorted(segmentler.values(), key=lambda s: -s[1])],
+            "onizleme": _onizleme(6, etiket=0, deger=1),
         },
     }
 
@@ -259,8 +281,87 @@ def _radar(db: Session, yil: int, ceyrek: int) -> dict:
         "tablo": {
             "sutunlar": [_sutun("Sıra", "Rank"), _sutun("Müşteri", "Customer"), _sutun("Aktif alarm", "Active alarms"), _sutun("Kapanan alarm", "Closed alarms")],
             "satirlar": [[s["sira"], s["unvan"], s["aktif"], s["kapanan"]] for s in satirlar],
+            "onizleme": _onizleme(3, sira=0, etiket=1, deger=2),
         },
     }
+
+
+# Sayilarla TAM Ekibi (ust yonetim sunumunun 3. slayti): proje kategorileri + toplantilar, onceki ceyrekle birlikte
+SAYI_KATEGORILERI = (
+    ("proje", "Proje", "Projects"),
+    ("ddos", "DDoS optimizasyonu", "DDoS optimization"),
+    ("topoloji", "Topoloji iyileştirme", "Topology improvement"),
+    ("dc_tasima", "DC taşıma", "DC migration"),
+    ("calisma", "Çalışma", "Work items"),
+)
+
+
+def _acilis(k: ProjectItem) -> date | None:
+    return k.created_at.date() if k.created_at else None
+
+
+def _kapanis(k: ProjectItem) -> date | None:
+    """Kapanis tarihi; kapali ama tarihi girilmemis kalem son guncelleme gununde kapanmis sayilir."""
+    if k.closed_date:
+        return k.closed_date
+    return k.updated_at.date() if k.status == "kapandi" and k.updated_at else None
+
+
+def _ceyrekte_aktif(k: ProjectItem, bas: date, son: date) -> bool:
+    """Ceyrekte yurutulen is: ceyrek sonundan once acilmis ve ceyrek basindan once kapanmamis."""
+    acilis, kapanis = _acilis(k), _kapanis(k)
+    return acilis is not None and acilis <= son and (kapanis is None or kapanis >= bas)
+
+
+def _sayilar(db: Session, yil: int, ceyrek: int) -> dict:
+    bas, son = donem_araligi(yil, ceyrek)
+    onceki_bas, onceki_son = donem_araligi(*_bir_onceki(yil, ceyrek))
+    kalemler = list(db.scalars(select(ProjectItem)))
+    adlar = {u.id: (u.display_name or u.username) for u in personel(db)}  # tek personel kumesi; yonetici/admin sahipli isler tek '—' satirinda
+    kpi: list[dict] = []
+    tamlar: dict[int | None, list] = {}
+    for i, (kod, ad, ad_en) in enumerate(SAYI_KATEGORILERI):
+        kume = [k for k in kalemler if k.category == kod]
+        aktif = [k for k in kume if _ceyrekte_aktif(k, bas, son)]
+        acilan = sum(1 for k in aktif if (_acilis(k) or bas) >= bas)
+        kapanan = sum(1 for k in aktif if (c := _kapanis(k)) is not None and c <= son)
+        onceki = sum(1 for k in kume if _ceyrekte_aktif(k, onceki_bas, onceki_son))
+        kpi.append(_kpi(ad, ad_en, len(aktif), alt=f"{acilan} açıldı · {kapanan} kapandı", alt_en=f"{acilan} opened · {kapanan} closed", onceki=onceki, kod=kod))
+        for k in aktif:
+            sahip = k.owner_id if k.owner_id in adlar else None
+            satir = tamlar.setdefault(sahip, [adlar.get(sahip, "—"), *([0] * (len(SAYI_KATEGORILERI) + 1))])
+            satir[1 + i] += 1
+            satir[-1] += 1
+    toplanti = takvim_ekibi(db, yil, ceyrek)["genel"]
+    onceki_toplanti = takvim_ekibi(db, *_bir_onceki(yil, ceyrek))["genel"]
+    kpi += [
+        _kpi("Yüz yüze buluşma", "Face-to-face meetings", toplanti["yuzyuze"], onceki=onceki_toplanti["yuzyuze"], kod="yuz_yuze"),
+        _kpi("Online toplantı", "Online meetings", toplanti["online"], onceki=onceki_toplanti["online"], kod="online"),
+    ]
+    return {
+        "stil": "sayilar",
+        "kpi": kpi,
+        "tablo": {
+            "sutunlar": [_sutun("TAM", "TAM"), *(_sutun(ad, ad_en) for _, ad, ad_en in SAYI_KATEGORILERI), _sutun("Toplam", "Total")],
+            "satirlar": sorted(tamlar.values(), key=lambda s: (s[0] == "—", tr_kucuk(s[0]))),
+        },
+    }
+
+
+def _gelir_uretim(db: Session, yil: int, ceyrek: int) -> dict:
+    """Gelir Faydasi Saglanan Isler: modulun kendi ozeti (iptaller haric, aylik tutarlar para birimi basina); kisa kartta ilk 3 is ve aylik tutari."""
+    v = gelir_uretim_ozeti(db, yil, ceyrek)
+    v["kpi"] = [_kpi(k["ad"], k["ad_en"], k["deger"], k["birim"], k["alt"]) for k in v["kpi"]]  # sunum KPI sozlesmesi (alt_en/onceki/kod)
+    v["tablo"]["onizleme"] = _onizleme(3, etiket=0, deger=4)
+    return v
+
+
+def _tanitim(db: Session, yil: int, ceyrek: int) -> dict:
+    v = tanitim.ozet(db)
+    sayi = {s["kod"]: s for s in v["sayilar"]}
+    kpi = [_kpi("Satır kod", "Lines of code", v["kod"]["satir"], kod="satir")] if v["kod"] else []
+    kpi += [_kpi(sayi[k]["ad"], sayi[k]["ad_en"], sayi[k]["deger"], kod=k) for k in ("modul", "uc", "test") if k in sayi]
+    return {"stil": "tanitim", "kpi": kpi, **v}
 
 
 @dataclass(frozen=True)
@@ -274,26 +375,27 @@ class Kaynak:
     anlik: bool = False  # donem filtresi yok: o anki durum (yalniz bir onceki ceyrek icin dondurulur)
 
 
+# Sira = sunumun akis sirasi (ust yonetim gundemi): once sayilar ve TAM Life, sonra isler, gelir, musteri, ekip, talepler
 KAYNAKLAR: dict[str, Kaynak] = {
-    "takvim": Kaynak(
-        "TAM Takvim özeti", "TAM Calendar summary",
-        "Kişi bazında izin/gün durumu ve toplantılar (TAM Takvim grafiği).", "Leave/day status and meetings per person (TAM Calendar chart).",
-        "takvim_ozet", _takvim,
+    "sayilar": Kaynak(
+        "Sayılarla TAM Ekibi", "TAM Team in Numbers",
+        "Çeyrekte yürütülen proje, DDoS, topoloji, DC taşıma ve çalışma sayıları; yüz yüze ve online toplantılar (önceki çeyrekle).", "Projects, DDoS, topology, DC migration and work items run in the quarter, plus face-to-face and online meetings (vs. the previous quarter).",
+        "proje", _sayilar,
     ),
-    "utilizasyon": Kaynak(
-        "TAM Utilizasyon sıralaması", "TAM Utilization ranking",
-        "TAM'ların çatı müşterilerindeki ortalama final skora göre sıralaması (o anki skorlar).", "TAMs ranked by the average final score of their parent customers (current scores).",
-        "utilizasyon", _utilizasyon, anlik=True,
+    "tanitim": Kaynak(
+        "TAM Life tanıtımı", "TAM Life introduction",
+        "Panelin amacı, kapsamı ve faydası; kaç satır kod, hangi dil, kod ne yapıyor (ölçülür, elle yazılmaz; o anki durum).", "What the panel is for, covers and gives; lines of code, languages and what the code does (measured, not typed in; current state).",
+        "sunum", _tanitim, anlik=True,
     ),
-    "rapor": Kaynak(
-        "Gönderilen aylık rapor durumu", "Sent monthly report status",
-        "Çeyreğin her ayı için TAM bazında atılan / beklenen aylık rapor sayısı.", "Monthly reports sent / expected per TAM for each month of the quarter.",
-        "rapor", _rapor,
+    "proje": Kaynak(
+        "Takip edilen projeler özeti", "Tracked projects summary",
+        "Çeyrekte açılan ve kapanan projeler, süren işler; TAM bazında.", "Projects opened and closed in the quarter and ongoing work, per TAM.",
+        "proje", _proje,
     ),
-    "onedesk": Kaynak(
-        "Onedesk özeti", "Onedesk summary",
-        "Çeyrekte açılan alarm, talep ve şikayet toplamları; en çok kayıt oluşan 10 müşteri.", "Alarms, requests and complaints opened in the quarter; top 10 customers by records.",
-        "onedesk", _onedesk,
+    "gelir_uretim": Kaynak(
+        "Gelir faydası sağlanan işler", "Work delivering revenue benefit",
+        "Çeyrekte süren, gelir / tasarruf / verimlilik faydası sağlayan işler: tamamlananlar, aylık gelir ve efor kazancı.", "Work running in the quarter that delivers revenue, savings or efficiency benefit: completed items, monthly revenue and effort saved.",
+        "gelir_uretim", _gelir_uretim,
     ),
     "sms": Kaynak(
         "ICT SMS gelir özeti", "ICT SMS revenue summary",
@@ -305,25 +407,40 @@ KAYNAKLAR: dict[str, Kaynak] = {
         "Talep tarihi çeyrekte olan APN kurulumları: teslim edilen, bekleyen ve tutar.", "APN installations requested in the quarter: delivered, pending and amount.",
         "tamapn", _apn,
     ),
+    "onedesk": Kaynak(
+        "Onedesk özeti", "Onedesk summary",
+        "Çeyrekte açılan alarm, talep ve şikayet toplamları; en çok kayıt oluşan 10 müşteri.", "Alarms, requests and complaints opened in the quarter; top 10 customers by records.",
+        "onedesk", _onedesk,
+    ),
+    "rapor": Kaynak(
+        "Gönderilen aylık rapor durumu", "Sent monthly report status",
+        "Çeyreğin her ayı için TAM bazında atılan / beklenen aylık rapor sayısı.", "Monthly reports sent / expected per TAM for each month of the quarter.",
+        "rapor", _rapor,
+    ),
     "portfoy": Kaynak(
         "Müşteri portföy özeti", "Customer portfolio summary",
         "Çatı / iştirak müşteri sayısı ve segment bazında ortalama skor (o anki durum).", "Parent / affiliate customer counts and average score per segment (current state).",
         "musteri", _portfoy, anlik=True,
     ),
-    "proje": Kaynak(
-        "Takip edilen projeler özeti", "Tracked projects summary",
-        "Çeyrekte açılan ve kapanan projeler, süren işler; TAM bazında.", "Projects opened and closed in the quarter and ongoing work, per TAM.",
-        "proje", _proje,
+    "utilizasyon": Kaynak(
+        "TAM Utilizasyon sıralaması", "TAM Utilization ranking",
+        "TAM'ların çatı müşterilerindeki ortalama final skora göre sıralaması (o anki skorlar).", "TAMs ranked by the average final score of their parent customers (current scores).",
+        "utilizasyon", _utilizasyon, anlik=True,
     ),
-    "radar": Kaynak(
-        "Müşteri radar özeti", "Customer radar summary",
-        "Panelde kartı olmayan ama alarm kaydı oluşan ilk 10 müşteri (ReportDB verisi, o anki durum).", "Top 10 customers with alarm records but no card in the panel (ReportDB data, current state).",
-        "radar", _radar, anlik=True,
+    "takvim": Kaynak(
+        "TAM Takvim özeti", "TAM Calendar summary",
+        "Kişi bazında izin/gün durumu ve toplantılar (TAM Takvim grafiği).", "Leave/day status and meetings per person (TAM Calendar chart).",
+        "takvim_ozet", _takvim,
     ),
     "talep": Kaynak(
         "Geliştirme talepleri özeti", "Development requests summary",
         "Çeyrekte açılan geliştirme talepleri ve durumları.", "Development requests opened in the quarter and their status.",
         "talep", _talep,
+    ),
+    "radar": Kaynak(
+        "Müşteri radar özeti", "Customer radar summary",
+        "Panelde kartı olmayan ama alarm kaydı oluşan ilk 10 müşteri (ReportDB verisi, o anki durum).", "Top 10 customers with alarm records but no card in the panel (ReportDB data, current state).",
+        "radar", _radar, anlik=True,
     ),
 }  # fmt: skip
 
@@ -379,8 +496,7 @@ def _zamani(yil: int, ceyrek: int) -> str:
 
 
 def _onceki_ceyrek() -> tuple[int, int]:
-    yil, ceyrek = bu_ceyrek()
-    return (yil, ceyrek - 1) if ceyrek > 1 else (yil - 1, 4)
+    return _bir_onceki(*bu_ceyrek())
 
 
 def _oge(anahtar: str, durum: str, veri: dict | None = None, gonderen: str = "", zaman: str | None = None, kayit_no: str = "") -> dict:

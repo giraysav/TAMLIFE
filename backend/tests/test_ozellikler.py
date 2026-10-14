@@ -287,7 +287,7 @@ def test_sms_gelirleri_ekle_duzenle_sil_ve_dogrulama(veri):
     r = veri.post("/api/v1/gelir/sms", json={"musteri": "Alfa Test A.S.", "proje": "OTP", "tutar": "1.250,50"}, headers=hdr)
     assert r.status_code == 200, r.text
     kayit = r.json()["data"]
-    assert kayit["tutar"] == 1250.5 and kayit["para_birimi"] == "TRY" and kayit["tam"] == "Admin Kisi"
+    assert kayit["tutar"] == 1250.5 and kayit["para_birimi"] == "TRY" and kayit["tam"] == ""  # sahibi admin: admin TAM degildir, TAM bos kalir
     veri.post("/api/v1/gelir/sms", json={"musteri": "Beta", "proje": "Kampanya", "tutar": 100, "para_birimi": "USD"}, headers=hdr)
     liste = veri.get("/api/v1/gelir/sms").json()["data"]
     assert len(liste["items"]) == 2 and liste["toplam"] == {"TRY": 1250.5, "USD": 100.0} and liste["yillar"] == [YIL]
@@ -323,10 +323,26 @@ def test_gelir_tam_dosyasina_yazilir_ve_tam_degisince_tasinir(veri):
     hdr = login_ok(veri)
     r = veri.post("/api/v1/gelir/sms", json={"musteri": "Beta", "proje": "P", "tutar": 10, "tam": "Ayse Test"}, headers=hdr).json()["data"]
     assert kimlik_coz(r["id"])[0] == 2 and kisi_say(SmsRevenue) == 1  # ayse'nin dosyasi
-    t = veri.put(f"/api/v1/gelir/sms/{r['id']}", json={"musteri": "Beta", "proje": "P", "tutar": 10, "tam": "Admin Kisi"}, headers=hdr).json()["data"]
-    assert kimlik_coz(t["id"])[0] == 1 and t["tam"] == "Admin Kisi" and kisi_say(SmsRevenue) == 1
+    assert veri.put(f"/api/v1/gelir/sms/{r['id']}", json={"musteri": "Beta", "proje": "P", "tutar": 10, "tam": "Admin Kisi"}, headers=hdr).status_code == 400  # admin TAM degildir
     with kullanici_oturumu("ayse") as k:
-        assert k.scalar(select(func.count()).select_from(SmsRevenue)) == 0
+        assert k.scalar(select(func.count()).select_from(SmsRevenue)) == 1  # reddedilen duzenleme tasimadi
+    t = veri.put(f"/api/v1/gelir/sms/{r['id']}", json={"musteri": "Beta", "proje": "P", "tutar": 10, "tam": "ayse"}, headers=hdr).json()["data"]  # kullanici adiyla da secilir
+    assert kimlik_coz(t["id"])[0] == 2 and t["tam"] == "Ayse Test" and kisi_say(SmsRevenue) == 1
+
+
+def test_gelir_tam_secimi_musteriden_turetilir_ve_duzenlemede_korunur(veri):
+    """ICT SMS / APN kayitlari rol bagli: TAM yalniz personel; secilmezse musterinin sorumlu TAM'i; duzenleme TAM'i admin'e kaydirmaz."""
+    hdr = login_ok(veri)
+    assert veri.get("/api/v1/gelir/tamlar").json()["data"] == ["Ayse Test"]  # admin listede yok
+    sms = veri.post("/api/v1/gelir/sms", json={"musteri": "Beta Test Ltd", "proje": "P", "tutar": 10}, headers=hdr).json()["data"]
+    assert sms["tam"] == "Ayse Test" and kimlik_coz(sms["id"])[0] == 2  # Beta'nin sorumlusu ayse
+    duz = veri.put(f"/api/v1/gelir/sms/{sms['id']}", json={"musteri": "Beta Test Ltd", "proje": "P2", "tutar": 20}, headers=hdr).json()["data"]
+    assert duz["tam"] == "Ayse Test" and kimlik_coz(duz["id"])[0] == 2 and duz["proje"] == "P2"  # TAM yeniden turetilmedi, dosya ayni
+    sahipsiz = veri.post("/api/v1/gelir/sms", json={"musteri": "Alfa Test A.S.", "proje": "P", "tutar": 5}, headers=hdr).json()["data"]
+    assert sahipsiz["tam"] == "" and kimlik_coz(sahipsiz["id"])[0] == 1  # sahibi admin: TAM bos
+    apn = veri.post("/api/v1/gelir/apn/kurulum", json={"musteri": "Beta Test Ltd", "apn_adi": "x", "talep_tarihi": "2026-02-01"}, headers=hdr).json()["data"]
+    assert apn["tam"] == "Ayse Test"
+    assert veri.post("/api/v1/gelir/apn/kurulum", json={"musteri": "Beta Test Ltd", "apn_adi": "x", "talep_tarihi": "2026-02-01", "tam": "Admin Kisi"}, headers=hdr).status_code == 400
 
 
 def test_apn_kurulum_alanlari_ve_tarih_kurallari(veri):

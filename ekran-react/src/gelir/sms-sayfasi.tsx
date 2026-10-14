@@ -20,6 +20,7 @@ export function SmsSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean })
   const sorgu = { yil }
   const liste = useQuery({ queryKey: ["gelir", "sms", yil], queryFn: () => oku<Liste>(`/api/v1/gelir/sms${sorguMetni(sorgu)}`) })
   const adlar = useQuery({ queryKey: ["gelir", "musteri-adlari"], queryFn: () => oku<string[]>("/api/v1/gelir/musteri-adlari"), staleTime: 60_000 })
+  const tamlar = useQuery({ queryKey: ["gelir", "tamlar"], queryFn: () => oku<string[]>("/api/v1/gelir/tamlar"), staleTime: 60_000 })
   const yenile = () => qc.invalidateQueries({ queryKey: ["gelir", "sms"] })
   const kaydet = useMutation({
     mutationFn: ({ govde, id }: { govde: Record<string, unknown>; id: number | null }) =>
@@ -32,6 +33,7 @@ export function SmsSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean })
     { anahtar: "musteri", baslik: t.musteri, tip: "musteri", zorunlu: true },
     { anahtar: "proje", baslik: t.proje, tip: "metin", zorunlu: true },
     { anahtar: "tutar", baslik: t.gelir, tip: "tutarPara", sag: true },
+    { anahtar: "tam", baslik: t.tam, tip: "secim", secenekler: tamlar.data ?? [], yer: t.tamYer },
   ]
   const toplamlar = Object.entries(liste.data?.toplam ?? {})
   const adet = liste.data?.items.length ?? 0

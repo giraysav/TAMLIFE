@@ -13,7 +13,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -60,7 +59,8 @@ TABLE_OWNER = {
     "apn_work": "tamapn",
     "radar_prospect": "radar",
     "presentation": "sunum",
-    "income_production": "gelir_uretim",
+    "revenue_benefit": "gelir_uretim",
+    "revenue_benefit_person": "gelir_uretim",
     "role_view": "roller",
     "app_setting": "core",
     "ingest_batch": "ingest",
@@ -511,14 +511,6 @@ class Presentation(Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class IncomeProduction(Base):
-    __tablename__ = "income_production"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    period: Mapped[str] = mapped_column(String(20), default="")
-    label: Mapped[str] = mapped_column(String(200), default="")
-    amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
-
-
 class RoleView(Base):
     """Rolun gorunumu: hangi modul/alt modulleri gorur, hangi sayfayla acilir. Admin belirler."""
 
@@ -560,5 +552,6 @@ class IngestBatch(Base):
 
 
 # Ozellik paketlerinin tablolari ayni Base'e baglanir (alembic ve create_all hepsini gorur). Dosyanin SONUNDA kalmali.
+from app.gelir_uretim import models as _gelir_uretim_models  # noqa: F401
 from app.tampon import models as _tampon_models  # noqa: F401
 from app.yonetim import models as _yonetim_models  # noqa: F401

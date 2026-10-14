@@ -204,6 +204,7 @@ def test_silme_app_user_baglarinin_hepsini_kapsar():
         ("score_approval_request", "requested_by"),
         ("score_approval_request", "resolved_by"),
         ("report_dispatch", "sender_id"),
+        ("revenue_benefit_person", "user_id"),
     }, "app_user'a yeni bir baglanti eklendi: kullanicilar.sil ona gore (bosalt / devret / sil) dogru davranmali; sonra bu listeyi guncelleyin"
 
 

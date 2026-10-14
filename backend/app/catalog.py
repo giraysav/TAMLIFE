@@ -126,10 +126,11 @@ MODULES: tuple[Module, ...] = (
         table="apn_revenues",
     ),
     Module(
-        "gelir_uretim", "Gelir Faydası Sağlanan İşler", "kart", title_en="Revenue-Benefit Work", ready=False,
+        "gelir_uretim", "Gelir Faydası Sağlanan İşler", "kart", title_en="Revenue-Benefit Work",
         i18n="card.gelirUretim.title", card_id="dash-card-gelir-uretim",
         box_id="card_gelir_uretim", permission_group="dashboard_cards",
-        note="icerik yakinda detaylandirilacak",
+        note="gelir, tasarruf ve verimlilik faydası sağlayan işler ile TAM inisiyatifleri; yazma ve Excel içe aktarma yalnız admin",
+        table="revenue_benefit",
     ),
     Module(
         "sunum", "Çeyrek Bazlı Sunum", "kart", title_en="Quarterly Presentation",

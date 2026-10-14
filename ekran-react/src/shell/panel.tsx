@@ -41,6 +41,7 @@ const SunumSayfasi = lazy(() => import("@/sunum/sunum-sayfasi").then((m) => ({ d
 const TalepSayfasi = lazy(() => import("@/talep/talep-sayfasi").then((m) => ({ default: m.TalepSayfasi })))
 const RadarSayfasi = lazy(() => import("@/radar/radar-sayfasi").then((m) => ({ default: m.RadarSayfasi })))
 const ProjeSayfasi = lazy(() => import("@/proje/proje-sayfasi").then((m) => ({ default: m.ProjeSayfasi })))
+const GelirUretimSayfasi = lazy(() => import("@/gelir-uretim/gelir-uretim-sayfasi").then((m) => ({ default: m.GelirUretimSayfasi })))
 const EkipOzeti = lazy(() => import("@/ekip/ekip-ozeti").then((m) => ({ default: m.EkipOzeti })))
 
 /** Eski yonetim adresleri (yer imleri, gecmis) ve Yonetim'e katlanan modul (utilizasyon) tek Yonetim alaninin bolumlerine yonlenir. */
@@ -334,6 +335,8 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
             <SmsSayfasi dil={dil} yazabilir={kullanici.is_admin} />
           ) : aktif === "tamapn" ? (
             <ApnSayfasi dil={dil} yazabilir={kullanici.is_admin} />
+          ) : aktif === "gelir_uretim" ? (
+            <GelirUretimSayfasi dil={dil} yazabilir={kullanici.is_admin} />
           ) : aktif === "rapor" ? (
             <RaporSayfasi dil={dil} />
           ) : alt && oge ? (
