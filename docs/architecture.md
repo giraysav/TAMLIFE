@@ -68,7 +68,7 @@ React 19, TypeScript 7, Vite 8, TanStack Query, Tailwind 4, framer-motion, lucid
 ## 6. Test ve doğrulama
 
 - Backend: `cd backend; ..\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider` (654 test, 1 atlanır; `ruff check .` temiz).
-- Arayüz: `cd ekran-react; npm test` (148 test), `npm run lint`, `npm run build`.
+- Arayüz: `cd ekran-react; npm test` (161 test), `npm run lint`, `npm run build`.
 - Alembic, rol/yetki (`test_yonetim_uclari_admin_disina_kapali` tüm Yönetim uçlarını OpenAPI'den dener), skor altın vektörleri (`skor_golden.json`), eski aktarım (`test_eski_aktar.py`) ayrı testlidir.
 
 ## 7. Depo düzeni

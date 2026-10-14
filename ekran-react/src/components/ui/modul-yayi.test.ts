@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { halkalar, KART, MASKOT, TASARIM_Y, YARICAP, YATAY } from "@/components/ui/modul-yayi"
+import { BASLIK_USTU, halkalar, HALKA, KALKIS, KART, LOGO, MASKOT, TASARIM_Y } from "@/components/ui/modul-yayi"
 
 /** Tasarim olcusunde (olcek 1) kart merkezleri; sahne alt orta noktasi (0, 0), yukari eksi y. Olcek tum olculeri orantili degistirir. */
 function merkezler(adet: number) {
   const { disAci, icAci } = halkalar(adet)
-  const nokta = (r: number, aci: number) => ({ x: YATAY * r * Math.cos((aci * Math.PI) / 180), y: -r * Math.sin((aci * Math.PI) / 180) })
-  return [...disAci.map((a) => nokta(YARICAP.dis, a)), ...icAci.map((a) => nokta(YARICAP.ic, a))]
+  const nokta = (h: { rx: number; ry: number }, aci: number) => ({ x: h.rx * Math.cos((aci * Math.PI) / 180), y: -(KALKIS + h.ry * Math.sin((aci * Math.PI) / 180)) })
+  return [...disAci.map((a) => nokta(HALKA.dis, a)), ...icAci.map((a) => nokta(HALKA.ic, a))]
 }
 
 describe("ModulYayi dizilimi", () => {
@@ -21,13 +21,25 @@ describe("ModulYayi dizilimi", () => {
     }
   })
 
-  it.each(Array.from({ length: 12 }, (_, i) => i + 1))("%i kartta kartlar sahne icinde kalir ve Teknocan kutusuna girmez", (adet) => {
+  it.each(Array.from({ length: 12 }, (_, i) => i + 1))("%i kartta kartlar sahne icinde kalir ve maskot bandina girmez", (adet) => {
     for (const [i, m] of merkezler(adet).entries()) {
       expect(m.y - KART.y / 2, `${i}. kart sahnenin ustunden tasiyor`).toBeGreaterThanOrEqual(-TASARIM_Y)
-      expect(m.y + KART.y / 2, `${i}. kart sahnenin altindan tasiyor`).toBeLessThanOrEqual(0)
-      const bosX = Math.abs(m.x) - KART.g / 2 - MASKOT.g / 2
-      const bosY = -MASKOT.y - (m.y + KART.y / 2)
-      expect(bosX >= 6 || bosY >= 6, `${i}. kart Teknocan kutusuna giriyor (bosluk ${bosX.toFixed(0)} x ${bosY.toFixed(0)})`).toBe(true)
+      expect(-(m.y + KART.y / 2), `${i}. kart gorseldeki baslik yazisini kapatiyor`).toBeGreaterThanOrEqual(BASLIK_USTU)
+      const bosX = Math.abs(m.x) - KART.g / 2 - MASKOT.yarim
+      expect(bosX, `${i}. kart maskot bandina giriyor (bosluk ${bosX.toFixed(0)})`).toBeGreaterThanOrEqual(6)
     }
+  })
+
+  it.each(Array.from({ length: 12 }, (_, i) => i + 1))("%i kartta sol ustteki logo kapanmaz", (adet) => {
+    for (const [i, m] of merkezler(adet).entries()) {
+      const logoda = 545 + m.x - KART.g / 2 < LOGO.sag && -(m.y - KART.y / 2) > LOGO.alt
+      expect(logoda, `${i}. kart gorseldeki logoyu kapatiyor`).toBe(false)
+    }
+  })
+
+  it("kartlar iki yana esit dagilir: tepe (maskotun ustu) bos kalir", () => {
+    const sol = merkezler(12).filter((m) => m.x < 0).length
+    expect(sol).toBe(6)
+    expect(merkezler(7).filter((m) => m.x < 0).length).toBeGreaterThanOrEqual(3)
   })
 })

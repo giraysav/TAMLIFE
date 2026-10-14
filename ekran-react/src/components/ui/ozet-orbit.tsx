@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import type { LucideIcon } from "lucide-react"
 import { Briefcase, CalendarCheck, CalendarDays, Circle, FileText, FolderKanban, LifeBuoy, Link2, MessageSquare, Presentation, Radar, TrendingUp, Wifi } from "lucide-react"
-import teknocan from "@/assets/teknocan.png"
+import sahne from "@/assets/tam-sahne.jpg"
 import { oku } from "@/lib/sorgu"
 import { ModulYayi } from "@/components/ui/modul-yayi"
 import type { YayOgesi } from "@/components/ui/modul-yayi"
@@ -53,17 +53,7 @@ export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string
   return (
     <ModulYayi
       ogeler={ogeler}
-      alt={
-        <div className="relative flex h-full w-full items-end justify-center">
-          <span aria-hidden className="absolute inset-x-[-18%] bottom-[-3%] h-[9%] rounded-[50%] bg-tl-navy/15 blur-[3px]" />
-          <img
-            src={teknocan}
-            alt="Teknocan"
-            draggable={false}
-            className="relative h-full w-auto max-w-full select-none object-contain drop-shadow-[0_8px_10px_rgba(0,40,85,0.2)]"
-          />
-        </div>
-      }
+      arkaPlan={{ src: sahne, alt: "Teknocan" }}
     />
   )
 }
