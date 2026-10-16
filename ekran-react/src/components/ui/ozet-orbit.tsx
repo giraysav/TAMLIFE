@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import type { LucideIcon } from "lucide-react"
-import { Briefcase, CalendarCheck, CalendarDays, Circle, FileText, FolderKanban, LifeBuoy, Link2, MessageSquare, Presentation, Radar, TrendingUp, Wifi } from "lucide-react"
+import { Briefcase, CalendarCheck, CalendarDays, Circle, FileText, FolderKanban, LifeBuoy, Link2, MessageSquare, Presentation, Radar, Store, TrendingUp, Wifi } from "lucide-react"
 import sahne from "@/assets/tam-sahne.jpg"
 import { oku } from "@/lib/sorgu"
 import { ModulYayi } from "@/components/ui/modul-yayi"
@@ -21,6 +21,7 @@ const IKON: Record<string, LucideIcon> = {
   tamapn: Wifi,
   gelir_uretim: TrendingUp,
   baglantili: Link2,
+  toptan: Store,
 }
 
 /** Modul rengi: [acik, koyu] gradyan. Renk tek basina anlam tasimaz (etiket her zaman gorunur). */
@@ -37,6 +38,7 @@ const RENK: Record<string, readonly [string, string]> = {
   tamapn: ["#22d3ee", "#0891b2"],
   gelir_uretim: ["#facc15", "#ca8a04"],
   baglantili: ["#94a3b8", "#475569"],
+  toptan: ["#fb923c", "#c2410c"],
 }
 const VARSAYILAN_RENK: readonly [string, string] = ["#64748b", "#334155"]
 
@@ -54,6 +56,7 @@ export function OzetOrbit({ dil, onGit }: { dil: "tr" | "en"; onGit: (id: string
     <ModulYayi
       ogeler={ogeler}
       arkaPlan={{ src: sahne, alt: "Teknocan" }}
+      yalin
     />
   )
 }

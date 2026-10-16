@@ -15,7 +15,7 @@ import { HamMusteriVerisi } from "@/yonetim/tampon/musteri-ham"
 type Bilgi = { ton: "yesil" | "amber"; metin: string }
 
 /** Oracle baglanti testi (alt surecte, sonuc maskeli); sonuc bildirime yazilir. */
-export function useBaglantiTesti(t: YM, setBilgi: (b: Bilgi) => void) {
+function useBaglantiTesti(t: YM, setBilgi: (b: Bilgi) => void) {
   return useMutation({
     mutationFn: (anahtar: string) => yaz<BaglantiTesti>("POST", `/api/v1/tampon/kaynaklar/${encodeURIComponent(anahtar)}/test`),
     onSuccess: (s) => setBilgi({ ton: s.ok ? "yesil" : "amber", metin: [s.mesaj, s.ipucu].filter(Boolean).join(" — ") }),
@@ -24,7 +24,7 @@ export function useBaglantiTesti(t: YM, setBilgi: (b: Bilgi) => void) {
 }
 
 /** Oracle kaynagi durumu: hazir/kapali, eksik anahtar, ReportDB tazeligi, baglanti testi (Veri Girisi ve Veritabani ortak). */
-export function OracleDurum({ k, t, test }: { k: Kaynak; t: YM; test: UseMutationResult<BaglantiTesti, Error, string> }) {
+function OracleDurum({ k, t, test }: { k: Kaynak; t: YM; test: UseMutationResult<BaglantiTesti, Error, string> }) {
   return (
     <span className="grid justify-items-start gap-0.5">
       <Rozet ton={k.hazir ? "yesil" : "gri"}>{k.hazir ? t.canliHazir : t.canliKapali}</Rozet>

@@ -162,12 +162,16 @@ function Kart({ oge, sira, azHareket, b, stil }: { oge: YayOgesi; sira: number; 
   )
 }
 
+/** Yalin gorselin en genis orani (genislik / yukseklik); gorselin 1672 / 941 oranindan fazlasi kirpilir, logo ve alt yazi korunur. */
+const YALIN_EN_GENIS = 2.1
+
 /**
  * arkaPlan: sahnenin arkasindaki gorsel (icinde Teknocan var; verilirse `alt` kullanilmaz). alt: arka plan yokken sahnenin
  * alt ortasindaki bos alana (104 x 180 x olcek) yerlesir; dar ekranda kart listesinin altinda durur.
+ * `yalin` (arkaPlan ile): kart ve yay cizilmez, gorsel ust kutunun kalan yuksekligini (flex-1) doldurur; kutu `YALIN_EN_GENIS` oranindan genisse (alan kisaysa) gorsel ortada kalir, yanlari lacivert zeminle solar (logo ve alt yazi kesilmesin) (2026-10-14: gorsel kartsiz nasil duruyor).
  * `yukseklik`: ust kutunun CSS yuksekligi (varsayilan ekran yuksekligine gore); sahne bu kutuya sigacak sekilde olceklenir.
  */
-export function ModulYayi({ ogeler, alt, arkaPlan, yukseklik = "clamp(23rem, 58dvh, 33rem)" }: { ogeler: YayOgesi[]; alt?: ReactNode; arkaPlan?: ArkaPlan; yukseklik?: string }) {
+export function ModulYayi({ ogeler, alt, arkaPlan, yalin = false, yukseklik = "clamp(23rem, 58dvh, 33rem)" }: { ogeler: YayOgesi[]; alt?: ReactNode; arkaPlan?: ArkaPlan; yalin?: boolean; yukseklik?: string }) {
   const cerceve = useRef<HTMLDivElement>(null)
   const [kutu, setKutu] = useState({ g: TASARIM_G, y: TASARIM_Y })
   const azHareket = !useHareket()
@@ -213,6 +217,21 @@ export function ModulYayi({ ogeler, alt, arkaPlan, yukseklik = "clamp(23rem, 58d
   const disYay = yayParcalari(cx, cy, HALKA.dis.rx * s, HALKA.dis.ry * s, HALKA.dis.aci)
   const icYay = yayParcalari(cx, cy, HALKA.ic.rx * s, HALKA.ic.ry * s, HALKA.ic.aci)
   const koyu = !!arkaPlan && !dar
+
+  if (yalin && arkaPlan) {
+    // Gorsel kalan yuksekligi doldurur: altindaki ozet karolari cogaldikca kendiliginden kuculur (en az 7rem; sayfa kaymaz).
+    return (
+      <section className="relative flex min-h-[7rem] w-full flex-1 justify-center overflow-hidden rounded-3xl border border-tl-navy bg-tl-navy shadow-sm">
+        <img
+          src={arkaPlan.src}
+          alt={arkaPlan.alt}
+          draggable={false}
+          className="h-full max-w-full select-none object-cover object-[50%_15%]"
+          style={{ aspectRatio: YALIN_EN_GENIS, maskImage: "linear-gradient(to right, transparent, #000 3%, #000 97%, transparent)" }}
+        />
+      </section>
+    )
+  }
 
   return (
     <section

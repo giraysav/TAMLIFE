@@ -303,7 +303,10 @@ def plan_olustur(db: Session, parti_id: int, yeni_olustur: bool = False) -> dict
     if "unvan" not in harita:
         raise UygulamaHatasi(
             400,
-            m('Dosyada "Müşteri Ünvanı" (ya da "Müşteri Adı") sütunu yok.', 'The file has no "Müşteri Ünvanı" (or "Müşteri Adı") column.'),
+            m(
+                'Dosyada "Çatı Müşteri Ünvanı" / "İştirak Müşteri Ünvanı" (ya da "Müşteri Ünvanı") sütunu yok.',
+                'The file has no "Çatı Müşteri Ünvanı" / "İştirak Müşteri Ünvanı" (or "Müşteri Ünvanı") column.',
+            ),
         )
 
     musteriler = list(db.scalars(select(Customer)))

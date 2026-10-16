@@ -93,7 +93,7 @@ def test_rapor_ve_gelir_bolumleri_modul_iznine_baglidir(veri, monkeypatch):
     _giris(veri, monkeypatch, "TeamMember")
     k = veri.get("/api/v1/musteri/1").json()["data"]
     assert "raporlar" not in k and "gelirler" not in k and k["erisim"]["rapor"] is False
-    assert "tam_secenekleri" not in k and k["erisim"]["tam_degistir"] is False and k["erisim"]["sil"] is False
+    assert "tam_secenekleri" not in k and k["erisim"]["tam_degistir"] is False and k["erisim"]["sil"] is False  # yazma yalniz admin
     assert veri.get("/api/v1/rapor/gonderilenler").status_code == 403  # rapor modulu verilmedi
 
 
@@ -289,12 +289,19 @@ def test_yetkisiz_ve_csrf(veri, monkeypatch):
     assert veri.get("/api/v1/musteri").status_code == 401
     hdr = login_ok(veri)
     assert veri.put("/api/v1/musteri/1/kimlik", json={"sector": "x"}).status_code == 403  # CSRF'siz
-    assert veri.put("/api/v1/roller/TeamMember", json={"modules": [], "landing": "ozet"}, headers=hdr).status_code == 200  # modul yok
+    # moduller bos liste verilirse musteri modulu kapali
+    assert veri.put("/api/v1/roller/TeamMember", json={"modules": [], "landing": "ozet"}, headers=hdr).status_code == 200
     _cikis(veri, hdr)
-    _giris(veri, monkeypatch, "TeamMember")
-    assert veri.get("/api/v1/musteri").status_code == 403
-    assert veri.get("/api/v1/musteri/1").status_code == 403
-    _ = datetime.now(UTC)
+    hdr = _giris(veri, monkeypatch, "TeamMember")
+    assert veri.get("/api/v1/musteri").status_code == 403  # modul verilmedi
+    # modullere musteri eklenirse erisilebilir
+    _cikis(veri, hdr)
+    admin_hdr = login_ok(veri)
+    assert veri.put("/api/v1/roller/TeamMember", json={"modules": ["musteri"], "landing": "ozet"}, headers=admin_hdr).status_code == 200
+    _cikis(veri, admin_hdr)
+    hdr = _giris(veri, monkeypatch, "TeamMember")
+    assert veri.get("/api/v1/musteri").status_code == 200  # okuma acik
+    assert veri.put("/api/v1/musteri/1/kimlik", json={"sector": "x"}, headers=hdr).status_code == 403  # yazma yalniz admin
 
 
 def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):

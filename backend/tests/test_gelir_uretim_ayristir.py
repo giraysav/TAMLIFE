@@ -260,10 +260,24 @@ def test_baslik_haritasi_kaynak_basliklari():
 def test_baslik_haritasi_disa_aktarim_basliklari_ve_buyuk_kucuk_farki():
     from app.gelir_uretim.excel import BASLIKLAR
 
-    h = a.baslik_haritasi(list(BASLIKLAR))
-    assert h["yil_ici"] == 10 and h["fayda_turu"] == 11 and h["baslik"] == 1 and h["ek"] == 7
+    # kullanicinin Excel'inin 13 sutunu (2026-10-15) + fayda turu: her baslik kendi alanina
+    assert a.baslik_haritasi(list(BASLIKLAR)) == {
+        "tam": 0, "baslik": 1, "durum": 2, "yol": 3, "aciklama": 4, "musteri": 5, "gelir": 6, "yil_ici": 7, "verimlilik": 8, "yillik_saat": 9,
+        "ek": 10, "baslangic": 11, "bitis": 12, "fayda_turu": 13,
+    }  # fmt: skip
     assert a.baslik_haritasi(["ILGILI tam", "ISIN OZETI", "GUNCEL DURUM"]) == {"tam": 0, "baslik": 1, "durum": 2}
     assert a.baslik_haritasi(["Foo", "Bar", None]) == {}
+
+
+def test_yillik_saat_ayristir():
+    assert a.yillik_saat_ayristir(432).saat == 432.0
+    for metin in ("432 saat", "432 Saat / 12 ay", "432 saat/yıl", "432 saat yıllık"):
+        assert a.yillik_saat_ayristir(metin).saat == 432.0, metin
+    assert a.yillik_saat_ayristir("1.200 saat").saat == 1200.0
+    for metin, neden in (("36 saat/ay", "donem_yok"), ("5 TL", "birim"), ("Çalışılmaktadır", "sayi_yok"), ("10 saat 20 saat", "coklu")):
+        sonuc = a.yillik_saat_ayristir(metin)
+        assert sonuc.saat is None and sonuc.neden == neden and sonuc.ek == metin
+    assert a.yillik_saat_ayristir(None).saat is None and a.yillik_saat_ayristir("  ").ek == ""
 
 
 def test_bolum_turu():

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import uuid
 
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -60,8 +61,10 @@ def kaydet(
     kaynak: str = "",
     kullanici: str = "",
     seviye: str = "error",
+    arka_plan: bool = False,
 ) -> str:
-    """Arizayi dosya gunlugune ve fault_event'e yazar; kayit numarasini doner. ASLA istisna firlatmaz."""
+    """Arizayi dosya gunlugune ve fault_event'e yazar; kayit numarasini doner. ASLA istisna firlatmaz.
+    arka_plan: fault_event satiri ayri is parcacigiyla yazilir (kilitli DB'de yanit bir busy_timeout daha beklemesin)."""
     kayit_no = uuid.uuid4().hex
     ozet = temizle(ayrinti or (str(exc) if exc else ""))
     seviye = seviye if seviye in SEVIYELER else "error"
@@ -86,12 +89,19 @@ def kaydet(
         at=simdi(),
         status="open",
     )
-    try:
-        from app.db import oturum
 
-        with oturum() as db:
-            db.add(satir)
-            db.commit()
-    except Exception:  # noqa: BLE001 - ariza kaydi yazilamasa da yanit donmeli
-        _log.warning("ariza kaydi veritabanina yazilamadi (kayit %s)", kayit_no[:8], exc_info=True)
+    def yaz() -> None:
+        try:
+            from app.db import oturum
+
+            with oturum() as db:
+                db.add(satir)
+                db.commit()
+        except Exception:  # noqa: BLE001 - ariza kaydi yazilamasa da yanit donmeli
+            _log.warning("ariza kaydi veritabanina yazilamadi (kayit %s)", kayit_no[:8], exc_info=True)
+
+    if arka_plan:
+        threading.Thread(target=yaz, name="ariza-kaydi", daemon=True).start()
+    else:
+        yaz()
     return kayit_no

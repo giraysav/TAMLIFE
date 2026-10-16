@@ -28,6 +28,8 @@ export type Profil = {
   company: string
   address: string
   website: string
+  /** Profil fotografi surumu (ms); yoksa null. Adres: fotoAdresi(photo_version). */
+  photo_version?: number | null
 }
 
 export type Kullanici = {

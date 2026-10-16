@@ -16,7 +16,7 @@ function sistemAzHareket(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
-export function tercihOku(): HareketTercihi {
+function tercihOku(): HareketTercihi {
   try {
     const ham = window.localStorage.getItem(ANAHTAR)
     return ham === "ac" || ham === "kapat" ? ham : "sistem"

@@ -1,19 +1,20 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import type { FormEvent } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Map as HaritaIkon, Network, TriangleAlert, Upload, ZoomIn, ZoomOut } from "lucide-react"
 import { Alan, Bildirim, BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, Panel, SayfaKabi, Sekmeler, Yukleniyor } from "@/components/sayfa-ui"
 import { sayi } from "@/lib/bicim"
-import { hataMesaji, sorguMetni, yukle } from "@/lib/sorgu"
+import { hataMesaji, oku, sorguMetni, yukle } from "@/lib/sorgu"
+import type { Kart } from "@/musteri/musteri-karti"
 import type { Dil } from "@/shell/metin"
 import { topolojiMetin } from "@/topoloji/topoloji-metin"
 
 export type Dugum = { id: string; tur: "bulut" | "switch" | "router"; etiket: string; lokasyon: string; il: string }
-export type Kenar = { kaynak: string; hedef: string; altyapi: string; etiket: string; yedek: boolean; renk: string }
+export type Kenar = { id: string; kaynak: string; hedef: string; altyapi: string; etiket: string; yedek: boolean; devre: string; renk: string }
 type Sehir = { il: string; adet: number; enlem: number; boylam: number }
 export type Analiz = {
   spof: boolean
-  spof_noktalari: { lokasyon: string; bb: string; altyapilar: string[] }[]
+  spof_noktalari: { lokasyon: string; bb: string; altyapilar: string[]; neden: "tek_devre" | "ortak_bb" | "ortak_erisim" | "ortak_router"; devreler: string[] }[]
   dugumler: Dugum[]
   kenarlar: Kenar[]
   sehirler: Sehir[]
@@ -21,6 +22,9 @@ export type Analiz = {
   kolonlar: Record<string, string>
   satir: number
   lokasyon: number
+  degerlendirme: "riskli" | "sinirli"
+  uyarilar: string[]
+  musteri?: { id: number; unvan: string }
   renkler: Record<string, string>
 }
 
@@ -36,9 +40,18 @@ export type Yerlesim = { konum: Record<string, Konum>; lokasyonlar: { ad: string
  *  ikinci, switch arkasindaki router'lar ucuncu seviyede. Birden cok switch'e bagli router ilk switch'in altina konur. */
 export function yerlesim(dugumler: Dugum[], kenarlar: Kenar[]): Yerlesim {
   const komsu = new Map<string, string[]>()
-  for (const k of kenarlar) komsu.set(k.kaynak, [...(komsu.get(k.kaynak) ?? []), k.hedef])
+  for (const k of kenarlar) {
+    const liste = komsu.get(k.kaynak) ?? []
+    if (!liste.includes(k.hedef)) liste.push(k.hedef)
+    komsu.set(k.kaynak, liste)
+  }
   const gruplar = new Map<string, Dugum[]>()
-  for (const d of dugumler) if (d.tur !== "bulut") gruplar.set(d.lokasyon, [...(gruplar.get(d.lokasyon) ?? []), d])
+  for (const d of dugumler) {
+    if (d.tur === "bulut") continue
+    const liste = gruplar.get(d.lokasyon) ?? []
+    liste.push(d)
+    gruplar.set(d.lokasyon, liste)
+  }
   const ust = new Set(komsu.get("ISP_CLOUD") ?? [])
   const konum: Record<string, Konum> = {}
   const lokasyonlar: Yerlesim["lokasyonlar"] = []
@@ -78,10 +91,24 @@ function kisalt(metin: string, uzunluk = 16) {
 function TopolojiCizimi({ veri, t }: { veri: Analiz; t: ReturnType<typeof topolojiMetin> }) {
   const [olcek, setOlcek] = useState(1)
   const [secili, setSecili] = useState<string | null>(null)
-  const { konum, lokasyonlar, genislik } = yerlesim(veri.dugumler, veri.kenarlar)
+  const { konum, lokasyonlar, genislik } = useMemo(() => yerlesim(veri.dugumler, veri.kenarlar), [veri])
   const yukseklik = SEVIYE[2] + 80
   const kullanilan = [...new Set(veri.kenarlar.map((k) => k.altyapi))]
   const ilgili = (k: Kenar) => secili !== null && (k.kaynak === secili || k.hedef === secili)
+  const paralel = useMemo(() => {
+    const toplam = new Map<string, number>()
+    const sira = new Map<string, number>()
+    for (const k of veri.kenarlar) {
+      const anahtar = `${k.kaynak}>${k.hedef}`
+      toplam.set(anahtar, (toplam.get(anahtar) ?? 0) + 1)
+    }
+    return new Map(veri.kenarlar.map((k) => {
+      const anahtar = `${k.kaynak}>${k.hedef}`
+      const no = sira.get(anahtar) ?? 0
+      sira.set(anahtar, no + 1)
+      return [k.id, (no - ((toplam.get(anahtar) ?? 1) - 1) / 2) * 16]
+    }))
+  }, [veri.kenarlar])
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -118,16 +145,17 @@ function TopolojiCizimi({ veri, t }: { veri: Analiz; t: ReturnType<typeof topolo
             const y1 = a.y + (k.kaynak === "ISP_CLOUD" ? 18 : 16)
             const y2 = b.y - 16
             const orta = (y1 + y2) / 2
+            const sapma = paralel.get(k.id) ?? 0
             const vurgu = ilgili(k)
             return (
-              <g key={`${k.kaynak}>${k.hedef}`} opacity={secili === null || vurgu ? 1 : 0.25}>
-                <path d={`M${a.x},${y1} C${a.x},${orta} ${b.x},${orta} ${b.x},${y2}`} fill="none" stroke={k.renk} strokeWidth={vurgu ? 3.5 : 2} strokeDasharray={k.yedek ? "6 4" : undefined} />
+              <g key={k.id} opacity={secili === null || vurgu ? 1 : 0.25}>
+                <path d={`M${a.x},${y1} C${a.x + sapma},${orta} ${b.x + sapma},${orta} ${b.x},${y2}`} fill="none" stroke={k.renk} strokeWidth={vurgu ? 3.5 : 2} strokeDasharray={k.yedek ? "6 4" : undefined} />
                 {k.etiket && k.etiket !== "LAN" ? (
-                  <text x={(a.x + b.x) / 2 + (b.x - a.x) * 0.25} y={orta + (y2 - orta) * 0.5} textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth={3} className="fill-slate-700 text-[9px] font-bold">
+                  <text x={(a.x + b.x) / 2 + (b.x - a.x) * 0.25 + sapma} y={orta + (y2 - orta) * 0.5} textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth={3} className="fill-slate-700 text-[9px] font-bold">
                     {kisalt(k.etiket, 18)}
                   </text>
                 ) : null}
-                <title>{`${k.altyapi}${k.yedek ? " (yedek)" : ""}${k.etiket ? ` · ${k.etiket}` : ""}`}</title>
+                <title>{`${k.devre} · ${k.altyapi}${k.yedek ? " (yedek)" : ""}${k.etiket ? ` · ${k.etiket}` : ""}`}</title>
               </g>
             )
           })}
@@ -219,13 +247,14 @@ function CografiHarita({ veri, t }: { veri: Analiz; t: ReturnType<typeof topoloj
 }
 
 /** TopoMaker (uretim topoMakerModal): musteri kartindaki arac bolumunden acilir. Dosya sunucuda saklanmaz; cizim SVG (CDN yok). */
-export function TopoMaker({ dil }: { dil: Dil }) {
+export function TopoMaker({ dil, musteriId }: { dil: Dil; musteriId: number }) {
   const t = topolojiMetin(dil)
   const [dosya, setDosya] = useState<File | null>(null)
   const [uyari, setUyari] = useState("")
   const [sekme, setSekme] = useState<"topoloji" | "harita">("topoloji")
+  const kart = useQuery({ queryKey: ["musteri", "kart", musteriId], queryFn: () => oku<Kart>(`/api/v1/musteri/${musteriId}`) })
   const m = useMutation({
-    mutationFn: (d: File) => yukle<Analiz>(`/api/v1/topoloji/analiz${sorguMetni({ dosya: d.name })}`, d, d.name.toLowerCase().endsWith(".xlsx") ? XLSX : "text/csv"),
+    mutationFn: (d: File) => yukle<Analiz>(`/api/v1/topoloji/analiz${sorguMetni({ musteri: musteriId, dosya: d.name })}`, d, d.name.toLowerCase().endsWith(".xlsx") ? XLSX : "text/csv"),
   })
   const v = m.data
 
@@ -235,6 +264,10 @@ export function TopoMaker({ dil }: { dil: Dil }) {
       setUyari(t.dosyaSec)
       return
     }
+    if (dosya.size > 10 * 1024 * 1024) {
+      setUyari(t.dosyaBuyuk)
+      return
+    }
     setUyari("")
     m.mutate(dosya)
   }
@@ -242,12 +275,15 @@ export function TopoMaker({ dil }: { dil: Dil }) {
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={Network} baslik={t.baslik} aciklama={t.aciklama} />
+      {kart.isError ? <HataKutu metin={hataMesaji(kart.error, t.musteriHata)} /> : (
+        <Bildirim>{t.musteri}: <strong>{kart.data?.kimlik.unvan ?? t.musteriYukleniyor}</strong></Bildirim>
+      )}
       <Panel>
         <form onSubmit={gonder} className="flex flex-wrap items-end gap-3">
           <Alan etiket={t.dosya} ipucu={t.dosyaIpucu} sinif="min-w-[16rem] flex-1">
             <input type="file" accept=".csv,.xlsx" className={GIRDI} onChange={(e) => setDosya(e.target.files?.[0] ?? null)} />
           </Alan>
-          <button type="submit" className={DUGME_SARI} disabled={m.isPending}>
+          <button type="submit" className={DUGME_SARI} disabled={m.isPending || kart.isPending || kart.isError}>
             <Upload aria-hidden className="size-4" />
             {t.baslat}
           </button>
@@ -276,13 +312,14 @@ export function TopoMaker({ dil }: { dil: Dil }) {
               <p className="text-xs font-medium text-slate-600">{t.spofAciklama}</p>
               <ul className="mt-2 list-inside list-disc text-xs font-bold text-slate-700">
                 {v.spof_noktalari.map((p) => (
-                  <li key={`${p.lokasyon}|${p.bb}`}>{t.spofSatir(p.lokasyon, p.bb, p.altyapilar.join(" + "))}</li>
+                  <li key={`${p.lokasyon}|${p.neden}|${p.bb}`}>{t.spofSatir(p.lokasyon, p.neden, p.bb, p.devreler.join(", "))}</li>
                 ))}
               </ul>
             </section>
           ) : (
             <Bildirim ton="yesil">{t.spofYok}</Bildirim>
           )}
+          {v.uyarilar.length ? <Bildirim ton="amber">{v.uyarilar.join(" · ")}</Bildirim> : null}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Kpi etiket={t.satir} deger={sayi(v.satir)} />
             <Kpi etiket={t.lokasyon} deger={sayi(v.lokasyon)} ton="sari" />

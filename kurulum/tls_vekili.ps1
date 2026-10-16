@@ -18,6 +18,8 @@ param([string]$Ad = 'tamlife',
       [string]$Sema = 'https',
       [switch]$Test)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'calisma_kimligi.ps1')
+Tamlife-KimlikDogrula
 
 # Govde akisla gecer (aylik rapor Excel'leri 50 MB'a kadar cikabilir; bellekte toplanmaz).
 $TAMPON = 81920
@@ -64,6 +66,12 @@ try {
     }
     exit 2
 }
+# Yavas istemci (baslik/govdeyi damla damla gonderen) isci havuzunu kilitlemesin: http.sys zaman asimlari kisaltilir.
+try {
+    $dinleyici.TimeoutManager.HeaderWait = [TimeSpan]::FromSeconds(15)
+    $dinleyici.TimeoutManager.EntityBody = [TimeSpan]::FromSeconds(60)
+    $dinleyici.TimeoutManager.IdleConnection = [TimeSpan]::FromSeconds(60)
+} catch { Yaz "zaman asimlari ayarlanamadi: $($_.Exception.Message)" }
 Yaz "dinleniyor $onek  ->  http://127.0.0.1:$HedefPort/"
 
 # --- Istek isleme: ISCI_SAYISI isci ayni dinleyiciden paralel GetContext alir; gunluk satirlari kuyruga yazilir -------------
@@ -77,7 +85,13 @@ $ISLE = {
     try {
         $istek = $baglam.Request
         $yanit = $baglam.Response
-        $hedef = "http://127.0.0.1:$($ortak.HedefPort)$($istek.RawUrl)"
+        # Yalniz '/' ile baslayan goreli yol iletilir: mutlak URI (GET http://baska/) ve '//' ile baslayan yol hedefi degistiremez.
+        $yol = $istek.RawUrl
+        if (-not $yol.StartsWith('/') -or $yol.StartsWith('//')) {
+            $baglam.Response.StatusCode = 400
+            return
+        }
+        $hedef = "http://127.0.0.1:$($ortak.HedefPort)$yol"
         $ileti = New-Object Net.Http.HttpRequestMessage((New-Object Net.Http.HttpMethod($istek.HttpMethod)), $hedef)
         if ($istek.HasEntityBody) {
             $ileti.Content = New-Object Net.Http.StreamContent($istek.InputStream)

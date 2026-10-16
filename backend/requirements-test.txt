@@ -1,0 +1,3 @@
+pytest==9.1.1
+httpx==0.28.1  # FastAPI TestClient ve ASGI surucusu
+# Istege bagli: locust (araclar/yuk/locustfile.py). Cevrimdisi: internetli makinede pip download -r requirements-test.txt locust -d tekerlek

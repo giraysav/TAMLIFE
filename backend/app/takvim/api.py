@@ -1,6 +1,7 @@
 """Takvim HTTP katmani.
 
-  /takvim/ben, /takvim/gun, /takvim/toplu  -> Izin&Takvim Yonetimi (takvim): kisi yalniz kendi gunlerini yazar
+  /takvim/ben, /takvim/gun, /takvim/toplu  -> Izin&Takvim Yonetimi (takvim): giris yapan kisi yalniz kendi takvimini gorur ve yazar
+                                            (gun durumu, toplanti, toplanti ozeti, yapilan isler; 2026-10-14)
   /takvim/ekip...                           -> TAM Takvim (takvim_ozet): panele giris yapmis herkesin ozeti
   /takvim/sunuma-gonder                     -> yalniz 'sunum.gonder' yetkisi olan rol (admin her zaman); yetkiyi admin Rol Yonetimi › Ceyrek Bazli Sunum'dan verir
 Ceyrek Bazli Sunum sayfasinin uclari app.sunum.api'dedir.
@@ -13,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.audit import audit_log
+from app.authz import is_admin
 from app.db import get_db
 from app.erisim import Erisim, modul_erisim
 from app.ortak import KimlikTipi, ok
@@ -39,17 +41,17 @@ class SunumaGovde(BaseModel):
 
 @router.get("/takvim/ben")
 def ben(yil: int = Yil, ay: int = Query(ge=1, le=12), e: Erisim = Depends(kendi_erisim)):
-    return ok(servis.ay_oku(e.user, yil, ay))
+    return ok(servis.ay_oku(e.user.username, yil, ay))
 
 
 @router.put("/takvim/gun")
 def gun(body: Serbest, e: Erisim = Depends(kendi_erisim)):
-    return ok(servis.gun_kaydet(e.user, body.model_dump()))
+    return ok(servis.gun_kaydet(e.user.username, body.model_dump()))
 
 
 @router.put("/takvim/toplu")
 def toplu(body: Serbest, e: Erisim = Depends(kendi_erisim)):
-    sonuc = servis.toplu_kaydet(e.user, body.model_dump())
+    sonuc = servis.toplu_kaydet(e.user.username, body.model_dump())
     audit_log.remember(actor=e.user.username, action="takvim.toplu", outcome="allow", module_key="takvim", detail=f"gun={sonuc['atanan']}")
     return ok(sonuc)
 
@@ -64,7 +66,7 @@ def ekip(yil: int | None = Query(default=None, ge=2000, le=2100), ceyrek: int | 
 
 @router.get("/takvim/ekip/{uye_id:int}")
 def uye(uye_id: KimlikTipi, yil: int = Yil, ceyrek: int = Query(ge=0, le=4), e: Erisim = Depends(ekip_erisim), db: Session = Depends(get_db)):
-    return ok(servis.uye_gunleri(db, yil, ceyrek, uye_id))
+    return ok(servis.uye_gunleri(db, yil, ceyrek, uye_id, metinli=is_admin(e.user)))
 
 
 @router.post("/takvim/sunuma-gonder")

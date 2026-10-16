@@ -18,6 +18,7 @@ from app.gelir_uretim.models import RevenueBenefit, RevenueBenefitPerson
 from app.models import ApnRevenue, AppUser, CalendarDay, Customer, OnedeskRecord, Presentation, ProjectItem, Report, RoleView, SmsRevenue
 from app.ortak import rapor_donemi, simdi
 from app.sunum import servis, tanitim
+from app.takvim import kurum_takvimi
 from app.takvim.servis import bu_ceyrek, donem_araligi
 from tests.conftest import login_ok
 
@@ -34,6 +35,10 @@ def _geri(yil: int, ceyrek: int, adim: int) -> tuple[int, int]:
 
 @pytest.fixture
 def veri(client):
+    return sunum_verisi(client)
+
+
+def sunum_verisi(client):
     """admin (id 1) + ayse (id 2, TeamMember). Cati A (admin, skor 70), istirak A-ist, cati B (ayse, skor 50); bu ceyrekte birer kayit."""
     with Session(engine()) as db:
         db.add_all(
@@ -95,7 +100,7 @@ def _sunum_sayisi() -> int:
 def test_kaynak_listesi_ve_yalniz_yetkili_degistirir(veri, monkeypatch):
     hdr = login_ok(veri)
     liste = veri.get("/api/v1/sunum/kaynaklar").json()["data"]
-    assert liste["duzenleyebilir"] is True and not any(k["acik"] for k in liste["kaynaklar"])  # varsayilan: hicbiri akmaz
+    assert liste["duzenleyebilir"] is True and all(k["acik"] for k in liste["kaynaklar"])  # varsayilan: her modulun alani gorunur (2026-10-14)
     assert {k["id"] for k in liste["kaynaklar"]} == set(servis.KAYNAKLAR)
     assert all(k["ad_en"] and k["aciklama"] and k["aciklama_en"] and k["modul"] for k in liste["kaynaklar"])
     acik = _kaynak_sec(veri, hdr, ["rapor", "takvim", "rapor"])
@@ -120,10 +125,17 @@ def test_kaynak_listesi_ve_yalniz_yetkili_degistirir(veri, monkeypatch):
     _cikis(veri, hdr)
 
     hdr = _giris(veri, monkeypatch, "admin")
-    veri.put("/api/v1/roller/TeamMember", json={"modules": ["takvim"], "landing": "ozet"}, headers=hdr)  # sunum modulu kapali
+    veri.put("/api/v1/roller/TeamMember", json={"modules": ["takvim"], "landing": "ozet"}, headers=hdr)  # sunum modulu verilmedi
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")
     assert veri.get("/api/v1/sunum/donem").status_code == 403
+    # sunum modulu verilirse 200:
+    _cikis(veri, {"X-CSRF-Token": veri.cookies.get("tamlife_csrf")})
+    admin_hdr = login_ok(veri)
+    veri.put("/api/v1/roller/TeamMember", json={"modules": ["takvim", "sunum"], "landing": "ozet"}, headers=admin_hdr)
+    _cikis(veri, admin_hdr)
+    _giris(veri, monkeypatch, "TeamMember")
+    assert veri.get("/api/v1/sunum/donem").status_code == 200
 
 
 def test_bu_ceyrek_canli_hesaplanir_ve_saklanmaz(veri):
@@ -172,7 +184,7 @@ def test_gecmis_ceyrek_ilk_goruntulemede_dondurulur(veri, monkeypatch):
     assert [(o["kaynak"], o["durum"]) for o in d["ogeler"]] == [("portfoy", "yok"), ("takvim", "kayitli")]
     assert _sunum_sayisi() == 3
     g = _donem(veri, *gelecek)
-    assert g["zaman"] == "gelecek" and g["ogeler"] == [] and _sunum_sayisi() == 3
+    assert g["zaman"] == "gelecek" and [(o["kaynak"], o["durum"]) for o in g["ogeler"]] == [("portfoy", "yok"), ("takvim", "yok")] and _sunum_sayisi() == 3
 
     # yetkili 'Guncelle': yeniden dondurur (gonderen artik kisi); 'Kaldir' sonrasi isaretli kaynak bir sonraki goruntulemede yeniden donar
     r = veri.post("/api/v1/sunum/gonder", json={"kaynak": "portfoy", "yil": onceki[0], "ceyrek": onceki[1], "gonder": True}, headers=hdr)
@@ -183,16 +195,20 @@ def test_gecmis_ceyrek_ilk_goruntulemede_dondurulur(veri, monkeypatch):
     assert [o["durum"] for o in _donem(veri, *eski)["ogeler"]] == ["yok", "kayitli"]
 
 
-def test_isaretsiz_kaynak_elle_gonderilir_ve_kaldirilir(veri):
+def test_kaynak_elle_sabitlenir_kaldirilir_gizli_alan_gosterilmez(veri):
     hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, ["rapor"])
     govde = {"kaynak": "rapor", "yil": YIL, "ceyrek": CEYREK, "gonder": True}
     assert veri.post("/api/v1/sunum/gonder", json={**govde, "kaynak": "yok"}, headers=hdr).status_code == 404
     assert veri.post("/api/v1/sunum/gonder", json={**govde, "ceyrek": 0}, headers=hdr).status_code == 422
     assert veri.post("/api/v1/sunum/gonder", json=govde, headers=hdr).status_code == 200
     (oge,) = _donem(veri, YIL, CEYREK)["ogeler"]
     assert oge["kaynak"] == "rapor" and oge["durum"] == "kayitli" and oge["gonderen"] == "Admin Kisi"
+    _kaynak_sec(veri, hdr, [])  # sunumdan cikarilan alan sabitlenmis kaydi olsa da gosterilmez
+    assert _donem(veri, YIL, CEYREK)["ogeler"] == []
+    _kaynak_sec(veri, hdr, ["rapor"])
     veri.post("/api/v1/sunum/gonder", json={**govde, "gonder": False}, headers=hdr)
-    assert _donem(veri, YIL, CEYREK)["ogeler"] == [] and _sunum_sayisi() == 0
+    assert [o["durum"] for o in _donem(veri, YIL, CEYREK)["ogeler"]] == ["canli"] and _sunum_sayisi() == 0
 
 
 def test_bir_kaynagin_hatasi_digerlerini_dusurmez(veri, monkeypatch):
@@ -405,3 +421,72 @@ def test_gelir_faydasi_kaynagi_kisa_kart_ozeti_verir(veri):
     assert kpi["Work delivering benefit"] == 2 and kpi["Completed"] == 1 and kpi["Monthly revenue TRY"] == 50000 and kpi["In-year revenue"] == 120000
     assert [s[0] for s in v["tablo"]["satirlar"]] == ["Kampanya otomasyonu", "Rapor otomasyonu"] and v["tablo"]["satirlar"][0][1] == "Ayse Test"
     assert v["tablo"]["onizleme"] == {"adet": 3, "etiket": 0, "deger": 4} and v["tablo"]["sutunlar"][4]["ad_en"] == "Monthly revenue TRY"
+
+
+def test_her_modulun_sunumda_alani_var():
+    """Menude gorunen her panel modulu (hazir olmayan Baglantili Araclar dahil; Yonetim'in Rol Yonetimi'si veri modulu degil) en az bir sunum kaynagiyla temsil edilir."""
+    menude = {m.key for m in catalog.MODULES if m.in_nav and m.key != "roller"}
+    assert menude <= {k.modul for k in servis.KAYNAKLAR.values()}
+
+
+def test_duzen_sira_ve_gorunurluk(veri, monkeypatch):
+    hdr = login_ok(veri)
+    sira = ["portfoy", "takvim", *(k for k in servis.KAYNAKLAR if k not in {"portfoy", "takvim"})]
+    r = veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": ["takvim", "portfoy", "izin"], "sira": ["izin", "portfoy"]}, headers=hdr)
+    assert r.status_code == 200, r.text
+    liste = r.json()["data"]["kaynaklar"]
+    assert [k["id"] for k in liste][:2] == ["izin", "portfoy"] and len(liste) == len(servis.KAYNAKLAR)  # eksik verilen sira: kalanlar eski sirasiyla
+    assert [o["kaynak"] for o in _donem(veri, YIL, CEYREK)["ogeler"]] == ["izin", "portfoy", "takvim"]
+    assert veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": [], "sira": ["yok"]}, headers=hdr).status_code == 400
+    _kaynak_sec(veri, hdr, list(servis.KAYNAKLAR))
+    veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": list(servis.KAYNAKLAR), "sira": sira}, headers=hdr)
+    assert [o["kaynak"] for o in _donem(veri, YIL, CEYREK)["ogeler"]] == sira
+    _cikis(veri, hdr)
+    hdr = _giris(veri, monkeypatch, "TeamMember")  # gorur, duzenleyemez
+    assert [k["id"] for k in veri.get("/api/v1/sunum/kaynaklar").json()["data"]["kaynaklar"]] == sira
+    assert veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": [], "sira": sira}, headers=hdr).status_code == 403
+
+
+def test_onay_sunumu_sabitler_ve_kaldirilabilir(veri, monkeypatch):
+    hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, ["portfoy", "baglantili"])
+    govde = {"yil": YIL, "ceyrek": CEYREK, "onay": True}
+    r = veri.post("/api/v1/sunum/onay", json=govde, headers=hdr)
+    assert r.status_code == 200 and r.json()["data"]["onay"]["onaylayan"] == "Admin Kisi"
+    d = _donem(veri, YIL, CEYREK)
+    assert d["onay"]["onaylayan"] == "Admin Kisi" and [(o["kaynak"], o["durum"], o["gonderen"]) for o in d["ogeler"]] == [("portfoy", "kayitli", "Admin Kisi"), ("baglantili", "kayitli", "Admin Kisi")]
+    assert d["ogeler"][1]["veri"] == {"kpi": [], "tablo": {"sutunlar": [], "satirlar": []}}  # icerigi olmayan modulun alani da durur
+    # onayli sunum degismez: yeni veri, duzen degisikligi ve sabitleme onu etkilemez
+    with Session(engine()) as db:
+        db.add(Customer(id=4, external_key="t-c", name="Gama", segment="MA", owner_id=1))
+        db.commit()
+    _kaynak_sec(veri, hdr, ["onedesk"])
+    assert _donem(veri, YIL, CEYREK)["ogeler"] == d["ogeler"]
+    assert veri.post("/api/v1/sunum/gonder", json={"kaynak": "onedesk", "yil": YIL, "ceyrek": CEYREK, "gonder": True}, headers=hdr).status_code == 409
+    assert veri.post("/api/v1/takvim/sunuma-gonder", json={"yil": YIL, "ceyrek": CEYREK, "gonder": True}, headers=hdr).status_code == 409
+    assert veri.post("/api/v1/sunum/onay", json=govde, headers=hdr).status_code == 409
+    assert veri.post("/api/v1/sunum/onay", json={**govde, "yil": YIL + 1}, headers=hdr).status_code == 400  # baslamamis ceyrek
+    _cikis(veri, hdr)
+    hdr = _giris(veri, monkeypatch, "TeamMember")
+    assert veri.post("/api/v1/sunum/onay", json={**govde, "onay": False}, headers=hdr).status_code == 403
+    _cikis(veri, hdr)
+    hdr = _giris(veri, monkeypatch, "admin")
+    assert veri.post("/api/v1/sunum/onay", json={**govde, "onay": False}, headers=hdr).json()["data"]["onay"] is None
+    d = _donem(veri, YIL, CEYREK)
+    assert d["onay"] is None and [(o["kaynak"], o["durum"]) for o in d["ogeler"]] == [("onedesk", "canli")] and _sunum_sayisi() == 0
+
+
+def test_izin_kaynagi_metin_gondermez(veri, monkeypatch):
+    monkeypatch.setattr(kurum_takvimi, "KURUM_GUNLERI", {})  # yalniz kisinin kayitlari (kurum gunleri: test_kurum_takvimi.py)
+    bas, _ = donem_araligi(YIL, CEYREK)
+    with kullanici_oturumu("ayse") as k:
+        k.add(CalendarDay(day=bas, status="yillik_izin"))
+        k.add(CalendarDay(day=bas + timedelta(days=1), status="calisiyor", work_notes="Gizli is metni", meeting_notes="Gizli toplanti"))
+        k.commit()
+    hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, ["izin"])
+    (oge,) = _donem(veri, YIL, CEYREK)["ogeler"]
+    kpi = {k["ad_en"]: k["deger"] for k in oge["veri"]["kpi"]}
+    assert kpi["Leave days"] == 1 and kpi["Annual leave"] == 1 and kpi["Days with work notes"] == 1 and kpi["Days with meeting notes"] == 1
+    assert oge["veri"]["tablo"]["satirlar"] == [["Ayse Test", 1, 1, 0, 0, 1, 1]]
+    assert "Gizli" not in str(oge)

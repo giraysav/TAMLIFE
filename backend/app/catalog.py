@@ -32,7 +32,6 @@ class Module:
     kind: str
     title_en: str = ""  # arayuz dili English iken gosterilen ad
     admin_only: bool = False
-    personel_only: bool = False  # yalniz TeamMember kendi kaydini tutar; admin ve TeamMngr bu modulde yer almaz (2026-10-13)
     public: bool = False
     in_nav: bool = True
     permission: str | None = None
@@ -59,10 +58,10 @@ MODULES: tuple[Module, ...] = (
         table="customers",
     ),
     Module(
-        "takvim", "İzin&Takvim Yönetimi", "modul", title_en="Leave & Calendar Management", personel_only=True,
+        "takvim", "İzin&Takvim Yönetimi", "modul", title_en="Leave & Calendar Management",
         i18n="tab.takvim", card_id="dash-card-modul-takvim",
         box_id="mod_takvim", permission_group="modules",
-        note="kişinin kendi takvimi; yalnız TeamMember (yönetici ve admin takvim tutmaz)",
+        note="giriş yapan kişinin kendi takvimi: gün durumu, izin, toplantı, yapılan işler; başkasının verisi burada görünmez",
         registry_status="aktif", modal_id="mgmtTakvimModal",
         table="calendar_records",
     ),
@@ -144,14 +143,22 @@ MODULES: tuple[Module, ...] = (
         i18n="card.radar.title", card_id="dash-card-radar",
         box_id="card_radar", permission_group="dashboard_cards",
         registry_status="aktif", modal_id="radarModal",
-        table="radar_prospects",
     ),
     Module(
-        "baglantili", "Bağlantılı Araçlar", "kart", title_en="Connected Tools", ready=False,
+        "baglantili", "Bağlantılı Araçlar", "kart", title_en="Connected Tools",
         i18n="card.placeholder.title", card_id="dash-card-baglantili",
         box_id="card_baglantili", permission_group="dashboard_cards",
-        note="içerik henüz yok",
-        registry_status="stub",
+        note="temel içerik Müşteri Yönetimi ile aynı ekran ve veri; kendi tasarımı sonra",
+        registry_status="aktif",
+        table="customers",
+    ),
+    Module(
+        "toptan", "Toptan", "modul", title_en="Wholesale",
+        card_id="dash-card-modul-toptan",
+        box_id="mod_toptan", permission_group="modules",
+        note="temel içerik Müşteri Yönetimi ile aynı ekran ve veri; kendi geliştirmesi sonra",
+        registry_status="aktif",
+        table="customers",
     ),
     Module(
         "topoloji", "TopoMaker", "modul", title_en="TopoMaker", in_nav=False, permission="musteri",
@@ -176,6 +183,7 @@ HOME_ORDER: tuple[str, ...] = (
     "gelir_uretim",
     "takvim",
     "baglantili",
+    "toptan",
 )
 
 HOME_CARDS: tuple[Module, ...] = tuple(BY_KEY[key] for key in HOME_ORDER)

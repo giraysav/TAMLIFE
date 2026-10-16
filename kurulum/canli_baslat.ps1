@@ -10,6 +10,8 @@ param([switch]$Kontrol,
       [int]$Port = 8117,
       [string]$Alanlar = 'tamlife,tamlife.turkcell.entp.tgc,127.0.0.1,localhost')
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'calisma_kimligi.ps1')
+Tamlife-KimlikDogrula
 $Kok = Split-Path -Parent $PSScriptRoot
 $Backend = Join-Path $Kok 'backend'
 $Py = Join-Path $Kok '.venv\Scripts\python.exe'
@@ -54,4 +56,4 @@ Adim 'Veritabani semasi guncelleniyor (alembic upgrade head)'
 & $Py -m alembic upgrade head
 if ($LASTEXITCODE -ne 0) { Dur 'Sema guncellenemedi.' }
 Adim "Panel baslatiliyor: http://127.0.0.1:$Port (canli mod). Durdurmak: Ctrl+C"
-& $Py -m uvicorn app.main:app --host 127.0.0.1 --port $Port
+& $Py -m uvicorn app.main:app --host 127.0.0.1 --port $Port --no-proxy-headers

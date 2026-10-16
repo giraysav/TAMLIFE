@@ -1,7 +1,8 @@
-"""Rol gorunumleri: hangi rol hangi modul/alt modulu gorur ve hangi sayfayla acilir.
+"""Rol gorunumleri: rolun giris sayfasi ve eylem yetkileri.
 
-Admin her sey icin yetki verir (admin ekraninda Rol Yonetimi). Admin her zaman tum sayfalari gorur.
-Kayit yoksa varsayilan: butun moduller (TAM Utilizasyon ve Rol Yonetimi dahil), giris sayfasi 'ozet'.
+Kullanici karari (2026-10-14): Yonetim alani (admin_only) disindaki her modul her personel (TeamMember) ve
+yonetici (TeamMngr) tarafindan gorulur; rol kaydi modul gizlemez. Ekleme, degistirme ve silme yalniz admindedir
+(deps.require_veri_yazma, modullerin kendi uclari). Admin Rol Yonetimi'nde giris sayfasini ve ek yetkileri verir.
 Veritabani okunamazsa yonetici olmayan kullanici kapali kalir (yalniz genel bakis ve profil).
 """
 
@@ -71,7 +72,6 @@ class RolHata(UygulamaHatasi):
 class Gorunum:
     izinli: frozenset[str] | None  # None = hepsi (admin)
     landing: str
-    guvenli_kapali: bool = False
     yetkiler: frozenset[str] = frozenset()  # eylem yetkileri; admin icin hepsi
 
     def yetkili_mi(self, yetki: str) -> bool:
@@ -90,31 +90,23 @@ def tum_kimlikler(yonetici_dahil: bool = False) -> list[str]:
 
 
 def varsayilan_moduller() -> list[str]:
+    """Personel ve yoneticinin gordugu moduller: Yonetim alani disindaki hepsi (rol kaydindaki eski modul listesi yok sayilir)."""
     return tum_kimlikler()
-
-
-def _rol_icin(rol: str, kimlikler: list[str]) -> list[str]:
-    """personel_only moduller (kisisel takvim) yalniz TeamMember'a verilir; TeamMngr kaydinda varsa dusurulur."""
-    if rol == "TeamMember":
-        return kimlikler
-    kapali = {m.key for m in MODULES if m.personel_only}
-    return [k for k in kimlikler if k.split("/")[0] not in kapali]
 
 
 def etkin(db: Session, user: Principal) -> Gorunum:
     if is_admin(user):
         return Gorunum(None, GIRIS_VARSAYILAN, yetkiler=frozenset(YETKILER))
     if user.role not in DUZENLENEBILIR:
-        return Gorunum(frozenset(), GIRIS_VARSAYILAN, guvenli_kapali=True)
+        return Gorunum(frozenset(), GIRIS_VARSAYILAN)
     try:
         satir = db.scalar(select(RoleView).where(RoleView.role == user.role))
     except SQLAlchemyError:
-        return Gorunum(frozenset(), GIRIS_VARSAYILAN, guvenli_kapali=True)
-    moduller = list(satir.modules) if satir else varsayilan_moduller()
-    gecerli = set(tum_kimlikler())  # admin_only (Yonetim) kimlikleri eski kayitta olsa bile role acilmaz
+        return Gorunum(frozenset(), GIRIS_VARSAYILAN)
+    gecerli = set(tum_kimlikler())
+    moduller = list(satir.modules) if (satir and satir.modules is not None) else varsayilan_moduller()
     izinli = frozenset(k for k in moduller if k in gecerli)
-    landing = satir.landing if satir and (satir.landing == GIRIS_VARSAYILAN or satir.landing in izinli) else GIRIS_VARSAYILAN
-    return Gorunum(izinli, landing, yetkiler=_gecerli_yetkiler(satir.permissions if satir else []) | _kisi_yetkileri(db, user))
+    return Gorunum(izinli, GIRIS_VARSAYILAN, yetkiler=_gecerli_yetkiler(satir.permissions if satir else []) | _kisi_yetkileri(db, user))
 
 
 def _kisi_yetkileri(db: Session, user: Principal) -> frozenset[str]:
@@ -149,13 +141,14 @@ def gorunumler(db: Session) -> list[dict]:
     ]
     for rol in DUZENLENEBILIR:
         satir = kayitlar.get(rol)
+        mods = [k for k in satir.modules if k in evren] if (satir and satir.modules is not None) else varsayilan_moduller()
         cikti.append(
             {
                 "role": rol,
                 "label": ROL_ETIKET[rol],
                 "editable": True,
-                "modules": _rol_icin(rol, [k for k in satir.modules if k in evren] if satir else varsayilan_moduller()),
-                "landing": satir.landing if satir else GIRIS_VARSAYILAN,
+                "modules": mods,
+                "landing": GIRIS_VARSAYILAN,
                 "permissions": sorted(_gecerli_yetkiler(satir.permissions) if satir else []),
                 "saved": satir is not None,
             }
@@ -210,7 +203,6 @@ def katalog() -> list[dict]:
             "label": m.title,
             "label_en": m.title_en,
             "admin_only": m.admin_only,
-            "personel_only": m.personel_only,
             "children": [{"id": f"{m.key}/{c.key}", "label": c.title, "label_en": c.title_en} for c in m.children],
         }
         for m in MODULES
@@ -219,20 +211,24 @@ def katalog() -> list[dict]:
 
 
 def kaydet(db: Session, rol: str, moduller: object, landing: object, actor: str, yetkiler: object = None) -> dict:
-    """yetkiler=None: mevcut eylem yetkileri korunur (eski istemciler)."""
     if rol not in DUZENLENEBILIR:
         raise RolHata(404, "Rol duzenlenemez.")
-    if not isinstance(moduller, list) or not all(isinstance(x, str) for x in moduller) or len(moduller) > 500:
-        raise RolHata(400, "Modul listesi gecersiz.")
+    satir = db.scalar(select(RoleView).where(RoleView.role == rol))
     evren = set(tum_kimlikler())
-    if any(k not in evren for k in moduller):
-        raise RolHata(400, "Gecersiz modul.")  # admin_only (Yonetim) kimlikleri de buraya duser
-    temiz = _rol_icin(rol, sorted(set(moduller), key=tum_kimlikler().index))
-    if not isinstance(landing, str) or (landing != GIRIS_VARSAYILAN and landing not in temiz):
-        raise RolHata(400, "Giris sayfasi verilen modullerden biri olmali.")
+    if moduller is not None:
+        if not isinstance(moduller, list) or not all(isinstance(x, str) for x in moduller) or len(moduller) > 500:
+            raise RolHata(400, "Modul listesi gecersiz.")
+        temiz = sorted(set(k for k in moduller if k in evren), key=tum_kimlikler().index)
+    elif satir and satir.modules is not None:
+        temiz = [k for k in satir.modules if k in evren]
+    else:
+        temiz = varsayilan_moduller()
+
+    if landing is not None and not isinstance(landing, str):
+        raise RolHata(400, "Giris sayfasi gecersiz.")
+    landing = GIRIS_VARSAYILAN
     if yetkiler is not None and (not isinstance(yetkiler, list) or not all(isinstance(x, str) and x in YETKILER for x in yetkiler)):
         raise RolHata(400, "Yetki listesi gecersiz.")
-    satir = db.scalar(select(RoleView).where(RoleView.role == rol))
     zaman = datetime.now(UTC)
     if satir is None:
         satir = RoleView(role=rol, modules=temiz, landing=landing, permissions=sorted(set(yetkiler or [])), updated_by=actor[:120], updated_at=zaman)

@@ -128,7 +128,7 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
     sarmala(<RollerSayfasi dil="tr" />)
     const member = await screen.findByRole("button", { name: /Member/ })
     expect(member).toHaveAttribute("aria-expanded", "false")
-    expect(screen.queryByText("Göreceği sayfalar")).toBeNull()
+    expect(screen.queryByText(/^Göreceği sayfalar/)).toBeNull()
     expect(screen.queryByText("Giray Sav", { selector: "span.truncate.font-medium" })).toBeNull()
     // Baslik sayfa ve kisi sayisini kapali iken de gosterir.
     expect(within(member).getByText("2 kişi")).toBeInTheDocument()
@@ -137,7 +137,7 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
     fireEvent.click(member)
     expect(member).toHaveAttribute("aria-expanded", "true")
     const bolge = screen.getByRole("region", { name: /Member/ })
-    expect(within(bolge).getByText("Göreceği sayfalar")).toBeInTheDocument()
+    expect(within(bolge).getByText(/^Göreceği sayfalar/)).toBeInTheDocument()
     expect(within(bolge).getByText("Bu roldeki personel (2)")).toBeInTheDocument()
     expect(within(bolge).getByText("Giray Sav")).toBeInTheDocument()
     expect(within(bolge).getByText("gsav")).toBeInTheDocument() // AD kullanici adi

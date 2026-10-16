@@ -1,21 +1,21 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { CalendarRange, FileSpreadsheet, ListChecks, Plus, Search, SearchX, Timer, TrendingUp, Upload, Users, Wallet, X } from "lucide-react"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { BadgeCheck, CalendarRange, ListChecks, Plus, Search, SearchX, Timer, TrendingUp, Upload, Users, Wallet, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import { Alan, BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, Rozet, SayfaKabi } from "@/components/sayfa-ui"
+import { Alan, Bildirim, BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, Rozet, SayfaKabi } from "@/components/sayfa-ui"
 import { Skeleton } from "@/components/ui/skeleton"
 import { para, sayi } from "@/lib/bicim"
-import { apiYolu } from "@/lib/http"
 import { useGecikmeli } from "@/lib/kanca"
-import { oku, sorguMetni } from "@/lib/sorgu"
+import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
 import { Ayrinti } from "@/gelir-uretim/ayrinti"
-import { DURUMLAR, FAYDALAR, PARALAR, TURLER, gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
+import { DURUMLAR, FAYDALAR, ONAYLAR, PARALAR, TURLER, gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
 import type { Kayit, Liste, Para } from "@/gelir-uretim/gelir-uretim-metin"
 import { IceAktar } from "@/gelir-uretim/ice-aktar"
 import { KayitFormu } from "@/gelir-uretim/kayit-formu"
-import { ANAHTAR, DURUM_TON, FaydaRozeti, TABAN, kisilerMetni, saatMetni, tarihAraligi, tutarMetni } from "@/gelir-uretim/ortak"
+import { ANAHTAR, DURUM_TON, FaydaRozeti, ONAY_TON, TABAN, kisilerMetni, saatMetni, tarihAraligi, tutarMetni } from "@/gelir-uretim/ortak"
+import { RaporDugmeleri } from "@/gelir-uretim/rapor"
 import type { Metin } from "@/gelir-uretim/ortak"
 
 const SEMBOL: Record<Para, string> = { TRY: "₺", USD: "$", EUR: "€" }
@@ -78,7 +78,7 @@ function KpiSeridi({ v, dil }: { v: Liste["ozet"] | undefined; dil: Dil }) {
       />
       <Kpi sans etiket={t.kpiAylik} deger={v ? <ParaDegeri toplamlar={v.aylik_gelir} /> : "—"} ikon={Wallet} ton="yesil" alt={diger || undefined} />
       <Kpi sans etiket={t.kpiYilIci} deger={v ? (v.yil_ici_gelir > 0 ? <ParaDegeri toplamlar={{ TRY: v.yil_ici_gelir }} /> : "—") : "—"} ikon={CalendarRange} ton="sari" />
-      <Kpi sans etiket={t.kpiSaat} deger={v ? sayi(v.aylik_saat) : "—"} ikon={Timer} ton="amber" alt={t.saatAy} />
+      <Kpi sans etiket={t.kpiSaat} deger={v ? sayi(v.aylik_saat) : "—"} ikon={Timer} ton="amber" alt={v && v.yillik_saat > 0 ? `${t.saatAy} · ${t.kpiYilSaat(sayi(v.yillik_saat))}` : t.saatAy} />
     </div>
   )
 }
@@ -116,6 +116,7 @@ function Kart({ k, dil, onSec }: { k: Kayit; dil: Dil; onSec: () => void }) {
         <Rozet ton={k.kind === "inisiyatif" ? "sari" : "gri"}>{t.tur_[k.kind]}</Rozet>
         <Rozet ton={DURUM_TON[k.status]}>{t.durum_[k.status]}</Rozet>
         <FaydaRozeti fayda={k.benefit_type} dil={dil} />
+        {k.approval !== "onayli" ? <Rozet ton={ONAY_TON[k.approval]}>{t.onay_[k.approval]}</Rozet> : null}
       </span>
       <span className="break-words text-sm font-black leading-snug text-tl-navy">{k.title}</span>
       {k.customers ? <span className="line-clamp-2 break-words text-xs font-bold text-slate-500">{k.customers}</span> : null}
@@ -145,7 +146,39 @@ function Kart({ k, dil, onSec }: { k: Kayit; dil: Dil; onSec: () => void }) {
 
 type Form = { kayit: Kayit | null }
 
-/** Gelir Faydasi Saglanan Isler: KPI seridi, suzgecler, is kartlari, ayrinti cekmecesi. Admin: yeni/duzenle/sil ve Excel'den ice aktarma. */
+/** Modul sahibi secimi (yalniz admin): personelin yeni isleri bu kisinin onayina duser. */
+function SahipSecimi({ dil, sahipId }: { dil: Dil; sahipId: number | null }) {
+  const t = gelirUretimMetin(dil)
+  const qc = useQueryClient()
+  const adaylar = useQuery({ queryKey: [...ANAHTAR, "sahip"], queryFn: () => oku<{ adaylar: { id: number; ad: string }[] }>(`${TABAN}/sahip`) })
+  const kaydet = useMutation({
+    mutationFn: (id: number | null) => yaz("PUT", `${TABAN}/sahip`, { user_id: id }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ANAHTAR }),
+  })
+  return (
+    <Alan etiket={t.sahip} ipucu={kaydet.isError ? hataMesaji(kaydet.error, t.sahipKaydedilemedi) : t.sahipIpucu}>
+      <select
+        className={GIRDI}
+        aria-label={t.sahipAta}
+        value={sahipId ?? ""}
+        disabled={kaydet.isPending || adaylar.isPending}
+        onChange={(e) => kaydet.mutate(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">{t.sahipYok}</option>
+        {(adaylar.data?.adaylar ?? []).map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.ad}
+          </option>
+        ))}
+      </select>
+    </Alan>
+  )
+}
+
+/**
+ * Gelir Faydasi Saglanan Isler: KPI seridi, suzgecler, is kartlari, ayrinti cekmecesi, Excel/PDF rapor. Herkes yeni is girer (modul sahibinin
+ * onayina gider); sahip/admin onaylar, onayli kaydi duzenler/siler. Admin: modul sahibi ve Excel'den ice aktarma.
+ */
 export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = gelirUretimMetin(dil)
   const [arama, setArama] = useState("")
@@ -154,12 +187,13 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
   const [fayda, setFayda] = useState("")
   const [tam, setTam] = useState("")
   const [yil, setYil] = useState("")
+  const [onay, setOnay] = useState("")
   const [secili, setSecili] = useState<Kayit | null>(null)
   const [form, setForm] = useState<Form | null>(null)
   const [ice, setIce] = useState(false)
   const q = useGecikmeli(arama.trim())
 
-  const sorgu = { q, tur, durum, fayda, tam, yil }
+  const sorgu = { q, tur, durum, fayda, tam, yil, onay }
   const liste = useQuery({
     queryKey: [...ANAHTAR, sorgu],
     queryFn: () => oku<Liste>(`${TABAN}${sorguMetni(sorgu)}`),
@@ -167,7 +201,21 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
   })
   const veri = liste.data
   const admin = veri?.yazabilir ?? yazabilir
-  const filtreVar = Boolean(arama.trim() || tur || durum || fayda || tam || yil)
+  const yonetebilir = veri?.onay.yonetebilir ?? admin
+  const benim = veri?.onay.benim ?? null
+  const filtreVar = Boolean(arama.trim() || tur || durum || fayda || tam || yil || onay)
+  /** Duzenle/Sil: sahip/admin her kayitta; giren kisi kendi bekleyen ya da reddedilen kaydinda (sunucu da ayni kurali uygular). */
+  const yazabilirMi = (k: Kayit) => yonetebilir || (k.approval !== "onayli" && benim !== null && k.created_by_id === benim)
+  const filtreMetni = [
+    arama.trim() ? `“${arama.trim()}”` : "",
+    tur ? t.tur_[tur as keyof typeof t.tur_] : "",
+    durum ? t.durum_[durum as keyof typeof t.durum_] : "",
+    fayda ? t.fayda_[fayda as keyof typeof t.fayda_] : "",
+    tam ? (veri?.secenekler.personel.find((p) => String(p.id) === tam)?.ad ?? "") : "",
+    yil,
+  ]
+    .filter(Boolean)
+    .join(", ")
 
   function temizle() {
     setArama("")
@@ -176,28 +224,36 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
     setFayda("")
     setTam("")
     setYil("")
+    setOnay("")
   }
 
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={TrendingUp} baslik={t.baslik} aciklama={t.aciklama}>
+        <button type="button" className={DUGME_SARI} onClick={() => setForm({ kayit: null })}>
+          <Plus aria-hidden className="size-4" />
+          {t.yeniKayit}
+        </button>
         {admin ? (
-          <>
-            <button type="button" className={DUGME_SARI} onClick={() => setForm({ kayit: null })}>
-              <Plus aria-hidden className="size-4" />
-              {t.yeniKayit}
-            </button>
-            <button type="button" className={DUGME} onClick={() => setIce(true)}>
-              <Upload aria-hidden className="size-4" />
-              {t.excelIceAktar}
-            </button>
-          </>
+          <button type="button" className={DUGME} onClick={() => setIce(true)}>
+            <Upload aria-hidden className="size-4" />
+            {t.excelIceAktar}
+          </button>
         ) : null}
-        <a className={DUGME} href={apiYolu(`${TABAN}/excel`)} download>
-          <FileSpreadsheet aria-hidden className="size-4" />
-          {t.excelAktar}
-        </a>
+        <RaporDugmeleri dil={dil} suzgec={{ q, tur, durum, fayda, tam, yil }} filtreMetni={filtreMetni} kayitlar={veri?.items ?? []} ozet={veri?.ozet} />
       </SayfaKabi>
+
+      {veri && veri.onay.yonetebilir && veri.onay.bekleyen > 0 && onay !== "bekliyor" ? (
+        <Bildirim ton="amber">
+          <span className="flex flex-wrap items-center justify-between gap-2">
+            {t.bekleyenVar(veri.onay.bekleyen)}
+            <button type="button" className={DUGME} onClick={() => setOnay("bekliyor")}>
+              <BadgeCheck aria-hidden className="size-4" />
+              {t.bekleyenleriGoster}
+            </button>
+          </span>
+        </Bildirim>
+      ) : null}
 
       <KpiSeridi v={veri?.ozet} dil={dil} />
 
@@ -215,7 +271,7 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
             </button>
           ) : null}
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <Alan etiket={t.tur}>
             <select className={GIRDI} value={tur} onChange={(e) => setTur(e.target.value)}>
               <option value="">{t.tumTurler}</option>
@@ -266,7 +322,24 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
               ))}
             </select>
           </Alan>
+          <Alan etiket={t.onay}>
+            <select className={GIRDI} value={onay} onChange={(e) => setOnay(e.target.value)}>
+              <option value="">{t.tumOnaylar}</option>
+              {ONAYLAR.map((id) => (
+                <option key={id} value={id}>
+                  {t.onay_[id]}
+                </option>
+              ))}
+            </select>
+          </Alan>
         </div>
+        {admin ? (
+          <div className="grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+            <SahipSecimi dil={dil} sahipId={veri?.onay.sahip?.id ?? null} />
+          </div>
+        ) : veri?.onay.sahip ? (
+          <p className="text-xs font-bold text-slate-500">{`${t.sahip}: ${veri.onay.sahip.ad}`}</p>
+        ) : null}
         <p className="text-xs font-bold text-slate-400">
           {veri ? t.toplamKayit(veri.items.length) : ""}
           {yil ? ` · ${t.yilIpucu}` : ""}
@@ -299,7 +372,8 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
         <Ayrinti
           k={secili}
           dil={dil}
-          yazabilir={admin}
+          yazabilir={yazabilirMi(secili)}
+          yonetebilir={yonetebilir}
           onKapat={() => setSecili(null)}
           onDuzenle={() => {
             setForm({ kayit: secili })
@@ -307,7 +381,7 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
           }}
         />
       ) : null}
-      {admin && form ? <KayitFormu dil={dil} kayit={form.kayit} personel={veri?.secenekler.personel ?? []} onKapat={() => setForm(null)} /> : null}
+      {form ? <KayitFormu dil={dil} kayit={form.kayit} personel={veri?.secenekler.personel ?? []} yonetebilir={yonetebilir} onKapat={() => setForm(null)} /> : null}
       {admin && ice ? <IceAktar dil={dil} onKapat={() => setIce(false)} /> : null}
     </div>
   )

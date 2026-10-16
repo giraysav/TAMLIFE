@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base
@@ -33,6 +33,8 @@ class RevenueBenefit(Base):
     year_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)  # "yil ici gelir" (TL)
     hours_per_month: Mapped[float | None] = mapped_column(Float, nullable=True)  # saat efor kazanci / ay
     hours_note: Mapped[str] = mapped_column(String(500), default="")
+    hours_per_year: Mapped[float | None] = mapped_column(Float, nullable=True)  # saat efor kazanci / 12 ay
+    roadmap: Mapped[str] = mapped_column(Text, default="", server_default="")  # "Yol Haritasi" (en fazla 4000)
     extra_note: Mapped[str] = mapped_column(Text, default="")  # "Ek aciklamalar" (en fazla 4000)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -41,6 +43,13 @@ class RevenueBenefit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_by: Mapped[str] = mapped_column(String(200), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Onay akisi (2026-10-15): yeni giris 'bekliyor' olur, modul sahibi ya da admin 'onayli' / 'reddedildi' yapar.
+    # Yalniz onayli isler toplamlara, rapora ve ceyrek sunumuna girer. Akistan onceki kayitlar ve Excel ice aktarma onaylidir.
+    approval: Mapped[str] = mapped_column(String(20), default="onayli", server_default="onayli")  # bekliyor | onayli | reddedildi
+    approval_note: Mapped[str] = mapped_column(Text, default="", server_default="")  # ret gerekcesi
+    approved_by: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # girisi yapan hesap (bekleyen kaydi gorur/duzeltir)
 
 
 class RevenueBenefitPerson(Base):

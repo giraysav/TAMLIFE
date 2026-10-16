@@ -35,7 +35,7 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {t.donem}: {String(durum.ay).padStart(2, "0")}.{durum.yil}
+            {t.donem}: {t.aylar[durum.ay - 1]} / {durum.yil}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -88,7 +88,7 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
             {liste.map((g) => (
               <li key={g.id} className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-0">
                 <span className="tabular-nums">
-                  {String(g.ay).padStart(2, "0")}.{g.yil}
+                  {t.aylar[g.ay - 1]} / {g.yil}
                 </span>
                 <a className="font-medium underline-offset-4 hover:underline" href={`#/musteri?m=${g.customer_id}`}>
                   {g.musteri}

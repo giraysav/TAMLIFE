@@ -19,6 +19,7 @@ async def genel_istisna(request: Request, exc: Exception) -> JSONResponse:
             exc=exc,
             kaynak=f"{request.method} {request.url.path}",
             kullanici=kullanici.username if kullanici else "",
+            arka_plan=kod == "TL-DB-02",  # DB kilitli: satir kilit kalkinca yazilir, 503 hemen doner
         )
     )
     return JSONResponse(

@@ -106,16 +106,16 @@ def _giris(client, kullanici, parola):
 
 
 def test_ilk_giriste_ad_kullanicisi_teammember_acilir_rol_db_den(client, sahte_ad):
-    r = _giris(client, "ayse.kaya", "Dogru-Parola-1")
+    r = _giris(client, "tcakaya", "Dogru-Parola-1")
     assert r.status_code == 200 and r.json()["data"]["role"] == "TeamMember"
     with Session(engine()) as db:
-        u = kullanicilar.bul(db, "ayse.kaya")
-        assert u.is_ad_user and u.ad_domain == "ornek.local" and u.display_name == "Ayse Kaya" and not u.is_admin and u.last_login_at is not None
+        u = kullanicilar.bul(db, "tcakaya")
+        assert u.is_ad_user and u.ad_domain == "ornek.local" and u.display_name == "Tcakaya" and not u.is_admin and u.last_login_at is not None
         u.role = "TeamMngr"  # rol yalniz panel DB'sinden
         db.commit()
     client.post("/api/v1/session/logout", headers={"X-CSRF-Token": client.cookies.get("tamlife_csrf") or ""})
-    assert _giris(client, "AYSE.KAYA", "yanlis").status_code == 401
-    r = _giris(client, "Ayse.Kaya", "Dogru-Parola-1")
+    assert _giris(client, "TCAKAYA", "yanlis").status_code == 401
+    r = _giris(client, "TcAkaya", "Dogru-Parola-1")
     assert r.status_code == 200 and client.get("/api/v1/session/me").json()["data"]["role"] == "TeamMngr"
 
 
@@ -126,7 +126,12 @@ def test_pasif_ve_otomatik_acma_kapali(client, sahte_ad, monkeypatch):
     once = sahte_ad["bind"]
     assert _giris(client, "pasif.kisi", "Dogru-Parola-1").status_code == 401
     assert sahte_ad["bind"] == once  # pasif kisi icin AD'ye gidilmez
+    # 2026-10-15: yalniz tc/ng/te ile baslayan kullanici adlarina hesap acilir (AD dogrulasa da)
+    assert _giris(client, "yeni.kisi", "Dogru-Parola-1").status_code == 401
+    with Session(engine()) as db:
+        assert kullanicilar.bul(db, "yeni.kisi") is None
     monkeypatch.setenv("AD_OTOMATIK_AC", "false")
+    assert _giris(client, "tcyeni", "Dogru-Parola-1").status_code == 401
     assert _giris(client, "yeni.kisi", "Dogru-Parola-1").status_code == 401
     with Session(engine()) as db:
         assert kullanicilar.bul(db, "yeni.kisi") is None

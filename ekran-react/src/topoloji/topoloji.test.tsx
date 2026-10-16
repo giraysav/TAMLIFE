@@ -10,14 +10,15 @@ afterEach(() => {
 })
 
 const d = (id: string, tur: Dugum["tur"], lokasyon = "Merkez", etiket = ""): Dugum => ({ id, tur, etiket, lokasyon, il: "İstanbul" })
-const k = (kaynak: string, hedef: string, altyapi = "SOL Fiber", yedek = false): Kenar => ({ kaynak, hedef, altyapi, etiket: "", yedek, renk: "#1A6FA6" })
+let kenarNo = 0
+const k = (kaynak: string, hedef: string, altyapi = "SOL Fiber", yedek = false): Kenar => ({ id: `K${++kenarNo}`, kaynak, hedef, altyapi, etiket: "", yedek, devre: `D${kenarNo}`, renk: "#1A6FA6" })
 
 const DUGUMLER = [d("ISP_CLOUD", "bulut"), d("R1", "router", "Merkez", "192.168.1.1"), d("SW1", "switch", "Merkez", "10.0.0.1"), d("SW2", "switch"), d("R2", "router"), d("R3", "router", "Şube")]
 const KENARLAR = [k("ISP_CLOUD", "SW1"), k("SW1", "R1", "LAN"), k("ISP_CLOUD", "SW2", "TT Fiber"), k("SW2", "R1", "LAN"), k("ISP_CLOUD", "R2", "4.5G", true), k("ISP_CLOUD", "R3", "xDSL", true)]
 
 const ANALIZ: Analiz = {
   spof: true,
-  spof_noktalari: [{ lokasyon: "Merkez", bb: "ist-bb-01", altyapilar: ["SOL Fiber", "TT Fiber"] }],
+  spof_noktalari: [{ lokasyon: "Merkez", bb: "ist-bb-01", altyapilar: ["SOL Fiber", "TT Fiber"], neden: "ortak_bb", devreler: ["D1", "D2"] }],
   dugumler: DUGUMLER,
   kenarlar: KENARLAR,
   sehirler: [{ il: "İSTANBUL", adet: 5, enlem: 41.0082, boylam: 28.9784 }],
@@ -25,6 +26,8 @@ const ANALIZ: Analiz = {
   kolonlar: { loc: "Lokasyon_Adi", il: "Il" },
   satir: 6,
   lokasyon: 2,
+  degerlendirme: "riskli",
+  uyarilar: [],
   renkler: { "SOL Fiber": "#1A6FA6", "TT Fiber": "#B03A2E", "4.5G": "#6C3483", xDSL: "#E67E22", LAN: "#7F8C8D" },
 }
 
@@ -43,24 +46,24 @@ describe("TopoMaker yerlesimi", () => {
 
 describe("TopoMaker ekrani", () => {
   it("dosya secilmeden uyarir; analizde SPoF, sayilar, cizim ve harita sekmesi", async () => {
-    const fetchSahte = vi.fn(async (_yol: RequestInfo | URL, _ayar?: RequestInit) => new Response(JSON.stringify({ status: "success", data: ANALIZ }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    const fetchSahte = vi.fn(async (yol: RequestInfo | URL, _ayar?: RequestInit) => new Response(JSON.stringify({ status: "success", data: String(yol).includes("/musteri/7") ? { kimlik: { unvan: "Test Müşteri" } } : ANALIZ }), { status: 200, headers: { "Content-Type": "application/json" } }))
     vi.stubGlobal("fetch", fetchSahte)
     const { container } = render(
       <QueryClientProvider client={new QueryClient()}>
-        <TopoMaker dil="tr" />
+        <TopoMaker dil="tr" musteriId={7} />
       </QueryClientProvider>,
     )
     expect(screen.getByText("Envanter Yüklenmesi Bekleniyor")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: /Analizi Başlat/ }))
     expect(screen.getByText(/Önce bir CSV veya XLSX/)).toBeInTheDocument()
-    expect(fetchSahte).not.toHaveBeenCalled()
+    expect(fetchSahte.mock.calls.filter((c) => String(c[0]).includes("/topoloji/"))).toHaveLength(0)
 
     const girdi = container.querySelector("input[type=file]") as HTMLInputElement
     fireEvent.change(girdi, { target: { files: [new File(["a;b"], "envanter.csv", { type: "text/csv" })] } })
     fireEvent.click(screen.getByRole("button", { name: /Analizi Başlat/ }))
     expect(await screen.findByText(/TEKİL HATA NOKTASI/)).toBeInTheDocument()
-    expect(String(fetchSahte.mock.calls[0][0])).toContain("/api/v1/topoloji/analiz?dosya=envanter.csv")
-    expect(screen.getByText("Merkez: ist-bb-01 (SOL Fiber + TT Fiber)")).toBeInTheDocument()
+    expect(fetchSahte.mock.calls.some((c) => String(c[0]).includes("/api/v1/topoloji/analiz?musteri=7&dosya=envanter.csv"))).toBe(true)
+    expect(screen.getByText(/Merkez: ortak BB router/)).toBeInTheDocument()
     expect(container.querySelectorAll("[data-tur=switch]")).toHaveLength(2)
     expect(container.querySelectorAll("[data-tur=router]")).toHaveLength(3)
     expect(container.querySelectorAll("path[stroke-dasharray]")).toHaveLength(2) // iki yedek devre
@@ -72,10 +75,12 @@ describe("TopoMaker ekrani", () => {
   })
 
   it("sunucu hatasi mesaji gosterilir", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "Lokasyon kolonu bulunamadı." }), { status: 400, headers: { "Content-Type": "application/json" } })))
+    vi.stubGlobal("fetch", vi.fn(async (yol: RequestInfo | URL) => String(yol).includes("/musteri/7")
+      ? new Response(JSON.stringify({ status: "success", data: { kimlik: { unvan: "Test Müşteri" } } }), { status: 200, headers: { "Content-Type": "application/json" } })
+      : new Response(JSON.stringify({ detail: "Lokasyon kolonu bulunamadı." }), { status: 400, headers: { "Content-Type": "application/json" } })))
     const { container } = render(
       <QueryClientProvider client={new QueryClient()}>
-        <TopoMaker dil="tr" />
+        <TopoMaker dil="tr" musteriId={7} />
       </QueryClientProvider>,
     )
     fireEvent.change(container.querySelector("input[type=file]") as HTMLInputElement, { target: { files: [new File(["x"], "a.xlsx")] } })

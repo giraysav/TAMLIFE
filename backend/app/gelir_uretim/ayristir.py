@@ -271,6 +271,40 @@ def saat_ayristir(deger: object) -> Saat:
     return Saat(saat=float(taban), ek=_kirp(_artik(metin, aralik)))
 
 
+def yillik_saat_ayristir(deger: object) -> Saat:
+    """"Yillik verimlilik faydasi (saat efor kazanci/12 ay)": "432 saat", "432 saat/yil", "432 saat / 12 ay" -> 432. Sayi hucresi oldugu gibi.
+    Aylik (/ay) ya da tek seferlik yazilmis, para birimli ya da saatsiz metin ayristirilmaz (nota gider)."""
+    if deger is None or (isinstance(deger, str) and not deger.strip()):
+        return Saat()
+    if _sayisal_mi(deger):
+        sayi = Decimal(str(deger))
+        return Saat(saat=float(sayi)) if sayi >= 0 else Saat(ek=_kirp(str(deger)), neden="sayi_belirsiz")
+    metin = _temiz(deger)
+    if not re.search(r"[^\W_]", metin):
+        return Saat()
+    kat = katla(metin)
+    on_iki = re.search(r"(?<![\d.,])12\s*ay(?![a-z])", kat)
+    if on_iki:
+        kat = _bosalt(kat, on_iki.span())
+    jetonlar = list(_SAYI_JETONU.finditer(kat))
+    if not jetonlar:
+        return Saat(ek=_kirp(metin), neden="sayi_yok")
+    if len(jetonlar) > 1:
+        return Saat(ek=_kirp(metin), neden="coklu")
+    saat_bulundu = _SAAT_DESENI.search(kat)
+    para_var = any(d.search(kat) for _, d in _PARA_DESENLERI) or _CARPAN_DESENI.match(kat, jetonlar[0].end()) is not None
+    if not saat_bulundu or para_var:
+        return Saat(ek=_kirp(metin), neden="birim")
+    taban = sayi_degeri(jetonlar[0].group())
+    if taban is None:
+        return Saat(ek=_kirp(metin), neden="sayi_belirsiz")
+    if {kod for kod, d in _DONEM_DESENLERI if d.search(kat)} - {"yil"}:
+        return Saat(ek=_kirp(metin), neden="donem_yok")
+    aralik = [jetonlar[0].span(), saat_bulundu.span(), *([on_iki.span()] if on_iki else [])]
+    aralik += [b.span() for _, d in _DONEM_DESENLERI for b in d.finditer(kat)]
+    return Saat(saat=float(taban), ek=_kirp(_artik(metin, aralik)))
+
+
 # --- yil ici gelir (K sutunu) --------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class YilIci:
@@ -442,6 +476,8 @@ def kisi_bol(metin: object) -> list[str]:
 # --- baslik haritasi -----------------------------------------------------------------------------------------------
 # Sira onemlidir: "Ek açıklamalar" 'aciklama'dan, "yıl içi gelir" 'gelir'den once yakalanir.
 _BASLIK_KURALLARI = (
+    ("yol", re.compile(r"yol harita|roadmap")),
+    ("yillik_saat", re.compile(r"yillik verimlilik|yillik efor|yearly effort|yearly efficiency")),
     ("baslangic", re.compile(r"baslangic|start")),
     ("bitis", re.compile(r"bitis|(?<![a-z])end(?![a-z])")),
     ("yil_ici", re.compile(r"yil ici|yillik gelir|year revenue")),

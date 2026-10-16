@@ -9,11 +9,15 @@
 # olmadan gorev Oracle'a baglanmaz, hicbir sey yazmaz (cikis 1). Gunluk: backend\var\logs\isci.log (ya da TAMLIFE_LOG_DIR).
 param([switch]$Kaldir,
       [switch]$Kuru,
-      [string]$Kullanici = 'TURKCELL\ladinadmin',
+      [string]$Kullanici = '',
       [int]$Dakika = 6,
       [string]$Istemci = 'E:\oracle\instantclient_19_32',
       [string]$Ad = 'TAM_Life_v35_ReportDB_6dk')
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'calisma_kimligi.ps1')
+Tamlife-KimlikDogrula
+if (-not $Kullanici) { $Kullanici = $TamlifeCalismaHesabi }
+if ($Kullanici -ine $TamlifeCalismaHesabi) { throw "Gorev hesabi $TamlifeCalismaHesabi olmali." }
 $Kok = Split-Path -Parent $PSScriptRoot
 $Backend = Join-Path $Kok 'backend'
 $Py = Join-Path $Kok '.venv\Scripts\python.exe'
@@ -55,16 +59,13 @@ if (-not ([Security.Principal.WindowsPrincipal]$kimlik).IsInRole([Security.Princ
 }
 if ($Dakika -lt 2 -or $Dakika -gt 60) { Dur "Dakika 2 ile 60 arasinda olmali" }
 
-Adim "$Kullanici icin parola isteniyor (gorev kaydina yazilir; dosyaya yazilmaz)"
-$sifre = Read-Host "$Kullanici parolasi" -AsSecureString
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sifre)
-try { $duz = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+$gorevBilgi = Tamlife-GorevKimlikBilgisi
 $eylem = New-ScheduledTaskAction -Execute $Py -Argument ('-m app.isci reportdb --client "{0}"' -f $Istemci) -WorkingDirectory $Backend
 $tetik = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(3) -RepetitionInterval (New-TimeSpan -Minutes $Dakika)
 $ayar = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 try {
-    Register-ScheduledTask -TaskName $Ad -Action $eylem -Trigger $tetik -Settings $ayar -User $Kullanici -Password $duz -RunLevel Highest -Force | Out-Null
-} finally { $duz = $null }
+    Register-ScheduledTask -TaskName $Ad -Action $eylem -Trigger $tetik -Settings $ayar -User $TamlifeCalismaHesabi -Password ($gorevBilgi.GetNetworkCredential().Password) -RunLevel Highest -Force | Out-Null
+} finally { $gorevBilgi = $null }
 Adim "Gorev kuruldu: $Ad (her $Dakika dk; ilk calisma ~3 dk sonra)"
 Write-Host "Hemen denemek icin:  Start-ScheduledTask -TaskName $Ad ; Start-Sleep 30 ; Get-ScheduledTaskInfo -TaskName $Ad ; Get-Content $Backend\var\logs\isci.log -Tail 3" -ForegroundColor Green
 Write-Host "Cikis kodu: 0 basarili | 1 hata | 2 onceki calisma suruyor (atlandi)" -ForegroundColor Green

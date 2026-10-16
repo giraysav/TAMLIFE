@@ -18,7 +18,7 @@ from app.db import get_db, oturum
 from app.deps import require_admin
 from app.dil import m
 from app.models import IngestBatch
-from app.ortak import KimlikTipi, UygulamaHatasi, iso, ok, sayfa_bilgisi
+from app.ortak import KimlikTipi, UygulamaHatasi, govde_oku, iso, ok, sayfa_bilgisi
 from app.session import Principal
 from app.tampon import analiz, dagitim, depo, kaynak, musteri_aktar, musteri_ham, oracle
 
@@ -131,23 +131,6 @@ def _yukle(veri: bytes, kaynak_adi: str, dosya: str, kullanici: str) -> dict[str
         return _parti_satiri(parti)
 
 
-async def _govde_oku(request: Request) -> bytes:
-    """Ham dosya govdesi; boyut siniri akis sirasinda uygulanir."""
-    sinir = get_settings().ingest_max_mb * 1024 * 1024
-    mesaj = m(f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).", f"File too large (max {get_settings().ingest_max_mb} MB).")
-    bildirilen = request.headers.get("content-length", "")
-    if bildirilen.isdigit() and int(bildirilen) > sinir:
-        raise HTTPException(status_code=413, detail=mesaj)
-    parcalar: list[bytes] = []
-    boyut = 0
-    async for parca in request.stream():
-        boyut += len(parca)
-        if boyut > sinir:
-            raise HTTPException(status_code=413, detail=mesaj)
-        parcalar.append(parca)
-    return b"".join(parcalar)
-
-
 # --- Ham Musteri Verisi (Kaynaklar'daki dosya yuklemesi) -------------------------------------------------------------
 def _ham_yukle(veri: bytes, dosya: str, kullanici: str) -> dict[str, Any]:
     tablo = musteri_ham.dosya_oku(veri, dosya)
@@ -170,7 +153,7 @@ async def ham_yukle(
     request: Request, dosya: str = Query(default="", max_length=200), admin: Principal = Depends(require_admin)
 ) -> dict[str, Any]:
     """Ham Musteri Verisi (.xlsx / .csv): sayfa ve baslik satiri kendiliginden bulunur, parti olarak tampona alinir."""
-    sonuc = await run_in_threadpool(_ham_yukle, await _govde_oku(request), dosya, admin.username)
+    sonuc = await run_in_threadpool(_ham_yukle, await govde_oku(request, get_settings().ingest_max_mb * 1048576), dosya, admin.username)
     _denetim(admin, "tampon.musteri_ham_yukle", f"parti={sonuc['id']} satir={sonuc['satir']} durum={sonuc['durum']}")
     return ok(sonuc)
 
@@ -228,7 +211,7 @@ async def yukle(
     admin: Principal = Depends(require_admin),
 ) -> dict[str, Any]:
     """Genel CSV yuklemesi (API; arayuzde yerini Ham Musteri Verisi aldi). Cok parcali form yok: yeni bagimlilik gerektirmez."""
-    sonuc = await run_in_threadpool(_yukle, await _govde_oku(request), kaynak_adi, dosya, admin.username)
+    sonuc = await run_in_threadpool(_yukle, await govde_oku(request, get_settings().ingest_max_mb * 1048576), kaynak_adi, dosya, admin.username)
     _denetim(admin, "tampon.yukle", f"parti={sonuc['id']} kaynak={sonuc['kaynak']} satir={sonuc['satir']} durum={sonuc['durum']}")
     return ok(sonuc)
 

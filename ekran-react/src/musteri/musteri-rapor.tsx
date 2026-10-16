@@ -6,10 +6,12 @@ import { Rozet } from "@/components/sayfa-ui"
 import type { Kart } from "@/musteri/musteri-karti"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
+import { useMusteriYolu } from "@/musteri/musteri-yolu"
 
 /** Aylik rapor sayfasi (#/musteri?m=<id>&sekme=rapor): ustte musteri kimligi ve karta donus baglantisi. */
 export function MusteriRapor({ id, dil }: { id: number; dil: Dil }) {
   const t = musteriMetin(dil)
+  const yol = useMusteriYolu()
   const q = useQuery({ queryKey: ["musteri", "kart", id], queryFn: () => oku<Kart>(`/api/v1/musteri/${id}`) })
   const kart = q.data
 
@@ -31,7 +33,7 @@ export function MusteriRapor({ id, dil }: { id: number; dil: Dil }) {
         </div>
         {kart.kimlik.segment ? <Rozet ton="sari">{kart.kimlik.segment}</Rozet> : null}
         <a
-          href={`#/musteri?m=${id}`}
+          href={`#/${yol}?m=${id}`}
           className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-xs font-bold hover:bg-white/20 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
         >
           <ArrowLeft aria-hidden className="size-3.5" />

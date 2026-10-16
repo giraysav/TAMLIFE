@@ -23,6 +23,7 @@ PRESENTATION: dict[str, tuple[str, str, str, str]] = {
     "sunum": ("insights", "presentation", "Çeyrek bazlı sunumları hazırlayın", "Prepare quarterly presentations"),
     "radar": ("insights", "radar", "Müşteri fırsatları ve takip kayıtları", "Customer opportunities and follow-ups"),
     "baglantili": ("work", "link", "Kurum içi bağlantılı araçlar", "Internal connected tools"),
+    "toptan": ("work", "store", "Toptan müşteriler", "Wholesale customers"),
 }
 
 # Yalnız admin: TEK giriş, sekiz bölüm (kimlik "yonetim/<bolum>"). Eski admin / integrations / veri / roller girişleri buraya indi.

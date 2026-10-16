@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
+from itertools import islice
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -23,12 +24,22 @@ UI_CSP = (
 
 
 class LoginLimiter:
-    """Counts failures per (ip, username) and per ip. Locks for lockout_seconds."""
+    """Counts failures per (ip, username) and per ip. Locks for lockout_seconds.
+
+    Budama amortize: esik her budamadan sonra kalan anahtar sayisinin iki katina cikar (ya da pencere dolunca bir kez),
+    boylece her deneme O(1) kalir. Eskiden esik ustunde her deneme tum sozlugu yeniden kuruyordu: 20 bin sahte IP 184 sn CPU,
+    karesel (tests/test_yuk_sinirlayici.py). SERT_SINIR bellek tavanidir; asilirsa en eski sayaclar atilir, kilitler atilmaz.
+    """
+
+    AZAMI_ANAHTAR = 5000
+    SERT_SINIR = 200_000
 
     def __init__(self) -> None:
         self._fails: dict[str, deque[float]] = {}
         self._locked: dict[str, float] = {}
         self._lock = threading.Lock()
+        self._esik = self.AZAMI_ANAHTAR
+        self._son_buda = time.monotonic()
 
     @staticmethod
     def _keys(ip: str, username: str) -> tuple[str, str]:
@@ -45,7 +56,7 @@ class LoginLimiter:
         now = time.monotonic()
         with self._lock:
             for key in self._keys(ip, username):
-                limit = settings.login_max_attempts * (4 if key.startswith("i:") else 1)
+                limit = settings.login_max_attempts * (settings.login_ip_carpani if key.startswith("i:") else 1)
                 window = self._fails.setdefault(key, deque())
                 window.append(now)
                 while window and now - window[0] > settings.login_window_seconds:
@@ -53,8 +64,18 @@ class LoginLimiter:
                 if len(window) >= limit:
                     self._locked[key] = now + settings.login_lockout_seconds
                     window.clear()
-            if len(self._fails) > 5000:
-                self._fails.clear()
+            boy = len(self._fails) + len(self._locked)
+            if boy > self._esik or (boy > self.AZAMI_ANAHTAR and now - self._son_buda > settings.login_window_seconds):
+                self._buda(now, settings.login_window_seconds)
+
+    def _buda(self, now: float, pencere: float) -> None:
+        """Yalniz suresi gecmis kayitlar atilir: toplu temizlik kilidi acmasin, sozluk sinirsiz buyumesin."""
+        self._fails = {k: w for k, w in self._fails.items() if w and now - w[-1] <= pencere}
+        self._locked = {k: t for k, t in self._locked.items() if t > now}
+        if len(self._fails) > self.SERT_SINIR:  # sozluk ekleme sirasi ~ ilk deneme zamani: en eskiler atilir
+            self._fails = dict(islice(self._fails.items(), len(self._fails) - self.SERT_SINIR // 2, None))
+        self._esik = max(self.AZAMI_ANAHTAR, 2 * (len(self._fails) + len(self._locked)))
+        self._son_buda = now
 
     def succeeded(self, ip: str, username: str) -> None:
         with self._lock:
@@ -66,18 +87,23 @@ class LoginLimiter:
         with self._lock:
             self._fails.clear()
             self._locked.clear()
+            self._esik = self.AZAMI_ANAHTAR
 
 
 limiter = LoginLimiter()
 
 
 def client_ip(request: Request) -> str:
-    """Gercek istemci IP'si. X-Forwarded-For yalniz guvenilir proxy'den gelirse okunur."""
+    """Gercek istemci IP'si. X-Forwarded-For yalniz guvenilir proxy'den gelirse sagdan ilk guvenilmeyen adres alinir (istemcinin
+    basa yazdigi sahte adres secilmez)."""
     peer = request.client.host if request.client else "-"
-    if peer in get_settings().trusted_proxies_list:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        if forwarded:
-            return forwarded
+    guvenilir = get_settings().trusted_proxies_list
+    if peer not in guvenilir:
+        return peer
+    for adres in reversed(request.headers.get("x-forwarded-for", "").split(",")):
+        adres = adres.strip()
+        if adres and adres not in guvenilir:
+            return adres
     return peer
 
 

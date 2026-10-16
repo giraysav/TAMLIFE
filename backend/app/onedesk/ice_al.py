@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.models import Customer, IngestBatch, OnedeskRecord
 from app.onedesk.servis import TURLER, OnedeskHata
 from app.ortak import eslestirme_anahtari, normal, simdi
-from app.tampon import depo
+from app.tampon import depo, reportdb
 from app.tampon.eslestirme import musteri_anahtarlari
 
 EN_COK_SATIR = 200_000
@@ -123,6 +123,12 @@ def sayaclari_yenile(db: Session, musteri_idleri: set[int]) -> None:
         )
 
 
+def aktarilabilir_mi(parti: IngestBatch) -> bool:
+    """ReportDB musteri OZETI (satir = musteri, kayit degil) ve eski panelden alinan tampon Onedesk'e kayit olarak aktarilmaz:
+    2026-10-14'te 8.441 satirlik ozet aktarilip kayit numarasiz 8.441 sahte kayit olusmustu (temizlik: python -m app.gecmis_temizle)."""
+    return parti.source_key != reportdb.KAYNAK and parti.created_by != "eski_aktar"
+
+
 def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None, *, kaynak: str = "import", sayac_yenile: bool = True) -> dict:
     """Hazir partiyi Onedesk kaydi olarak aktarir. varsayilan_tur: kaynakta tur sutunu yoksa tum satirlarin turu; kaynak: kayit source."""
     parti = db.get(IngestBatch, parti_id)
@@ -130,6 +136,8 @@ def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None, *
         raise OnedeskHata(404, "Parti bulunamadı.")
     if parti.status != "ready":
         raise OnedeskHata(409, "Yalnız hazır (kabul edilmiş) parti aktarılabilir.")
+    if not aktarilabilir_mi(parti):
+        raise OnedeskHata(400, "Bu parti müşteri bazında alarm özeti ya da eski panel tamponu; Onedesk kaydı değildir.")
     if varsayilan_tur is not None and varsayilan_tur not in TURLER:
         raise OnedeskHata(400, "Tür alarm, talep ya da sikayet olmalı.")
     s = sutunlari_bul(parti.columns or [])

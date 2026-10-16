@@ -66,6 +66,7 @@ def kaynak(admin: Principal = Depends(require_admin), db: Session = Depends(get_
             "partiler": [
                 {"id": p.id, "kaynak": p.source_key, "etiket": p.label, "satir": p.row_count, "zaman": iso(p.received_at), "sutunlar": list(p.columns or [])}
                 for p in partiler
+                if ice_al.aktarilabilir_mi(p)
             ],
         }
     )

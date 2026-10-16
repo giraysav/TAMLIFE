@@ -4,8 +4,16 @@ _build_tam_personal_ai_summary). Ayri modul degil, Genel Bakis'ta bolum (2026-10
 Her TAM icin: bugunku takvim durumu, portfoy (cati musteri), bu ayin rapor uyumu (Aylik Rapor ile ayni rapor birimi kurali),
 risk yuku (tum musterilerinin acik alarm + sikayet), acik talep, kapanan kayit, utilizasyon (puanlama disi personelde bos),
 bu ayin toplantilari ve projeler. Uretimdeki 'acik gorev' (DailyTask) yeni panelde yok; yerine acik proje sayilir.
-ICT/APN geliri kisisel dosyadadir, ozete girmez.
+ICT/APN geliri kisi satirlarina girmez; modul ozet karolari ekip/moduller.py (2026-10-14).
 Kapsam: admin ve TeamMngr tum ekibi, TeamMember yalniz kendini gorur. Ozet cumleleri kural tabanlidir (LLM yok).
+
+Riskli utilizasyon (2026-10-14 kullanici istegi: "risk yukunu utilizasyonla birlestir, utilizasyona orantili formul"):
+risk = olasilik x etki (ISO 31000 / NIST SP 800-30 risk matrisi, FMEA RPN ayni carpimsal yapidadir).
+  1. Musteri riski   r_c = acik_c x etki_c ; acik_c = acik alarm + acik sikayet (olasilik: sorunun su an yasaniyor olmasi),
+                       etki_c = utilizasyon skoru / 100 (musterinin agirligi); skorsuz musteride etki 1 (ihtiyatli: bilinmeyen etki dusuk sayilmaz).
+  2. TAM risk puani  R = toplam r_c (cati + istirak).
+  3. Risk orani      p = R / (R + E), E = YUKSEK_RISK (16): 0..1 arasi doygun oran, R = E iken %50; tek bir buyuk musteri orani 1'e tasimaz.
+  4. Riskli utilizasyon = U x (1 + p), U = agirlik puani (0-100). Risk yoksa U'ya esit, en kotu durumda 2U; yani yuk utilizasyonla ORANTILI artar.
 """
 
 from __future__ import annotations
@@ -18,12 +26,14 @@ from sqlalchemy.orm import Session
 from app.authz import yonetici_mi
 from app.db import mevcut_oturumlar
 from app.dil import ingilizce, m
+from app.ekip.moduller import modul_ozetleri
 from app.kullanicilar import kullanici_kaydi, personel
 from app.models import AppUser, CalendarDay, Customer, ProjectItem, Report, ScoringExclusion
 from app.musteri.servis import rapor_birimi_mi
 from app.ortak import rapor_donemi, tr_kucuk
 from app.session import Principal
 from app.skor.servis import tam_skor_ozeti
+from app.takvim.kurum_takvimi import kurum_gunu
 from app.takvim.servis import DURUMLAR
 
 KRITIK_UYUM = 50  # % alti kritik (uretim)
@@ -49,7 +59,7 @@ def _takvim(uyeler: list[AppUser], bugun: date) -> dict[str, tuple[str | None, i
     sonuc: dict[str, tuple[str | None, int, int]] = {}
     for ad, k in mevcut_oturumlar([u.username for u in uyeler]):
         gunler = list(k.scalars(select(CalendarDay).where(CalendarDay.day >= bas, CalendarDay.day <= bugun)))
-        durum = next((g.status for g in gunler if g.day == bugun), None)
+        durum = next((g.status for g in gunler if g.day == bugun), None) or (kurum_gunu(bugun) or (None,))[0]  # kayit yoksa kurum tatili
         sonuc[ad] = (durum, sum(g.online_count for g in gunler), sum(g.face_count for g in gunler))
     return sonuc
 
@@ -63,6 +73,19 @@ DURUM_EN = {
     "resmi_tatil": "on public holiday",
     "hafta_sonu": "on weekend",
 }
+
+
+def risk_puani(musteriler: list[Customer]) -> float:
+    """Utilizasyon agirlikli acik kayit (olasilik x etki); bkz. modul aciklamasi."""
+    return round(sum(((c.alarm_count or 0) + (c.complaint_count or 0)) * ((c.score / 100) if c.score else 1.0) for c in musteriler), 1)
+
+
+def risk_orani(puan: float) -> float:
+    return round(puan / (puan + YUKSEK_RISK), 3) if puan > 0 else 0.0
+
+
+def riskli_utilizasyon(agirlik: float | None, oran: float) -> float | None:
+    return None if agirlik is None else round(agirlik * (1 + oran), 1)
 
 
 def _uyum_kelimesi(yuzde: int) -> str:
@@ -109,6 +132,14 @@ def kisi_cumlesi(s: dict) -> str:
     if s["final_skor"] is not None:
         parcalar.append(
             m(f"Ortalama TAM Utilizasyon skoru {_sayi(s['final_skor'])}.", f"Average TAM Utilization score is {_sayi(s['final_skor'])}.")
+        )
+    if s.get("riskli_utilizasyon") is not None and s.get("risk_orani"):
+        yuzde = round(s["risk_orani"] * 100)
+        parcalar.append(
+            m(
+                f"Risk ağırlıklı utilizasyonu {_sayi(s['riskli_utilizasyon'])} (risk oranı %{yuzde}).",
+                f"Risk-weighted utilization is {_sayi(s['riskli_utilizasyon'])} (risk ratio {yuzde}%).",
+            )
         )
     if s["online"] or s["yuzyuze"]:
         parcalar.append(
@@ -210,6 +241,7 @@ def ozet(db: Session, user: Principal) -> dict:
             "talep": sum(c.request_count or 0 for c in hepsi),
             "kapanan": sum((c.alarm_closed_count or 0) + (c.complaint_closed_count or 0) + (c.request_closed_count or 0) for c in hepsi),
             "risk": alarm + sikayet,
+            "risk_puani": risk_puani(hepsi),
             "puanlama_disi": u.id in disi,
             "final_skor": skor["final_skor"],
             "toplam_puan": skor["toplam_puan"],
@@ -224,6 +256,8 @@ def ozet(db: Session, user: Principal) -> dict:
                 if p.priority in ONEMLI_ONCELIK
             ],
         }
+        s["risk_orani"] = risk_orani(s["risk_puani"]) if risk_var else 0.0
+        s["riskli_utilizasyon"] = riskli_utilizasyon(s["agirlik_puani"], s["risk_orani"])
         s["cumle"] = kisi_cumlesi(s)
         satirlar.append(s)
     # Uretim: agirlik puanina gore buyukten kucuge (Veri Yonlendirici > Personel Agirlik ile ayni deger); skoru olmayan en altta.
@@ -239,8 +273,8 @@ def ozet(db: Session, user: Principal) -> dict:
             "kritik_uyum": sum(1 for s in satirlar if s["rapor_beklenen"] and s["uyum"] < KRITIK_UYUM),
             "yuksek_risk": sum(1 for s in satirlar if risk_var and s["risk"] >= YUKSEK_RISK),
             "acik_proje": sum(s["proje_acik"] for s in satirlar),
-            "bugun_izinli": sum(1 for s in satirlar if s["bugun"] in ("yillik_izin", "sirket_izni", "raporlu")),
         },
         "satirlar": satirlar,
-        "esikler": {"kritik_uyum": KRITIK_UYUM, "yuksek_risk": YUKSEK_RISK},
+        "moduller": modul_ozetleri(db, user, satirlar),  # menudeki her modulun ozet kutusu (ekip/moduller.py)
+        "esikler": {"kritik_uyum": KRITIK_UYUM, "yuksek_risk": YUKSEK_RISK},  # yuksek_risk ayni zamanda risk oraninin yari doygunluk sabiti (E)
     }

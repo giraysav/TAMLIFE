@@ -15,7 +15,7 @@ type Bilgi = { ton: "yesil" | "amber"; metin: string }
 const DURUM_TON = { guncelle: "sari", yeni: "yesil", hata: "kirmizi", degisiklik_yok: "gri" } as const
 
 /** Dosyanin katalogla eslesmesi: bicim, eslesen alan sayisi, eslesen / taninmayan sutunlar. */
-export function UyumKarti({ u, t }: { u: HamUyum; t: YM }) {
+function UyumKarti({ u, t }: { u: HamUyum; t: YM }) {
   const h = t.ham
   return (
     <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">

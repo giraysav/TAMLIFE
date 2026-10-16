@@ -1,5 +1,6 @@
 import { Building2 } from "lucide-react"
 import { baslangicHarfleri, sayi } from "@/lib/bicim"
+import { useMusteriYolu } from "@/musteri/musteri-yolu"
 import { kisaUnvan, portfoyMetin } from "@/musteri/portfoy-metin"
 import type { Dil } from "@/shell/metin"
 
@@ -17,7 +18,7 @@ export type PortfoyKart = {
 }
 export type Secenekler = { segmentler: string[]; yonetici: boolean; kendi_id: number | null; tam: { id: number; ad: string }[]; catilar: { id: number; ad: string }[] }
 
-export const SEGMENT_RENK: Record<string, string> = {
+const SEGMENT_RENK: Record<string, string> = {
   SMB: "bg-slate-100 text-slate-600",
   SA: "bg-sky-100 text-sky-700",
   MA: "bg-indigo-100 text-indigo-700",
@@ -50,6 +51,7 @@ function Olcu({ ad, deger, ton }: { ad: string; deger: number; ton: "kirmizi" | 
 
 export function MusteriKarti({ m, dil, onizleme = false }: { m: PortfoyKart; dil: Dil; onizleme?: boolean }) {
   const t = portfoyMetin(dil)
+  const yol = useMusteriYolu()
   const icerik = (
     <>
       <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-tl-yellow transition-all group-hover:w-2.5" />
@@ -94,7 +96,7 @@ export function MusteriKarti({ m, dil, onizleme = false }: { m: PortfoyKart; dil
   return onizleme ? (
     <div className={sinif}>{icerik}</div>
   ) : (
-    <a href={`#/musteri?m=${m.id}`} aria-label={`${t.kartiAc}: ${m.name}`} className={`${sinif} hover:-translate-y-1 hover:border-tl-yellow hover:shadow-xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow`}>
+    <a href={`#/${yol}?m=${m.id}`} aria-label={`${t.kartiAc}: ${m.name}`} className={`${sinif} hover:-translate-y-1 hover:border-tl-yellow hover:shadow-xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow`}>
       {icerik}
     </a>
   )

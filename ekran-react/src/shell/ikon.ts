@@ -13,6 +13,7 @@ import {
   Radar,
   Settings,
   ShieldCheck,
+  Store,
   Users,
 } from "lucide-react"
 
@@ -33,4 +34,5 @@ export const IKON: Record<string, LucideIcon> = {
   link: Link2,
   database: Database,
   settings: Settings,
+  store: Store,
 }

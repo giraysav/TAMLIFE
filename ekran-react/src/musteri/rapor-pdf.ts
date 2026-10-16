@@ -82,6 +82,10 @@ export async function raporPdfOlustur(el: HTMLElement, olcek = 2, kalite = 0.95)
   for (const ad of BETIKLER) await betikYukle(ad)
   const w = window as Pencere
   if (!w.html2canvas || !w.jspdf) throw new Error("pdf")
+  await Promise.all(Array.from(el.querySelectorAll("img")).map(async (img) => {
+    await img.decode()
+    if (!img.naturalWidth) throw new Error("report-image")
+  }))
   const [eskiX, eskiY] = [window.scrollX, window.scrollY]
   window.scrollTo(0, 0) // kaydirilmis sayfada html2canvas sablonun ustunu kirpabiliyor
   let canvas: HTMLCanvasElement

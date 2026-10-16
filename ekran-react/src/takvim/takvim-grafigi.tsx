@@ -1,54 +1,41 @@
 import { sayi } from "@/lib/bicim"
-import { Halka, Lejant, YatayCubuklar } from "@/components/grafik"
+import { Lejant, Sutunlar } from "@/components/grafik"
 import type { Seri } from "@/components/grafik"
 import { DURUM_RENK, DURUM_SIRASI } from "@/takvim/takvim-metin"
 import type { TakvimMetin } from "@/takvim/takvim-metin"
 
-export type Ozet = { durumlar: Record<string, number>; online: number; yuzyuze: number; kayitli_gun: number; izin_gun: number; toplanti: number }
-export type GrafikUyesi = { ad: string } & Ozet
+/** kayitli_gun sunucuda kalir (sunum bos/dolu denetimi), ekranda gosterilmez. is_gunu: yapilan is girilen gun sayisi. */
+export type Ozet = { durumlar: Record<string, number>; online: number; yuzyuze: number; kayitli_gun: number; izin_gun: number; toplanti: number; is_gunu?: number }
 
 export function durumSerileri(t: TakvimMetin): Seri[] {
   // 'calisiyor' yalniz kayitli (varsayilan olmayan) gunleri sayar; grafikte de gorunur
   return DURUM_SIRASI.map((k) => ({ anahtar: k, ad: t.durumlar[k] ?? k, renk: DURUM_RENK[k] ?? "#64748b" }))
 }
 
-/** Donem grafigi: durum toplami (halka), kisi bazinda gun dagilimi ve toplantilar (yatay yigilmis cubuklar). Sunum modulu de ayni bilesenle cizer. */
-export function TakvimGrafigi({ genel, uyeler, t }: { genel: Ozet; uyeler: GrafikUyesi[]; t: TakvimMetin }) {
-  // Izin ve tatil gorunur olsun diye 'Calisiyor' (yalniz toplanti girilen gunler) grafikten cikarilir.
-  const seriler = durumSerileri(t).filter((s) => s.anahtar !== "calisiyor")
-  const izinToplam = seriler.reduce((a, s) => a + (genel.durumlar[s.anahtar] ?? 0), 0)
-  const toplanti: Seri[] = [
-    { anahtar: "online", ad: t.toplantiOnline, renk: "#0055a5" },
-    { anahtar: "yuzyuze", ad: t.toplantiYuzYuze, renk: "#ffc72c" },
+/** TAM Takvim tablo sutunlari ve grafik kalemleri, kullanicinin sirasiyla (2026-10-15: is girilen gun, calisiyor, toplanti ve
+ * raporlu kalkti; online / yuz yuze toplanti zaten calisma gunu sayilir). Yarim gun = arife. */
+export function takvimKalemleri(t: TakvimMetin, o: Ozet): (Seri & { deger: number })[] {
+  const durum = (k: string, ad: string) => ({ anahtar: k, ad, renk: DURUM_RENK[k] ?? "#64748b", deger: o.durumlar[k] ?? 0 })
+  return [
+    { anahtar: "online", ad: t.sutunOnline, renk: "#0055a5", deger: o.online },
+    { anahtar: "yuzyuze", ad: t.sutunYuzyuze, renk: "#059669", deger: o.yuzyuze },
+    durum("yillik_izin", t.sutunYillik),
+    durum("sirket_izni", t.sutunSirket),
+    durum("arife_tatili", t.sutunYarim),
+    durum("resmi_tatil", t.sutunResmi),
   ]
+}
+
+/** Donem grafigi: tum personelin toplami, veri turu basina bir sutun ve sayili lejant (kisi listesi yok). Sunum modulu de ayni bilesenle cizer. */
+export function TakvimGrafigi({ genel, t }: { genel: Ozet; t: TakvimMetin }) {
+  const kalemler = takvimKalemleri(t, genel)
   return (
-    <div className="grid gap-6 lg:grid-cols-[auto_1fr]">
-      <div className="grid justify-items-center gap-3">
-        <p className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.durumToplami}</p>
-        <Halka
-          dilimler={seriler.map((s) => ({ anahtar: s.anahtar, ad: s.ad, deger: genel.durumlar[s.anahtar] ?? 0, renk: s.renk }))}
-          baslik={sayi(izinToplam)}
-          alt={t.izinTatilGunu}
-        />
-        <Lejant seriler={seriler.filter((s) => (genel.durumlar[s.anahtar] ?? 0) > 0)} sayilar={genel.durumlar} />
-      </div>
-      <div className="grid gap-5">
-        <div>
-          <p className="mb-2 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.kisiBazinda}</p>
-          <YatayCubuklar satirlar={uyeler.map((u) => ({ anahtar: u.ad, etiket: u.ad, degerler: u.durumlar, sag: sayi(u.izin_gun) }))} seriler={seriler} yukseklik={12} />
-        </div>
-        <div>
-          <p className="mb-2 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.toplantilar}</p>
-          <YatayCubuklar
-            satirlar={uyeler.map((u) => ({ anahtar: u.ad, etiket: u.ad, degerler: { online: u.online, yuzyuze: u.yuzyuze }, sag: `${u.online} / ${u.yuzyuze}` }))}
-            seriler={toplanti}
-            yukseklik={12}
-          />
-          <div className="mt-2">
-            <Lejant seriler={toplanti} />
-          </div>
-        </div>
-      </div>
+    <div className="grid max-w-3xl gap-3">
+      <p className="text-xs font-bold text-slate-500">
+        {t.toplamToplanti}: <span className="font-mono font-black text-tl-navy">{sayi(genel.toplanti)}</span> · {t.izinGunu}: <span className="font-mono font-black text-tl-navy">{sayi(genel.izin_gun)}</span>
+      </p>
+      <Sutunlar sutunlar={kalemler.map((k) => ({ etiket: k.ad, degerler: { [k.anahtar]: k.deger } }))} seriler={kalemler} yukseklik={128} />
+      <Lejant seriler={kalemler} sayilar={Object.fromEntries(kalemler.map((k) => [k.anahtar, k.deger]))} />
     </div>
   )
 }

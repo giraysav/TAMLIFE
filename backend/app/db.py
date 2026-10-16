@@ -14,7 +14,7 @@ import threading
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -22,14 +22,35 @@ from app.config import get_settings
 from app.models import KullaniciBase
 
 KIMLIK_CARPANI = 1_000_000
+SQLITE_BEKLEME_SN = 30
+# SQLite havuzu sinirsiz tasar (10 kalici): istek, bagimlilikta (require_user) aldigi baglantiyi uc govdesi icin is parcacigi
+# beklerken de tutar; tavanli havuzda baglanti bekleyen is parcaciklari ile is parcacigi bekleyen baglantilar birbirini
+# pool_timeout (30 sn) boyunca kilitliyordu: varsayilan 5+10'da 100 eszamanlida %61 zaman asimi, 10+110'da 300 eszamanlida 31-61 sn
+# (tests/test_yuk_ornek.py). SQLite baglantisi bir dosya tutamacidir; tasan baglanti iade edilince kapanir.
+SQLITE_HAVUZ = 10
 _ENGINES: dict[str, Engine] = {}
 _HAZIR: set[str] = set()  # sema kurulmus kullanici dosyalari
 _LOCK = threading.Lock()
+_SEMA_KILIDI = threading.Lock()
+
+
+def _sqlite_ayarla(baglanti, _kayit) -> None:  # type: ignore[no-untyped-def]
+    """WAL: yazma surerken okuma bloklanmaz (panel + isci ayni dosya). busy_timeout: kilitte hemen 'database is locked' yerine bekler."""
+    imlec = baglanti.cursor()
+    imlec.execute(f"PRAGMA busy_timeout={SQLITE_BEKLEME_SN * 1000}")
+    imlec.execute("PRAGMA journal_mode=WAL")
+    imlec.execute("PRAGMA synchronous=NORMAL")
+    imlec.close()
 
 
 def _motor_kur(url: str) -> Engine:
     if url.startswith("sqlite"):
-        return create_engine(url, pool_pre_ping=True)
+        motor = create_engine(
+            url, pool_pre_ping=True, pool_size=SQLITE_HAVUZ, max_overflow=-1,
+            connect_args={"timeout": SQLITE_BEKLEME_SN},
+        )
+        event.listen(motor, "connect", _sqlite_ayarla)
+        return motor
     # PostgreSQL erisilemezse istek dakikalarca beklemesin: 3 sn'de hata (arka plan yazicilar ve saglik kontrolu de buna guvenir).
     return create_engine(url, pool_pre_ping=True, connect_args={"connect_timeout": 3})
 
@@ -62,6 +83,14 @@ def dispose_engines() -> None:
 def oturum() -> Session:
     """Panel DB oturumu (istek disi kullanim: arka plan yazici, ariza kaydi, ornek veri). `with oturum() as db:`"""
     return Session(engine(), autoflush=False)
+
+
+def yazma_kilidi(db: Session) -> None:
+    """SQLite'ta yazma islemini OKUMADAN once baslatir (BEGIN IMMEDIATE; kilit doluysa busy_timeout bekler). pysqlite islemi ilk
+    DML'de actigi icin "satir yok mu? ekle" deseninde iki yazici ayni bos sonucu gorup UNIQUE'e carpiyordu. PostgreSQL'de islem yok."""
+    baglanti = db.connection()
+    if baglanti.dialect.name == "sqlite" and not baglanti.connection.dbapi_connection.in_transaction:  # type: ignore[union-attr]
+        baglanti.exec_driver_sql("BEGIN IMMEDIATE")
 
 
 def get_db() -> Iterator[Session]:
@@ -105,10 +134,12 @@ def kullanici_oturumu(kullanici: str) -> Session:
     dosya = kullanici_dosyasi(kullanici)
     motor = engine(f"sqlite:///{dosya.as_posix()}")
     if str(dosya) not in _HAZIR:
-        dosya.parent.mkdir(parents=True, exist_ok=True)
-        KullaniciBase.metadata.create_all(motor)
-        _eksik_sutunlari_ekle(motor)
-        _HAZIR.add(str(dosya))
+        with _SEMA_KILIDI:
+            if str(dosya) not in _HAZIR:
+                dosya.parent.mkdir(parents=True, exist_ok=True)
+                KullaniciBase.metadata.create_all(motor)
+                _eksik_sutunlari_ekle(motor)
+                _HAZIR.add(str(dosya))
     return Session(motor, autoflush=False)
 
 

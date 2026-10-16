@@ -1,4 +1,4 @@
-"""Rol gorunumu uclari: rolun gorecegi sayfalar ve giris sayfasi. Okuma ve yazma: yalniz admin (Yonetim alani)."""
+"""Rol gorunumu uclari: rolun giris sayfasi ve eylem yetkileri (moduller herkese acik). Okuma ve yazma: yalniz admin (Yonetim alani)."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ router = APIRouter(prefix="/api/v1/roller", tags=["roller"])
 
 
 class RolGovde(BaseModel):
-    modules: list[str] = Field(max_length=500)
-    landing: str = Field(max_length=80)
+    modules: list[str] | None = Field(default=None, max_length=500)  # 2026-10-14: yok sayilir, her modul personele ve yoneticiye acik
+    landing: str | None = Field(default=None, max_length=80)  # 2026-10-14: yok sayilir, herkes Genel Bakis'la acar
     permissions: list[str] | None = Field(default=None, max_length=50)  # bos birakilirsa mevcut eylem yetkileri korunur
 
 

@@ -1,12 +1,16 @@
-"""Gelir Faydasi Saglanan Isler HTTP katmani. Gorme: modul_erisim("gelir_uretim") (rol gorunumune bagli); yazma ve ice aktarma: yalniz admin.
+"""Gelir Faydasi Saglanan Isler HTTP katmani. Gorme: modul_erisim("gelir_uretim") (rol gorunumune bagli). Yeni giris: modulu goren herkes
+(kayit sahibin onayina duser); onay, onayli kaydi duzenleme/silme: modul sahibi ya da admin (servis); ice aktarma ve sahip atama: yalniz admin.
 
-  GET    /gelir-uretim?q=&tur=&durum=&fayda=&tam=&yil=  -> {items, ozet, secenekler, yazabilir}
-  POST   /gelir-uretim                                   -> yeni kayit
+  GET    /gelir-uretim?q=&tur=&durum=&fayda=&tam=&yil=&onay=  -> {items, ozet, secenekler, onay, yazabilir}
+  POST   /gelir-uretim                                   -> yeni kayit (tum zorunlu alanlar; personel girisi 'bekliyor')
   PUT    /gelir-uretim/{id}                              -> kaydi guncelle (tum alanlar)
   DELETE /gelir-uretim/{id}                              -> kaydi sil
+  POST   /gelir-uretim/{id}/onay                         -> {karar: onayla|reddet|geri_al, gerekce} (sahip/admin)
+  GET    /gelir-uretim/sahip                             -> {sahip, adaylar}
+  PUT    /gelir-uretim/sahip                             -> {user_id|null} modul sahibini ata (admin)
   POST   /gelir-uretim/ice-al/onizleme?dosya=            -> ham .xlsx govdesi (en fazla 5 MB, 500 satir): ayristirma onizlemesi, hicbir sey yazmaz
-  POST   /gelir-uretim/ice-al/uygula?dosya=              -> ayni dosya: yalniz YENI satirlari tek islemde ekler
-  GET    /gelir-uretim/excel                             -> kaynak tablo sutun duzeninde .xlsx
+  POST   /gelir-uretim/ice-al/uygula?dosya=              -> ayni dosya: yalniz YENI satirlari tek islemde ekler (onayli)
+  GET    /gelir-uretim/excel?q=&tur=&durum=&fayda=&tam=&yil= -> rapor: suzgece uyan onayli isler (kullanicinin Excel sutunlari) + Ozet sayfasi
 Her yazma denetim kaydina alan ADLARIYLA yazilir (deger yazilmaz); kayit islem onaylandiktan SONRA denetlenir.
 """
 
@@ -24,10 +28,9 @@ from app.audit import audit_log
 from app.authz import is_admin
 from app.db import get_db, oturum
 from app.deps import require_veri_yazma
-from app.dil import m
 from app.erisim import Erisim, modul_erisim
 from app.gelir_uretim import excel, ice_al, servis
-from app.ortak import KimlikTipi, ok
+from app.ortak import KimlikTipi, govde_oku, ok
 from app.session import Principal
 
 router = APIRouter(prefix="/api/v1/gelir-uretim", tags=["gelir-uretim"])
@@ -39,6 +42,7 @@ FaydaTuru = Literal["gelir", "tasarruf", "verimlilik"]
 Durum = Literal["baslamadi", "devam", "tamamlandi", "iptal"]
 Para = Literal["TRY", "USD", "EUR"]
 Donem = Literal["ay", "yil", "tek_sefer"]
+Onay = Literal["bekliyor", "onayli", "reddedildi"]
 
 
 class KayitGovde(BaseModel):
@@ -56,6 +60,8 @@ class KayitGovde(BaseModel):
     year_revenue: float | None = Field(default=None, ge=0, le=1e13, allow_inf_nan=False)
     hours_per_month: float | None = Field(default=None, ge=0, le=1e6, allow_inf_nan=False)
     hours_note: str = Field(default="", max_length=500)
+    hours_per_year: float | None = Field(default=None, ge=0, le=1e7, allow_inf_nan=False)
+    roadmap: str = Field(default="", max_length=4000)
     extra_note: str = Field(default="", max_length=4000)
     start_date: date | None = None
     end_date: date | None = None
@@ -64,6 +70,15 @@ class KayitGovde(BaseModel):
 
     def alanlar(self) -> dict:
         return self.model_dump(exclude={"person_ids"})
+
+
+class OnayGovde(BaseModel):
+    karar: Literal["onayla", "reddet", "geri_al"]
+    gerekce: str = Field(default="", max_length=2000)
+
+
+class SahipGovde(BaseModel):
+    user_id: KimlikTipi | None = None
 
 
 def _denetim(e: Erisim, eylem: str, ayrinti: str) -> None:
@@ -78,19 +93,43 @@ def liste(
     fayda: FaydaTuru | None = None,
     tam: KimlikTipi | None = None,
     yil: int | None = Query(default=None, ge=2000, le=2100),
+    onay: Onay | None = None,
     e: Erisim = Depends(gelir_uretim_erisim),
     db: Session = Depends(get_db),
 ):
-    sonuc = servis.liste(db, q=q, tur=tur, durum=durum, fayda=fayda, tam=tam, yil=yil)
+    sonuc = servis.liste(db, e.user, q=q, tur=tur, durum=durum, fayda=fayda, tam=tam, yil=yil, onay=onay)
     return ok({**sonuc, "yazabilir": is_admin(e.user)})
 
 
 @router.post("")
-def ekle(body: KayitGovde, e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
-    kimlik = servis.olustur(db, e.user, body.alanlar(), body.person_ids)
+def ekle(body: KayitGovde, e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db)):
+    kayit = servis.olustur(db, e.user, body.alanlar(), body.person_ids)
+    kimlik, onay = kayit.id, kayit.approval
     db.commit()
-    _denetim(e, "gelir_uretim.ekle", f"is={kimlik}")
-    return ok({"id": kimlik})
+    _denetim(e, "gelir_uretim.ekle", f"is={kimlik} onay={onay}")
+    return ok({"id": kimlik, "approval": onay})
+
+
+@router.get("/sahip")
+def sahip_oku(e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db)):
+    kisi = servis.sahip(db)
+    return ok({"sahip": {"id": kisi.id, "ad": servis.kisi_adi(kisi)} if kisi else None, "adaylar": servis.sahip_adaylari(db) if is_admin(e.user) else []})
+
+
+@router.put("/sahip")
+def sahip_ata(body: SahipGovde, e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+    kisi = servis.sahip_kaydet(db, body.user_id, e.user.username)
+    db.commit()
+    _denetim(e, "gelir_uretim.sahip", f"sahip={kisi.username if kisi else '-'}")
+    return ok({"sahip": {"id": kisi.id, "ad": servis.kisi_adi(kisi)} if kisi else None})
+
+
+@router.post("/{kayit_id}/onay")
+def onay(kayit_id: KimlikTipi, body: OnayGovde, e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db)):
+    yeni = servis.onay_ver(db, e.user, kayit_id, body.karar, body.gerekce)
+    db.commit()
+    _denetim(e, f"gelir_uretim.{body.karar}", f"is={kayit_id} onay={yeni}")
+    return ok({"id": kayit_id, "approval": yeni})
 
 
 @router.put("/{kayit_id}")
@@ -99,7 +138,6 @@ def guncelle(
     body: KayitGovde,
     e: Erisim = Depends(gelir_uretim_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     degisen = servis.guncelle(db, e.user, kayit_id, body.alanlar(), body.person_ids)
     db.commit()
@@ -109,31 +147,14 @@ def guncelle(
 
 
 @router.delete("/{kayit_id}")
-def sil(kayit_id: KimlikTipi, e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
-    servis.sil(db, kayit_id)
+def sil(kayit_id: KimlikTipi, e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db)):
+    servis.sil(db, e.user, kayit_id)
     db.commit()
     _denetim(e, "gelir_uretim.sil", f"is={kayit_id}")
     return ok({"id": kayit_id})
 
 
 # --- Excel ice aktarma ----------------------------------------------------------------------------------------------
-async def _dosya_govdesi(request: Request) -> bytes:
-    """Ham .xlsx govdesi (cok parcali form yok); boyut siniri akis sirasinda uygulanir."""
-    sinir = ice_al.AZAMI_BAYT
-    mesaj = m(f"Dosya çok büyük (en fazla {sinir // (1024 * 1024)} MB).", f"File too large (max {sinir // (1024 * 1024)} MB).")
-    bildirilen = request.headers.get("content-length", "")
-    if bildirilen.isdigit() and int(bildirilen) > sinir:
-        raise servis.GelirUretimHata(413, mesaj)
-    parcalar: list[bytes] = []
-    boyut = 0
-    async for parca in request.stream():
-        boyut += len(parca)
-        if boyut > sinir:
-            raise servis.GelirUretimHata(413, mesaj)
-        parcalar.append(parca)
-    return b"".join(parcalar)
-
-
 def _onizle(veri: bytes, dosya: str) -> dict:
     with oturum() as db:
         return ice_al.onizleme(db, veri, dosya)
@@ -153,7 +174,7 @@ async def ice_al_onizleme(
     e: Erisim = Depends(gelir_uretim_erisim),
     _y: Principal = Depends(require_veri_yazma),
 ):
-    veri = await _dosya_govdesi(request)
+    veri = await govde_oku(request, ice_al.AZAMI_BAYT)
     return ok(await run_in_threadpool(_onizle, veri, dosya))
 
 
@@ -164,15 +185,24 @@ async def ice_al_uygula(
     e: Erisim = Depends(gelir_uretim_erisim),
     _y: Principal = Depends(require_veri_yazma),
 ):
-    veri = await _dosya_govdesi(request)
+    veri = await govde_oku(request, ice_al.AZAMI_BAYT)
     sonuc = await run_in_threadpool(_uygula, e.user, veri, dosya)
     _denetim(e, "gelir_uretim.ice_al", f"satir={sonuc['toplam']} eklendi={sonuc['eklendi']} var={sonuc['var']} tekrar={sonuc['tekrar']} hatali={sonuc['hatali']}")
     return ok(sonuc)
 
 
 @router.get("/excel")
-def disa_aktar(e: Erisim = Depends(gelir_uretim_erisim), db: Session = Depends(get_db)) -> Response:
-    icerik = excel.excel_olustur(db)
+def disa_aktar(
+    q: str = Query(default="", max_length=100),
+    tur: Tur | None = None,
+    durum: Durum | None = None,
+    fayda: FaydaTuru | None = None,
+    tam: KimlikTipi | None = None,
+    yil: int | None = Query(default=None, ge=2000, le=2100),
+    e: Erisim = Depends(gelir_uretim_erisim),
+    db: Session = Depends(get_db),
+) -> Response:
+    icerik = excel.excel_olustur(db, q=q, tur=tur, durum=durum, fayda=fayda, tam=tam, yil=yil)
     _denetim(e, "gelir_uretim.excel", "")
     ad = f"Gelir_Faydasi_{date.today():%Y%m%d}.xlsx"
     return Response(

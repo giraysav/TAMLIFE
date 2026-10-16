@@ -71,7 +71,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
 export function Sidebar({ className, children }: HTMLAttributes<HTMLElement>) {
   const { open, isMobile, openMobile, setOpenMobile } = useSidebar()
-  const panel = <div className={cn("flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground", className)}>{children}</div>
+  // data-yan-menu: yan menu yazilari buyuk harf kuralinin disinda (lib/buyuk-harf.ts)
+  const panel = (
+    <div data-yan-menu className={cn("flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground", className)}>
+      {children}
+    </div>
+  )
 
   if (isMobile) {
     return (

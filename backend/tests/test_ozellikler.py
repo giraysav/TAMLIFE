@@ -24,6 +24,7 @@ from app.models import (
     SmsRevenue,
 )
 from app.onedesk import yz
+from app.takvim import kurum_takvimi
 from app.tampon import depo
 from tests.conftest import kisi_say, login_ok
 
@@ -214,11 +215,18 @@ def test_onedesk_member_yalniz_kendi_portfoyunu_gorur(veri, monkeypatch):
 
 def test_onedesk_modul_yetkisi_ve_kaynak_yalniz_admin(veri, monkeypatch):
     hdr = login_ok(veri)
-    _rol_ver(veri, hdr, moduller=["musteri"])
+    _rol_ver(veri, hdr, moduller=["musteri"])  # onedesk verilmedi
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")
     assert veri.get("/api/v1/onedesk/durum").status_code == 403
-    assert veri.get("/api/v1/onedesk/kaynak").status_code == 403
+    # onedesk verilince acilir:
+    _cikis(veri, {"X-CSRF-Token": veri.cookies.get("tamlife_csrf")})
+    admin_hdr = login_ok(veri)
+    _rol_ver(veri, admin_hdr, moduller=["musteri", "onedesk"])
+    _cikis(veri, admin_hdr)
+    _giris(veri, monkeypatch, "TeamMember")
+    assert veri.get("/api/v1/onedesk/durum").status_code == 200
+    assert veri.get("/api/v1/onedesk/kaynak").status_code == 403  # kaynak ve ice alma yalniz admin
     assert veri.post("/api/v1/onedesk/ice-al/1", json={}, headers=login_hdr(veri)).status_code == 403
 
 
@@ -406,10 +414,11 @@ def test_takvim_listesi_yalniz_etkin_team_member_personelidir(veri):
     assert veri.get(f"/api/v1/takvim/ekip/{kimlik['yeni']}", params=q).status_code == 200
     for ad in ("admin", "mudur", "pasif"):  # personel olmayan icin satir acilmaz
         assert veri.get(f"/api/v1/takvim/ekip/{kimlik[ad]}", params=q).status_code == 404
-    assert veri.get("/api/v1/takvim/ben", params={"yil": YIL, "ay": 2}).status_code == 403  # admin kendi takvimini tutmaz
+    assert veri.get("/api/v1/takvim/ben", params={"yil": YIL, "ay": 2}).status_code == 200  # Izin&Takvim'de herkes kendi takvimini tutar (2026-10-14)
 
 
 def test_gun_ve_toplu_kayit_ile_ekip_ozeti(veri, monkeypatch):
+    monkeypatch.setattr(kurum_takvimi, "KURUM_GUNLERI", {})  # yalniz kisinin kayitlari (kurum gunleri: test_kurum_takvimi.py)
     hdr = _giris(veri, monkeypatch, "TeamMember")  # 'admin' satirina bagli Member (id 1) kendi takvimini yazar; yonetici/admin takvim tutmaz
     with kullanici_oturumu("ayse") as k:  # gunler kisinin kendi dosyasinda
         k.add(CalendarDay(day=date(YIL, 2, 3), status="yillik_izin"))
@@ -472,7 +481,7 @@ def test_toplanti_ozeti_yazilir_korunur_ve_baskasina_gitmez(veri, monkeypatch):
     # TAM Takvim baskasinin ozetini gostermez
     admin_id = next(u["id"] for u in veri.get("/api/v1/takvim/ekip", params={"yil": YIL, "ceyrek": 1}).json()["data"]["uyeler"] if u["kullanici"] == "admin")
     tam = veri.get(f"/api/v1/takvim/ekip/{admin_id}", params={"yil": YIL, "ceyrek": 1}).json()["data"]["gunler"]
-    assert len(tam) == 1 and "toplanti_ozeti" not in tam[0]
+    assert len([g for g in tam if "kurum" not in g]) == 1 and all("toplanti_ozeti" not in g for g in tam)  # + Turkcell'li Takvimi gunleri
     # sinir ve tur
     assert yaz(toplanti_ozeti="a" * 4001).status_code == 400
     assert yaz(toplanti_ozeti="a" * 4000).status_code == 200
@@ -482,6 +491,28 @@ def test_toplanti_ozeti_yazilir_korunur_ve_baskasina_gitmez(veri, monkeypatch):
     assert veri.get("/api/v1/takvim/ben", params=ben).json()["data"]["gunler"] == []
     with kullanici_oturumu("admin") as k:
         assert k.scalar(select(CalendarDay)) is None
+
+
+def test_yapilan_isler_yazilir_korunur_ve_tam_takvimde_yalniz_sayisi_gorunur(veri, monkeypatch):
+    """2026-10-14: calisilan gune o gun yapilan isler girilir; metin yalniz kisinin kendi takviminde, TAM Takvim'de yalniz 'is girilen gun' sayisi."""
+    hdr = _giris(veri, monkeypatch, "TeamMember")
+    gun = f"{YIL}-02-03"
+    yaz = lambda **g: veri.put("/api/v1/takvim/gun", json={"tarih": gun, "durum": "calisiyor", **g}, headers=hdr)
+    r = yaz(yapilan_isler="Alfa SD-WAN kurulumu tamamlandi.  \r\n")
+    assert r.status_code == 200 and r.json()["data"]["yapilan_isler"] == "Alfa SD-WAN kurulumu tamamlandi."
+    assert yaz(online=1).json()["data"]["yapilan_isler"] == "Alfa SD-WAN kurulumu tamamlandi."  # govdede yoksa korunur
+    toplu = {"baslangic": gun, "bitis": gun, "hafta_sonu_atla": False, "durum": "calisiyor"}
+    yaz(online=0)
+    assert veri.put("/api/v1/takvim/toplu", json=toplu, headers=hdr).status_code == 200  # isli gun silinmez
+    gunler = veri.get("/api/v1/takvim/ben", params={"yil": YIL, "ay": 2}).json()["data"]["gunler"]
+    assert [(g["tarih"], g["yapilan_isler"]) for g in gunler] == [(gun, "Alfa SD-WAN kurulumu tamamlandi.")]
+    ekip = veri.get("/api/v1/takvim/ekip", params={"yil": YIL, "ceyrek": 1}).json()["data"]
+    uye = next(u for u in ekip["uyeler"] if u["kullanici"] == "admin")
+    assert uye["is_gunu"] == 1 and ekip["genel"]["is_gunu"] == 1
+    assert "yapilan_isler" not in veri.get(f"/api/v1/takvim/ekip/{uye['id']}", params={"yil": YIL, "ceyrek": 1}).json()["data"]["gunler"][0]
+    assert yaz(yapilan_isler="a" * 4001).status_code == 400
+    yaz(yapilan_isler="")
+    assert veri.get("/api/v1/takvim/ben", params={"yil": YIL, "ay": 2}).json()["data"]["gunler"] == []
 
 
 def test_eski_kullanici_dosyasina_ozet_sutunu_eklenir(client):
@@ -539,6 +570,7 @@ def test_sunuma_gonderilen_ogeler_ceyrek_basina_tek_kayit(veri):
     with kullanici_oturumu("ayse") as k:
         k.add(CalendarDay(day=date(YIL, 8, 3), status="raporlu"))
         k.commit()
+    assert veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": ["takvim"]}, headers=hdr).status_code == 200  # yalniz takvim alani
     for _ in range(2):  # tekrar gonderim gunceller
         assert veri.post("/api/v1/takvim/sunuma-gonder", json={"yil": YIL, "ceyrek": 3, "gonder": True}, headers=hdr).status_code == 200
     sunum = veri.get("/api/v1/sunum/donem", params={"yil": YIL, "ceyrek": 3}).json()["data"]
@@ -547,7 +579,8 @@ def test_sunuma_gonderilen_ogeler_ceyrek_basina_tek_kayit(veri):
     assert ogeler[0]["gonderen"] == "Admin Kisi"
     ayse = next(u for u in ogeler[0]["veri"]["uyeler"] if u["ad"] == "Ayse Test")
     assert ayse["durumlar"]["raporlu"] == 1 and ogeler[0]["veri"]["genel"]["durumlar"]["raporlu"] == 1
-    assert veri.get("/api/v1/sunum/donem", params={"yil": YIL - 5, "ceyrek": 3}).json()["data"]["ogeler"] == []  # akan kaynak secilmedi
+    veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": []}, headers=hdr)
+    assert veri.get("/api/v1/sunum/donem", params={"yil": YIL - 5, "ceyrek": 3}).json()["data"]["ogeler"] == []  # sunumda gorunur alan yok
     veri.post("/api/v1/takvim/sunuma-gonder", json={"yil": YIL, "ceyrek": 3, "gonder": False}, headers=hdr)
     with Session(engine()) as db:
         assert db.scalar(select(func.count()).select_from(Presentation)) == 0

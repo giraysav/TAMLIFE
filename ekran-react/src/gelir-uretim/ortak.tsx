@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react"
 import { para, sayi, tarih } from "@/lib/bicim"
 import type { Dil } from "@/shell/metin"
 import { gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
-import type { Durum, Fayda, Kayit, SatirDurumu } from "@/gelir-uretim/gelir-uretim-metin"
+import type { Durum, Fayda, Kayit, Onay, SatirDurumu, ZorunluAlan } from "@/gelir-uretim/gelir-uretim-metin"
 
 /** Modulun ortak parcalari: API yolu, sorgu anahtari, rozetler ve tutar/tarih metinleri (sayfa, ayrinti, form ve ice aktarma kullanir). */
 export const TABAN = "/api/v1/gelir-uretim"
@@ -15,6 +15,7 @@ export type Metin = ReturnType<typeof gelirUretimMetin>
 type Ton = "gri" | "sari" | "yesil" | "amber" | "kirmizi"
 
 export const DURUM_TON: Record<Durum, Ton> = { baslamadi: "gri", devam: "amber", tamamlandi: "yesil", iptal: "kirmizi" }
+export const ONAY_TON: Record<Onay, Ton> = { bekliyor: "amber", onayli: "yesil", reddedildi: "kirmizi" }
 export const SATIR_TON: Record<SatirDurumu, Ton> = { yeni: "yesil", var: "gri", tekrar: "amber", hatali: "kirmizi" }
 
 const FAYDA_SINIF: Record<Fayda, string> = {
@@ -55,4 +56,14 @@ export function tarihAraligi(k: Pick<Kayit, "start_date" | "end_date" | "status"
 /** Panel kullanicilari ve panelde hesabi olmayan kisiler tek metinde. */
 export function kisilerMetni(adlar: string[], diger: string): string {
   return [...adlar, diger].map((s) => s.trim()).filter(Boolean).join(", ")
+}
+
+/** Zorunlu alanin formdaki adi (eksik alan uyarilari). */
+export function zorunluEtiket(alan: ZorunluAlan, t: Metin): string {
+  const etiketler: Record<ZorunluAlan, string> = {
+    people: t.tamKisiler, title: t.baslikAlani, status_note: t.durumNotu, roadmap: t.yolAlani, description: t.aciklamaAlani, customers: t.musterilerAlani,
+    revenue_amount: t.gelirTutari, year_revenue: t.yilIciAlani, hours_per_month: t.eforAlani, hours_per_year: t.yilSaatAlani, extra_note: t.ekAlani,
+    start_date: t.baslangicAlani, end_date: t.bitisAlani,
+  }  // prettier-ignore
+  return etiketler[alan]
 }

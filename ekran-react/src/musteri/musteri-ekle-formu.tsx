@@ -7,6 +7,7 @@ import { hataMesaji, yaz } from "@/lib/sorgu"
 import { MusteriKarti } from "@/musteri/portfoy-kart"
 import type { Secenekler } from "@/musteri/portfoy-kart"
 import { portfoyMetin } from "@/musteri/portfoy-metin"
+import { useMusteriYolu } from "@/musteri/musteri-yolu"
 import type { Dil } from "@/shell/metin"
 import { sorguAyarla } from "@/shell/rota"
 
@@ -15,6 +16,7 @@ type Tur = "ana" | "istirak"
 /** "Musteri ekle" formu (cekmece icinde): tur, cati (istirak), unvan, segment, sorumlu TAM; ustte canli kart onizlemesi. */
 export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek: Secenekler; onBitti: () => void }) {
   const t = portfoyMetin(dil)
+  const yol = useMusteriYolu()
   const qc = useQueryClient()
   const [tur, setTur] = useState<Tur>("ana")
   const [catiId, setCatiId] = useState("")
@@ -35,7 +37,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
     onSuccess: (sonuc) => {
       void qc.invalidateQueries({ queryKey: ["musteri"] })
       onBitti()
-      sorguAyarla("musteri", { m: String(sonuc.id) })
+      sorguAyarla(yol, { m: String(sonuc.id) })
     },
     onError: (e) => setHata(hataMesaji(e, t.eklenemedi)),
   })

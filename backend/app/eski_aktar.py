@@ -419,7 +419,7 @@ def tamponu_aktar(ham_yol: Path | None, uygula: bool, say: Counter) -> None:
 
 
 # --- komut satiri ---------------------------------------------------------------------------------------
-def _yedek_al() -> str | None:
+def _yedek_al(etiket: str = "eski_aktar") -> str | None:
     """SQLite panel veritabaninin tutarli kopyasi (sqlite yedekleme arayuzu). PostgreSQL'de operator yedek alir."""
     url = engine().url
     if url.get_backend_name() != "sqlite" or not url.database or url.database == ":memory:":
@@ -429,7 +429,7 @@ def _yedek_al() -> str | None:
         return None
     klasor = kaynak.parent / "yedek"
     klasor.mkdir(parents=True, exist_ok=True)
-    hedef = klasor / f"{kaynak.stem}-eski_aktar-{datetime.now():%Y%m%d-%H%M%S}.db"
+    hedef = klasor / f"{kaynak.stem}-{etiket}-{datetime.now():%Y%m%d-%H%M%S}.db"
     with sqlite3.connect(kaynak) as k, sqlite3.connect(hedef) as h:
         k.backup(h)
     return str(hedef)

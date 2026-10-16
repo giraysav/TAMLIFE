@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, date, datetime
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import Field
+
+from app.dil import m
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
 
 EN_FAZLA_SAYFA_BASINA = 200
 EN_BUYUK_KIMLIK = 2_147_483_647  # PostgreSQL INTEGER ile uyumlu; SQLite 64 bit sinirinin cok altinda
@@ -84,3 +89,17 @@ def normal(metin: object) -> str:
 def ok(veri: object) -> dict[str, object]:
     """Basari govdesi: {"status": "success", "data": ...} (API kontrati)."""
     return {"status": "success", "data": veri}
+
+
+async def govde_oku(request: Request, sinir: int, mesaj: str = "") -> bytes:
+    """Ham dosya govdesi (cok parcali form yok). Sinir hem bildirilen boyuta hem akisa uygulanir (yalan Content-Length/chunked); asimda 413."""
+    mesaj = mesaj or m(f"Dosya çok büyük (en fazla {sinir // 1048576} MB).", f"File too large (max {sinir // 1048576} MB).")
+    bildirilen = request.headers.get("content-length", "")
+    if bildirilen.isdigit() and int(bildirilen) > sinir:
+        raise UygulamaHatasi(413, mesaj)
+    govde = bytearray()
+    async for parca in request.stream():
+        govde += parca
+        if len(govde) > sinir:
+            raise UygulamaHatasi(413, mesaj)
+    return bytes(govde)

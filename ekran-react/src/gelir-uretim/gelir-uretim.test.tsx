@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { bicimDili } from "@/lib/bicim"
 import type { Dil } from "@/shell/metin"
 import { gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
-import type { Kayit, Onizleme, OnizlemeSatiri, UygulaSonucu } from "@/gelir-uretim/gelir-uretim-metin"
+import type { Kayit, OnayBilgisi, Onizleme, OnizlemeSatiri, UygulaSonucu } from "@/gelir-uretim/gelir-uretim-metin"
 import { GelirUretimSayfasi } from "@/gelir-uretim/gelir-uretim-sayfasi"
 import { kisilerMetni, saatMetni, tarihAraligi, tutarMetni } from "@/gelir-uretim/ortak"
 
@@ -32,6 +32,8 @@ function kayit(ek: Partial<Kayit> & Pick<Kayit, "id" | "title">): Kayit {
     year_revenue: null,
     hours_per_month: null,
     hours_note: "",
+    hours_per_year: null,
+    roadmap: "",
     extra_note: "",
     start_date: null,
     end_date: null,
@@ -41,6 +43,12 @@ function kayit(ek: Partial<Kayit> & Pick<Kayit, "id" | "title">): Kayit {
     created_at: "2026-10-01T12:00:00Z",
     updated_by: "",
     updated_at: null,
+    created_by_id: null,
+    approval: "onayli",
+    approval_note: "",
+    approved_by: "",
+    approved_at: null,
+    eksik: [],
     ...ek,
   }
 }
@@ -78,6 +86,8 @@ const GAMA = kayit({
   revenue_currency: "USD",
   revenue_period: "tek_sefer",
   people: [{ id: 9, name: "Eski Personel" }],
+  // akistan onceki (eski) kayit: bos zorunlu alanlar duzenlemede bos kalabilir
+  eksik: ["status_note", "roadmap", "description", "customers", "year_revenue", "hours_per_month", "hours_per_year", "extra_note", "start_date", "end_date"],
 })
 const KAYITLAR = [ALFA, BETA, GAMA]
 const OZET = {
@@ -89,6 +99,7 @@ const OZET = {
   tek_seferlik_gelir: { USD: 250000 },
   yil_ici_gelir: 450000,
   aylik_saat: 12.5,
+  yillik_saat: 150,
 }
 const SECENEKLER = {
   personel: [
@@ -111,6 +122,7 @@ function satir(ek: Partial<OnizlemeSatiri> & Pick<OnizlemeSatiri, "satir" | "dur
     revenue_note: "",
     year_revenue: null,
     hours_per_month: null,
+    hours_per_year: null,
     start_date: null,
     end_date: null,
     uyarilar: [],
@@ -147,6 +159,7 @@ const UYGULA: UygulaSonucu = { ...ONIZLEME.plan, eklendi: 2, uyarilar: [] }
 type Cagri = { yol: string; yontem: string; govde: unknown; basliklar: Record<string, string> }
 type Ayar = {
   items?: Kayit[]
+  onay?: Partial<OnayBilgisi>
   liste?: { durum: number; ayrinti?: string }
   onizleme?: { durum: number; veri?: Onizleme; ayrinti?: string }
 }
@@ -163,10 +176,12 @@ function kur({ yazabilir = true, dil = "tr", ...ayar }: Ayar & { yazabilir?: boo
       cagrilar.push({ yol, yontem, govde: typeof init?.body === "string" ? JSON.parse(init.body) : (init?.body ?? null), basliklar: (init?.headers ?? {}) as Record<string, string> })
       if (yol.includes("/ice-al/onizleme")) return ayar.onizleme && ayar.onizleme.durum >= 400 ? yanit(ayar.onizleme.durum, null, ayar.onizleme.ayrinti) : yanit(200, ayar.onizleme?.veri ?? ONIZLEME)
       if (yol.includes("/ice-al/uygula")) return yanit(200, UYGULA)
+      if (yol.endsWith("/sahip") && yontem === "GET") return yanit(200, { sahip: null, adaylar: [{ id: 3, ad: "Can Test" }, { id: 7, ad: "Selin Sahip" }] })
       if (yontem !== "GET") return yanit(200, { id: 1 })
       if (ayar.liste && ayar.liste.durum >= 400) return yanit(ayar.liste.durum, null, ayar.liste.ayrinti)
       const items = ayar.items ?? KAYITLAR
-      return yanit(200, { items, ozet: { ...OZET, is_sayisi: items.length }, secenekler: SECENEKLER, yazabilir })
+      const onay = { sahip: null, yonetebilir: yazabilir, bekleyen: 0, benim: 5, ...ayar.onay }
+      return yanit(200, { items, ozet: { ...OZET, is_sayisi: items.length }, secenekler: SECENEKLER, onay, yazabilir })
     }),
   )
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -191,11 +206,12 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     expect(kpi("İş sayısı")).toHaveTextContent("1 devam · 1 tamamlandı")
     expect(kpi("Aylık gelir faydası")).toHaveTextContent("12.501 ₺")
     expect(kpi("Aylık gelir faydası")).toHaveTextContent("Yıllık: 120.000 ₺ · Tek seferlik: 250.000 $")
-    expect(kpi("Yıl içi gelir")).toHaveTextContent("450.000 ₺")
+    expect(kpi("Yıllık gelir faydası")).toHaveTextContent("450.000 ₺")
     expect(kpi("Aylık efor kazancı")).toHaveTextContent("12,5")
+    expect(kpi("Aylık efor kazancı")).toHaveTextContent("yıllık 150 saat")
 
     const alfa = kart("Alfa Test İşi")
-    for (const metin of ["Proje", "Devam ediyor", "Gelir", "Alfa Müşteri A.Ş.", "1.250,75 ₺ / ay", "Yıl içi: 5.000,00 ₺", "15.01.2026 – devam ediyor", "Ayse Test"]) expect(alfa).toHaveTextContent(metin)
+    for (const metin of ["Proje", "Devam ediyor", "Gelir", "Alfa Müşteri A.Ş.", "1.250,75 ₺ / ay", "Yıllık: 5.000,00 ₺", "15.01.2026 – devam ediyor", "Ayse Test"]) expect(alfa).toHaveTextContent(metin)
     const beta = kart("Beta İnisiyatifi")
     for (const metin of ["TAM inisiyatifi", "Tamamlandı", "Verimlilik", "15,8 KTL", "12,5 saat/ay", "01.02.2026 – 31.03.2026", "Dış Kişi"]) expect(beta).toHaveTextContent(metin)
     const gama = kart("Gama Tasarrufu")
@@ -203,17 +219,21 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
 
     expect(screen.getByRole("button", { name: "Yeni kayıt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Excel'den içe aktar" })).toBeInTheDocument()
-    const excel = screen.getByRole("link", { name: "Excel'e aktar" })
+    const excel = screen.getByRole("link", { name: "Excel rapor" })
     expect(excel).toHaveAttribute("href", "/api/v1/gelir-uretim/excel")
     expect(excel).toHaveAttribute("download")
+    expect(screen.getByRole("button", { name: "PDF rapor" })).toBeEnabled()
+    expect(screen.getByLabelText("Modül sahibini seç")).toHaveValue("")
   })
 
-  it("admin olmayan kullanici yalniz okur: yeni, ice aktar, duzenle ve sil yok; Excel baglantisi ve ayrinti acik", async () => {
-    kur({ yazabilir: false })
+  it("personel yeni is girer ama ice aktaramaz; onayli kaydi duzenleyemez, silemez; sahip adini gorur", async () => {
+    kur({ yazabilir: false, onay: { sahip: { id: 7, ad: "Selin Sahip" } } })
     expect(await screen.findByText("Alfa Test İşi")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Yeni kayıt" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Yeni kayıt" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Excel'den içe aktar" })).not.toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "Excel'e aktar" })).toBeInTheDocument()
+    expect(screen.queryByLabelText("Modül sahibini seç")).not.toBeInTheDocument()
+    expect(screen.getByText("Modül sahibi: Selin Sahip")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Excel rapor" })).toBeInTheDocument()
 
     fireEvent.click(kart("Alfa Test İşi"))
     const pencere = await screen.findByRole("dialog")
@@ -240,12 +260,17 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     await waitFor(() => expect(sonGet()?.yol).toContain("yil=2026"))
     expect(screen.getByText(/Yıl seçilince başlangıç tarihi olmayan işler listelenmez/)).toBeInTheDocument()
 
+    fireEvent.change(screen.getByLabelText("Onay"), { target: { value: "bekliyor" } })
+    await waitFor(() => expect(sonGet()?.yol).toContain("onay=bekliyor"))
+    // rapor baglantisi ayni suzgecleri tasir (onay haric: rapor yalniz onaylilari kapsar)
+    expect(screen.getByRole("link", { name: "Excel rapor" }).getAttribute("href")).toBe("/api/v1/gelir-uretim/excel?tur=inisiyatif&durum=tamamlandi&fayda=verimlilik&tam=3&yil=2026")
+
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "alfa" } })
     await waitFor(() => expect(sonGet()?.yol).toContain("q=alfa"))
 
     fireEvent.click(screen.getByRole("button", { name: "Temizle" }))
     await waitFor(() => expect(sonGet()?.yol).toBe("/api/v1/gelir-uretim"))
-    for (const etiket of ["Tür", "Durum", "Fayda türü", "TAM", "Yıl"]) expect(screen.getByLabelText(etiket)).toHaveValue("")
+    for (const etiket of ["Tür", "Durum", "Fayda türü", "TAM", "Yıl", "Onay"]) expect(screen.getByLabelText(etiket)).toHaveValue("")
     expect(screen.getByRole("searchbox")).toHaveValue("")
     expect(screen.queryByRole("button", { name: "Temizle" })).not.toBeInTheDocument()
   })
@@ -279,37 +304,47 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     expect(within(pencere).queryByText("Ek açıklamalar")).not.toBeInTheDocument()
   })
 
-  it("yeni kayit: dogrulama mesajlari, ardindan POST govdesi; kayit sonrasi liste yenilenir ve cekmece kapanir", async () => {
+  it("yeni kayit: tum Excel basliklari zorunlu, sayi ve tarih denetimi, ardindan POST govdesi; liste yenilenir ve cekmece kapanir", async () => {
     const { cagrilar, getler } = kur()
     await screen.findByText("Alfa Test İşi")
     fireEvent.click(screen.getByRole("button", { name: "Yeni kayıt" }))
     const pencere = await screen.findByRole("dialog")
     const ic = within(pencere)
     const kaydet = () => fireEvent.click(ic.getByRole("button", { name: "Kaydet" }))
+    const yaz = (etiket: string, deger: string) => fireEvent.change(ic.getByLabelText(etiket), { target: { value: deger } })
 
     kaydet()
     expect(await ic.findByText("Başlık zorunlu.")).toBeInTheDocument()
+    yaz("İşin özeti *", "  Yeni Test İşi  ")
+    kaydet()
+    const eksik = await ic.findByText(/^Zorunlu alanlar boş:/)
+    for (const ad of ["İlgili TAM", "Güncel durum notu", "Yol haritası", "Detaylı açıklama", "Etkilenen müşteriler", "Gelir tutarı", "Yıllık gelir faydası (TL/12 ay)",
+                      "Aylık efor kazancı (saat/ay)", "Yıllık efor kazancı (saat/12 ay)", "Ek açıklamalar", "Başlangıç tarihi", "Bitiş tarihi"]) expect(eksik).toHaveTextContent(ad)  // prettier-ignore
     expect(cagrilar.some((c) => c.yontem === "POST")).toBe(false)
 
-    fireEvent.change(ic.getByLabelText("Başlık"), { target: { value: "  Yeni Test İşi  " } })
-    fireEvent.change(ic.getByLabelText("Gelir tutarı"), { target: { value: "1.250,75" } })
+    yaz("Güncel durum notu *", "Teklif verildi")
+    yaz("Yol haritası *", "Mayıs: faz 1")
+    yaz("Detaylı açıklama *", "Açıklama metni")
+    yaz("Etkilenen müşteriler *", "Alfa")
+    yaz("Gelir tutarı *", "1.250,75")
+    yaz("Yıllık gelir faydası (TL/12 ay) *", "15000")
+    yaz("Aylık efor kazancı (saat/ay) *", "0")
+    yaz("Yıllık efor kazancı (saat/12 ay) *", "0")
+    yaz("Ek açıklamalar *", "-")
+    yaz("Başlangıç tarihi *", "2026-03-01")
+    yaz("Bitiş tarihi *", "2026-02-01")
+    fireEvent.click(ic.getByRole("checkbox", { name: "Can Test" }))
     kaydet()
     expect(await ic.findByText(/Gelir tutarı: sıfır ya da pozitif bir sayı girin/)).toBeInTheDocument()
-
-    fireEvent.change(ic.getByLabelText("Gelir tutarı"), { target: { value: "1250,75" } })
-    fireEvent.change(ic.getByLabelText("Para birimi"), { target: { value: "USD" } })
-    fireEvent.change(ic.getByLabelText("Dönem"), { target: { value: "yil" } })
-    fireEvent.change(ic.getByLabelText("Yıl içi gelir (TL)"), { target: { value: "5000" } })
-    fireEvent.change(ic.getByLabelText("Aylık efor kazancı (saat)"), { target: { value: "12,5" } })
-    fireEvent.change(ic.getByLabelText("Tür"), { target: { value: "inisiyatif" } })
-    fireEvent.change(ic.getByLabelText("Fayda türü"), { target: { value: "tasarruf" } })
-    fireEvent.change(ic.getByLabelText("Başlangıç tarihi"), { target: { value: "2026-03-01" } })
-    fireEvent.change(ic.getByLabelText("Bitiş tarihi"), { target: { value: "2026-02-01" } })
+    yaz("Gelir tutarı *", "1250,75")
+    yaz("Para birimi", "USD")
+    yaz("Dönem", "yil")
+    yaz("Tür", "inisiyatif")
+    yaz("Fayda türü", "tasarruf")
     kaydet()
     expect(await ic.findByText("Bitiş tarihi başlangıçtan önce olamaz.")).toBeInTheDocument()
 
-    fireEvent.change(ic.getByLabelText("Bitiş tarihi"), { target: { value: "2026-12-31" } })
-    fireEvent.click(ic.getByRole("checkbox", { name: "Can Test" }))
+    yaz("Bitiş tarihi *", "2026-12-31")
     const onceki = getler().length
     kaydet()
     await waitFor(() => expect(cagrilar.find((c) => c.yontem === "POST")).toBeDefined())
@@ -320,17 +355,19 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
       benefit_type: "tasarruf",
       title: "Yeni Test İşi",
       status: "devam",
-      status_note: "",
-      description: "",
-      customers: "",
+      status_note: "Teklif verildi",
+      description: "Açıklama metni",
+      customers: "Alfa",
       revenue_amount: 1250.75,
       revenue_currency: "USD",
       revenue_period: "yil",
       revenue_note: "",
-      year_revenue: 5000,
-      hours_per_month: 12.5,
+      year_revenue: 15000,
+      hours_per_month: 0,
       hours_note: "",
-      extra_note: "",
+      hours_per_year: 0,
+      roadmap: "Mayıs: faz 1",
+      extra_note: "-",
       start_date: "2026-03-01",
       end_date: "2026-12-31",
       other_people: "",
@@ -341,30 +378,24 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     await waitFor(() => expect(getler().length).toBeGreaterThan(onceki))
   })
 
-  it("bos tutar ve tarih null gider; sinir disi sayi reddedilir", async () => {
-    const { cagrilar } = kur()
+  it("personelin yeni kaydi icin onay notu gorunur; TAM yerine diger kisiler yazilabilir; sinir disi saat reddedilir", async () => {
+    const { cagrilar } = kur({ yazabilir: false })
     await screen.findByText("Alfa Test İşi")
     fireEvent.click(screen.getByRole("button", { name: "Yeni kayıt" }))
     const ic = within(await screen.findByRole("dialog"))
-    fireEvent.change(ic.getByLabelText("Başlık"), { target: { value: "Sade İş" } })
-    fireEvent.change(ic.getByLabelText("Aylık efor kazancı (saat)"), { target: { value: "2000000" } })
+    expect(ic.getByText(/modül sahibinin onayına gider/)).toBeInTheDocument()
+    const alanlar: [string, string][] = [
+      ["İşin özeti *", "Sade İş"], ["Güncel durum notu *", "x"], ["Yol haritası *", "x"], ["Detaylı açıklama *", "x"], ["Etkilenen müşteriler *", "x"],
+      ["Gelir tutarı *", "0"], ["Yıllık gelir faydası (TL/12 ay) *", "0"], ["Aylık efor kazancı (saat/ay) *", "2000000"], ["Yıllık efor kazancı (saat/12 ay) *", "0"],
+      ["Ek açıklamalar *", "x"], ["Başlangıç tarihi *", "2026-01-01"], ["Bitiş tarihi *", "2026-06-30"], ["Diğer kişiler", "Dış Kişi"],
+    ]  // prettier-ignore
+    for (const [etiket, deger] of alanlar) fireEvent.change(ic.getByLabelText(etiket), { target: { value: deger } })
     fireEvent.click(ic.getByRole("button", { name: "Kaydet" }))
-    expect(await ic.findByText(/Aylık efor kazancı \(saat\): sıfır ya da pozitif/)).toBeInTheDocument()
-    fireEvent.change(ic.getByLabelText("Aylık efor kazancı (saat)"), { target: { value: "" } })
+    expect(await ic.findByText(/Aylık efor kazancı \(saat\/ay\): sıfır ya da pozitif/)).toBeInTheDocument()
+    fireEvent.change(ic.getByLabelText("Aylık efor kazancı (saat/ay) *"), { target: { value: "36" } })
     fireEvent.click(ic.getByRole("button", { name: "Kaydet" }))
     await waitFor(() => expect(cagrilar.find((c) => c.yontem === "POST")).toBeDefined())
-    expect(cagrilar.find((c) => c.yontem === "POST")?.govde).toMatchObject({
-      title: "Sade İş",
-      kind: "proje",
-      benefit_type: "gelir",
-      status: "devam",
-      revenue_amount: null,
-      year_revenue: null,
-      hours_per_month: null,
-      start_date: null,
-      end_date: null,
-      person_ids: [],
-    })
+    expect(cagrilar.find((c) => c.yontem === "POST")?.govde).toMatchObject({ title: "Sade İş", hours_per_month: 36, other_people: "Dış Kişi", person_ids: [] })
   })
 
   it("duzenle: mevcut degerler dolar, etkin olmayan bagli kisi (pasif) isaretli kalir ve PUT ile gonderilir", async () => {
@@ -375,15 +406,16 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     const pencere = await screen.findByRole("dialog")
     const ic = within(pencere)
     expect(ic.getByText("Kaydı düzenle")).toBeInTheDocument()
-    expect(ic.getByLabelText("Başlık")).toHaveValue("Gama Tasarrufu")
-    expect(ic.getByLabelText("Gelir tutarı")).toHaveValue("250000")
+    expect(ic.getByLabelText("İşin özeti *")).toHaveValue("Gama Tasarrufu")
+    expect(ic.getByLabelText("Gelir tutarı *")).toHaveValue("250000")
+    expect(ic.getByLabelText("Yol haritası")).toHaveValue("") // eski kayitta bos olan alan zorunlu isaretli degil
     expect(ic.getByLabelText("Para birimi")).toHaveValue("USD")
     expect(ic.getByLabelText("Dönem")).toHaveValue("tek_sefer")
     expect(ic.getByLabelText("Durum")).toHaveValue("baslamadi")
     expect(ic.getByRole("checkbox", { name: "Eski Personel (pasif)" })).toBeChecked()
     expect(ic.getByRole("checkbox", { name: "Ayse Test" })).not.toBeChecked()
 
-    fireEvent.change(ic.getByLabelText("Başlık"), { target: { value: "Gama Tasarrufu 2" } })
+    fireEvent.change(ic.getByLabelText("İşin özeti *"), { target: { value: "Gama Tasarrufu 2" } })
     fireEvent.click(ic.getByRole("button", { name: "Kaydet" }))
     await waitFor(() => expect(cagrilar.find((c) => c.yontem === "PUT")).toBeDefined())
     const cagri = cagrilar.find((c) => c.yontem === "PUT")
@@ -505,7 +537,8 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     expect(screen.getByText("Work items")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "New record" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Import from Excel" })).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "Export to Excel" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Excel report" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "PDF report" })).toBeInTheDocument()
     expect(kart("Alfa Test İşi")).toHaveTextContent("In progress")
     expect(kart("Alfa Test İşi")).toHaveTextContent("15/01/2026 – ongoing")
     expect(kart("Beta İnisiyatifi")).toHaveTextContent("TAM initiative")
@@ -514,6 +547,100 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     const ic = within(await screen.findByRole("dialog"))
     fireEvent.click(ic.getByRole("button", { name: "Save" }))
     expect(await ic.findByText("Title is required.")).toBeInTheDocument()
+  })
+})
+
+describe("Gelir Faydasi onay akisi ve rapor", () => {
+  const BEKLEYEN = kayit({ id: 4, title: "Delta Bekleyen", approval: "bekliyor", created_by_id: 5, created_by: "Ali Personel", people: [{ id: 2, name: "Ayse Test" }] })
+  const REDDEDILEN = kayit({ id: 5, title: "Epsilon Reddedilen", approval: "reddedildi", approval_note: "Tutarı kontrol edin", created_by_id: 5, approved_by: "Selin Sahip", approved_at: "2026-10-14T10:00:00Z" })
+
+  it("sahip: bekleyen sayisi uyarisi ve suzgeci; Onayla ve Reddet (gerekceyle) istekleri", async () => {
+    const gerekce = vi.spyOn(window, "prompt").mockReturnValueOnce("").mockReturnValueOnce("Tutarı kontrol edin")
+    const { cagrilar, sonGet } = kur({ yazabilir: false, items: [...KAYITLAR, BEKLEYEN], onay: { yonetebilir: true, bekleyen: 1, benim: 7, sahip: { id: 7, ad: "Selin Sahip" } } })
+    expect(await screen.findByText("1 iş onayınızı bekliyor.")).toBeInTheDocument()
+    expect(kart("Delta Bekleyen")).toHaveTextContent("Onay bekliyor")
+    fireEvent.click(screen.getByRole("button", { name: "Bekleyenleri göster" }))
+    await waitFor(() => expect(sonGet()?.yol).toContain("onay=bekliyor"))
+
+    fireEvent.click(kart("Delta Bekleyen"))
+    const ic = within(await screen.findByRole("dialog"))
+    expect(ic.getByText(/Modül sahibi kontrol edip onaylayınca canlıya alınır/)).toBeInTheDocument()
+    fireEvent.click(ic.getByRole("button", { name: "Reddet" }))
+    expect(gerekce).toHaveBeenCalledWith("Ret gerekçesi (giren kişi görür):", "")
+    expect(cagrilar.some((c) => c.yol.endsWith("/onay"))).toBe(false) // bos gerekce: istek yok
+    fireEvent.click(ic.getByRole("button", { name: "Reddet" }))
+    await waitFor(() => expect(cagrilar.find((c) => c.yol === "/api/v1/gelir-uretim/4/onay")?.govde).toEqual({ karar: "reddet", gerekce: "Tutarı kontrol edin" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+
+    fireEvent.click(kart("Delta Bekleyen"))
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Onayla, canlıya al" }))
+    await waitFor(() => expect(cagrilar.filter((c) => c.yol === "/api/v1/gelir-uretim/4/onay").map((c) => c.govde)).toContainEqual({ karar: "onayla" }))
+  })
+
+  it("sahip onayli kaydin onayini geri alabilir; personel onay dugmesi gormez", async () => {
+    const { cagrilar } = kur({ yazabilir: false, onay: { yonetebilir: true, benim: 7 } })
+    await screen.findByText("Alfa Test İşi")
+    fireEvent.click(kart("Alfa Test İşi"))
+    const ic = within(await screen.findByRole("dialog"))
+    expect(ic.getByRole("button", { name: "Düzenle" })).toBeInTheDocument() // sahip onayli kaydi duzenler
+    fireEvent.click(ic.getByRole("button", { name: "Onayı geri al" }))
+    await waitFor(() => expect(cagrilar.find((c) => c.yol === "/api/v1/gelir-uretim/1/onay")?.govde).toEqual({ karar: "geri_al" }))
+    cleanup()
+
+    kur({ yazabilir: false })
+    await screen.findByText("Alfa Test İşi")
+    fireEvent.click(kart("Alfa Test İşi"))
+    const ic2 = within(await screen.findByRole("dialog"))
+    for (const ad of ["Onayı geri al", "Onayla, canlıya al", "Reddet", "Düzenle", "Sil"]) expect(ic2.queryByRole("button", { name: ad })).not.toBeInTheDocument()
+  })
+
+  it("giren kisi reddedilen kaydinin gerekcesini gorur, duzenleyip yeniden gonderir; baskasinin bekleyenini degistiremez", async () => {
+    const BASKASI = kayit({ id: 6, title: "Zeta Baskasi", approval: "bekliyor", created_by_id: 99 })
+    kur({ yazabilir: false, items: [REDDEDILEN, BASKASI] })
+    await screen.findByText("Epsilon Reddedilen")
+    expect(kart("Epsilon Reddedilen")).toHaveTextContent("Reddedildi")
+    fireEvent.click(kart("Epsilon Reddedilen"))
+    const ic = within(await screen.findByRole("dialog"))
+    expect(ic.getByText(/Ret gerekçesi: Tutarı kontrol edin\. Düzeltip kaydettiğinizde yeniden onaya gider\./)).toBeInTheDocument()
+    expect(ic.getByText(/Selin Sahip · 14\.10\.2026/)).toBeInTheDocument()
+    expect(ic.getByRole("button", { name: "Düzenle" })).toBeInTheDocument()
+    expect(ic.getByRole("button", { name: "Sil" })).toBeInTheDocument()
+    fireEvent.click(ic.getByRole("button", { name: "Kapat" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    fireEvent.click(kart("Zeta Baskasi"))
+    const ic2 = within(await screen.findByRole("dialog"))
+    expect(ic2.queryByRole("button", { name: "Düzenle" })).not.toBeInTheDocument()
+  })
+
+  it("admin modul sahibini secer: PUT /sahip; bos secim sahipligi kaldirir", async () => {
+    const { cagrilar } = kur()
+    await screen.findByText("Alfa Test İşi")
+    const secim = screen.getByLabelText("Modül sahibini seç")
+    await within(secim).findByRole("option", { name: "Selin Sahip" })
+    fireEvent.change(secim, { target: { value: "7" } })
+    await waitFor(() => expect(cagrilar.find((c) => c.yol === "/api/v1/gelir-uretim/sahip" && c.yontem === "PUT")?.govde).toEqual({ user_id: 7 }))
+  })
+
+  it("PDF rapor: yalniz onayli isler sablona girer, dosya indirilir; hata mesaji gosterilir", async () => {
+    const pdf = await import("@/musteri/rapor-pdf")
+    const olustur = vi.spyOn(pdf, "raporPdfOlustur").mockImplementation(async (el: HTMLElement) => {
+      expect(el).toHaveTextContent("Gelir Faydası Sağlanan İşler Raporu")
+      expect(el).toHaveTextContent("Onaylı işler · 3 kayıt")
+      expect(el).toHaveTextContent("1. Alfa Test İşi")
+      expect(el).not.toHaveTextContent("Delta Bekleyen")
+      return new Blob(["%PDF"], { type: "application/pdf" })
+    })
+    const indir = vi.spyOn(pdf, "dosyaIndir").mockImplementation(() => undefined)
+    kur({ items: [...KAYITLAR, BEKLEYEN] })
+    await screen.findByText("Alfa Test İşi")
+    fireEvent.click(screen.getByRole("button", { name: "PDF rapor" }))
+    await waitFor(() => expect(indir).toHaveBeenCalledTimes(1))
+    expect(olustur).toHaveBeenCalledTimes(1)
+    expect(indir.mock.calls[0]?.[1]).toMatch(/^Gelir_Faydasi_\d{8}\.pdf$/)
+
+    olustur.mockRejectedValueOnce(new Error("pdf"))
+    fireEvent.click(screen.getByRole("button", { name: "PDF rapor" }))
+    expect(await screen.findByText("PDF oluşturulamadı.")).toBeInTheDocument()
   })
 })
 

@@ -57,7 +57,6 @@ TABLE_OWNER = {
     "sms_revenue": "tamsms",
     "apn_revenue": "tamapn",
     "apn_work": "tamapn",
-    "radar_prospect": "radar",
     "presentation": "sunum",
     "revenue_benefit": "gelir_uretim",
     "revenue_benefit_person": "gelir_uretim",
@@ -251,6 +250,8 @@ class CalendarDay(KullaniciBase):
     online_count: Mapped[int] = mapped_column(Integer, default=0)
     face_count: Mapped[int] = mapped_column(Integer, default=0)  # yuz yuze toplanti
     meeting_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # toplanti ozeti (serbest metin, satir satir); eski dosyalara db._eksik_sutunlari_ekle ekler
+    work_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # o gun yapilan isler (2026-10-14); eski dosyalara db._eksik_sutunlari_ekle ekler
+    status2: Mapped[str | None] = mapped_column(String(30), nullable=True)  # yarim gun bolunmesi (2026-10-15): gunun ikinci yarisi; her yari 0,5 gun
 
 
 class ProjectItem(Base):
@@ -485,13 +486,6 @@ class ApnWork(KullaniciBase):
     apn_name: Mapped[str] = mapped_column(String(200), default="")
     created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-class RadarProspect(Base):
-    __tablename__ = "radar_prospect"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), default="")
-    stage: Mapped[str] = mapped_column(String(40), default="")
-
 
 class Presentation(Base):
     """Ceyrek bazli sunum ogesi: kaynagin (app.sunum.servis.KAYNAKLAR, ornek 'takvim') o ceyrekteki donmus goruntusu (period '2026-Q4').

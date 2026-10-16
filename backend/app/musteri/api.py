@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -14,10 +14,9 @@ from app.audit import audit_log
 from app.config import get_settings
 from app.db import get_db, oturum
 from app.deps import require_veri_yazma
-from app.dil import m
 from app.erisim import Erisim, modul_erisim
 from app.musteri import servis as ms
-from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, ok
+from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, govde_oku, ok
 from app.rapor import servis as rs
 from app.session import Principal
 
@@ -218,23 +217,6 @@ def gonder(musteri_id: KimlikTipi, body: GonderGovde, e: Erisim = Depends(muster
     return sonuc
 
 
-async def _dosya_govdesi(request: Request, sinir_mb: int) -> bytes:
-    """Ham dosya govdesi (cok parcali form yok); boyut siniri akis sirasinda uygulanir."""
-    sinir = sinir_mb * 1024 * 1024
-    mesaj = m(f"Dosya \u00e7ok b\u00fcy\u00fck (en fazla {sinir_mb} MB).", f"File too large (max {sinir_mb} MB).")
-    bildirilen = request.headers.get("content-length", "")
-    if bildirilen.isdigit() and int(bildirilen) > sinir:
-        raise HTTPException(status_code=413, detail=mesaj)
-    parcalar: list[bytes] = []
-    boyut = 0
-    async for parca in request.stream():
-        boyut += len(parca)
-        if boyut > sinir:
-            raise HTTPException(status_code=413, detail=mesaj)
-        parcalar.append(parca)
-    return b"".join(parcalar)
-
-
 def _ayri_oturumda(islem: Callable[[Session], Any]) -> Any:
     """Excel okumasi CPU-yogun: threadpool'da kendi oturumuyla calisir, olay dongusunu bekletmez."""
     with oturum() as db:
@@ -253,7 +235,7 @@ async def sla_yukle(
     musteri_id: KimlikTipi, request: Request, dosya: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
 ):
     """SLA Excel'i (.xlsx govdesi). Donemde oncekinin yerine gecer; rapor gonderilirken iletiye otomatik eklenir."""
-    veri = await _dosya_govdesi(request, min(get_settings().ingest_max_mb, 30))
+    veri = await govde_oku(request, min(get_settings().ingest_max_mb, 30) * 1048576)
     sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.sla_yukle(db, e.user, musteri_id, veri, dosya))
     _denetim(e.user, "rapor.sla_yukle", f"musteri={musteri_id} boyut={len(veri)}")
     return ok(sonuc)
@@ -269,7 +251,7 @@ async def gorsel_ekle(
     musteri_id: KimlikTipi, request: Request, baslik: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
 ):
     """Elle eklenen rapor grafigi (MRTG vb.; GALAPAGOS baglanana kadar). PNG/JPEG/GIF govdesi."""
-    veri = await _dosya_govdesi(request, 10)
+    veri = await govde_oku(request, 10 * 1048576)
     return ok(await run_in_threadpool(_ayri_oturumda, lambda db: rs.gorsel_ekle(db, e.user, musteri_id, veri, baslik)))
 
 
@@ -283,7 +265,7 @@ async def dosya_ekle(
     musteri_id: KimlikTipi, request: Request, ad: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
 ):
     """Rapor iletisine eklenecek dosya (ham govde). Gonderimde iletiye otomatik girer."""
-    veri = await _dosya_govdesi(request, 20)
+    veri = await govde_oku(request, 20 * 1048576)
     sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.dosya_ekle(db, e.user, musteri_id, veri, ad))
     _denetim(e.user, "rapor.dosya_ekle", f"musteri={musteri_id} boyut={len(veri)}")
     return ok(sonuc)
@@ -344,3 +326,29 @@ def durum(
 ):
     simdi_yil, simdi_ay = rs.donem()
     return _yap(db, lambda: rs.durum_ozeti(db, e.user, ay or simdi_ay, yil or simdi_yil))
+
+
+# --- Cacti grafik baglantilari ve aylik rapor -----------------------------------------------------
+class CactiGovde(BaseModel):
+    baglantilar: list[str] = Field(max_length=6)
+
+    model_config = {"str_max_length": 2048}
+
+
+@router.get("/musteri/{musteri_id:int}/rapor/cacti")
+def cacti_ayar(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.cacti_ayar(db, e.user, musteri_id))
+
+
+@router.put("/musteri/{musteri_id:int}/rapor/cacti")
+def cacti_kaydet(musteri_id: KimlikTipi, body: CactiGovde, e: Erisim = Depends(musteri_erisim),
+                 db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+    sonuc = _yap(db, lambda: rs.cacti_kaydet(db, e.user, musteri_id, body.baglantilar), yaz=True)
+    _denetim(e.user, "rapor.cacti_ayar", f"musteri={musteri_id} adet={len(body.baglantilar)}")
+    return sonuc
+
+
+@router.get("/musteri/{musteri_id:int}/rapor/cacti/grafikler")
+def cacti_grafikleri(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    # Senkron endpoint FastAPI threadpool'unda calisir; ag I/O event loop'u tutmaz.
+    return _yap(db, lambda: rs.cacti_grafikleri(db, e.user, musteri_id))

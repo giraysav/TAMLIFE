@@ -248,8 +248,9 @@ def ice_aktar(db: Session, musteri: Customer, icerik: bytes) -> dict:
 def kaydet(db: Session, ozetler: dict[int, dict], dosya: str, yukleyen: str) -> None:
     """Musteri basina son yukleme degistirir (commit cagiranda)."""
     zaman = simdi()
+    mevcut = {s.customer_id: s for s in db.scalars(select(UrunTutarOzet).where(UrunTutarOzet.customer_id.in_([int(c) for c in ozetler])))}
     for cid, ozet in ozetler.items():
-        satir = db.get(UrunTutarOzet, int(cid))
+        satir = mevcut.get(int(cid))
         if satir is None:
             db.add(UrunTutarOzet(customer_id=int(cid), summary=ozet, file_name=dosya[:200], uploaded_by=yukleyen[:120], uploaded_at=zaman))
         else:

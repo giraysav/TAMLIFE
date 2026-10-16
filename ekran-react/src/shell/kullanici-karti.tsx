@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Check, ChevronUp, LogOut, MessageSquare, ShieldCheck, Sparkles, UserRound, Wand2 } from "lucide-react"
 import { baslangicHarfleri } from "@/lib/bicim"
+import { fotoAdresi } from "@/lib/foto"
 import { hareketDegistir, useHareket } from "@/lib/hareket"
 import { yaziDegistir, useYazi } from "@/lib/yazi"
 import type { Kullanici } from "@/lib/oturum"
@@ -165,7 +166,11 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
               className="tl-hareket absolute inset-0 rounded-full"
               style={{ background: "conic-gradient(from 0deg, #ffc72c, #00a3e0, #ffc72c 60%, transparent 85%)", animation: "tl-donus 5s linear infinite" }}
             />
-            <span className="relative flex size-[2.375rem] items-center justify-center rounded-full bg-tl-navy text-sm font-black tracking-tight text-tl-yellow">{baslangicHarfleri(gorunenAd)}</span>
+            {kullanici.profile?.photo_version ? (
+              <img src={fotoAdresi(kullanici.profile.photo_version)} alt="" className="relative size-[2.375rem] rounded-full border-2 border-tl-navy bg-tl-navy object-cover" />
+            ) : (
+              <span className="relative flex size-[2.375rem] items-center justify-center rounded-full bg-tl-navy text-sm font-black tracking-tight text-tl-yellow">{baslangicHarfleri(gorunenAd)}</span>
+            )}
             <span aria-hidden className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-tl-navy">
               <span className="tl-hareket size-2 rounded-full bg-emerald-400" style={{ animation: "tl-nabiz 2.4s ease-in-out infinite" }} />
             </span>

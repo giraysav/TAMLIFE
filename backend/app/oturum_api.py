@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app import ad, kullanicilar
+from app import ad, kullanicilar, profil_foto
 from app.ad import directory
 from app.audit import SecretAuditError, audit_log
 from app.config import get_settings
@@ -17,7 +18,7 @@ from app.deps import require_user
 from app.kullanicilar import giris_isle
 from app.models import AppUser
 from app.navigation import navigation_for
-from app.ortak import ok
+from app.ortak import govde_oku, ok
 from app.rolgorunum import etkin
 from app.security import client_ip, limiter
 from app.session import Principal, current_user, login, logout
@@ -69,6 +70,8 @@ def _kimlik_dogrula(db: Session, girdi: str, parola: str) -> tuple[Principal | N
         return None, sebep
     if get_settings().ad_otomatik_ac.strip().lower() != "true":
         return None, "ad_onayladi_otomatik_kapali"
+    if not kullanicilar.onek_izinli(kisa):
+        return None, "ad_onayladi_onek_izinsiz"  # yalniz tc/ng/te ile baslayan kullanici adlarina hesap acilir
     try:
         return _kisi(kullanicilar.ad_kullanicisi_ac(db, kisa, alan)), "ad_kullanici_acildi"
     except SQLAlchemyError:
@@ -127,6 +130,7 @@ def whoami(user: Principal = Depends(require_user), db: Session = Depends(get_db
         db.rollback()
         satir = None  # DB okunamazsa oturum yine acik kalir; profil bos gelir
     profil = kullanicilar.profil_sozlugu(satir, user)
+    profil["photo_version"] = profil_foto.surum(user.username)
     return ok(
         {
             "username": user.username,
@@ -149,3 +153,29 @@ def profil_yaz(body: ProfilBody, user: Principal = Depends(require_user), db: Se
     db.commit()
     audit_log.remember(actor=user.username, action="profil.guncelle", outcome="allow", detail=f"alanlar={','.join(degisen) or '-'}")  # degerler (telefon, adres) gunluge yazilmaz
     return ok(kullanicilar.profil_sozlugu(satir, user))
+
+
+@router.get("/photo")
+def foto_oku(user: Principal = Depends(require_user)) -> Response:
+    """Oturum sahibinin profil fotografi (hesap karti). Adres surumludur (?v=photo_version), bu yuzden tarayici saklayabilir."""
+    veri = profil_foto.oku(user.username)
+    if veri is None:
+        raise HTTPException(status_code=404, detail="Fotoğraf yok.")
+    return Response(content=veri, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
+
+
+@router.put("/photo")
+async def foto_yaz(request: Request, user: Principal = Depends(require_user)) -> dict:
+    """Ham JPEG govdesi (arayuz 256 px kareye kucultur). Kisi yalniz kendi fotografini degistirir."""
+    veri = await govde_oku(request, profil_foto.AZAMI_BAYT)
+    surum = await run_in_threadpool(profil_foto.kaydet, user.username, veri)
+    audit_log.remember(actor=user.username, action="profil.foto", outcome="allow", detail=f"bayt={len(veri)}")
+    return ok({"photo_version": surum})
+
+
+@router.delete("/photo")
+def foto_sil(user: Principal = Depends(require_user)) -> dict:
+    silindi = profil_foto.sil(user.username)
+    if silindi:
+        audit_log.remember(actor=user.username, action="profil.foto_sil", outcome="allow")
+    return ok({"photo_version": None})

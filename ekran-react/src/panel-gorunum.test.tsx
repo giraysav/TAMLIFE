@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Bolum, Panel } from "@/components/sayfa-ui"
@@ -188,6 +188,65 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     expect(within(satir).getByRole("button", { name: /Kritik CI/ })).toBeInTheDocument()
     expect(within(satir).getByRole("link", { name: /Topo Maker/ })).toHaveAttribute("href", "#/musteri?m=9&sekme=topoloji")
     expect(within(satir).getByRole("button", { name: /Müşteriyi sil/ })).toBeInTheDocument()
+  })
+
+  it("Duzenle formu arka plan yenilemesinde yazilani korur; Vazgec sonrasi sunucu degerine doner", async () => {
+    sahteSunucu({ "/api/v1/musteri/9": KART })
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={istemci}>
+        <MusteriKarti id={9} dil="tr" />
+      </QueryClientProvider>,
+    )
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    fireEvent.click(screen.getByRole("button", { name: "Düzenle" }))
+    const unvan = () => document.querySelector<HTMLInputElement>("#k-name") as HTMLInputElement
+    expect(unvan().value).toBe("112 ACIL SERVIS")
+    fireEvent.change(unvan(), { target: { value: "YAZILAN AD" } })
+    await act(() => istemci.refetchQueries({ queryKey: ["musteri", "kart", 9] }))
+    expect(unvan().value).toBe("YAZILAN AD")
+    fireEvent.click(screen.getByRole("button", { name: "Vazgeç" }))
+    fireEvent.click(screen.getByRole("button", { name: "Düzenle" }))
+    expect(unvan().value).toBe("112 ACIL SERVIS")
+  })
+
+  it("Duzenle: istirak secilince cati alani acilir ve secilen iliski kaydedilir", async () => {
+    const cagrilar = sahteSunucu({
+      "/api/v1/musteri/9/iletisim": { ok: true },
+      "/api/v1/musteri/9/kimlik": { ok: true },
+      "/api/v1/musteri/9": { ...KART, cati_secenekleri: [{ id: 8, ad: "TEST CATI" }] },
+    })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    fireEvent.click(screen.getByRole("button", { name: "Düzenle" }))
+    const form = screen.getByRole("form", { name: "Düzenle" })
+    expect(within(form).getByRole("combobox", { name: "Müşteri türü" })).toHaveValue("cati")
+    expect(within(form).queryByRole("combobox", { name: "Çatı müşteri" })).toBeNull()
+    fireEvent.change(within(form).getByRole("combobox", { name: "Müşteri türü" }), { target: { value: "istirak" } })
+    const cati = within(form).getByRole("combobox", { name: "Çatı müşteri" })
+    expect(cati).toBeRequired()
+    expect(cati).toHaveValue("")
+    fireEvent.change(cati, { target: { value: "8" } })
+    fireEvent.click(within(form).getByRole("button", { name: "Kaydet" }))
+    await waitFor(() => expect(cagrilar.find((c) => c.yontem === "PUT" && c.yol.endsWith("/kimlik"))?.govde).toMatchObject({ parent_id: 8 }))
+  })
+
+  it("Mevcut istirakin catisi secili gelir; catiya donuste parent_id null gonderilir", async () => {
+    const cagrilar = sahteSunucu({
+      "/api/v1/musteri/9/iletisim": { ok: true },
+      "/api/v1/musteri/9/kimlik": { ok: true },
+      "/api/v1/musteri/9": { ...KART, kimlik: { ...KART.kimlik, cati: { id: 8, unvan: "TEST CATI" } }, cati_secenekleri: [{ id: 8, ad: "TEST CATI" }] },
+    })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    fireEvent.click(screen.getByRole("button", { name: "Düzenle" }))
+    const form = screen.getByRole("form", { name: "Düzenle" })
+    expect(within(form).getByRole("combobox", { name: "Müşteri türü" })).toHaveValue("istirak")
+    expect(within(form).getByRole("combobox", { name: "Çatı müşteri" })).toHaveValue("8")
+    fireEvent.change(within(form).getByRole("combobox", { name: "Müşteri türü" }), { target: { value: "cati" } })
+    expect(within(form).queryByRole("combobox", { name: "Çatı müşteri" })).toBeNull()
+    fireEvent.click(within(form).getByRole("button", { name: "Kaydet" }))
+    await waitFor(() => expect(cagrilar.find((c) => c.yontem === "PUT" && c.yol.endsWith("/kimlik"))?.govde).toMatchObject({ parent_id: null }))
   })
 
   it("Kritik CI dugmesi tabloyu cekmecede acar", async () => {

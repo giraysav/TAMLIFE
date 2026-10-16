@@ -1,6 +1,12 @@
 """Gelir Faydasi Saglanan Isler is kurallari: kayit CRUD, liste + suzgec + ozet, ceyrek sunum ozeti.
 
-Gorme: modul_erisim("gelir_uretim") (rol gorunumune bagli). Yazma ve Excel ice aktarma: yalniz admin (deps.require_veri_yazma, API katmaninda).
+Gorme: modul_erisim("gelir_uretim") (rol gorunumune bagli). Excel ice aktarma: yalniz admin (deps.require_veri_yazma, API katmaninda).
+Onay akisi (2026-10-15 kullanici istegi): modulu goren herkes yeni is girer; kayit 'bekliyor' olur ve modul sahibinin (app_setting
+'gelir_uretim.sahip', admin atar) onayina duser (sahibin ve admin'in kendi girisi dogrudan onaylidir). Sahip ya da admin onaylar (canliya alir) veya gerekceyle reddeder. Bekleyen/reddedilen
+kaydi yalniz giren kisi (duzeltip yeniden gonderir) ve sahip/admin gorur; toplamlara, Excel/PDF raporuna ve ceyrek sunumuna yalniz
+ONAYLI isler girer. Onayli kaydi duzenleme ve silme sahip/admin isidir. Akistan onceki kayitlar ve Excel ice aktarma onaylidir.
+Zorunlu alanlar (kullanicinin Excel basliklari, ZORUNLU): yeni giriste hepsi dolu olmali (sayilar 0 olabilir). Duzenlemede onceden bos
+olan alan bos kalabilir (eski kayitlar duzenlenebilsin), dolu alan bosaltilamaz; bekleyen/reddedilen kayitta hepsi zorunludur.
 Kisiler yalniz app.kullanicilar.personel kumesinden (etkin TeamMember) baglanir; yonetici ve admin hicbir kisi listesinde yoktur.
 Zaman kurali: isin calisma araligi [baslangic, bitis]; bitis bos = devam ediyor (acik uclu). Baslangici olmayan is zamana
 yerlestirilemez, yil/ceyrek suzgecinde ve sunum ozetinde yer almaz. Bitis tarihi olmayan TAMAMLANMIS is yalniz baslangic gununde sayilir
@@ -15,11 +21,12 @@ from datetime import date, datetime
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.authz import is_admin
 from app.dil import m
 from app.gelir_uretim.ayristir import katla
 from app.gelir_uretim.models import RevenueBenefit, RevenueBenefitPerson
 from app.kullanicilar import kullanici_kaydi, personel
-from app.models import AppUser
+from app.models import AppSetting, AppUser
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.session import Principal
 from app.takvim.servis import donem_araligi
@@ -29,11 +36,14 @@ FAYDA_TURLERI = ("gelir", "tasarruf", "verimlilik")
 DURUMLAR = ("baslamadi", "devam", "tamamlandi", "iptal")
 PARALAR = ("TRY", "USD", "EUR")
 DONEMLER = ("ay", "yil", "tek_sefer")
+ONAY_DURUMLARI = ("bekliyor", "onayli", "reddedildi")
+SAHIP_ANAHTARI = "gelir_uretim.sahip"
 
 # alan -> (Turkce ad, Ingilizce ad, azami uzunluk)
 METIN_ALANLARI = {
     "title": ("Başlık", "Title", 300),
     "status_note": ("Güncel durum", "Current status", 4000),
+    "roadmap": ("Yol haritası", "Roadmap", 4000),
     "description": ("Detaylı açıklama", "Description", 8000),
     "customers": ("Etkilenen müşteriler", "Affected customers", 500),
     "revenue_note": ("Tutar notu", "Amount note", 500),
@@ -45,11 +55,29 @@ SAYI_ALANLARI = {
     "revenue_amount": ("Gelir tutarı", "Revenue amount", 1e13),
     "year_revenue": ("Yıl içi gelir", "In-year revenue", 1e13),
     "hours_per_month": ("Aylık efor kazancı", "Monthly effort saved", 1e6),
+    "hours_per_year": ("Yıllık efor kazancı", "Yearly effort saved", 1e7),
 }
 ALANLAR = (
     "kind", "benefit_type", "title", "status", "status_note", "description", "customers", "revenue_amount", "revenue_currency",
     "revenue_period", "revenue_note", "year_revenue", "hours_per_month", "hours_note", "extra_note", "start_date", "end_date", "other_people",
+    "roadmap", "hours_per_year",
 )  # fmt: skip
+# Kullanicinin Excel basliklari sirasiyla zorunlu alanlar: alan -> (Turkce, Ingilizce). "people" = Ilgili TAM (personel ya da diger kisiler).
+ZORUNLU = {
+    "people": ("İlgili TAM", "Responsible TAM"),
+    "title": ("İşin özeti", "Work summary"),
+    "status_note": ("Güncel durum", "Current status"),
+    "roadmap": ("Yol haritası", "Roadmap"),
+    "description": ("Detaylı açıklaması", "Description"),
+    "customers": ("Hangi müşteri/müşterileri etkilediği", "Affected customers"),
+    "revenue_amount": ("Aylık gelir faydası (TL/ay)", "Monthly revenue benefit"),
+    "year_revenue": ("Yıllık gelir faydası (TL/12 ay)", "Yearly revenue benefit"),
+    "hours_per_month": ("Aylık verimlilik faydası (saat/ay)", "Monthly efficiency benefit (hours)"),
+    "hours_per_year": ("Yıllık verimlilik faydası (saat/12 ay)", "Yearly efficiency benefit (hours)"),
+    "extra_note": ("Ek açıklamalar", "Additional notes"),
+    "start_date": ("Başlangıç tarihi", "Start date"),
+    "end_date": ("Bitiş tarihi", "End date"),
+}
 TUR_SIRASI = {"proje": 0, "inisiyatif": 1}
 
 
@@ -105,6 +133,91 @@ def temizle(girdi: dict) -> dict:
     return v
 
 
+def eksik_alanlar(temiz: dict, kisi_var: bool) -> list[str]:
+    """ZORUNLU alanlardan bos olanlar (sirasiyla). Sayi 0 dolu sayilir."""
+    eksik = []
+    for ad in ZORUNLU:
+        if ad == "people":
+            bos = not kisi_var and not temiz.get("other_people")
+        else:
+            deger = temiz.get(ad)
+            bos = deger is None or (isinstance(deger, str) and not deger.strip())
+        if bos:
+            eksik.append(ad)
+    return eksik
+
+
+def zorunlu_dogrula(temiz: dict, kisi_var: bool, hos_gorulen: set[str] | frozenset[str] = frozenset()) -> None:
+    """Eksik zorunlu alan varsa 400; hos_gorulen: duzenlemede onceden de bos olan (eski kayit) alanlar."""
+    eksik = [a for a in eksik_alanlar(temiz, kisi_var) if a not in hos_gorulen]
+    if eksik:
+        raise GelirUretimHata(
+            400,
+            m(
+                "Zorunlu alanlar boş: " + ", ".join(ZORUNLU[a][0] for a in eksik) + ". Sayısal alanlara fayda yoksa 0 yazın.",
+                "Required fields are empty: " + ", ".join(ZORUNLU[a][1] for a in eksik) + ". Enter 0 in number fields when there is no benefit.",
+            ),
+        )
+
+
+# --- modul sahibi ve yetki -----------------------------------------------------------------------------------------
+def sahip_id(db: Session) -> int | None:
+    kayit = db.get(AppSetting, SAHIP_ANAHTARI)
+    deger = kayit.value if kayit is not None and isinstance(kayit.value, dict) else {}
+    kimlik = deger.get("user_id")
+    return kimlik if isinstance(kimlik, int) and not isinstance(kimlik, bool) else None
+
+
+def sahip(db: Session) -> AppUser | None:
+    kimlik = sahip_id(db)
+    kisi = db.get(AppUser, kimlik) if kimlik is not None else None
+    return kisi if kisi is not None and kisi.active is not False else None
+
+
+def sahip_adaylari(db: Session) -> list[dict]:
+    """Modul sahibi secenekleri: etkin hesaplar (admin hesaplari haric; admin zaten onaylayabilir)."""
+    kisiler = db.scalars(select(AppUser).where(AppUser.active.is_not(False)).order_by(AppUser.display_name, AppUser.username))
+    return [{"id": k.id, "ad": kisi_adi(k)} for k in kisiler if not (k.is_admin or k.role == "admin")]
+
+
+def sahip_kaydet(db: Session, kimlik: int | None, yapan: str) -> AppUser | None:
+    if kimlik is not None and kimlik not in {a["id"] for a in sahip_adaylari(db)}:
+        raise GelirUretimHata(400, m("Modül sahibi etkin bir panel kullanıcısı olmalı.", "The module owner must be an active panel user."))
+    kayit = db.get(AppSetting, SAHIP_ANAHTARI)
+    if kayit is None:
+        kayit = AppSetting(key=SAHIP_ANAHTARI)
+        db.add(kayit)
+    kayit.value = {"user_id": kimlik}
+    kayit.updated_by, kayit.updated_at = yapan[:120], simdi()
+    db.flush()
+    return sahip(db)
+
+
+def _kim(db: Session, user: Principal) -> AppUser | None:
+    """Oturumdaki kisinin satiri (olusturmaz: yalniz okuma)."""
+    return db.scalar(select(AppUser).where(AppUser.username == user.username))
+
+
+def yonetebilir(db: Session, user: Principal) -> bool:
+    """Onay, onayli kaydi duzenleme ve silme: admin ya da modul sahibi."""
+    if is_admin(user):
+        return True
+    kimlik = sahip_id(db)
+    kisi = _kim(db, user)
+    return kimlik is not None and kisi is not None and kisi.id == kimlik
+
+
+def _kendi(db: Session, user: Principal, r: RevenueBenefit) -> bool:
+    kisi = _kim(db, user)
+    return kisi is not None and r.created_by_id == kisi.id
+
+
+def gorebilir(db: Session, user: Principal, r: RevenueBenefit, yonetici: bool | None = None) -> bool:
+    if r.approval == "onayli":
+        return True
+    return (yonetebilir(db, user) if yonetici is None else yonetici) or _kendi(db, user, r)
+
+
 def _kisileri_dogrula(db: Session, idler: list[int], izinli_ek: set[int] | None = None) -> list[int]:
     """Yalniz etkin TAM personeli (kisi listelerinin tek kumesi). Guncellemede isin zaten bagli kisileri de gecer (sonradan pasif olmus olabilir)."""
     tekil = list(dict.fromkeys(idler))
@@ -128,10 +241,15 @@ def _bagli_idler(db: Session, kayit_id: int) -> set[int]:
 
 
 # --- yazma -------------------------------------------------------------------------------------------------------
-def ekle(db: Session, yapan: str, temiz: dict, kisi_idleri: list[int]) -> RevenueBenefit:
-    """Temizlenmis alanlarla kayit ekler (flush eder, commit etmez). Excel ice aktarma da bunu kullanir; kisi idleri onceden dogrulanmis olmali."""
+def ekle(
+    db: Session, yapan: str, temiz: dict, kisi_idleri: list[int], *, onay: str = "onayli", yapan_id: int | None = None
+) -> RevenueBenefit:
+    """Temizlenmis alanlarla kayit ekler (flush eder, commit etmez). Excel ice aktarma da bunu kullanir (onayli); kisi idleri onceden dogrulanmis olmali."""
     an = simdi()
-    satir = RevenueBenefit(**temiz, created_by=yapan, created_at=an, updated_by=yapan, updated_at=an)
+    satir = RevenueBenefit(
+        **temiz, created_by=yapan, created_at=an, updated_by=yapan, updated_at=an, approval=onay, created_by_id=yapan_id,
+        approved_by=yapan if onay == "onayli" else "", approved_at=an if onay == "onayli" else None,
+    )  # fmt: skip
     db.add(satir)
     db.flush()
     for kisi_id in kisi_idleri:
@@ -140,18 +258,47 @@ def ekle(db: Session, yapan: str, temiz: dict, kisi_idleri: list[int]) -> Revenu
     return satir
 
 
-def olustur(db: Session, user: Principal, girdi: dict, kisi_idleri: list[int]) -> int:
+def olustur(db: Session, user: Principal, girdi: dict, kisi_idleri: list[int]) -> RevenueBenefit:
+    """Yeni giris: tum zorunlu alanlar dolu olmali. Personelin girisi sahibin onayina duser ('bekliyor'); onay yetkisi olanin
+    (modul sahibi ya da admin) girisi dogrudan onaylidir."""
     temiz = temizle(girdi)
     idler = _kisileri_dogrula(db, kisi_idleri)
-    return ekle(db, kisi_adi(kullanici_kaydi(db, user)), temiz, idler).id
+    zorunlu_dogrula(temiz, bool(idler))
+    onay = "onayli" if yonetebilir(db, user) else "bekliyor"
+    kisi = kullanici_kaydi(db, user)
+    return ekle(db, kisi_adi(kisi), temiz, idler, onay=onay, yapan_id=kisi.id)
+
+
+def _yazma_yetkisi(db: Session, user: Principal, satir: RevenueBenefit) -> bool:
+    """Sahip/admin her kaydi; giren kisi yalniz kendi bekleyen ya da reddedilen kaydini degistirir."""
+    return yonetebilir(db, user) or (satir.approval != "onayli" and _kendi(db, user, satir))
+
+
+def _bul_yazilabilir(db: Session, user: Principal, kayit_id: int) -> RevenueBenefit:
+    satir = _bul(db, kayit_id)
+    if not gorebilir(db, user, satir):
+        raise GelirUretimHata(404, m("Kayıt bulunamadı.", "Record not found."))
+    if not _yazma_yetkisi(db, user, satir):
+        raise GelirUretimHata(
+            403,
+            m(
+                "Onaylı kaydı yalnızca modül sahibi ya da admin değiştirebilir.",
+                "Only the module owner or an admin can change an approved record.",
+            ),
+        )
+    return satir
 
 
 def guncelle(db: Session, user: Principal, kayit_id: int, girdi: dict, kisi_idleri: list[int]) -> list[str]:
-    """Kaydin tum alanlarini degistirir; degisen alan adlarini (deger degil) dondurur. Degisiklik yoksa guncelleme izi yazilmaz."""
-    satir = _bul(db, kayit_id)
+    """Kaydin tum alanlarini degistirir; degisen alan adlarini (deger degil) dondurur. Degisiklik yoksa guncelleme izi yazilmaz.
+    Reddedilen kaydi giren kisi duzeltince kayit yeniden onaya duser ('bekliyor')."""
+    satir = _bul_yazilabilir(db, user, kayit_id)
     temiz = temizle(girdi)
     mevcut = _bagli_idler(db, kayit_id)
     idler = _kisileri_dogrula(db, kisi_idleri, izinli_ek=mevcut)
+    onceki = {ad: getattr(satir, ad) for ad in ALANLAR}
+    hos = frozenset() if satir.approval != "onayli" else frozenset(eksik_alanlar(onceki, bool(mevcut)))
+    zorunlu_dogrula(temiz, bool(idler), hos)
     degisen = [ad for ad in ALANLAR if getattr(satir, ad) != temiz[ad]]
     for ad in degisen:
         setattr(satir, ad, temiz[ad])
@@ -164,12 +311,40 @@ def guncelle(db: Session, user: Principal, kayit_id: int, girdi: dict, kisi_idle
     if degisen:
         satir.updated_by = kisi_adi(kullanici_kaydi(db, user))
         satir.updated_at = simdi()
+        if satir.approval == "reddedildi":
+            satir.approval = "bekliyor"
+            degisen.append("approval")
     db.flush()
     return degisen
 
 
-def sil(db: Session, kayit_id: int) -> None:
+def onay_ver(db: Session, user: Principal, kayit_id: int, karar: str, gerekce: str = "") -> str:
+    """karar: onayla | reddet (gerekce zorunlu) | geri_al (onayli kaydi yeniden beklemeye alir). Yalniz sahip/admin. Donus: yeni durum."""
+    if not yonetebilir(db, user):
+        raise GelirUretimHata(403, m("Onay yalnızca modül sahibi ya da admin yetkisindedir.", "Only the module owner or an admin can approve."))
     satir = _bul(db, kayit_id)
+    gerekce = gerekce.strip()
+    if len(gerekce) > 2000:
+        raise GelirUretimHata(400, m("Gerekçe en fazla 2000 karakter olabilir.", "The reason can be at most 2000 characters."))
+    if karar == "reddet" and not gerekce:
+        raise GelirUretimHata(400, m("Ret gerekçesi yazın.", "Write a reason for rejecting."))
+    yeni = {"onayla": "onayli", "reddet": "reddedildi", "geri_al": "bekliyor"}.get(karar)
+    if yeni is None:
+        raise GelirUretimHata(400, m("Geçersiz karar.", "Invalid decision."))
+    if yeni == "onayli":
+        zorunlu_dogrula(
+            {ad: getattr(satir, ad) for ad in ALANLAR}, bool(_bagli_idler(db, kayit_id)), frozenset() if satir.created_by_id else frozenset(ZORUNLU)
+        )
+    satir.approval = yeni
+    satir.approval_note = gerekce if yeni == "reddedildi" else ""
+    satir.approved_by = kisi_adi(kullanici_kaydi(db, user))
+    satir.approved_at = simdi()
+    db.flush()
+    return yeni
+
+
+def sil(db: Session, user: Principal, kayit_id: int) -> None:
+    satir = _bul_yazilabilir(db, user, kayit_id)
     db.execute(delete(RevenueBenefitPerson).where(RevenueBenefitPerson.item_id == kayit_id))  # SQLite'ta FK zinciri kapali olabilir: acikca silinir
     db.delete(satir)
     db.flush()
@@ -225,6 +400,8 @@ def kayit_sozlugu(r: RevenueBenefit, kisiler: list[AppUser]) -> dict:
         "year_revenue": r.year_revenue,
         "hours_per_month": r.hours_per_month,
         "hours_note": r.hours_note,
+        "hours_per_year": r.hours_per_year,
+        "roadmap": r.roadmap,
         "extra_note": r.extra_note,
         "start_date": r.start_date.isoformat() if r.start_date else None,
         "end_date": r.end_date.isoformat() if r.end_date else None,
@@ -234,20 +411,29 @@ def kayit_sozlugu(r: RevenueBenefit, kisiler: list[AppUser]) -> dict:
         "created_at": iso(r.created_at),
         "updated_by": r.updated_by,
         "updated_at": iso(r.updated_at),
+        "created_by_id": r.created_by_id,
+        "approval": r.approval,
+        "approval_note": r.approval_note,
+        "approved_by": r.approved_by,
+        "approved_at": iso(r.approved_at) if r.approved_at else None,
+        "eksik": eksik_alanlar({ad: getattr(r, ad) for ad in ALANLAR}, bool(kisiler)),
     }
 
 
 def _toplamlara_girer(r: RevenueBenefit) -> bool:
-    return r.status != "iptal"
+    return r.status != "iptal" and r.approval == "onayli"
 
 
 def ozet_hesapla(kayitlar: list[RevenueBenefit], toplam_is: int) -> dict:
-    """Gosterilen kayitlarin ozeti. Iptal edilenler sayida gorunur, tutar/saat toplamlarina girmez. Kur cevirisi yok: para birimi basina toplanir."""
+    """Gosterilen ONAYLI kayitlarin ozeti (bekleyen/reddedilen sayilmaz). Iptal edilenler sayida gorunur, tutar/saat toplamlarina girmez.
+    Kur cevirisi yok: para birimi basina toplanir."""
+    kayitlar = [r for r in kayitlar if r.approval == "onayli"]
     aylik: dict[str, float] = {}
     yillik: dict[str, float] = {}
     tek: dict[str, float] = {}
     yil_ici = 0.0
     saat = 0.0
+    yil_saat = 0.0
     for r in kayitlar:
         if not _toplamlara_girer(r):
             continue
@@ -256,6 +442,7 @@ def ozet_hesapla(kayitlar: list[RevenueBenefit], toplam_is: int) -> dict:
             hedef[r.revenue_currency] = round(hedef.get(r.revenue_currency, 0.0) + r.revenue_amount, 2)
         yil_ici += r.year_revenue or 0.0
         saat += r.hours_per_month or 0.0
+        yil_saat += r.hours_per_year or 0.0
     return {
         "is_sayisi": len(kayitlar),
         "toplam_is": toplam_is,
@@ -265,6 +452,7 @@ def ozet_hesapla(kayitlar: list[RevenueBenefit], toplam_is: int) -> dict:
         "tek_seferlik_gelir": tek,
         "yil_ici_gelir": round(yil_ici, 2),
         "aylik_saat": round(saat, 2),
+        "yillik_saat": round(yil_saat, 2),
     }
 
 
@@ -280,7 +468,7 @@ def personel_secenekleri(db: Session) -> list[dict]:
     return [{"id": k.id, "ad": kisi_adi(k)} for k in personel(db)]
 
 
-def liste(
+def _suz(
     db: Session,
     *,
     q: str = "",
@@ -289,9 +477,9 @@ def liste(
     fayda: str | None = None,
     tam: int | None = None,
     yil: int | None = None,
-) -> dict:
-    """Suzulmus liste + ozet + secenekler. q: baslik, musteri, aciklama, durum, ek not ve kisi adlarinda (Turkce harf/buyuk-kucuk farksiz) arar.
-    yil: calisma araligi o yila degen isler (baslangici olmayanlar elenir)."""
+    onay: str | None = None,
+) -> tuple[list[RevenueBenefit], dict[int, list[AppUser]]]:
+    """Suzgeclere uyan kayitlar (sirali) ve kisileri. Gorme kurali cagirandadir."""
     sorgu = select(RevenueBenefit)
     if tur:
         sorgu = sorgu.where(RevenueBenefit.kind == tur)
@@ -299,6 +487,8 @@ def liste(
         sorgu = sorgu.where(RevenueBenefit.status == durum)
     if fayda:
         sorgu = sorgu.where(RevenueBenefit.benefit_type == fayda)
+    if onay:
+        sorgu = sorgu.where(RevenueBenefit.approval == onay)
     if tam:
         sorgu = sorgu.where(RevenueBenefit.id.in_(select(RevenueBenefitPerson.item_id).where(RevenueBenefitPerson.user_id == tam)))
     kayitlar = list(db.scalars(sorgu))
@@ -312,23 +502,50 @@ def liste(
             r
             for r in kayitlar
             if anahtar
-            in katla(" ".join([r.title, r.customers, r.description, r.status_note, r.extra_note, r.other_people, *(kisi_adi(k) for k in kisiler[r.id])]))
+            in katla(" ".join([r.title, r.customers, r.description, r.status_note, r.roadmap, r.extra_note, r.other_people, *(kisi_adi(k) for k in kisiler[r.id])]))
         ]
-    kayitlar = _sirala(kayitlar)
+    return _sirala(kayitlar), kisiler
+
+
+def liste(
+    db: Session,
+    user: Principal,
+    *,
+    q: str = "",
+    tur: str | None = None,
+    durum: str | None = None,
+    fayda: str | None = None,
+    tam: int | None = None,
+    yil: int | None = None,
+    onay: str | None = None,
+) -> dict:
+    """Suzulmus liste + ozet + secenekler. q: baslik, musteri, aciklama, durum, yol haritasi, ek not ve kisi adlarinda (Turkce harf/buyuk-kucuk
+    farksiz) arar. yil: calisma araligi o yila degen isler (baslangici olmayanlar elenir). Bekleyen/reddedilen kayitlar yalniz girene ve
+    sahip/admin'e listelenir; ozet yalniz onaylilari toplar. bekleyen: sahip/admin icin onay bekleyen kayit sayisi (suzgecsiz)."""
+    yonetici = yonetebilir(db, user)
+    kayitlar, kisiler = _suz(db, q=q, tur=tur, durum=durum, fayda=fayda, tam=tam, yil=yil, onay=onay)
+    kayitlar = [r for r in kayitlar if gorebilir(db, user, r, yonetici)]
     yillar = {simdi().year}
     for baslangic, bitis in db.execute(select(RevenueBenefit.start_date, RevenueBenefit.end_date)):
         yillar.update(t.year for t in (baslangic, bitis) if t)
+    kisi = _kim(db, user)
+    sahibi = sahip(db)
     return {
         "items": [kayit_sozlugu(r, kisiler[r.id]) for r in kayitlar],
-        "ozet": ozet_hesapla(kayitlar, db.scalar(select(func.count(RevenueBenefit.id))) or 0),
+        "ozet": ozet_hesapla(kayitlar, db.scalar(select(func.count(RevenueBenefit.id)).where(RevenueBenefit.approval == "onayli")) or 0),
         "secenekler": {"personel": personel_secenekleri(db), "yillar": sorted(yillar, reverse=True)},
+        "onay": {
+            "sahip": {"id": sahibi.id, "ad": kisi_adi(sahibi)} if sahibi else None,
+            "yonetebilir": yonetici,
+            "bekleyen": (db.scalar(select(func.count(RevenueBenefit.id)).where(RevenueBenefit.approval == "bekliyor")) or 0) if yonetici else 0,
+            "benim": kisi.id if kisi else None,
+        },
     }
 
 
-def tum_kayitlar(db: Session) -> list[tuple[RevenueBenefit, list[AppUser]]]:
-    """Excel disa aktarim icin: sirali tum kayitlar ve kisileri."""
-    kayitlar = _sirala(list(db.scalars(select(RevenueBenefit))))
-    kisiler = _kisi_haritasi(db, [r.id for r in kayitlar])
+def tum_kayitlar(db: Session, **suzgec: object) -> list[tuple[RevenueBenefit, list[AppUser]]]:
+    """Excel/PDF rapor icin: suzgece uyan ONAYLI kayitlar (sirali) ve kisileri."""
+    kayitlar, kisiler = _suz(db, **{**suzgec, "onay": "onayli"})  # type: ignore[arg-type]
     return [(r, kisiler[r.id]) for r in kayitlar]
 
 
@@ -342,7 +559,7 @@ def _sutun(ad: str, ad_en: str, birim: str = "") -> dict:
 
 
 def sunum_ozeti(db: Session, yil: int, ceyrek: int) -> dict:
-    """Sunum modulunun genel kart yuku. ceyrek 0 = tum yil. O doneme calisma araligi degen, iptal edilmemis isler.
+    """Sunum modulunun genel kart yuku. ceyrek 0 = tum yil. O doneme calisma araligi degen, iptal edilmemis ONAYLI isler.
 
     Hucreler dil bagimsizdir (ceyrek gecmisse kart dondurulur): is adi, kisi adlari, ISO tarih, sayilar. Tutarlar para birimi basina ayri
     sutun/KPI'dir (kur cevirisi yok); yalniz AYLIK tutarlar toplanir, yillik ve tek seferlik tutarlar bu kartta yer almaz."""
@@ -369,6 +586,9 @@ def sunum_ozeti(db: Session, yil: int, ceyrek: int) -> dict:
         kpi.append(_kpi("Yıl içi gelir", "In-year revenue", round(sum(yil_ici), 2), birim="TRY"))
     if saatler:
         kpi.append(_kpi("Aylık efor kazancı (saat)", "Monthly effort saved (hours)", round(sum(saatler), 2)))
+    yil_saatler = [r.hours_per_year for r in secilen if r.hours_per_year is not None]
+    if yil_saatler:
+        kpi.append(_kpi("Yıllık efor kazancı (saat)", "Yearly effort saved (hours)", round(sum(yil_saatler), 2)))
     satirlar = []
     for r in secilen:
         adlar = [kisi_adi(k) for k in kisiler[r.id]] + ([r.other_people] if r.other_people else [])

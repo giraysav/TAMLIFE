@@ -156,11 +156,6 @@ def personel(db: Session) -> list[AppUser]:
     return list(db.scalars(select(AppUser).where(*personel_kosulu()).order_by(AppUser.display_name, AppUser.username)))
 
 
-def giris_yapmislar(db: Session) -> list[AppUser]:
-    """Panele en az bir kez giris yapmis, etkin kisiler (ada gore). Kisi listeleri icin `personel` kullanilir; bu yalniz hesap denetimi icindir."""
-    return list(db.scalars(select(AppUser).where(AppUser.last_login_at.is_not(None), AppUser.active.is_(True)).order_by(AppUser.display_name, AppUser.username)))
-
-
 def silme_yetkilisi_ad() -> str:
     """Kullanici silebilen TEK hesabin adi (KULLANICI_SILME_YETKILISI, varsayilan admin); bos ayar = kimse silemez."""
     return get_settings().kullanici_silme_yetkilisi.strip().lower()
@@ -215,6 +210,14 @@ def tam_ad_uret(kisa_ad: str) -> str:
     """'giray.sav' -> 'Giray Sav' (Turkce i/I)."""
     parcalar = [p for p in kisa_ad.replace("_", ".").split(".") if p]
     return " ".join({"i": "İ", "ı": "I"}.get(p[0], p[0].upper()) + p[1:] for p in parcalar) or kisa_ad
+
+
+IZINLI_ONEKLER = ("tc", "ng", "te")  # 2026-10-15 kullanici karari: panelde yalniz admin ve tc/ng/te ile baslayan kullanicilar
+
+
+def onek_izinli(kisa_ad: str) -> bool:
+    """AD ile ilk kez giren kisiye hesap acilabilir mi (kullanici adi tc/ng/te ile baslamali)."""
+    return kisa_ad.strip().lower().startswith(IZINLI_ONEKLER)
 
 
 def ad_kullanicisi_ac(db: Session, kisa_ad: str, alan: str) -> AppUser:

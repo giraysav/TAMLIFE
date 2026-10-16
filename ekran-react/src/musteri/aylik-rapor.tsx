@@ -11,6 +11,7 @@ import { blobBase64, dosyaIndir, raporPdfOlustur, seriGrafigi } from "@/musteri/
 import { EkDosyaKarti, GalapagosKarti, SlaKarti } from "@/musteri/sla-paneli"
 import type { SlaVeri } from "@/musteri/sla-paneli"
 import { SlaAnalizi } from "@/musteri/sla-analizi"
+import { CactiKarti, useCacti } from "@/musteri/cacti-paneli"
 import type { AnalizMetni } from "@/musteri/sla-analizi"
 
 type Gonderim = { id: number; yil: number; ay: number; gonderen: string; zaman: string; konu: string; durum: string; pdf: boolean; geri_alan: string | null }
@@ -116,6 +117,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const t = musteriMetin(dil)
   const taban = `/api/v1/musteri/${musteriId}/rapor`
   const istemci = useQueryClient()
+  const cacti = useCacti(taban)
   const slaAnahtari = ["musteri", "rapor", musteriId, "sla"]
   const taslakQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "taslak"], queryFn: () => oku<Taslak>(`${taban}/taslak`) })
   const gecmisQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "gecmis"], queryFn: () => oku<Gonderim[]>(`${taban}/gecmis`) })
@@ -160,7 +162,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
       }),
     [sla, raporDili],
   )
-  const ekGorseller = useMemo<RaporGrafigi[]>(() => (sla?.ekler ?? []).map((e) => ({ anahtar: `ek-${e.no}`, baslik: e.baslik, gorsel: e.gorsel })), [sla])
+  const ekGorseller = useMemo<RaporGrafigi[]>(() => [...cacti.grafikler, ...(sla?.ekler ?? []).map((e) => ({ anahtar: `ek-${e.no}`, baslik: e.baslik, gorsel: e.gorsel }))], [sla, cacti.grafikler])
 
   const yukle = () => Promise.all([taslakQ.refetch(), gecmisQ.refetch()])
   const bildir = (anahtar: string, metin: string) => setMesaj((m) => ({ ...m, [anahtar]: metin }))
@@ -190,7 +192,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const donemYaz = (donem: string, d: Dil) => `${musteriMetin(d).aylar[Number(donem.slice(5, 7)) - 1] ?? ""} ${donem.slice(0, 4)}`
 
   async function pdfUret(): Promise<Blob> {
-    if (!sablon.current) throw new Error("pdf")
+    if (!sablon.current || cacti.engel) throw new Error("pdf")
     return raporPdfOlustur(sablon.current)
   }
 
@@ -317,7 +319,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
                 <button type="button" className={`${DUGME} border-tl-navy/30 font-black`} disabled={!!g} onClick={() => void taslagiKaydet()}>
                   {t.taslagiKaydet}
                 </button>
-                <button type="button" className={DUGME_SARI} disabled={!!g || pdfMesgul} onClick={() => void gonder()}>
+                <button type="button" className={DUGME_SARI} disabled={!!g || pdfMesgul || cacti.engel} onClick={() => void gonder()}>
                   {t.gonder}
                 </button>
               </div>
@@ -373,7 +375,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
               <button type="button" className={DUGME} aria-expanded={onizlemeAcik} onClick={() => setOnizlemeAcik((a) => !a)}>
                 {onizlemeAcik ? t.onizlemeKapat : t.onizlemeAc}
               </button>
-              <button type="button" className={DUGME_ANA} disabled={pdfMesgul} onClick={() => void pdfIndir()}>
+              <button type="button" className={DUGME_ANA} disabled={pdfMesgul || cacti.engel} onClick={() => void pdfIndir()}>
                 {pdfMesgul ? t.pdfHazirlaniyor : t.pdfIndir}
               </button>
             </div>
@@ -414,7 +416,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
             {gecmis.map((x) => (
               <li key={x.id} className="flex flex-wrap items-center gap-2 border-b border-slate-100 py-1.5 text-xs last:border-0">
                 <span className="font-mono font-black text-slate-700">
-                  {String(x.ay).padStart(2, "0")}.{x.yil}
+                  {t.aylar[x.ay - 1]} / {x.yil}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-slate-500" title={x.konu}>
                   {x.konu}
@@ -459,6 +461,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
 
         <SlaKarti {...slaOrtak} />
         <SlaAnalizi taban={taban} t={t} dil={raporDili} slaVar={!!sla?.ozet?.dosya} yzHazir={!!sla?.araclar?.yz} kilitli={!!g} onYaz={ozetiYaz} />
+        <CactiKarti cacti={cacti} ingilizce={dil === "en"} />
         <GalapagosKarti {...slaOrtak} />
         <EkDosyaKarti {...slaOrtak} />
       </div>

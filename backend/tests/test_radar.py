@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import engine
@@ -51,10 +52,17 @@ def test_panelde_olanlar_numara_ya_da_unvanla_dislanir_siralama_toplam(client):
     assert adlar.isdisjoint({"KARTLI NUMARA", "IKINCI NUMARA", "DOGUS TEKNOLOJI HIZMETLERI AS", "SIFIR KAYIT"})
 
 
-def test_rol_gorunumunde_yoksa_403(client, monkeypatch):
+def test_rol_kaydi_radari_gizler_veya_acar(client, monkeypatch):
     with Session(engine()) as db:
         db.add(RoleView(role="TeamMember", modules=["musteri"], landing="ozet", permissions=[]))
         db.commit()
     monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMember")
     login_ok(client)
+    # radar modulu verilmedigi icin kapali ve 403 doner
     assert client.get("/api/v1/radar").status_code == 403
+    # admin radari verirse acilir
+    with Session(engine()) as db:
+        satir = db.scalar(select(RoleView).where(RoleView.role == "TeamMember"))
+        satir.modules = ["musteri", "radar"]
+        db.commit()
+    assert client.get("/api/v1/radar").status_code == 200

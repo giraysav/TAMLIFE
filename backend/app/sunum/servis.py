@@ -1,14 +1,24 @@
 """Ceyrek Bazli Sunum servisi. Kaynaklar tek kayitta (KAYNAKLAR: anahtar -> ad TR/EN -> ceyrek goruntusunu ureten fonksiyon).
 
-Gosterim kurali (donem):
+Her panel modulu sunumda kendi alanina sahiptir (KAYNAKLAR'da modul basina en az bir kaynak; veri olmasa da alan cizilir).
+Duzen (app_setting 'sunum.duzen' = {"sira": [...], "gizli": [...]}): alanlarin sirasi ve sunumdan cikarilanlar; Sunum sayfasindaki
+'Sunum icerigi' penceresinden ve suruklenerek degistirilir. Varsayilan: hepsi gorunur, KAYNAKLAR sirasi (eski 'sunum.kaynaklar' secimi okunmaz).
+Onay (app_setting 'sunum.onay.<donem>'): yetkili ceyregin sunumunu onaylayinca o anki ogeler ve sira kaydin icine yazilir; ceyrek bundan sonra
+yalniz bu kayittan gosterilir, gonder/sabitle/kaldir reddedilir (409). Onayi kaldirmak sunumu yeniden duzenlenebilir yapar.
+
+Gosterim kurali (donem, onaysiz):
   1. Kaynagin o ceyrege ait kaydi (presentation) varsa o gosterilir: elle gonderilmis/sabitlenmis ya da daha once dondurulmus.
-  2. Kayit yoksa ve kaynak 'sunuma akan' olarak isaretliyse (app_setting 'sunum.kaynaklar'):
+  2. Kayit yoksa ve kaynak gorunurse:
      - icinde bulunulan ceyrek: her acilista CANLI hesaplanir, saklanmaz;
      - gecmis ceyrek: ilk goruntulemede hesaplanip DONDURULUR (sonra degismez; yetkili 'Guncelle' ile yeniler);
      - 'anlik' kaynak (donem filtresi yok, o anki durumu verir) yalniz bir onceki ceyrek icin dondurulur; daha eski ceyrege bugunku durum yazilmaz;
-     - gelecek ceyrek hesaplanmaz.
+     - gelecek ceyrek hesaplanmaz (alan 'yok' durumuyla bos cizilir).
 Goruntu ekip geneli kapsamla (yonetici gorunumu) tek kez hesaplanir, 'sunum' modulunu goren herkese aynidir.
-Yonetim (gonder/sabitle/kaldir, kaynak secimi) admin ya da rolgorunum.SUNUM_YETKISI ister; kontrol api katmanindadir.
+Yonetim (gonder/sabitle/kaldir, duzen, onay) admin ya da rolgorunum.SUNUM_YETKISI ister; kontrol api katmanindadir.
+Senkron (2026-10-15 kullanici bildirimi: "ceyrek sunuma akan veriler hatali"): karsilastir() her gorunur kaynagin kayitli (dondurulmus /
+sabitlenmis / onayli) goruntusunu canli hesapla kiyaslar; senkronla() farkli ya da hic dondurulmemis olanlari canli veriyle yeniler (yetkili,
+elle tetiklenir). Onayli ceyrek senkronlanmaz (409): once onay kaldirilir. 'Anlik' kaynagin eski ceyrekleri kapsam disidir (bugunku durum
+gecmise yazilmaz).
 Yuk bicimi: 'takvim' kendi grafigi icin (takvim.servis.sunum_ozeti); digerleri {"kpi": [...], "tablo": {...}}. Arayuz her kaynagi KISA
 bir kartla cizer (KPI'lar + ilk satirlar; tablonun tamami 'Ayrinti' altinda). tablo.onizleme (opsiyonel) ilk satirlarin hangi sutunlardan
 cizilecegini soyler. 'stil' alani ozel cizim ister: 'sayilar' (Sayilarla TAM Ekibi) ve 'tanitim' (TAMLIFE tanitim sayfasi).
@@ -16,6 +26,7 @@ cizilecegini soyler. 'stil' alani ozel cizim ister: 'sayilar' (Sayilarla TAM Eki
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -43,7 +54,9 @@ from app.sunum import tanitim
 from app.takvim.servis import bu_ceyrek, donem_adi, donem_araligi, sunum_ozeti
 from app.takvim.servis import ekip as takvim_ekibi
 
-AYAR_ANAHTARI = "sunum.kaynaklar"
+AYAR_ANAHTARI = "sunum.duzen"
+ONAY_ONEKI = "sunum.onay."
+ONAYLI = "Bu çeyreğin sunumu onaylandı ve sabitlendi; değiştirmek için önce onayı kaldırın."
 EKIP = Principal("sunum", "TeamMngr", False)  # ekip geneli kapsam (yonetici gorunumu); kullanici kaydi acan fonksiyona verilmez
 
 
@@ -348,6 +361,43 @@ def _sayilar(db: Session, yil: int, ceyrek: int) -> dict:
     }
 
 
+def _izin(db: Session, yil: int, ceyrek: int) -> dict:
+    """Izin&Takvim Yonetimi: ekibin ceyrekteki izin gunleri ve yapilan is / toplanti ozeti girilen gun sayilari (metinler sunuma gitmez)."""
+    v = takvim_ekibi(db, yil, ceyrek)
+    g = v["genel"]
+    d = g["durumlar"]
+    return {
+        "kpi": [
+            _kpi("İzin günü", "Leave days", g["izin_gun"]),
+            _kpi("Yıllık izin", "Annual leave", d.get("yillik_izin", 0)),
+            _kpi("Şirket izni", "Company leave", d.get("sirket_izni", 0)),
+            _kpi("Raporlu", "Sick leave", d.get("raporlu", 0)),
+            _kpi("Yapılan iş girilen gün", "Days with work notes", g["is_gunu"]),
+            _kpi("Toplantı özeti girilen gün", "Days with meeting notes", g["ozet_gunu"]),
+        ],
+        "tablo": {
+            "sutunlar": [
+                _sutun("TAM", "TAM"), _sutun("İzin günü", "Leave days"), _sutun("Yıllık izin", "Annual leave"), _sutun("Şirket izni", "Company leave"),
+                _sutun("Raporlu", "Sick leave"), _sutun("Yapılan iş girilen gün", "Days with work notes"), _sutun("Toplantı özeti girilen gün", "Days with meeting notes"),
+            ],
+            "satirlar": sorted(
+                (
+                    [u["ad"], u["izin_gun"], u["durumlar"].get("yillik_izin", 0), u["durumlar"].get("sirket_izni", 0), u["durumlar"].get("raporlu", 0), u["is_gunu"], u["ozet_gunu"]]
+                    for u in v["uyeler"]
+                ),
+                key=lambda s: tr_kucuk(s[0]),
+            ),
+            "onizleme": _onizleme(3, etiket=0, deger=1),
+        },
+    }  # fmt: skip
+
+
+def _bos_alan(db: Session, yil: int, ceyrek: int) -> dict:
+    """Baglantili Araclar / Toptan: modul simdilik Musteri Yonetimi ekranini gosterir; kendi sunum
+    ozeti modulun tasarimiyla gelecek. O zamana kadar alan bos durur (portfoy ozeti zaten kendi alaninda; uydurma veri yok)."""
+    return {"kpi": [], "tablo": {"sutunlar": [], "satirlar": []}}
+
+
 def _gelir_uretim(db: Session, yil: int, ceyrek: int) -> dict:
     """Gelir Faydasi Saglanan Isler: modulun kendi ozeti (iptaller haric, aylik tutarlar para birimi basina); kisa kartta ilk 3 is ve aylik tutari."""
     v = gelir_uretim_ozeti(db, yil, ceyrek)
@@ -375,7 +425,8 @@ class Kaynak:
     anlik: bool = False  # donem filtresi yok: o anki durum (yalniz bir onceki ceyrek icin dondurulur)
 
 
-# Sira = sunumun akis sirasi (ust yonetim gundemi): once sayilar ve TAM Life, sonra isler, gelir, musteri, ekip, talepler
+# Varsayilan sira = sunumun akis sirasi (ust yonetim gundemi): once sayilar ve TAM Life, sonra isler, gelir, musteri, ekip, talepler.
+# Her panel modulu (catalog, menude gorunen) en az bir kaynakla temsil edilir; test_her_modulun_sunumda_alani_var denetler.
 KAYNAKLAR: dict[str, Kaynak] = {
     "sayilar": Kaynak(
         "Sayılarla TAM Ekibi", "TAM Team in Numbers",
@@ -432,6 +483,11 @@ KAYNAKLAR: dict[str, Kaynak] = {
         "Kişi bazında izin/gün durumu ve toplantılar (TAM Takvim grafiği).", "Leave/day status and meetings per person (TAM Calendar chart).",
         "takvim_ozet", _takvim,
     ),
+    "izin": Kaynak(
+        "İzin ve yapılan işler özeti", "Leave and work log summary",
+        "Ekibin çeyrekteki izin günleri; yapılan iş ve toplantı özeti girilen gün sayıları (metinler sunuma gitmez).", "The team's leave days in the quarter; number of days with work and meeting notes (the texts are not shown).",
+        "takvim", _izin,
+    ),
     "talep": Kaynak(
         "Geliştirme talepleri özeti", "Development requests summary",
         "Çeyrekte açılan geliştirme talepleri ve durumları.", "Development requests opened in the quarter and their status.",
@@ -442,18 +498,36 @@ KAYNAKLAR: dict[str, Kaynak] = {
         "Panelde kartı olmayan ama alarm kaydı oluşan ilk 10 müşteri (ReportDB verisi, o anki durum).", "Top 10 customers with alarm records but no card in the panel (ReportDB data, current state).",
         "radar", _radar, anlik=True,
     ),
+    "baglantili": Kaynak(
+        "Bağlantılı araçlar", "Connected tools",
+        "Kurum içi bağlantılı araçlar (modül şimdilik Müşteri Yönetimi içeriğini gösterir; sunum özeti tasarımla gelecek).", "Internal connected tools (the module currently shows Customer Management; its summary comes with its design).",
+        "baglantili", _bos_alan, anlik=True,
+    ),
+    "toptan": Kaynak(
+        "Toptan", "Wholesale",
+        "Toptan müşteriler (modül şimdilik Müşteri Yönetimi içeriğini gösterir; sunum özeti geliştirmeyle gelecek).", "Wholesale customers (the module currently shows Customer Management; its summary comes later).",
+        "toptan", _bos_alan, anlik=True,
+    ),
 }  # fmt: skip
 
 
-# --- sunuma akan kaynak ayari ---------------------------------------------------------------------------
-def acik_kaynaklar(db: Session) -> list[str]:
+# --- sunum duzeni: alan sirasi ve gorunurluk ----------------------------------------------------------------
+def duzen(db: Session) -> tuple[list[str], set[str]]:
+    """(sira, gizli). Kayitta olmayan (yeni eklenen) kaynak sona eklenir ve gorunur."""
     kayit = db.get(AppSetting, AYAR_ANAHTARI)
-    deger = kayit.value if kayit is not None and isinstance(kayit.value, list) else []
-    return [k for k in KAYNAKLAR if k in deger]
+    deger = kayit.value if kayit is not None and isinstance(kayit.value, dict) else {}
+    sira = [k for k in dict.fromkeys(deger.get("sira") or []) if k in KAYNAKLAR]
+    sira += [k for k in KAYNAKLAR if k not in sira]
+    return sira, {k for k in deger.get("gizli") or [] if k in KAYNAKLAR}
+
+
+def acik_kaynaklar(db: Session) -> list[str]:
+    sira, gizli = duzen(db)
+    return [k for k in sira if k not in gizli]
 
 
 def kaynak_listesi(db: Session) -> list[dict]:
-    acik = set(acik_kaynaklar(db))
+    sira, gizli = duzen(db)
     return [
         {
             "id": k,
@@ -464,23 +538,64 @@ def kaynak_listesi(db: Session) -> list[dict]:
             "modul": modul(v.modul).title,
             "modul_en": modul(v.modul).title_en,
             "anlik": v.anlik,
-            "acik": k in acik,
+            "acik": k not in gizli,
             "grup": MENU.get(v.modul, ("",))[0] or "insights",  # work = Benim Yerim, insights = Raporlar, admin = Yonetim
         }
-        for k, v in KAYNAKLAR.items()
+        for k in sira
+        for v in (KAYNAKLAR[k],)
     ]
 
 
-def kaynaklar_kaydet(db: Session, ham: object, actor: str) -> list[str]:
-    if not isinstance(ham, list) or not all(isinstance(k, str) and k in KAYNAKLAR for k in ham):
+def kaynaklar_kaydet(db: Session, ham: object, actor: str, sira: object = None) -> list[str]:
+    """ham: gorunur kaynaklar; sira (opsiyonel): alanlarin yeni sirasi (eksikler eski sirasiyla sona). Donus: gorunurler, sirasiyla."""
+    def gecerli(x: object) -> bool:
+        return isinstance(x, list) and all(isinstance(k, str) and k in KAYNAKLAR for k in x)
+
+    if not gecerli(ham) or (sira is not None and not gecerli(sira)):
         raise SunumHata(400, "Kaynak listesi geçersiz.")
+    eski, _ = duzen(db)
+    yeni = list(dict.fromkeys([*(sira or []), *eski]))
     kayit = db.get(AppSetting, AYAR_ANAHTARI)
     if kayit is None:
         kayit = AppSetting(key=AYAR_ANAHTARI)
         db.add(kayit)
-    kayit.value, kayit.updated_by, kayit.updated_at = [k for k in KAYNAKLAR if k in ham], actor[:120], simdi()
+    kayit.value = {"sira": yeni, "gizli": [k for k in yeni if k not in ham]}
+    kayit.updated_by, kayit.updated_at = actor[:120], simdi()
     db.flush()
-    return list(kayit.value)
+    return acik_kaynaklar(db)
+
+
+# --- onay: ceyregin sunumunu sabitleme ---------------------------------------------------------------------
+def _onay_kaydi(db: Session, donem_: str) -> AppSetting | None:
+    kayit = db.get(AppSetting, ONAY_ONEKI + donem_)
+    return kayit if kayit is not None and isinstance(kayit.value, dict) else None
+
+
+def _onay_ozeti(kayit: AppSetting) -> dict:
+    return {"onaylayan": kayit.value.get("onaylayan", ""), "zaman": kayit.value.get("zaman")}
+
+
+def onayla(db: Session, user: Principal, yil: int, ceyrek: int, onay: bool) -> dict:
+    """onay=True: ceyregin o anki ogelerini (canli olanlar dahil) ve sirasini onay kaydina yazar; sunum bundan sonra yalniz oradan gosterilir.
+    onay=False: kaydi siler; sunum yeniden duzenlenebilir ve canli/dondurulmus kurallarina doner."""
+    _ceyrek_dogrula(yil, ceyrek)
+    ad = donem_adi(yil, ceyrek)
+    mevcut = _onay_kaydi(db, ad)
+    if not onay:
+        if mevcut is not None:
+            db.delete(mevcut)
+            db.flush()
+        return {"donem": ad, "onay": None}
+    if mevcut is not None:
+        raise SunumHata(409, "Bu çeyreğin sunumu zaten onaylı.")
+    if _zamani(yil, ceyrek) == "gelecek":
+        raise SunumHata(400, "Henüz başlamamış çeyreğin sunumu onaylanamaz.")
+    kisi = kullanici_kaydi(db, user).display_name or user.username
+    an = iso(simdi())
+    ogeler = [({**o, "durum": "kayitli", "gonderen": kisi, "zaman": an} if o["durum"] == "canli" else o) for o in donem(db, yil, ceyrek, user.username)["ogeler"]]
+    db.add(AppSetting(key=ONAY_ONEKI + ad, value={"onaylayan": kisi, "zaman": an, "ogeler": ogeler}, updated_by=kisi[:120], updated_at=simdi()))
+    db.flush()
+    return {"donem": ad, "onay": {"onaylayan": kisi, "zaman": an}}
 
 
 # --- ceyrek goruntusu -----------------------------------------------------------------------------------
@@ -528,16 +643,20 @@ def donem(db: Session, yil: int, ceyrek: int, kullanici: str) -> dict:
     """Ceyregin sunum ogeleri (kaynak sirasiyla). Gecmis ceyrekte ilk goruntulemede donduruleni yazar; commit cagiranda."""
     _ceyrek_dogrula(yil, ceyrek)
     ad, zamani = donem_adi(yil, ceyrek), _zamani(yil, ceyrek)
+    onay = _onay_kaydi(db, ad)
+    if onay is not None:
+        return {"yil": yil, "ceyrek": ceyrek, "donem": ad, "zaman": zamani, "ogeler": onay.value.get("ogeler") or [], "onay": _onay_ozeti(onay)}
     kayitlar = {p.source: p for p in db.scalars(select(Presentation).where(Presentation.period == ad, Presentation.source != ""))}
     acik = acik_kaynaklar(db)
     ogeler: list[dict] = []
     dondurulen = False
-    for anahtar in [*KAYNAKLAR, *(k for k in kayitlar if k not in KAYNAKLAR)]:
+    for anahtar in [*acik, *(k for k in kayitlar if k not in KAYNAKLAR)]:
         p = kayitlar.get(anahtar)
         if p is not None:
             ogeler.append(_oge(anahtar, "kayitli", p.payload, p.sent_by, iso(p.sent_at)))
             continue
-        if anahtar not in acik or zamani == "gelecek":
+        if zamani == "gelecek":
+            ogeler.append(_oge(anahtar, "yok"))  # her modulun alani cizilir; veri ceyrek baslayinca gelir
             continue
         if zamani == "gecmis" and KAYNAKLAR[anahtar].anlik and (yil, ceyrek) != _onceki_ceyrek():
             ogeler.append(_oge(anahtar, "yok"))
@@ -559,7 +678,7 @@ def donem(db: Session, yil: int, ceyrek: int, kullanici: str) -> dict:
         except IntegrityError:  # ayni anda baska istek dondurdu: onun kaydi okunur
             db.rollback()
             return donem(db, yil, ceyrek, kullanici)
-    return {"yil": yil, "ceyrek": ceyrek, "donem": ad, "zaman": zamani, "ogeler": ogeler}
+    return {"yil": yil, "ceyrek": ceyrek, "donem": ad, "zaman": zamani, "ogeler": ogeler, "onay": None}
 
 
 def gonder(db: Session, user: Principal, kaynak: str, yil: int, ceyrek: int, gonder: bool) -> dict:
@@ -568,6 +687,8 @@ def gonder(db: Session, user: Principal, kaynak: str, yil: int, ceyrek: int, gon
         raise SunumHata(404, "Sunum kaynağı bulunamadı.")
     _ceyrek_dogrula(yil, ceyrek)
     ad = donem_adi(yil, ceyrek)
+    if _onay_kaydi(db, ad) is not None:
+        raise SunumHata(409, ONAYLI)
     if not gonder:
         db.execute(delete(Presentation).where(Presentation.source == kaynak, Presentation.period == ad))
         return {"donem": ad, "kaynak": kaynak, "sunumda": None}
@@ -575,3 +696,87 @@ def gonder(db: Session, user: Principal, kaynak: str, yil: int, ceyrek: int, gon
     kayit = _sakla(db, kaynak, ad, KAYNAKLAR[kaynak].uret(db, yil, ceyrek), kisi)
     db.flush()
     return {"donem": ad, "kaynak": kaynak, "sunumda": {"gonderen": kayit.sent_by, "zaman": iso(kayit.sent_at)}}
+
+
+# --- senkron: kayitli goruntu ile canli verinin karsilastirilmasi ---------------------------------------------------------
+OYNAK_ANAHTARLAR = frozenset({"olcum"})  # her hesapta degisen zaman damgasi: karsilastirmaya girmez
+
+
+def _sade(veri: object) -> object:
+    if isinstance(veri, dict):
+        return {k: _sade(v) for k, v in veri.items() if k not in OYNAK_ANAHTARLAR}
+    if isinstance(veri, (list, tuple)):
+        return [_sade(v) for v in veri]
+    return veri
+
+
+def _iz(veri: object) -> str:
+    """Kalici (JSON) ve canli yuk ayni bicimde: anahtar sirasi, tuple/liste ve tarih farki yok sayilir."""
+    return json.dumps(_sade(json.loads(json.dumps(veri, default=str))), sort_keys=True, ensure_ascii=False)
+
+
+def _kpi_farklari(eski: object, yeni: object, en_cok: int = 6) -> list[dict]:
+    """Ad bazinda degisen KPI degerleri (arayuz 'ne degisti' satiri icin)."""
+    def harita(v: object) -> dict[str, object]:
+        return {k.get("ad"): k.get("deger") for k in (v.get("kpi") or []) if isinstance(k, dict)} if isinstance(v, dict) else {}
+
+    e, y = harita(eski), harita(yeni)
+    return [{"ad": ad, "eski": e.get(ad), "yeni": y.get(ad)} for ad in dict.fromkeys([*y, *e]) if e.get(ad) != y.get(ad)][:en_cok]
+
+
+def _kayitli_goruntuler(db: Session, ad: str) -> tuple[dict[str, dict], bool]:
+    """(kaynak -> {veri, gonderen, zaman}, onayli_mi). Onayli ceyrekte onay kaydinin ogeleri, degilse presentation kayitlari."""
+    onay = _onay_kaydi(db, ad)
+    if onay is not None:
+        return {o["kaynak"]: {"veri": o.get("veri"), "gonderen": o.get("gonderen", ""), "zaman": o.get("zaman")} for o in onay.value.get("ogeler") or [] if o.get("durum") == "kayitli"}, True
+    kayitlar = db.scalars(select(Presentation).where(Presentation.period == ad, Presentation.source != ""))
+    return {p.source: {"veri": p.payload, "gonderen": p.sent_by, "zaman": iso(p.sent_at)} for p in kayitlar}, False
+
+
+def karsilastir(db: Session, yil: int, ceyrek: int, kullanici: str) -> dict:
+    """Her gorunur kaynak icin durum: guncel (kayitli = canli) | farkli | eksik (gecmis ceyrek henuz dondurulmamis) | canli (icinde
+    bulunulan ceyrek, kayit yok: zaten canli) | kapsam_disi (gelecek ceyrek ya da anlik kaynagin eski ceyregi) | hata. Hicbir sey yazmaz."""
+    _ceyrek_dogrula(yil, ceyrek)
+    ad, zamani = donem_adi(yil, ceyrek), _zamani(yil, ceyrek)
+    kayitli, onayli = _kayitli_goruntuler(db, ad)
+    satirlar: list[dict] = []
+    for anahtar in acik_kaynaklar(db):
+        k = KAYNAKLAR[anahtar]
+        sakli = kayitli.get(anahtar)
+        satir = {"kaynak": anahtar, "ad": k.ad, "ad_en": k.ad_en, "durum": "", "gonderen": (sakli or {}).get("gonderen", ""), "zaman": (sakli or {}).get("zaman"), "farklar": [], "kayit_no": ""}
+        if zamani == "gelecek" or (zamani == "gecmis" and k.anlik and (yil, ceyrek) != _onceki_ceyrek()):
+            satirlar.append({**satir, "durum": "kapsam_disi"})
+            continue
+        try:
+            canli = k.uret(db, yil, ceyrek)
+        except Exception as exc:  # noqa: BLE001 - tek kaynagin hatasi karsilastirmanin geri kalanini dusurmez
+            satirlar.append({**satir, "durum": "hata", "kayit_no": ariza.kaydet("TL-SRV-01", exc=exc, kaynak=f"sunum.karsilastir.{anahtar}", kullanici=kullanici)[:8]})
+            continue
+        if sakli is None:
+            satirlar.append({**satir, "durum": "canli" if zamani == "guncel" else "eksik"})
+        elif _iz(sakli["veri"]) == _iz(canli):
+            satirlar.append({**satir, "durum": "guncel"})
+        else:
+            satirlar.append({**satir, "durum": "farkli", "farklar": _kpi_farklari(sakli["veri"], canli)})
+    sayilar = {d: sum(1 for s in satirlar if s["durum"] == d) for d in ("guncel", "farkli", "eksik", "canli", "kapsam_disi", "hata")}
+    return {
+        "yil": yil, "ceyrek": ceyrek, "donem": ad, "zaman": zamani, "onayli": onayli, "kontrol": iso(simdi()),
+        "kaynaklar": satirlar, "sayilar": sayilar, "senkron_gerekli": bool(sayilar["farkli"] or sayilar["eksik"]),
+    }  # fmt: skip
+
+
+def senkronla(db: Session, user: Principal, yil: int, ceyrek: int) -> dict:
+    """Farkli ve eksik kaynaklarin ceyrek goruntusunu canli veriyle yeniler (gonderen = tetikleyen). Onayli ceyrekte 409. Commit cagiranda."""
+    _ceyrek_dogrula(yil, ceyrek)
+    ad = donem_adi(yil, ceyrek)
+    if _onay_kaydi(db, ad) is not None:
+        raise SunumHata(409, "Bu çeyreğin sunumu onaylı; senkron için önce onayı kaldırın, senkrondan sonra yeniden onaylayın.")
+    once = karsilastir(db, yil, ceyrek, user.username)
+    kisi = kullanici_kaydi(db, user).display_name or user.username
+    yenilenen = []
+    for s in once["kaynaklar"]:
+        if s["durum"] in ("farkli", "eksik"):
+            _sakla(db, s["kaynak"], ad, KAYNAKLAR[s["kaynak"]].uret(db, yil, ceyrek), kisi)
+            yenilenen.append(s["kaynak"])
+    db.flush()
+    return {"donem": ad, "yenilenen": yenilenen, "sonra": karsilastir(db, yil, ceyrek, user.username)}

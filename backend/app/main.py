@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import csv
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+from anyio import to_thread
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app import ad
 from app.audit import audit_log
 from app.config import env_dosyasi_yukle, get_settings
-from app.dil import DilAraKatmani
+from app.dil import DilAraKatmani, m
 from app.ekip.api import router as ekip_router
 from app.gelir.api import router as gelir_router
 from app.gelir_uretim.api import router as gelir_uretim_router
@@ -36,6 +40,21 @@ from app.yonetim.gunlukler import kalici_yaz
 from app.yonetim.router import router as yonetim_router
 from app.yonetim.yakalayici import genel_istisna
 
+# Senkron uclarin is parcacigi havuzu (anyio varsayilani 40). SQLite yazma kilidinde 40 yazici busy_timeout (30 sn) beklerken
+# okumalar ve saglik ucu da sirada donuyordu (tests/test_yuk_ornek.py); bekleyen is parcacigi CPU harcamaz.
+IS_PARCACIGI = 100
+
+
+@asynccontextmanager
+async def _yasam(_: FastAPI) -> AsyncIterator[None]:
+    to_thread.current_default_thread_limiter().total_tokens = IS_PARCACIGI
+    yield
+
+
+async def csv_hatasi(_: Request, exc: csv.Error) -> JSONResponse:
+    """Bozuk CSV (kapanmamis tirnak, 128 KB'tan uzun alan) kullanici girdisidir: 500 degil 400 (tests/test_yuk_async_bellek.py)."""
+    return JSONResponse({"detail": m("CSV dosyası okunamadı (kapanmamış tırnak ya da çok uzun alan).", "Could not read the CSV file (unclosed quote or field too long).")}, status_code=400)
+
 
 async def uygulama_hatasi(_: Request, exc: UygulamaHatasi) -> JSONResponse:
     """Servis katmaninin bilinen hatalari (kod = HTTP durumu); RaporHata gibi ek alan tasiyanlar govdeye eklenir."""
@@ -53,11 +72,13 @@ def create_app() -> FastAPI:
         docs_url="/docs" if dev else None,
         redoc_url=None,
         openapi_url="/openapi.json" if dev else None,
+        lifespan=_yasam,
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
     install_security(app)
     app.add_middleware(DilAraKatmani)  # X-Dil: sunucu metinlerinin dili (app.dil.m)
-    app.add_exception_handler(UygulamaHatasi, uygulama_hatasi)  # bilinen is hatasi: kod + mesaj
+    app.add_exception_handler(UygulamaHatasi, uygulama_hatasi)
+    app.add_exception_handler(csv.Error, csv_hatasi)  # bilinen is hatasi: kod + mesaj
     app.add_exception_handler(Exception, genel_istisna)  # beklenmeyen hata: kod + kayit no, ham metin yok
     audit_log.sink = kalici_yaz  # denetim olaylari audit_event'e KALICI yazilir
     if settings.env != "test":
@@ -66,7 +87,7 @@ def create_app() -> FastAPI:
         app.include_router(router)
 
     @app.get("/api/v1/health")
-    def health() -> dict:
+    async def health() -> dict:  # G/C yok: olay dongusunde calisir, dolu is parcacigi havuzunda beklemez
         ayar = get_settings()
         return ok(
             {

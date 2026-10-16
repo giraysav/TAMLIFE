@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5
     login_window_seconds: int = 300
     login_lockout_seconds: int = 300
+    login_ip_carpani: int = 20  # ayni IP icin kilit esigi = login_max_attempts x bu; Citrix gibi ortak IP herkesi kilitlemesin
     allowed_origins: str = ""  # virgulle ayrilmis ek Origin listesi
     allowed_hosts: str = "127.0.0.1,localhost,testserver"
     trusted_proxies: str = ""  # virgulle ayrilmis proxy IP'leri; X-Forwarded-For yalniz bunlardan kabul
@@ -134,6 +135,32 @@ def env_dosyasi_yukle(yol: Path | None = None) -> None:
         os.environ.setdefault(ad, deger)
 
 
+_AYAR_ONBELLEGI: tuple[tuple[str | None, ...], Settings] | None = None
+_AYAR_ADLARI: tuple[str, ...] | None = None
+
+
+def _ayar_adlari() -> tuple[str, ...]:
+    """Settings'in okudugu ortam degiskeni adlari (TAMLIFE_<alan> ya da validation_alias)."""
+    onek = Settings.model_config.get("env_prefix", "")
+    return tuple(
+        (alan.validation_alias if isinstance(alan.validation_alias, str) else f"{onek}{ad}").upper()
+        for ad, alan in Settings.model_fields.items()
+    )
+
+
 def get_settings() -> Settings:
-    return Settings()
+    """Ayarlar ortamdan okunur; Settings'in okudugu degiskenler degismedikce ayni nesne doner. Eskiden her cagri pydantic ile
+    ~1 ms yeniden kuruluyordu (istek basina onlarca cagri; oturum budamasi her oturum icin bir kez, giris sinirlayici her
+    denemede). Ortam degisince (test monkeypatch, env_dosyasi_yukle) parmak izi degisir ve yeniden kurulur.
+    Donen nesneyi degistirmeyin (paylasilir)."""
+    global _AYAR_ONBELLEGI, _AYAR_ADLARI
+    if _AYAR_ADLARI is None:
+        _AYAR_ADLARI = _ayar_adlari()
+    iz = tuple(map(os.environ.get, _AYAR_ADLARI))
+    onbellek = _AYAR_ONBELLEGI
+    if onbellek is not None and onbellek[0] == iz:
+        return onbellek[1]
+    ayar = Settings()
+    _AYAR_ONBELLEGI = (iz, ayar)
+    return ayar
 

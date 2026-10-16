@@ -1,13 +1,13 @@
 import { Fragment, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { BarChart3, CalendarCheck, CalendarOff, ChevronDown, Lock, Presentation, Users } from "lucide-react"
+import { BarChart3, CalendarCheck, ChevronDown, Lock, Presentation, Users, Video } from "lucide-react"
 import { Bildirim, BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, Panel, SayfaKabi, Yukleniyor } from "@/components/sayfa-ui"
 import { baslangicHarfleri, sayi, tarih, zaman } from "@/lib/bicim"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
-import { durumSerileri, TakvimGrafigi } from "@/takvim/takvim-grafigi"
+import { takvimKalemleri, TakvimGrafigi } from "@/takvim/takvim-grafigi"
 import type { Ozet } from "@/takvim/takvim-grafigi"
-import { DURUM_RENK, DURUM_SIRASI, takvimMetin } from "@/takvim/takvim-metin"
+import { DURUM_RENK, DURUM_SIRASI, gunZemini, takvimMetin } from "@/takvim/takvim-metin"
 import type { TakvimMetin } from "@/takvim/takvim-metin"
 import { varsayilanYil, yilSecenekleri } from "@/lib/yillar"
 
@@ -21,11 +21,14 @@ type Ekip = {
   sunumda: { gonderen: string; zaman: string | null } | null
   sunuma_gonderebilir: boolean
 }
-type UyeGunleri = { uye: string; gunler: { tarih: string; durum: string; online: number; yuzyuze: number }[] }
-
-function ayniCeyrek(): number {
-  return Math.floor(new Date().getMonth() / 3) + 1
+/** toplanti_ozeti / yapilan_isler yalniz admin bakiyorsa gelir (2026-10-15 kullanici karari). */
+type UyeGunleri = {
+  uye: string
+  gunler: { tarih: string; durum: string; durum2?: string; online: number; yuzyuze: number; kurum?: unknown; toplanti_ozeti?: string; yapilan_isler?: string }[]
 }
+
+/** Baskasinin girdigi veri ekranda acik dururken de gelsin (senkron): periyodik ve pencereye donuste yenilenir. */
+const CANLI = { refetchInterval: 30_000, refetchOnWindowFocus: true } as const
 
 type Gun = UyeGunleri["gunler"][number]
 
@@ -59,9 +62,9 @@ function AyIzgarasi({ yil, ay, gunler, yerel, t }: { yil: number; ay: number; gu
           return (
             <span
               key={anahtar}
-              title={g ? `${tarih(anahtar)} · ${durum}${g.online + g.yuzyuze ? ` · ${t.toplantiAlt(g.online, g.yuzyuze)}` : ""}` : undefined}
+              title={g ? `${tarih(anahtar)} · ${durum}${g.durum2 ? ` / ${t.durumlar[g.durum2] ?? g.durum2}` : ""}${g.online + g.yuzyuze ? ` · ${t.toplantiAlt(g.online, g.yuzyuze)}` : ""}` : undefined}
               className={`relative flex h-7 items-center justify-center rounded-md font-mono text-[0.625rem] font-bold ${g ? "text-white shadow-sm" : haftaSonu ? "text-slate-300" : "bg-slate-50 text-slate-500"}`}
-              style={g ? { background: DURUM_RENK[g.durum] ?? "#64748b" } : undefined}
+              style={g ? { background: gunZemini(g.durum, g.durum2, true) } : undefined}
             >
               {i + 1}
               {g && g.online + g.yuzyuze > 0 ? <span aria-hidden className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-white ring-1 ring-black/10" /> : null}
@@ -75,13 +78,15 @@ function AyIzgarasi({ yil, ay, gunler, yerel, t }: { yil: number; ay: number; gu
 
 function GunListesi({ yil, ceyrek, uyeId, dil }: { yil: number; ceyrek: number; uyeId: number; dil: Dil }) {
   const t = takvimMetin(dil)
-  const q = useQuery({ queryKey: ["takvim", "uye", uyeId, yil, ceyrek], queryFn: () => oku<UyeGunleri>(`/api/v1/takvim/ekip/${uyeId}?yil=${yil}&ceyrek=${ceyrek}`) })
+  const q = useQuery({ queryKey: ["takvim", "uye", uyeId, yil, ceyrek], queryFn: () => oku<UyeGunleri>(`/api/v1/takvim/ekip/${uyeId}?yil=${yil}&ceyrek=${ceyrek}`), ...CANLI })
   if (q.isPending) return <Yukleniyor metin="…" />
   if (q.isError) return <HataKutu metin={t.yuklenemedi} tekrar={() => void q.refetch()} tekrarEtiket={t.tekrar} />
   if (q.data.gunler.length === 0) return <p className="text-xs font-bold text-slate-400">{t.gunKayitYok}</p>
   const gunler = new Map(q.data.gunler.map((g) => [g.tarih, g]))
   const sayilar = DURUM_SIRASI.map((d) => [d, q.data.gunler.filter((g) => g.durum === d).length] as const).filter(([, n]) => n > 0)
   const yerel = dil === "en" ? "en-GB" : "tr-TR"
+  // admin: kisinin girdigi her kayit metniyle (kurum gunu haric; toplanti, ozet ya da is girilen ya da ozel durumlu gunler)
+  const kayitlar = q.data.gunler.filter((g) => g.toplanti_ozeti !== undefined && !g.kurum && (g.online + g.yuzyuze > 0 || g.toplanti_ozeti || g.yapilan_isler || g.durum !== "calisiyor" || g.durum2))
   return (
     <div className="grid gap-3">
       <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[0.6875rem] font-bold text-slate-600">
@@ -103,6 +108,38 @@ function GunListesi({ yil, ceyrek, uyeId, dil }: { yil: number; ceyrek: number; 
           <AyIzgarasi key={ay} yil={yil} ay={ay} gunler={gunler} yerel={yerel} t={t} />
         ))}
       </div>
+      {kayitlar.length > 0 ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <p className="px-3 pt-2.5 text-[0.6875rem] font-black uppercase tracking-wide text-tl-navy">{t.kayitlar}</p>
+          <table className="w-full text-left text-xs">
+            <thead className="text-[0.625rem] font-black uppercase text-slate-400">
+              <tr>
+                <th scope="col" className="px-3 py-2">{t.kayitTarih}</th>
+                <th scope="col" className="px-3 py-2">{t.kayitDurum}</th>
+                <th scope="col" className="px-3 py-2 text-right">{t.toplantiOnline}</th>
+                <th scope="col" className="px-3 py-2 text-right">{t.toplantiYuzYuze}</th>
+                <th scope="col" className="px-3 py-2">{t.toplantiOzeti}</th>
+                <th scope="col" className="px-3 py-2">{t.yapilanIsler}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 align-top">
+              {kayitlar.map((g) => (
+                <tr key={g.tarih}>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-slate-600">{tarih(g.tarih)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-bold text-slate-700">
+                    {t.durumlar[g.durum] ?? g.durum}
+                    {g.durum2 ? ` / ${t.durumlar[g.durum2] ?? g.durum2}` : ""}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono font-bold">{g.online}</td>
+                  <td className="px-3 py-2 text-right font-mono font-bold">{g.yuzyuze}</td>
+                  <td className="min-w-48 whitespace-pre-line px-3 py-2 text-slate-600">{g.toplanti_ozeti || "—"}</td>
+                  <td className="min-w-48 whitespace-pre-line px-3 py-2 text-slate-600">{g.yapilan_isler || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -115,12 +152,14 @@ export function TamTakvim({ dil }: { dil: Dil }) {
   const t = takvimMetin(dil)
   const qc = useQueryClient()
   const [yil, setYil] = useState(varsayilanYil())
-  const [ceyrek, setCeyrek] = useState(ayniCeyrek())
+  const [ceyrek, setCeyrek] = useState(0) // varsayilan tum yil: kisinin kendi ekranindaki gibi yil toplami (2026-10-15 kullanici istegi)
   const [acik, setAcik] = useState<number | null>(null)
   const [grafik, setGrafik] = useState(false)
   const [bilgi, setBilgi] = useState<{ ton: "yesil" | "kirmizi"; metin: string } | null>(null)
 
-  const q = useQuery({ queryKey: ["takvim", "ekip", yil, ceyrek], queryFn: () => oku<Ekip>(`/api/v1/takvim/ekip?yil=${yil}&ceyrek=${ceyrek}`) })
+  const q = useQuery({ queryKey: ["takvim", "ekip", yil, ceyrek], queryFn: () => oku<Ekip>(`/api/v1/takvim/ekip?yil=${yil}&ceyrek=${ceyrek}`), ...CANLI })
+  // Takvim grafigi secilen yilin TAMAMINI gosterir (2026-10-14 kullanici istegi); tablo ve sunuma gonderme secilen donemle kalir.
+  const yq = useQuery({ queryKey: ["takvim", "ekip", yil, 0], queryFn: () => oku<Ekip>(`/api/v1/takvim/ekip?yil=${yil}&ceyrek=0`), enabled: grafik, ...CANLI })
   const sunum = useMutation({
     mutationFn: (gonder: boolean) => yaz("POST", "/api/v1/takvim/sunuma-gonder", { yil, ceyrek, gonder }),
     onSuccess: (_, gonder) => {
@@ -131,7 +170,7 @@ export function TamTakvim({ dil }: { dil: Dil }) {
     onError: (e) => setBilgi({ ton: "kirmizi", metin: hataMesaji(e, t.sunumHata) }),
   })
   const v = q.data
-  const seriler = durumSerileri(t)
+  const kalemler = v ? takvimKalemleri(t, v.genel) : []
   const donemAdi = ceyrek === 0 ? `${yil}` : `${yil} · ${t.ceyrek(ceyrek)}`
 
   return (
@@ -170,11 +209,11 @@ export function TamTakvim({ dil }: { dil: Dil }) {
         <HataKutu metin={t.yuklenemedi} tekrar={() => void q.refetch()} tekrarEtiket={t.tekrar} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Kpi etiket={t.kpiKisi} deger={v.uyeler.length} ikon={Users} ton="mavi" />
-            <Kpi etiket={t.kpiIzin} deger={sayi(v.uyeler.reduce((a, u) => a + u.izin_gun, 0))} ikon={CalendarOff} ton="sari" />
-            <Kpi etiket={t.kpiToplanti} deger={v.genel.toplanti} alt={t.toplantiAlt(v.genel.online, v.genel.yuzyuze)} ikon={Presentation} ton="yesil" />
-            <Kpi etiket={t.kpiKayit} deger={v.genel.kayitli_gun} ikon={CalendarCheck} ton="gri" />
+          {/* 2026-10-15 kullanici istegi: ustte yalniz TAM sayisi, online ve yuz yuze toplamlari */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Kpi etiket={t.kpiTam} deger={v.uyeler.length} ikon={Users} ton="mavi" />
+            <Kpi etiket={t.sutunOnline} deger={sayi(v.genel.online)} ikon={Video} ton="mavi" />
+            <Kpi etiket={t.sutunYuzyuze} deger={sayi(v.genel.yuzyuze)} ikon={Presentation} ton="yesil" />
           </div>
 
           <Panel
@@ -194,21 +233,17 @@ export function TamTakvim({ dil }: { dil: Dil }) {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-tl-navy text-white">
                     <tr>
-                      <th scope="col" className="px-3 py-2.5 font-black">
+                      <th scope="col" className="sticky left-0 z-[1] bg-tl-navy px-3 py-2.5 font-black">
                         {t.kisi}
                       </th>
-                      <th scope="col" className="min-w-48 px-3 py-2.5 font-black">
-                        {t.durumDagilimi}
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 text-right font-black">
-                        {t.izinGunu}
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 text-right font-black">
-                        {t.toplanti}
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 text-right font-black">
-                        {t.kayitliGun}
-                      </th>
+                      {kalemler.map((k) => (
+                        <th key={k.anahtar} scope="col" className="px-2 py-2.5 text-right font-black">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: k.renk }} />
+                            {k.ad}
+                          </span>
+                        </th>
+                      ))}
                       <th scope="col" className="px-3 py-2.5 font-black">
                         {t.sonGiris}
                       </th>
@@ -220,37 +255,22 @@ export function TamTakvim({ dil }: { dil: Dil }) {
                   <tbody className="divide-y divide-slate-100">
                     {v.uyeler.map((u) => {
                       const acikMi = acik === u.id
-                      const toplamGun = Object.values(u.durumlar).reduce((a, b) => a + b, 0)
                       return (
                         <Fragment key={u.id}>
                           <tr className="hover:bg-slate-50">
-                            <td className="px-3 py-2.5">
-                              <span className="flex items-center gap-2.5">
-                                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-tl-navy text-[0.6875rem] font-black text-tl-yellow">{baslangicHarfleri(u.ad)}</span>
-                                <span className="grid min-w-0">
-                                  <span className="truncate font-black text-tl-navy">{u.ad}</span>
-                                  <span className="text-[0.625rem] font-bold text-slate-400">{u.rol}</span>
-                                </span>
+                            <td className="sticky left-0 bg-white px-3 py-2">
+                              <span className="flex items-center gap-2">
+                                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-tl-navy text-[0.625rem] font-black text-tl-yellow">{baslangicHarfleri(u.ad)}</span>
+                                <span className="truncate font-black text-tl-navy">{u.ad}</span>
                               </span>
                             </td>
-                            <td className="px-3 py-2.5">
-                              {toplamGun === 0 ? (
-                                <span className="text-slate-300">—</span>
-                              ) : (
-                                <div className="flex h-2.5 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={seriler.map((s) => `${s.ad}: ${u.durumlar[s.anahtar] ?? 0}`).join(", ")}>
-                                  {seriler.map((s) =>
-                                    (u.durumlar[s.anahtar] ?? 0) > 0 ? <span key={s.anahtar} title={`${s.ad}: ${u.durumlar[s.anahtar]}`} style={{ background: s.renk, width: `${((u.durumlar[s.anahtar] ?? 0) / toplamGun) * 100}%` }} /> : null,
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-mono font-black text-tl-navy">{sayi(u.izin_gun)}</td>
-                            <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono font-bold text-slate-600">
-                              {u.online} / {u.yuzyuze}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-600">{u.kayitli_gun}</td>
-                            <td className="whitespace-nowrap px-3 py-2.5 text-[0.6875rem] font-bold text-slate-400">{zaman(u.son_giris)}</td>
-                            <td className="px-2 py-2.5 text-right">
+                            {takvimKalemleri(t, u).map((k) => (
+                              <td key={k.anahtar} className={`px-2 py-2 text-right font-mono font-bold ${k.deger > 0 ? "text-slate-700" : "text-slate-300"}`}>
+                                {sayi(k.deger)}
+                              </td>
+                            ))}
+                            <td className="whitespace-nowrap px-3 py-2 text-[0.6875rem] font-bold text-slate-400">{zaman(u.son_giris)}</td>
+                            <td className="px-2 py-2 text-right">
                               <button
                                 type="button"
                                 aria-expanded={acikMi}
@@ -265,7 +285,7 @@ export function TamTakvim({ dil }: { dil: Dil }) {
                           </tr>
                           {acikMi ? (
                             <tr className="bg-slate-50/70">
-                              <td colSpan={7} className="px-4 py-3">
+                              <td colSpan={kalemler.length + 3} className="px-4 py-3">
                                 <GunListesi yil={yil} ceyrek={ceyrek} uyeId={u.id} dil={dil} />
                               </td>
                             </tr>
@@ -280,8 +300,8 @@ export function TamTakvim({ dil }: { dil: Dil }) {
           </Panel>
 
           {grafik && v.uyeler.length > 0 ? (
-            <Panel baslik={t.grafikBaslik} aciklama={t.grafikAlt(donemAdi)}>
-              <TakvimGrafigi genel={v.genel} uyeler={v.uyeler} t={t} />
+            <Panel baslik={t.grafikBaslik} aciklama={t.grafikAlt(`${yil} · ${t.tumYil}`)}>
+              {yq.data ? <TakvimGrafigi genel={yq.data.genel} t={t} /> : yq.isError ? <HataKutu metin={t.yuklenemedi} tekrar={() => void yq.refetch()} tekrarEtiket={t.tekrar} /> : <Yukleniyor metin="…" />}
               <div className="mt-5 rounded-2xl border border-tl-yellow/50 bg-tl-yellow/10 p-4">
                 <label className={`flex items-start gap-3 ${v.sunuma_gonderebilir && ceyrek !== 0 ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`}>
                   <input

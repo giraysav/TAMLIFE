@@ -51,24 +51,20 @@ def test_tum_listeler_ayni_personeli_gosterir(client):
     assert {t["ad"] for t in proje["tamlar"]} == {d["tam"] for d in proje["ozet"]} == beklenen  # projesi olmayan da satir
 
 
-def test_yonetici_ve_admin_takvim_tutmaz_ama_ekip_takvimini_gorur(client, monkeypatch):
+def test_izin_takvim_herkese_gorunur_herkes_yalniz_kendi_takvimini_gorur(client, monkeypatch):
+    """2026-10-14: Izin&Takvim her rolun menusunde; giris yapan kisi yalniz kendi takvimini gorur ve yazar (baskasinin verisi burada yok)."""
     login_ok(client)
     hdr = {"X-CSRF-Token": client.cookies.get("tamlife_csrf") or ""}
     _kisiler()
-    r = client.get("/api/v1/roller").json()["data"]
-    takvim = next(m for m in r["catalog"] if m["id"] == "takvim")
-    assert takvim["personel_only"] is True
-    # TeamMngr kaydina 'takvim' verilse bile dusurulur; TeamMember'da kalir
-    moduller = ["takvim", "takvim_ozet", "musteri"]
-    assert client.put("/api/v1/roller/TeamMngr", json={"modules": moduller, "landing": "ozet"}, headers=hdr).json()["data"]["modules"] == ["musteri", "takvim_ozet"]
-    assert "takvim" in client.put("/api/v1/roller/TeamMember", json={"modules": moduller, "landing": "ozet"}, headers=hdr).json()["data"]["modules"]
-    # admin: kendi takvimini acamaz
-    assert client.get("/api/v1/takvim/ben", params={"yil": 2026, "ay": 2}).status_code == 403
-    assert client.put("/api/v1/takvim/gun", json={"tarih": "2026-02-02", "durum": "calisiyor"}, headers=hdr).status_code == 403
-    # TeamMngr: TAM Takvim'i gorur (listede kendisi yok), kendi takvimini acamaz
-    _giris(client, monkeypatch, "TeamMngr")
-    assert client.get("/api/v1/takvim/ben", params={"yil": 2026, "ay": 2}).status_code == 403
-    assert {u["ad"] for u in client.get("/api/v1/takvim/ekip").json()["data"]["uyeler"]} == {"Ayse Test", "Mehmet Test"}
+    assert "takvim" in {i["id"] for i in client.get("/api/v1/session/me").json()["data"]["navigation"]}
+    assert client.put("/api/v1/takvim/gun", json={"tarih": "2026-02-02", "durum": "yillik_izin"}, headers=hdr).status_code == 200  # admin kendi takvimi
+    assert [g["durum"] for g in client.get("/api/v1/takvim/ben", params={"yil": 2026, "ay": 2}).json()["data"]["gunler"]] == ["yillik_izin"]
+    assert client.get("/api/v1/takvim/kisiler").status_code == 404  # kisi secici yok
+    # TeamMngr: menude var, kendi takvimini acar (yerel test hesabi ayni kullanici adi: ayni dosya)
+    hdr = _giris(client, monkeypatch, "TeamMngr")
+    assert "takvim" in {i["id"] for i in client.get("/api/v1/session/me").json()["data"]["navigation"]}
+    assert client.get("/api/v1/takvim/ben", params={"yil": 2026, "ay": 2}).status_code == 200
+    assert {u["ad"] for u in client.get("/api/v1/takvim/ekip").json()["data"]["uyeler"]} == {"Ayse Test", "Mehmet Test"}  # TAM Takvim yalniz personel
     # TeamMember: kendi takvimini yazar
     hdr = _giris(client, monkeypatch, "TeamMember")
     assert client.put("/api/v1/takvim/gun", json={"tarih": "2026-02-02", "durum": "calisiyor", "online": 1}, headers=hdr).status_code == 200

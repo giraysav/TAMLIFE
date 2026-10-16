@@ -1,6 +1,6 @@
 import { useId } from "react"
-import type { ReactNode } from "react"
-import { ChevronDown, ChevronUp } from "lucide-react"
+import type { DragEvent, ReactNode } from "react"
+import { ChevronDown, ChevronUp, GripVertical } from "lucide-react"
 import { Halka, Lejant } from "@/components/grafik"
 import { BASLIK_BANDI, BASLIK_YAZISI, Kpi, VeriTablosu } from "@/components/sayfa-ui"
 import { para, sayi } from "@/lib/bicim"
@@ -12,17 +12,9 @@ import type { GenelVeri, Hucre, KpiVeri, Oge, TabloVeri, TakvimVeri } from "@/su
 import { TakvimGrafigi, durumSerileri } from "@/takvim/takvim-grafigi"
 import type { TakvimMetin } from "@/takvim/takvim-metin"
 
-export const hucre = (v: Hucre | undefined, birim: string) => (v === null || v === undefined ? "—" : typeof v === "number" ? (birim ? para(v, birim) : sayi(v)) : v)
-export const kpiDeger = (k: KpiVeri) => (k.birim ? para(k.deger, k.birim, true) : sayi(k.deger))
+const hucre = (v: Hucre | undefined, birim: string) => (v === null || v === undefined ? "—" : typeof v === "number" ? (birim ? para(v, birim) : sayi(v)) : v)
+const kpiDeger = (k: KpiVeri) => (k.birim ? para(k.deger, k.birim, true) : sayi(k.deger))
 export const kpiAlt = (k: KpiVeri, dil: Dil) => (dil === "en" && k.alt_en ? k.alt_en : k.alt)
-
-/** Kisa kartta gosterilecek bir sey yok mu: tum KPI'lar 0/bos (ya da takvimde kayitli gun yok). Boyle kaynaklar tek satirlik notta toplanir. */
-export function bosMu(o: Oge): boolean {
-  const v = o.veri
-  if (o.durum === "hata" || !v || tanitimMi(v) || o.gonderen) return false // elle gonderilen oge her zaman kart olarak kalir (yonetici kaldirabilsin)
-  if (takvimMi(o.kaynak, v)) return v.genel.kayitli_gun === 0 && v.genel.toplanti === 0
-  return v.kpi.every((k) => !k.deger)
-}
 
 /** Ayrinti (acilir) bolumunun satir/kisi sayisi; 0 ise ayrinti dugmesi gosterilmez. */
 export function ayrintiSayisi(o: Oge): number {
@@ -53,20 +45,38 @@ type KartProps = {
   genis?: boolean
   /** baslik bandi yok: icerik kendi basligini cizer (TAM Life tanitimi); kabuk dolgu vermez */
   bantsiz?: boolean
+  /** surukle-birak ile yer degistirme (yetkili, onaysiz sunum): tutamak bantta gorunur */
+  surukle?: { etiket: string; uzerinde: boolean; suruklenen: boolean; bas: (e: DragEvent) => void; uzerinden: (e: DragEvent) => void; birak: (e: DragEvent) => void; bitir: () => void }
   children: ReactNode
 }
 
 /** Sunumdaki her kaynagin ortak kabugu: lacivert baslik bandi + rozet, kisa icerik, altta Ayrinti dugmesi / zaman damgasi / yonetici dugmeleri. */
-export function SunumKarti({ baslik, rozet, zaman, zamanAciklama, eylem, ayrinti, acik = false, onAc, genis = false, bantsiz = false, children }: KartProps) {
+export function SunumKarti({ baslik, rozet, zaman, zamanAciklama, eylem, ayrinti, acik = false, onAc, genis = false, bantsiz = false, surukle, children }: KartProps) {
   const kimlik = useId()
+  const tutamak = surukle ? (
+    <span title={surukle.etiket} aria-label={surukle.etiket} className={`cursor-grab rounded-md p-0.5 active:cursor-grabbing ${bantsiz ? "absolute right-2 top-2 z-10 bg-white/90 text-slate-500 shadow" : "text-white/70 hover:bg-white/10"}`}>
+      <GripVertical aria-hidden className="size-4" />
+    </span>
+  ) : null
   return (
-    <section className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${genis ? "lg:col-span-2" : ""}`}>
-      {bantsiz ? null : (
+    <section
+      aria-label={baslik}
+      draggable={surukle ? true : undefined}
+      onDragStart={surukle?.bas}
+      onDragOver={surukle?.uzerinden}
+      onDrop={surukle?.birak}
+      onDragEnd={surukle?.bitir}
+      className={`relative flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition ${genis ? "lg:col-span-2" : ""} ${surukle?.uzerinde ? "border-tl-yellow ring-2 ring-tl-yellow" : "border-slate-200"} ${surukle?.suruklenen ? "opacity-50" : ""}`}
+    >
+      {bantsiz ? tutamak : (
         <div className={`${BASLIK_BANDI} shrink-0 justify-between`}>
-          <h3 className={`flex items-center gap-2 ${BASLIK_YAZISI}`}>
-            <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-tl-yellow" />
-            {baslik}
-          </h3>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {tutamak}
+            <h3 className={`flex min-w-0 items-center gap-2 ${BASLIK_YAZISI}`}>
+              <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-tl-yellow" />
+              {baslik}
+            </h3>
+          </div>
           {rozet}
         </div>
       )}
@@ -192,5 +202,5 @@ export function TakvimOzet({ veri, t }: { veri: TakvimVeri; t: TakvimMetin }) {
 }
 
 export function TakvimAyrinti({ veri, t }: { veri: TakvimVeri; t: TakvimMetin }) {
-  return <TakvimGrafigi genel={veri.genel} uyeler={veri.uyeler} t={t} />
+  return <TakvimGrafigi genel={veri.genel} t={t} />
 }

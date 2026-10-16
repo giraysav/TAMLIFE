@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
 import { Activity, Building2, FileText, ListChecks, Mail, Network, Pencil, Phone, Plus, Trash2 } from "lucide-react"
@@ -8,6 +8,7 @@ import { Cekmece } from "@/components/cekmece"
 import { Alan, Bolum, Bos, DUGME, DUGME_ANA, GIRDI, Rozet, Satir, VeriTablosu } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
+import { useMusteriYolu } from "@/musteri/musteri-yolu"
 import { sorguAyarla } from "@/shell/rota"
 
 type Sayilar = { envanter: number; alarm: number; sikayet: number; talep: number; alarm_kapanan: number; sikayet_kapanan: number; talep_kapanan: number }
@@ -33,6 +34,7 @@ export type Kart = {
   raporlar?: { toplam: number; son: { donem: string; gonderildi: boolean; duzenleyen: string | null; tarih: string | null; bayrak: number }[] }
   erisim: { rapor: boolean; gelir: boolean; kimlik_duzenle: boolean; iletisim_duzenle: boolean; sil: boolean; tam_degistir: boolean; rapor_geri_al: boolean; ayri_rapor_sec: boolean; istirak_ekle: boolean }
   tam_secenekleri?: { id: number; ad: string }[]
+  cati_secenekleri?: { id: number; ad: string }[]
 }
 
 const SEGMENTLER = ["SMB", "SA", "MA", "PA", "WHOLESALE"]
@@ -161,21 +163,21 @@ function Operasyon({ kart, t }: { kart: Kart; t: Metin }) {
 
 export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const t = musteriMetin(dil)
+  const yol = useMusteriYolu()
   const q = useQuery({ queryKey: ["musteri", "kart", id], queryFn: () => oku<Kart>(`/api/v1/musteri/${id}`) })
   const kart = q.data
   const [duzenle, setDuzenle] = useState(false)
   const [kim, setKim] = useState<Record<string, string>>({})
   const [ilet, setIlet] = useState<Record<string, string>>({})
   const [tam, setTam] = useState("")
+  const [tur, setTur] = useState<"cati" | "istirak">("cati")
+  const [catiId, setCatiId] = useState("")
   const [mesaj, setMesaj] = useState<Record<string, string>>({})
   const [yeniIstirak, setYeniIstirak] = useState<string | null>(null)
   const [ciAcik, setCiAcik] = useState(false)
 
-  useEffect(() => {
-    setDuzenle(false)
-    setCiAcik(false)
-  }, [id])
-  useEffect(() => {
+  /** Form sunucu verisiyle YALNIZ duzenleme acilirken doldurulur: arka plan yenilemesi yazilani ezmez, Vazgec sonrasi eski deger donmez. */
+  function duzenlemeyiAc() {
     if (!kart) return
     setKim({
       name: kart.kimlik.unvan,
@@ -189,7 +191,10 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
     })
     setIlet({ ...kart.iletisim })
     setTam(kart.kimlik.tam_id ? String(kart.kimlik.tam_id) : "")
-  }, [kart])
+    setTur(kart.kimlik.cati ? "istirak" : "cati")
+    setCatiId(kart.kimlik.cati ? String(kart.kimlik.cati.id) : "")
+    setDuzenle(true)
+  }
 
   const bildir = (anahtar: string, metin: string) => setMesaj((m) => ({ ...m, [anahtar]: metin }))
   /** Istek basarisizsa hatayi ilgili alana yazar; basariyi dondurur. */
@@ -207,12 +212,16 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   async function kaydet(olay: FormEvent) {
     olay.preventDefault()
     if (!kart) return
+    if (kart.erisim.kimlik_duzenle && tur === "istirak" && !catiId) {
+      bildir("duzenle", t.catiSeciniz)
+      return
+    }
     const tamDegisti = kart.erisim.tam_degistir && tam && Number(tam) !== kart.kimlik.tam_id
     let tamam = true
     if (kart.erisim.iletisim_duzenle) tamam = await dene("duzenle", () => yaz("PUT", `/api/v1/musteri/${id}/iletisim`, ilet))
     if (tamam && kart.erisim.kimlik_duzenle) {
       tamam = await dene("duzenle", async () => {
-        await yaz("PUT", `/api/v1/musteri/${id}/kimlik`, { ...kim, inventory: kim.inventory === "" ? 0 : Number(kim.inventory) })
+        await yaz("PUT", `/api/v1/musteri/${id}/kimlik`, { ...kim, inventory: kim.inventory === "" ? 0 : Number(kim.inventory), parent_id: tur === "istirak" ? Number(catiId) : null })
         if (tamDegisti) await yaz("PUT", `/api/v1/musteri/${id}/sorumlu`, { owner_id: Number(tam) })
       })
     }
@@ -228,7 +237,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
 
   async function sil() {
     if (!window.confirm(t.silOnay)) return
-    if (await dene("sil", () => yaz("DELETE", `/api/v1/musteri/${id}`))) sorguAyarla("musteri", {})
+    if (await dene("sil", () => yaz("DELETE", `/api/v1/musteri/${id}`))) sorguAyarla(yol, {})
   }
 
   async function istirakEkle(olay: FormEvent) {
@@ -239,7 +248,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
     })
     if (!tamam) return
     setYeniIstirak(null)
-    sorguAyarla("musteri", { m: String(yeni) })
+    sorguAyarla(yol, { m: String(yeni) })
   }
 
   if (q.isPending) return <p className="text-sm text-muted-foreground">…</p>
@@ -255,7 +264,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const k = kart.kimlik
   const o = kart.operasyon
   const duzenlenebilir = e.kimlik_duzenle || e.iletisim_duzenle
-  const mobilNot = (ilet.mobil_kmt_detail ?? "").trim()
+  const mobilNot = (kart.iletisim.mobil_kmt_detail ?? "").trim()
 
   return (
     <div className="space-y-4 font-sans">
@@ -282,7 +291,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
               <div className="flex flex-wrap items-stretch gap-3 lg:justify-end">
                 {/* AYLIK RAPOR: panelin en onemli ogelerinden biri; sari, buyuk, parlayan dugme */}
                 <a
-                  href={`#/musteri?m=${k.id}&sekme=rapor`}
+                  href={`#/${yol}?m=${k.id}&sekme=rapor`}
                   title={t.aylikRaporGonder}
                   className="group relative flex min-w-[17rem] flex-1 items-center gap-3.5 overflow-hidden rounded-2xl bg-gradient-to-br from-tl-yellow to-amber-400 px-5 py-4 text-tl-navy shadow-[0_10px_28px_-8px_rgba(255,199,44,0.85)] ring-2 ring-white/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-8px_rgba(255,199,44,1)] focus-visible:outline-hidden focus-visible:ring-4 focus-visible:ring-white"
                 >
@@ -331,6 +340,25 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
               <form onSubmit={kaydet} aria-label={t.duzenle} className="grid gap-5 p-4">
                 {e.kimlik_duzenle ? (
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="col-span-full grid gap-3 sm:grid-cols-2">
+                      <Alan etiket={t.musteriTuru} sinif="min-w-0">
+                        <select id="k-tur" aria-label={t.musteriTuru} className={GIRDI} value={tur} onChange={(ev) => setTur(ev.target.value as "cati" | "istirak")}>
+                          <option value="cati">{t.cati}</option>
+                          <option value="istirak" disabled={k.istirakler.length > 0}>{t.istirak}</option>
+                        </select>
+                      </Alan>
+                      {tur === "istirak" ? (
+                        <Alan etiket={t.cati} sinif="min-w-0">
+                          <select id="k-cati" aria-label={t.cati} className={GIRDI} value={catiId} onChange={(ev) => setCatiId(ev.target.value)} required>
+                            <option value="">{t.catiSeciniz}</option>
+                            {(kart.cati_secenekleri ?? (k.cati ? [{ id: k.cati.id, ad: k.cati.unvan }] : [])).filter((c) => c.id !== id).map((c) => (
+                              <option key={c.id} value={c.id}>{c.ad}</option>
+                            ))}
+                          </select>
+                        </Alan>
+                      ) : null}
+                      {k.istirakler.length > 0 ? <p className="col-span-full text-xs text-slate-500">{t.istirakleriTasi}</p> : null}
+                    </div>
                     <Girdi id="k-name" etiket={t.unvan} deger={kim.name ?? ""} onChange={(v) => setKim({ ...kim, name: v })} />
                     <Alan etiket={t.segment} sinif="min-w-0">
                       <select id="k-segment" value={kim.segment ?? ""} onChange={(ev) => setKim({ ...kim, segment: ev.target.value })} className={GIRDI}>
@@ -421,7 +449,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                     <Satir etiket={t.sorumluTam}>{k.tam || "—"}</Satir>
                     <Satir etiket={t.cati}>
                       {k.cati ? (
-                        <a className="text-tl-blue hover:underline" href={`#/musteri?m=${k.cati.id}`}>
+                        <a className="text-tl-blue hover:underline" href={`#/${yol}?m=${k.cati.id}`}>
                           {k.cati.unvan}
                         </a>
                       ) : (
@@ -445,7 +473,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                   <CerceveBasligi>{t.iletisim}</CerceveBasligi>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {ILETISIM_GRUPLARI.map((g) => (
-                      <IletisimKutusu key={g.baslik} g={g} ilet={ilet} t={t} />
+                      <IletisimKutusu key={g.baslik} g={g} ilet={kart.iletisim} t={t} />
                     ))}
                   </div>
                   {mobilNot ? (
@@ -470,7 +498,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
               {k.istirakler.map((i) => (
                 <a
                   key={i.id}
-                  href={`#/musteri?m=${i.id}`}
+                  href={`#/${yol}?m=${i.id}`}
                   className="rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1 text-xs font-bold text-tl-navy transition-colors hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
                 >
                   {i.unvan}
@@ -487,7 +515,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
         {mesaj.sil ? <span role="alert" className="text-xs font-bold text-destructive">{mesaj.sil}</span> : null}
         {!duzenle && mesaj.duzenle ? <span role="status" className="text-xs font-bold text-slate-500">{mesaj.duzenle}</span> : null}
         {duzenlenebilir && !duzenle ? (
-          <button type="button" onClick={() => setDuzenle(true)} className={DUGME}>
+          <button type="button" onClick={duzenlemeyiAc} className={DUGME}>
             <Pencil aria-hidden className="size-3.5" />
             {t.duzenle}
           </button>
@@ -515,7 +543,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
           {t.kritikCi}
           <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.625rem] text-slate-500">{kart.kritik_ci.satirlar.length}</span>
         </button>
-        <a href={`#/musteri?m=${k.id}&sekme=topoloji`} className={DUGME} title={t.topoAciklama}>
+        <a href={`#/${yol}?m=${k.id}&sekme=topoloji`} className={DUGME} title={t.topoAciklama}>
           <Network aria-hidden className="size-3.5" />
           {t.topoMaker}
         </a>

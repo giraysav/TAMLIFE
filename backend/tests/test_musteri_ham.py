@@ -93,11 +93,47 @@ def test_sablon_bos_ve_dolu_geri_okunur(ham):
     bos = client.get(f"{TABAN}/sablon.xlsx")
     assert bos.status_code == 200 and "spreadsheetml" in bos.headers["content-type"]
     t = H.dosya_oku(bos.content, "s.xlsx")
-    assert t["sayfa"] == H.SAYFA and t["basliklar"] == [a.baslik for a in H.ALANLAR] and t["satirlar"] == []
-    dolu = H.dosya_oku(client.get(f"{TABAN}/sablon.xlsx?dolu=true").content, "s.xlsx")
-    adlar = [r[0] for r in dolu["satirlar"]]
-    assert adlar == ["Alfa Teknoloji A.Ş.", "Beta Enerji"]
-    assert dolu["satirlar"][0][2] == "Ayşe Kaya"  # Sorumlu TAM: kartin gercek degeri
+    assert t["sayfa"] == H.SAYFA and t["basliklar"] == [b for b, _ in H.SABLON] and t["satirlar"] == []
+    dolu_veri = client.get(f"{TABAN}/sablon.xlsx?dolu=true").content
+    dolu = H.dosya_oku(dolu_veri, "s.xlsx")
+    assert [r[1] for r in dolu["satirlar"]] == ["Alfa Teknoloji A.Ş.", "Beta Enerji"]  # Cati Musteri Unvani
+    assert dolu["satirlar"][0][0] == "Ayşe Kaya" and dolu["satirlar"][0][2] == "11111111"  # Sorumlu TAM, Cati Musteri No
+    # dolu sablon geri yuklenince hicbir karta degisiklik dusmez
+    _, hdr = ham
+    p = _yukle(client, hdr, dolu_veri)
+    assert p["uyum"]["bicim"] == "genis" and p["uyum"]["uyumlu"] and not p["uyum"]["fazla"]
+    o = _onizle(client, hdr, p["id"])
+    assert o["ozet"]["guncelle"] == 0 and o["ozet"]["yeni"] == 0 and o["ozet"]["hata"] == 0
+
+
+def test_kullanici_sablonu_bicim_ve_ice_alma(ham):
+    """2026-10-15 kullanici sablonu: tek sayfa, 20 sutun, koyu mavi baslik, C2'den sabit; 'Çatı_to_İştirak Müşteri No' taninir."""
+    client, hdr = ham
+    wb = openpyxl.load_workbook(io.BytesIO(client.get(f"{TABAN}/sablon.xlsx").content))
+    ws = wb[H.SAYFA]
+    assert wb.sheetnames == [H.SAYFA] and ws.freeze_panes == "C2" and ws.max_column == 20
+    assert ws.auto_filter.ref == "A1:T2" and ws.column_dimensions["A"].width == 24
+    assert [c.value for c in ws[1]][:6] == ["Sorumlu TAM", "Çatı Müşteri Ünvanı", "Çatı Müşteri No", "Çatı_to_İştirak Müşteri No",
+                                            "İştirak Müşteri Ünvanı", "İştirak Müşteri No"]  # fmt: skip
+    assert ws["T1"].value == "Mobil KMT Notu" and ws["A1"].font.b and ws["A1"].fill.fgColor.theme == 4
+    satirlar = [
+        [b for b, _ in H.SABLON],
+        ["TC1001", "Delta Holding", "66666666", None, None, None, "SA", "Holding", "Selin Satış"] + [None] * 11,
+        ["TC1001", "Delta Holding", "66666666", None, "Delta Lojistik", "77777777", None, "Lojistik"] + [None] * 12,
+        [None, None, None, "66666666", "Delta Enerji", "99999999", None, None] + [None] * 4 + ["tac@delta.com.tr"] + [None] * 7,
+    ]
+    p = _yukle(client, hdr, _xlsx({H.SAYFA: satirlar}))
+    assert p["uyum"]["bicim"] == "genis" and p["uyum"]["uyumlu"] and not p["uyum"]["fazla"]
+    o = _onizle(client, hdr, p["id"])
+    assert o["ozet"]["yeni"] == 3 and o["ozet"]["hata"] == 0
+    r = client.post(f"{TABAN}/uygula", json={"parti_id": p["id"], "plan_ozeti": o["plan_ozeti"], "onay": True}, headers=hdr)
+    assert r.status_code == 200, r.text
+    with Session(engine()) as db:
+        cati = db.scalar(select(Customer).where(Customer.name == "Delta Holding"))
+        altlar = {c.name: c for c in db.scalars(select(Customer).where(Customer.parent_id == cati.id))}
+        assert set(altlar) == {"Delta Lojistik", "Delta Enerji"} and cati.segment == "SA" and cati.sector == "Holding"
+        assert db.get(CustomerTeam, cati.id).sales_manager == "Selin Satış"
+        assert db.get(CustomerTeam, altlar["Delta Enerji"].id).tac_email == "tac@delta.com.tr"
 
 
 def test_onizle_uygula_geri_al(ham):
@@ -116,13 +152,14 @@ def test_onizle_uygula_geri_al(ham):
     )
     p = _yukle(client, hdr, veri)
     assert p["durum"] == "ready" and p["uyum"]["uyumlu"] and p["uyum"]["bicim"] == "sablon"
+    assert p["uyum"]["fazla"] == ["Envanter", "FT Hacim"]  # sablonda olmayan sutunlar okunmaz
     o = _onizle(client, hdr, p["id"])
     durum = {r["unvan"]: r for r in o["satirlar"]}
     alfa = durum["ALFA TEKNOLOJİ (yeni ad)"]
     assert alfa["durum"] == "guncelle" and any("Müşteri No ile eşleşti" in u for u in alfa["uyarilar"])
     degisen = {d["alan"]: d["yeni"] for d in alfa["degisiklikler"]}
     # Segment 'Major Account' -> MA: kartta zaten MA, degisiklik sayilmaz
-    assert degisen == {"customer_no": "11111111, 33333333", "envanter": "12", "tac_email": "tac@alfa.com.tr", "ft_hacim": "1.500,50 ₺"}
+    assert degisen == {"customer_no": "11111111, 33333333", "tac_email": "tac@alfa.com.tr"}
     assert durum["Beta Enerji"]["durum"] == "hata"
     yeni = durum["Yeni Kurum"]
     assert yeni["durum"] == "yeni" and any("birleştirildi" in u for u in yeni["uyarilar"])
@@ -142,12 +179,12 @@ def test_onizle_uygula_geri_al(ham):
     assert s["ozet"]["guncellenen"] == 1 and s["ozet"]["olusturulan"] == 1
     with Session(engine()) as db:
         alfa_k = db.get(Customer, 1)
-        assert alfa_k.name == "Alfa Teknoloji A.Ş." and alfa_k.customer_no == "11111111, 33333333" and alfa_k.inventory_count == 12
-        assert alfa_k.ft_volume == "1.500,50 ₺" and db.get(CustomerTeam, 1).tac_email == "tac@alfa.com.tr"
+        assert alfa_k.name == "Alfa Teknoloji A.Ş." and alfa_k.customer_no == "11111111, 33333333" and alfa_k.inventory_count == 0
+        assert alfa_k.ft_volume != "1.500,50 ₺" and db.get(CustomerTeam, 1).tac_email == "tac@alfa.com.tr"
         yeni_k = db.scalar(select(Customer).where(Customer.name == "Yeni Kurum"))
         assert yeni_k.customer_no == "44444444, 55555555" and yeni_k.segment == "SMB"
         assert db.get(AppUser, yeni_k.owner_id).username == "TC1001"
-        alfa_k.sector = "Elle girildi"  # aktarim disi degisiklik geri almada korunur
+        alfa_k.customer_no = "11111111, 33333333, 12121212"  # aktarimdan sonra elle degisen alan geri almada korunur
         alfa_k.inventory_count = 99
         db.commit()
 
@@ -158,7 +195,7 @@ def test_onizle_uygula_geri_al(ham):
     assert g.json()["data"]["silinen_musteri"] == 1 and g.json()["data"]["korunan_alan"] == 1
     with Session(engine()) as db:
         alfa_k = db.get(Customer, 1)
-        assert alfa_k.customer_no == "11111111" and alfa_k.segment == "MA" and alfa_k.inventory_count == 99
+        assert alfa_k.customer_no == "11111111, 33333333, 12121212" and alfa_k.segment == "MA" and alfa_k.inventory_count == 99
         assert db.get(CustomerTeam, 1) is None
         assert db.scalar(select(Customer).where(Customer.name == "Yeni Kurum")) is None
     assert client.post(f"{TABAN}/aktarimlar/{s['kayit_id']}/geri-al", headers=hdr).status_code == 409

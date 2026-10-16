@@ -86,6 +86,23 @@ def test_eski_create_all_veritabani_yukselir(tmp_path):
     assert _fark(url) == []
 
 
+
+@pytest.mark.parametrize("satir", [0, 1])
+def test_0010_radar_prospect_yalniz_bossa_kalkar(tmp_path, satir):
+    url = f"sqlite:///{(tmp_path / 'radar.db').as_posix()}"
+    command.upgrade(_ayar(url), "0009_gelir_uretim")
+    motor = create_engine(url)
+    try:
+        with motor.begin() as b:
+            for i in range(satir):
+                b.execute(text("INSERT INTO radar_prospect (id, name, stage) VALUES (:i, 'x', 'y')"), {"i": i + 1})
+        command.upgrade(_ayar(url), "head")
+        assert inspect(motor).has_table("radar_prospect") is bool(satir)
+        command.downgrade(_ayar(url), "0009_gelir_uretim")
+        assert inspect(motor).has_table("radar_prospect")
+    finally:
+        motor.dispose()
+
 @pytest.mark.skipif(not os.environ.get("TAMLIFE_TEST_PG_URL"), reason="TAMLIFE_TEST_PG_URL yok")
 def test_zincir_postgresql():
     url = os.environ["TAMLIFE_TEST_PG_URL"]
@@ -99,3 +116,28 @@ def test_zincir_postgresql():
     finally:
         motor.dispose()
     command.downgrade(_ayar(url), "base")
+
+
+def test_0011_gelir_onay_eski_kayitlar_onayli(tmp_path):
+    """Mevcut Gelir Faydasi kayitlari onay akisina 'onayli' girer (canli veri ve sunum degismez); geri alma satiri korur."""
+    url = f"sqlite:///{(tmp_path / 'gelir.db').as_posix()}"
+    command.upgrade(_ayar(url), "0010_radar_prospect_kaldir")
+    motor = create_engine(url)
+    try:
+        with motor.begin() as b:
+            b.execute(
+                text(
+                    "INSERT INTO revenue_benefit (id, kind, benefit_type, title, status, status_note, description, customers, revenue_currency,"
+                    " revenue_period, revenue_note, hours_note, extra_note, other_people, created_by, created_at, updated_by, updated_at)"
+                    " VALUES (1, 'proje', 'gelir', 'Alfa', 'devam', '', '', '', 'TRY', 'ay', '', '', '', '', 'x', '2026-01-01', 'x', '2026-01-01')"
+                )
+            )
+        command.upgrade(_ayar(url), "head")
+        with motor.connect() as b:
+            assert b.execute(text("SELECT approval, roadmap, approval_note, hours_per_year, created_by_id FROM revenue_benefit")).one() == ("onayli", "", "", None, None)
+        command.downgrade(_ayar(url), "0010_radar_prospect_kaldir")
+        assert "approval" not in {c["name"] for c in inspect(motor).get_columns("revenue_benefit")}
+        with motor.connect() as b:
+            assert b.execute(text("SELECT title FROM revenue_benefit")).scalar() == "Alfa"
+    finally:
+        motor.dispose()

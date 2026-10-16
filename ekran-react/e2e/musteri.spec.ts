@@ -1,15 +1,16 @@
 import { expect, test } from "@playwright/test"
 import type { Page } from "@playwright/test"
+import { buyukHarf as B } from "../src/lib/buyuk-harf"  // ekran sidebar disinda buyuk harf ve Turkce karaktersiz gosterir
 
 const KULLANICI = process.env.E2E_USER ?? "admin"
 const PAROLA = process.env.E2E_PASS ?? ""
 
 async function girisYap(page: Page) {
   await page.goto("/")
-  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
-  await page.getByLabel("Şifre").fill(PAROLA)
-  await page.getByRole("button", { name: "Giriş" }).click()
-  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
 }
 
 test("musteri karti ve aylik rapor akisi (ekle, duzenle, iletisim, taslak, alici, gonder, kilit, geri al, sil)", async ({ page }) => {

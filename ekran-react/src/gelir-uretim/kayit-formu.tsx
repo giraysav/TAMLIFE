@@ -5,9 +5,9 @@ import { Cekmece } from "@/components/cekmece"
 import { ALT_BASLIK_BANDI, ALT_BASLIK_YAZISI, Alan, Bildirim, DUGME, DUGME_ANA, GIRDI } from "@/components/sayfa-ui"
 import { hataMesaji, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
-import { DONEMLER, DURUMLAR, FAYDALAR, PARALAR, TURLER, gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
-import type { Donem, Durum, Fayda, Kayit, Para, Tur } from "@/gelir-uretim/gelir-uretim-metin"
-import { ANAHTAR, TABAN } from "@/gelir-uretim/ortak"
+import { DONEMLER, DURUMLAR, FAYDALAR, PARALAR, TURLER, ZORUNLU, gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
+import type { Donem, Durum, Fayda, Kayit, Para, Tur, ZorunluAlan } from "@/gelir-uretim/gelir-uretim-metin"
+import { ANAHTAR, TABAN, zorunluEtiket } from "@/gelir-uretim/ortak"
 import type { Metin } from "@/gelir-uretim/ortak"
 
 type Form = {
@@ -25,6 +25,8 @@ type Form = {
   year_revenue: string
   hours_per_month: string
   hours_note: string
+  hours_per_year: string
+  roadmap: string
   extra_note: string
   start_date: string
   end_date: string
@@ -32,12 +34,15 @@ type Form = {
   person_ids: number[]
 }
 /** Serbest metin ya da sayi/tarih girdisi olan alanlar (numaralandirmalar ayri secim kutusudur). */
-type Serbest = "title" | "status_note" | "description" | "customers" | "revenue_amount" | "revenue_note" | "year_revenue" | "hours_per_month" | "hours_note" | "extra_note" | "start_date" | "end_date" | "other_people"
+type Serbest =
+  | "title" | "status_note" | "roadmap" | "description" | "customers" | "revenue_amount" | "revenue_note" | "year_revenue" | "hours_per_month"
+  | "hours_per_year" | "hours_note" | "extra_note" | "start_date" | "end_date" | "other_people"
 
 const FORM_ID = "gelir-uretim-formu"
 /** Sunucu sinirlariyla ayni: tutar 1e13, saat 1e6. */
 const AZAMI_TUTAR = 1e13
 const AZAMI_SAAT = 1e6
+const AZAMI_YIL_SAAT = 1e7
 const SAYI = /^\d+([.,]\d+)?$/
 
 const sayiMetni = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n))
@@ -58,6 +63,8 @@ function baslangic(k: Kayit | null): Form {
     year_revenue: sayiMetni(k?.year_revenue),
     hours_per_month: sayiMetni(k?.hours_per_month),
     hours_note: k?.hours_note ?? "",
+    hours_per_year: sayiMetni(k?.hours_per_year),
+    roadmap: k?.roadmap ?? "",
     extra_note: k?.extra_note ?? "",
     start_date: k?.start_date ?? "",
     end_date: k?.end_date ?? "",
@@ -75,14 +82,25 @@ function sayiOku(metin: string, azami: number): number | null | undefined {
   return Number.isFinite(n) && n <= azami ? n : undefined
 }
 
-function govdeKur(f: Form, t: Metin): { govde: Record<string, unknown> } | { hata: string } {
+/** Zorunlu alanin form karsiligi bos mu (people: panel kisisi ya da diger kisiler). */
+function bosMu(f: Form, alan: ZorunluAlan): boolean {
+  if (alan === "people") return f.person_ids.length === 0 && !f.other_people.trim()
+  return !f[alan].trim()
+}
+
+/** hos: duzenlemede onceden de bos olan (eski, onayli kayit) alanlar; sunucu da ayni kurali uygular. */
+function govdeKur(f: Form, t: Metin, hos: ReadonlySet<string>): { govde: Record<string, unknown> } | { hata: string } {
   if (!f.title.trim()) return { hata: t.baslikZorunlu }
+  const eksik = ZORUNLU.filter((a) => !hos.has(a) && bosMu(f, a))
+  if (eksik.length > 0) return { hata: t.zorunluEksik(eksik.map((a) => zorunluEtiket(a, t)).join(", ")) }
   const tutar = sayiOku(f.revenue_amount, AZAMI_TUTAR)
   if (tutar === undefined) return { hata: t.sayiHata(t.gelirTutari) }
   const yilIci = sayiOku(f.year_revenue, AZAMI_TUTAR)
   if (yilIci === undefined) return { hata: t.sayiHata(t.yilIciAlani) }
   const saat = sayiOku(f.hours_per_month, AZAMI_SAAT)
   if (saat === undefined) return { hata: t.sayiHata(t.eforAlani) }
+  const yilSaat = sayiOku(f.hours_per_year, AZAMI_YIL_SAAT)
+  if (yilSaat === undefined) return { hata: t.sayiHata(t.yilSaatAlani) }
   if (f.start_date && f.end_date && f.end_date < f.start_date) return { hata: t.tarihHata }
   return {
     govde: {
@@ -100,6 +118,8 @@ function govdeKur(f: Form, t: Metin): { govde: Record<string, unknown> } | { hat
       year_revenue: yilIci,
       hours_per_month: saat,
       hours_note: f.hours_note,
+      hours_per_year: yilSaat,
+      roadmap: f.roadmap,
       extra_note: f.extra_note,
       start_date: f.start_date || null,
       end_date: f.end_date || null,
@@ -137,9 +157,26 @@ function Secim<T extends string>({ etiket, deger, secenekler, onDegis }: { etike
 
 type KisiSecenegi = { id: number; ad: string }
 
-/** Yeni kayit (kayit = null) ya da duzenleme cekmecesi. Yalniz admin acar; sunucu da ayni kurali uygular. */
-export function KayitFormu({ dil, kayit, personel, onKapat }: { dil: Dil; kayit: Kayit | null; personel: KisiSecenegi[]; onKapat: () => void }) {
+/**
+ * Yeni kayit (kayit = null) ya da duzenleme cekmecesi. Modulu goren herkes yeni is girer (yonetebilir degilse sahibin onayina gider);
+ * onayli kaydi yalniz sahip/admin, bekleyen/reddedilen kaydi giren kisi de duzenler. Yetkiyi sunucu zorlar.
+ */
+export function KayitFormu({
+  dil,
+  kayit,
+  personel,
+  yonetebilir,
+  onKapat,
+}: {
+  dil: Dil
+  kayit: Kayit | null
+  personel: KisiSecenegi[]
+  yonetebilir: boolean
+  onKapat: () => void
+}) {
   const t = gelirUretimMetin(dil)
+  const hos = useMemo(() => new Set<string>(kayit && kayit.approval === "onayli" ? kayit.eksik : []), [kayit])
+  const yildiz = (alan: ZorunluAlan, etiket: string) => (hos.has(alan) ? etiket : `${etiket} *`)
   const qc = useQueryClient()
   const [f, setF] = useState<Form>(() => baslangic(kayit))
   const [uyari, setUyari] = useState("")
@@ -187,6 +224,7 @@ export function KayitFormu({ dil, kayit, personel, onKapat }: { dil: Dil; kayit:
       kapatEtiketi={t.kapat}
       alt={
         <div className="grid gap-2">
+          {!yonetebilir && (!kayit || kayit.approval !== "onayli") ? <Bildirim ton="gri">{t.formOnayNotu}</Bildirim> : null}
           {uyari ? <Bildirim ton="amber">{uyari}</Bildirim> : null}
           {kaydet.isError ? <Bildirim ton="kirmizi">{hataMesaji(kaydet.error, t.kaydedilemedi)}</Bildirim> : null}
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -206,7 +244,7 @@ export function KayitFormu({ dil, kayit, personel, onKapat }: { dil: Dil; kayit:
         className="grid gap-5"
         onSubmit={(e) => {
           e.preventDefault()
-          const sonuc = govdeKur(f, t)
+          const sonuc = govdeKur(f, t, hos)
           if ("hata" in sonuc) return setUyari(sonuc.hata)
           setUyari("")
           kaydet.mutate(sonuc.govde)
@@ -218,13 +256,14 @@ export function KayitFormu({ dil, kayit, personel, onKapat }: { dil: Dil; kayit:
             <Secim etiket={t.fayda} deger={f.benefit_type} onDegis={(d) => ayarla("benefit_type", d)} secenekler={FAYDALAR.map((id) => ({ id, ad: t.fayda_[id] }))} />
             <Secim etiket={t.durum} deger={f.status} onDegis={(d) => ayarla("status", d)} secenekler={DURUMLAR.map((id) => ({ id, ad: t.durum_[id] }))} />
           </div>
-          {girdi("title", t.baslikAlani, 300)}
-          {kutu("status_note", t.durumNotu, 4000, 2)}
-          {kutu("description", t.aciklamaAlani, 8000, 4)}
-          {girdi("customers", t.musterilerAlani, 500)}
+          {girdi("title", yildiz("title", t.baslikAlani), 300)}
+          {kutu("status_note", yildiz("status_note", t.durumNotu), 4000, 2)}
+          {kutu("roadmap", yildiz("roadmap", t.yolAlani), 4000, 3)}
+          {kutu("description", yildiz("description", t.aciklamaAlani), 8000, 4)}
+          {girdi("customers", yildiz("customers", t.musterilerAlani), 500)}
           <div className="grid gap-3 sm:grid-cols-2">
-            {girdi("start_date", t.baslangicAlani, 10, { tarih: true })}
-            {girdi("end_date", t.bitisAlani, 10, { tarih: true })}
+            {girdi("start_date", yildiz("start_date", t.baslangicAlani), 10, { tarih: true })}
+            {girdi("end_date", yildiz("end_date", t.bitisAlani), 10, { tarih: true })}
           </div>
           <p className="-mt-1 text-[0.625rem] font-bold text-slate-400">{t.bitisIpucu}</p>
         </Bolge>
@@ -232,23 +271,24 @@ export function KayitFormu({ dil, kayit, personel, onKapat }: { dil: Dil; kayit:
         <Bolge baslik={t.gelirBilgisi}>
           <p className="-mt-1 text-[0.625rem] font-bold text-slate-400">{t.sayiIpucu}</p>
           <div className="grid gap-3 sm:grid-cols-3">
-            {girdi("revenue_amount", t.gelirTutari, 20, { sayisal: true })}
+            {girdi("revenue_amount", yildiz("revenue_amount", t.gelirTutari), 20, { sayisal: true })}
             <Secim etiket={t.paraBirimi} deger={f.revenue_currency} onDegis={(d) => ayarla("revenue_currency", d)} secenekler={PARALAR.map((id) => ({ id, ad: t.para_[id] }))} />
             <Secim etiket={t.donem} deger={f.revenue_period} onDegis={(d) => ayarla("revenue_period", d)} secenekler={DONEMLER.map((id) => ({ id, ad: t.donem_[id] }))} />
           </div>
           {girdi("revenue_note", t.tutarNotu, 500)}
-          {girdi("year_revenue", t.yilIciAlani, 20, { sayisal: true })}
+          {girdi("year_revenue", yildiz("year_revenue", t.yilIciAlani), 20, { sayisal: true })}
         </Bolge>
 
         <Bolge baslik={t.verimlilikBilgisi}>
           <div className="grid gap-3 sm:grid-cols-2">
-            {girdi("hours_per_month", t.eforAlani, 20, { sayisal: true })}
-            {girdi("hours_note", t.eforNotu, 500)}
+            {girdi("hours_per_month", yildiz("hours_per_month", t.eforAlani), 20, { sayisal: true })}
+            {girdi("hours_per_year", yildiz("hours_per_year", t.yilSaatAlani), 20, { sayisal: true })}
           </div>
-          {kutu("extra_note", t.ekAlani, 4000, 3)}
+          {girdi("hours_note", t.eforNotu, 500)}
+          {kutu("extra_note", yildiz("extra_note", t.ekAlani), 4000, 3)}
         </Bolge>
 
-        <Bolge baslik={t.personel}>
+        <Bolge baslik={yildiz("people", t.personel)}>
           <fieldset className="grid gap-1.5">
             <legend className="sr-only">{t.personel}</legend>
             {kisiler.length === 0 ? (

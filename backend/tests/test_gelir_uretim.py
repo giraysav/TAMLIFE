@@ -45,8 +45,15 @@ def _kisi(kullanici: str, ad: str, rol: str = "TeamMember", aktif: bool = True, 
         return satir.id
 
 
+# Yeni giriste tum zorunlu alanlar dolu olmali (servis.ZORUNLU); testler yalniz konu ettikleri alanlari degistirir.
+ZORUNLU_VARSAYILAN = {
+    "status_note": "Sürüyor", "roadmap": "Faz 1", "description": "Açıklama", "customers": "Alfa", "revenue_amount": 0, "year_revenue": 0,
+    "hours_per_month": 0, "hours_per_year": 0, "extra_note": "-", "start_date": "2026-01-01", "end_date": "2026-12-31", "other_people": "Dış Kişi",
+}  # fmt: skip
+
+
 def _govde(**alanlar) -> dict:
-    temel = {"kind": "proje", "benefit_type": "gelir", "title": "Alfa devre yedekleme", "status": "devam"}
+    temel = {"kind": "proje", "benefit_type": "gelir", "title": "Alfa devre yedekleme", "status": "devam", **ZORUNLU_VARSAYILAN}
     return {**temel, **alanlar}
 
 
@@ -54,6 +61,19 @@ def _ekle(client, hdr, **alanlar) -> int:
     r = client.post(URL, json=_govde(**alanlar), headers=hdr)
     assert r.status_code == 200, r.text
     return r.json()["data"]["id"]
+
+
+def _eski(client, hdr, **alanlar) -> int:
+    """Zorunlu alan kuralindan onceki (ya da Excel'den ice alinan) onayli kayit: yalniz verilen alanlar dolu (ozet/sunum testleri)."""
+    kisiler = alanlar.pop("person_ids", [])
+    girdi = {"kind": "proje", "benefit_type": "gelir", "title": "Alfa devre yedekleme", "status": "devam", **alanlar}
+    for ad in ("start_date", "end_date"):
+        if isinstance(girdi.get(ad), str):
+            girdi[ad] = date.fromisoformat(girdi[ad])
+    with Session(engine()) as db:
+        kimlik = servis.ekle(db, "admin", servis.temizle(girdi), kisiler).id
+        db.commit()
+        return kimlik
 
 
 def _liste(client, **sorgu) -> dict:
@@ -78,6 +98,11 @@ BASLIKLAR = [
     "Aylık verimlilik faydası (saat efor kazancı/ay)", "Ek açıklamalar", "Proje/çalışma başlangıç tarihi", "Proje/çalışma bitiş tarihi",
 ]  # fmt: skip
 BOLUM = "Tam Gelir Artırıcı Aldığımız İnsiyatifler"
+KULLANICI_BASLIKLARI = [
+    "İlgili TAM", "İşin özeti", "Güncel durum", "Yol Haritası", "Detaylı açıklaması", "Hangi müşteri/müşterileri etkilediği", "Aylık gelir faydası (TL/ay)",
+    "Yıllık gelir faydası (TL/12 ay)", "Aylık verimlilik faydası (saat efor kazancı/ay)", "Yıllık verimlilik faydası (saat efor kazancı/12 ay)",
+    "Ek açıklamalar", "Proje/çalışma başlangıç tarihi", "Proje/çalışma bitiş tarihi",
+]  # fmt: skip
 
 
 def _xlsx(satirlar: list[list], basliklar: list | None = None, sayfa: str = "Liste") -> bytes:
@@ -132,7 +157,8 @@ def test_admin_ekler_gunceller_siler_ve_denetler(client, ekip):
     veri = _liste(client)
     assert veri["yazabilir"] is True and veri["ozet"]["is_sayisi"] == 1 and veri["ozet"]["aylik_gelir"] == {"TRY": 88200.0}
     kayit = veri["items"][0]
-    assert kayit["id"] == kimlik and kayit["title"] == "Alfa yedek devre" and kayit["end_date"] is None  # bitis bos = devam ediyor
+    assert kayit["id"] == kimlik and kayit["title"] == "Alfa yedek devre" and kayit["end_date"] == "2026-12-31"
+    assert kayit["approval"] == "onayli" and kayit["eksik"] == [] and kayit["roadmap"] == "Faz 1"  # admin girisi dogrudan onayli
     assert [k["name"] for k in kayit["people"]] == ["Ali Örnek", "Veli Deneme"] and kayit["other_people"] == "Dış Kişi"
     assert kayit["created_by"] == "admin" and kayit["updated_at"]
     assert [p["ad"] for p in veri["secenekler"]["personel"]] == ["Ali Örnek", "Veli Deneme"]  # pasif, yonetici ve admin listede yok
@@ -168,28 +194,30 @@ def test_yazilmayan_degisiklik_guncelleme_izi_birakmaz(client, ekip):
 
 
 # --- yetki ---------------------------------------------------------------------------------------------------------------
-def test_yetki_matrisi_yalniz_admin_yazar(client, monkeypatch, ekip):
+def test_yetki_matrisi_personel_girer_onayli_kaydi_degistiremez(client, monkeypatch, ekip):
+    """2026-10-15: modulu goren herkes yeni is girer (onaya duser); onayli kaydi duzenleme/silme ve ice aktarma sahibin/admin'indir."""
     hdr = login_ok(client)
     kimlik = _ekle(client, hdr, title="Alfa")
     dosya = _ornek_dosya()
     for kullanici, rol in (("uye", "TeamMember"), ("yon", "TeamMngr")):
         h = _giris(client, monkeypatch, kullanici, rol)
-        # herkes (modulu acabilen) listeyi gorur, yazamaz
         veri = _liste(client)
-        assert veri["yazabilir"] is False and len(veri["items"]) == 1
+        assert veri["yazabilir"] is False and veri["onay"]["yonetebilir"] is False and len(veri["items"]) == 1
         assert client.get(f"{URL}/excel").status_code == 200
+        yeni = client.post(URL, json=_govde(title=f"Yeni {kullanici}"), headers=h)
+        assert yeni.status_code == 200 and yeni.json()["data"]["approval"] == "bekliyor"
         for yanit in (
-            client.post(URL, json=_govde(title="Yeni"), headers=h),
             client.put(f"{URL}/{kimlik}", json=_govde(title="Degisti"), headers=h),
             client.delete(f"{URL}/{kimlik}", headers=h),
+            client.post(f"{URL}/{kimlik}/onay", json={"karar": "geri_al"}, headers=h),
             client.post(f"{URL}/ice-al/onizleme", content=dosya, headers=h),
             client.post(f"{URL}/ice-al/uygula", content=dosya, headers=h),
+            client.put(f"{URL}/sahip", json={"user_id": ekip["ali"]}, headers=h),
         ):
             assert yanit.status_code == 403, (kullanici, yanit.text)
-    assert _say() == 1  # hicbir yazma gecmedi
+    assert _say() == 3  # onayli kayit + iki bekleyen giris
     with Session(engine()) as db:
-        assert db.scalar(select(RevenueBenefit.title)) == "Alfa"
-    assert _denetim() == [("gelir_uretim.ekle", f"is={kimlik}"), ("gelir_uretim.excel", ""), ("gelir_uretim.excel", "")]
+        assert db.get(RevenueBenefit, kimlik).title == "Alfa"
 
 
 def test_oturumsuz_istek_reddedilir(client):
@@ -198,22 +226,26 @@ def test_oturumsuz_istek_reddedilir(client):
     assert client.post(URL, json=_govde()).status_code in (401, 403)
 
 
-def test_rol_gorunumunde_kapaliysa_403(client, monkeypatch, ekip):
+def test_rol_kaydi_modulu_gizler_veya_acar(client, monkeypatch, ekip):
+    """Admin rol modullerinden gelir_uretim'i cikarirsa 403, eklerse 200."""
     hdr = login_ok(client)
     _ekle(client, hdr)
+    # gelir_uretim listede yok:
     assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri", "talep"], "landing": "musteri"}, headers=hdr).status_code == 200
+    _cikis(client, hdr)
     _giris(client, monkeypatch, "uye", "TeamMember")
     for yol in (URL, f"{URL}/excel"):
         assert client.get(yol).status_code == 403
     assert "gelir_uretim" not in {i["id"] for i in client.get("/api/v1/session/me").json()["data"]["navigation"]}
-    # modul rol gorunumune eklenince acilir
-    h = _giris(client, monkeypatch, "admin", "admin")
-    assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri", "gelir_uretim"], "landing": "musteri"}, headers=h).status_code == 200
+    # admin gelir_uretim'i geri verirse:
+    _cikis(client, {"X-CSRF-Token": client.cookies.get("tamlife_csrf")})
+    hdr = _giris(client, monkeypatch, "admin", "admin")
+    assert client.put("/api/v1/roller/TeamMember", json={"modules": ["musteri", "talep", "gelir_uretim"], "landing": "ozet"}, headers=hdr).status_code == 200
+    _cikis(client, hdr)
     _giris(client, monkeypatch, "uye", "TeamMember")
-    assert len(_liste(client)["items"]) == 1
+    for yol in (URL, f"{URL}/excel"):
+        assert client.get(yol).status_code == 200
     assert "gelir_uretim" in {i["id"] for i in client.get("/api/v1/session/me").json()["data"]["navigation"]}
-    with Session(engine()) as db:
-        assert db.scalar(select(func.count()).select_from(RoleView)) >= 1
 
 
 def test_katalogda_hazir_ve_tablo_sahipligi():
@@ -315,15 +347,15 @@ def test_servis_temizle_dogrudan():
 
 # --- liste, suzgec, ozet ---------------------------------------------------------------------------------------------------
 def _cesitli(client, hdr, ekip):
-    _ekle(client, hdr, title="Çimento hız artışı", customers="Çimsa Örnek", benefit_type="gelir", status="tamamlandi", revenue_amount=100000, revenue_period="ay",
+    _eski(client, hdr, title="Çimento hız artışı", customers="Çimsa Örnek", benefit_type="gelir", status="tamamlandi", revenue_amount=100000, revenue_period="ay",
           year_revenue=1_000_000, start_date="2026-03-01", end_date="2026-06-01", person_ids=[ekip["ali"]])  # fmt: skip
-    _ekle(client, hdr, title="Alfa raporlama otomasyonu", benefit_type="verimlilik", status="devam", hours_per_month=36, start_date="2026-02-15", person_ids=[ekip["veli"]])
-    _ekle(client, hdr, title="Beta yazılım tasarrufu", benefit_type="tasarruf", status="devam", revenue_amount=2000, revenue_currency="USD", revenue_period="ay", start_date="2025-11-01",
+    _eski(client, hdr, title="Alfa raporlama otomasyonu", benefit_type="verimlilik", status="devam", hours_per_month=36, start_date="2026-02-15", person_ids=[ekip["veli"]])
+    _eski(client, hdr, title="Beta yazılım tasarrufu", benefit_type="tasarruf", status="devam", revenue_amount=2000, revenue_currency="USD", revenue_period="ay", start_date="2025-11-01",
           end_date="2026-01-31")  # fmt: skip
-    _ekle(client, hdr, kind="inisiyatif", title="Gama tek seferlik satış", status="tamamlandi", revenue_amount=7500, revenue_currency="EUR", revenue_period="tek_sefer",
+    _eski(client, hdr, kind="inisiyatif", title="Gama tek seferlik satış", status="tamamlandi", revenue_amount=7500, revenue_currency="EUR", revenue_period="tek_sefer",
           start_date="2026-09-24", other_people="Dış Kişi")  # fmt: skip
-    _ekle(client, hdr, kind="inisiyatif", title="Delta iptal edilen", status="iptal", revenue_amount=999999, revenue_period="ay", hours_per_month=500, start_date="2026-05-01")
-    _ekle(client, hdr, title="Tarihsiz iş", status="baslamadi", revenue_amount=50, revenue_period="yil")
+    _eski(client, hdr, kind="inisiyatif", title="Delta iptal edilen", status="iptal", revenue_amount=999999, revenue_period="ay", hours_per_month=500, start_date="2026-05-01")
+    _eski(client, hdr, title="Tarihsiz iş", status="baslamadi", revenue_amount=50, revenue_period="yil")
 
 
 def test_liste_suzgecleri(client, ekip):
@@ -586,14 +618,17 @@ def test_excel_disa_aktarim_basliklari_ve_icerigi(client, ekip):
     assert r.headers["content-disposition"].startswith('attachment; filename="Gelir_Faydasi_') and r.headers["content-disposition"].endswith('.xlsx"')
     ws = load_workbook(io.BytesIO(r.content)).active
     satirlar = [[h.value for h in satir] for satir in ws.iter_rows()]
-    assert tuple(satirlar[0]) == excel.BASLIKLAR and satirlar[0][:10] == BASLIKLAR  # kaynak tablonun sutun duzeni
+    assert tuple(satirlar[0]) == excel.BASLIKLAR and list(satirlar[0][:13]) == KULLANICI_BASLIKLARI  # kullanicinin Excel'i, ayni sira
     alfa = next(s for s in satirlar if s[1] == "Alfa proje")
-    assert alfa[0] == "Ali Örnek, Dış Kişi" and alfa[2] == "Devam ediyor. Güncel not" and alfa[5] == "88200 TL/ay" and alfa[6] == "36 saat/ay"
-    assert alfa[8] == datetime(2026, 4, 1) and alfa[9] is None and alfa[10] == 1_000_000 and alfa[11] == "Gelir"
+    assert alfa[:7] == ["Ali Örnek, Dış Kişi", "Alfa proje", "Devam ediyor. Güncel not", "Faz 1", "Açıklama", "Alfa A.Ş.", "88200 TL/ay"]
+    assert alfa[7:] == [1_000_000, "36 saat/ay", 0, "Ek not", datetime(2026, 4, 1), datetime(2026, 12, 31), "Gelir"]
     sira = [s[1] or s[0] for s in satirlar[1:]]
     assert sira.index(excel.BOLUM_INISIYATIF) < sira.index("Beta inisiyatif") and sira.index("Alfa proje") < sira.index(excel.BOLUM_INISIYATIF)  # projeler, bolum satiri, inisiyatifler
     beta = next(s for s in satirlar if s[1] == "Beta inisiyatif")
-    assert beta[2] == "Tamamlandı" and beta[5] == "7500 EUR (tek seferlik) adetli" and beta[11] == "Tasarruf"
+    assert beta[2] == "Tamamlandı. Sürüyor" and beta[6] == "7500 EUR (tek seferlik) adetli" and beta[13] == "Tasarruf"
+    ozet = load_workbook(io.BytesIO(r.content))[excel.OZET_SAYFASI]
+    degerler = {s[0]: s[1] for s in ozet.iter_rows(min_row=3, values_only=True)}
+    assert degerler["İş sayısı"] == 3 and degerler["Aylık gelir faydası (iptaller hariç)"] == "88200 TL" and degerler["Yıllık gelir faydası (TL/12 ay)"] == 1_000_000
     # formul gibi gorunen metin formul olarak yazilmaz
     formul = next(h for satir in ws.iter_rows() for h in satir if h.value == "=1+1")
     assert formul.data_type == "s"

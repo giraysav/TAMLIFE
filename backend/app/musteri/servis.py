@@ -297,7 +297,8 @@ def rapor_birimi_mi(musteri: Customer) -> bool:
 def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] | None) -> dict:
     musteri = musteri_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id).order_by(func.lower(Customer.name))))
-    tam = db.get(AppUser, musteri.owner_id) if musteri.owner_id else None
+    sahipler = {u.id: u for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in [musteri, *istirakler] if c.owner_id})))}
+    tam = sahipler.get(musteri.owner_id)
     ust = db.get(Customer, musteri.parent_id) if musteri.parent_id else None
     adlar = {eslestirme_anahtari(c.name) for c in [musteri, *istirakler] if c.name}
 
@@ -317,7 +318,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
             "tam_id": musteri.owner_id,
             "ayri_rapor": ayri_rapor_mu(musteri) if musteri.parent_id else None,
             "cati": {"id": ust.id, "unvan": ust.name} if ust else None,
-            "istirakler": [{"id": c.id, "unvan": c.name, "ncst": c.ncst or "", "tam": _ad(db.get(AppUser, c.owner_id) if c.owner_id else None)} for c in istirakler],
+            "istirakler": [{"id": c.id, "unvan": c.name, "ncst": c.ncst or "", "tam": _ad(sahipler.get(c.owner_id))} for c in istirakler],
         },
         "operasyon": {
             "ft_hacim": musteri.ft_volume or VARSAYILAN_TUTAR,
@@ -373,6 +374,10 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "ayri_rapor_sec": yazma and musteri.parent_id is not None,
     }
     if yazma:
+        kart["cati_secenekleri"] = [
+            {"id": c.id, "ad": c.name}
+            for c in db.scalars(select(Customer).where(Customer.parent_id.is_(None), Customer.id != musteri.id).order_by(Customer.name, Customer.id))
+        ]
         secenek = {u.id: u for u in personel(db)}
         if musteri.owner_id and musteri.owner_id not in secenek:  # eski kayit: personel olmayan sahip secili gorunsun
             eski = db.get(AppUser, musteri.owner_id)
@@ -434,6 +439,27 @@ def kimlik_guncelle(db: Session, user: Principal, musteri_id: int, govde: dict) 
     if not eylem_yetkisi(user, "duzenle"):
         raise MusteriHata(403, "Yetki yok.")
     musteri = musteri_getir(db, user, musteri_id)
+    if "parent_id" in govde:
+        yeni_cati = govde["parent_id"]
+        if yeni_cati is not None:
+            if isinstance(yeni_cati, bool) or not isinstance(yeni_cati, int) or not 1 <= yeni_cati <= 2_147_483_647:
+                raise MusteriHata(400, "Çatı müşteri seçimi geçersiz.")
+            if yeni_cati == musteri.id:
+                raise MusteriHata(400, "Müşteri kendisinin çatısı olamaz.")
+            # Kilit sirasi sabit: eszamanli A->B ve B->A degisiklikleri dongu olusturmasin.
+            kilitli = {
+                c.id: c for c in db.scalars(
+                    select(Customer).where(Customer.id.in_([musteri.id, yeni_cati])).order_by(Customer.id)
+                    .with_for_update().execution_options(populate_existing=True)
+                )
+            }
+            ust = kilitli.get(yeni_cati)
+            if ust is None:
+                raise MusteriHata(404, "Çatı müşteri bulunamadı.")
+            if ust.parent_id is not None:
+                raise MusteriHata(400, "Bir iştirak çatı müşteri olarak seçilemez.")
+            if yeni_cati != musteri.parent_id and db.scalar(select(Customer.id).where(Customer.parent_id == musteri.id).limit(1)) is not None:
+                raise MusteriHata(409, "Bu müşterinin iştiraklerini önce başka bir çatıya taşıyın.")
     if "name" in govde:
         yeni_ad = _metin(govde, "name", "Müşteri Ünvanı", 150, zorunlu=True)
         assert yeni_ad is not None
@@ -459,6 +485,8 @@ def kimlik_guncelle(db: Session, user: Principal, musteri_id: int, govde: dict) 
         musteri.tam_ft = _metin(govde, "tam_ft", "TAM FT", 100) or VARSAYILAN_TUTAR
     if "inventory" in govde:
         musteri.inventory_count = _tamsayi(govde["inventory"], "Envanter", 0, 1_000_000_000)
+    if "parent_id" in govde:
+        musteri.parent_id = govde["parent_id"]
     db.flush()
     return {"unvan": musteri.name}
 

@@ -201,7 +201,7 @@ const TR = {
   csvDosyasi: "CSV dosyası",
   ham: {
     baslik: "Ham Müşteri Verisi",
-    aciklama: "Müşteri listesini (.xlsx ya da .csv) yükleyin: sayfa ve başlık satırı kendiliğinden bulunur, sütunlar müşteri kartı alanlarıyla eşleştirilir. Önce önizleme, onayınızla kartlara yazılır; her aktarım geri alınabilir.",
+    aciklama: "Şablonu (.xlsx) doldurup yükleyin: her satır bir çatı müşteri ya da çatısıyla birlikte bir iştirak. Okunan sütunlar: Sorumlu TAM, çatı ve iştirak ünvanı / numarası, Segment, Sektör ve Ekip & İletişim. Önce önizleme, onayınızla kartlara yazılır; her aktarım geri alınabilir.",
     dosya: "Müşteri dosyası (.xlsx / .csv)",
     yukle: "Yükle ve tanı",
     bosSablon: "Boş şablon",
@@ -763,7 +763,7 @@ const EN: typeof TR = {
   csvDosyasi: "CSV file",
   ham: {
     baslik: "Raw Customer Data",
-    aciklama: "Upload the customer list (.xlsx or .csv): the sheet and header row are detected automatically and columns are matched to customer card fields. Preview first; cards are written only after your confirmation and every import can be undone.",
+    aciklama: "Fill in the template (.xlsx) and upload it: each row is a parent customer, or an affiliate together with its parent. Columns read: Responsible TAM, parent and affiliate name / number, Segment, Sector and Team & Contacts. Preview first; cards are written only after your confirmation and every import can be undone.",
     dosya: "Customer file (.xlsx / .csv)",
     yukle: "Upload and detect",
     bosSablon: "Blank template",

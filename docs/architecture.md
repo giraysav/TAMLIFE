@@ -19,7 +19,7 @@ Tarayıcı ──HTTPS 443──► Windows http.sys (TLS'i sonlandırır; özel
   python -m app.rapor.ceviri --isci ─► CTranslate2 TR→EN (aylık rapor çevirisi; çökerse yalnız alt süreç ölür)
 ```
 
-- **Kalıcı çalıştırma:** `kurulum\canli_gorev_kur.ps1` iki SYSTEM görevi kurar: `TAMLIFE_v35_Panel` (`canli_baslat.ps1`: prod modu, AD girişi, 127.0.0.1:8117) ve `TAMLIFE_v35_TLS_Vekil` (443 → 8117). İkisi açılışta başlar, kapanırsa 15 sn sonra yeniden açar. Günlük: `var\log\canli_panel.log`, `canli_vekil.log` (10 MB'ta döner). `-Hemen`, `-Durum`, `-Kaldir`.
+- **Kalıcı çalıştırma:** `kurulum\canli_gorev_kur.ps1` iki TURKCELL\TAMLIFEADLOG görevi kurar: `TAMLIFE_v35_Panel` (`canli_baslat.ps1`: prod modu, AD girişi, 127.0.0.1:8117) ve `TAMLIFE_v35_TLS_Vekil` (443 → 8117). İkisi açılışta başlar, kapanırsa 15 sn sonra yeniden açar. Günlük: `var\log\canli_panel.log`, `canli_vekil.log` (10 MB'ta döner). `-Hemen`, `-Durum`, `-Kaldir`.
 - **Yalnız 443.** 80'den yönlendirme yoktur. Eski panelin `https://+:443/` kaydı yüzünden eski panel kapatılmış, vekil `-Ad '+'` ile başlatılmıştır.
 - **Prod kipi:** `TAMLIFE_ENV=prod` → yerel admin girişi yok, `/docs` ve `/openapi.json` kapalı, `TrustedHost` yalnız `TAMLIFE_ALLOWED_HOSTS`, `Origin` ya `scheme://Host` olmalı ya da `TAMLIFE_ALLOWED_ORIGINS`'te, `X-Forwarded-For` yalnız `TAMLIFE_TRUSTED_PROXIES`'ten kabul edilir.
 - **Geliştirme:** `backend\dev.ps1` (API 8117, SQLite `var/dev.db`), arayüz için `cd ekran-react; npm run dev` (Vite 5173, `/api` → 8117) ya da `dev.ps1 -Arayuz`.
@@ -68,7 +68,7 @@ React 19, TypeScript 7, Vite 8, TanStack Query, Tailwind 4, framer-motion, lucid
 ## 6. Test ve doğrulama
 
 - Backend: `cd backend; ..\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider` (654 test, 1 atlanır; `ruff check .` temiz).
-- Arayüz: `cd ekran-react; npm test` (161 test), `npm run lint`, `npm run build`.
+- Arayüz: `cd ekran-react; npm test` (162 test), `npm run lint`, `npm run build`.
 - Alembic, rol/yetki (`test_yonetim_uclari_admin_disina_kapali` tüm Yönetim uçlarını OpenAPI'den dener), skor altın vektörleri (`skor_golden.json`), eski aktarım (`test_eski_aktar.py`) ayrı testlidir.
 
 ## 7. Depo düzeni
@@ -87,7 +87,8 @@ Git dışı, sunucuda kalıcı: `backend\.env`, `backend\var\`, `ekran-react\dis
 
 ## 8. Açık işler
 
-- REPORTDB: logon tetikleyicisi izni (DBA) gelince `TAM_Life_v35_ReportDB_6dk` görevi açılır (`kurulum\reportdb_gorev_kur.ps1`).
+- REPORTDB: Windows çalışma hesabı `TURKCELL\TAMLIFEADLOG`; aynı hesapla Oracle bağlantısı 2026-10-16'da doğrulandı. `TAM_Life_v35_ReportDB_6dk` görev hesabı da buna taşındı; otomatik veri çekimi mevcut devre dışı durumunda korundu (`kurulum\reportdb_gorev_kur.ps1`).
+- **Windows kimliği:** `kurulum/calisma_kimligi.ps1` çalışma hesabını tek yerde tanımlar. Kurulum Windows kimlik bilgisi penceresinden parola alır; parola kodda/günlükte tutulmaz, oturum kapalıyken çalışma için Task Scheduler tarafından saklanır. Mevcut görevleri taşıma: yükseltilmiş PowerShell'de `kurulum/kimlik_gecir.ps1` (önce aynı görev hesabında salt okunur Oracle testi, sonra hesap geçişi ve panel/TLS yeniden başlatma; görevlerin etkin/devre dışı durumları korunur). `kurulum/kimlik_kontrol.ps1` yalnız bağlantı ve kimlik doğrular. Görev tanımı kopyaları `var/isletim/kimlik-<tarih-saat>/`, geçiş günlüğü `var/log/kimlik-gecis.log`.
 - 114 çatı müşterinin segmenti boş (eski panelde de boştu): Veri Girişi › ham müşteri yüklemesiyle doldurulur.
 - GALAPAGOSDB anahtarları ve ONENTDB/Ürün-Tutar bağlantıları sunucu `.env`'inde doğrulanacak.
 - Çeviri modeli `ceviri_modeli\tr_en` altında olmalı; `kurulum\ceviri_kur.ps1 -Dogrula` dosyayı, SHA256'yı ve deneme çevirisini denetler (eski panel klasörü silindi; internetsiz sunucuda `-Paket`).

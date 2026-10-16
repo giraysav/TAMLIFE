@@ -6,7 +6,7 @@ hepsi YALNIZ admin. Tek istisna TAM tarafindaki "skor atamasi iste" (POST /talep
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -16,7 +16,7 @@ from app.config import get_settings
 from app.db import get_db, oturum
 from app.deps import require_admin, require_user
 from app.kullanicilar import kullanici_kaydi
-from app.ortak import KimlikTipi, ok
+from app.ortak import KimlikTipi, govde_oku, ok
 from app.session import Principal
 from app.skor import kaynak_secimi, servis, urun_tutar
 
@@ -184,17 +184,7 @@ async def urun_tutar_yukle(
     user: Principal = Depends(require_admin),
 ) -> dict:
     """Ham .xlsx govdesi (tampon yuklemesiyle ayni kalip: cok parcali form yok). Ozet musteri basina son yuklemeyle degisir."""
-    sinir = get_settings().ingest_max_mb * 1024 * 1024
-    bildirilen = request.headers.get("content-length", "")
-    if bildirilen.isdigit() and int(bildirilen) > sinir:
-        raise HTTPException(status_code=413, detail=f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).")
-    parcalar: list[bytes] = []
-    boyut = 0
-    async for parca in request.stream():
-        boyut += len(parca)
-        if boyut > sinir:
-            raise HTTPException(status_code=413, detail=f"Dosya çok büyük (en fazla {get_settings().ingest_max_mb} MB).")
-        parcalar.append(parca)
-    sonuc = await run_in_threadpool(_urun_tutar_yukle, musteri_id, b"".join(parcalar), dosya or "urun_tutar.xlsx", user.username)
+    veri = await govde_oku(request, get_settings().ingest_max_mb * 1048576)
+    sonuc = await run_in_threadpool(_urun_tutar_yukle, musteri_id, veri, dosya or "urun_tutar.xlsx", user.username)
     _denetim(user, "skor.urun_tutar", f"musteri={musteri_id} ozet={len(sonuc['musteriler'])} eslesen={sonuc['eslesen']}")
     return ok(sonuc)

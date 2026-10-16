@@ -39,6 +39,7 @@ from app.gelir_uretim.ayristir import (
     tarih_ayristir,
     tutar_ayristir,
     yil_ici_ayristir,
+    yillik_saat_ayristir,
 )
 from app.gelir_uretim.models import RevenueBenefit
 from app.kullanicilar import ad_soyad, kullanici_kaydi, personel
@@ -52,11 +53,13 @@ EN_COK_SATIR = 500
 OKUNAN_SATIR_SINIRI = 5000  # sondaki bos satirlar sonsuz dolasmasin
 SUTUN_SINIRI = 40
 GEREKLI_BASLIK = "baslik"
-ISTENEN_SUTUNLAR = ("tam", "baslik", "durum", "aciklama", "musteri", "gelir", "verimlilik", "baslangic", "bitis")
+ISTENEN_SUTUNLAR = ("tam", "baslik", "durum", "yol", "aciklama", "musteri", "gelir", "verimlilik", "yillik_saat", "baslangic", "bitis")
 SUTUN_ADLARI = {
     "tam": ("İlgili TAM", "Responsible TAM"),
     "baslik": ("İşin özeti", "Work summary"),
     "durum": ("Güncel durum", "Current status"),
+    "yol": ("Yol Haritası", "Roadmap"),
+    "yillik_saat": ("Yıllık verimlilik faydası", "Yearly efficiency benefit"),
     "aciklama": ("Detaylı açıklaması", "Description"),
     "musteri": ("Etkilenen müşteri", "Affected customers"),
     "gelir": ("Aylık gelir faydası", "Monthly revenue benefit"),
@@ -74,7 +77,7 @@ def _onizleme_satiri(no: int, durum: str, tur: str, baslik: str, uyarilar: list[
     return {
         "satir": no, "durum": durum, "kind": tur, "title": baslik, "status": "", "benefit_type": "", "people": [], "other_people": "",
         "revenue_amount": None, "revenue_currency": "TRY", "revenue_period": "ay", "revenue_note": "", "year_revenue": None,
-        "hours_per_month": None, "start_date": None, "end_date": None, "uyarilar": uyarilar, **alanlar,
+        "hours_per_month": None, "hours_per_year": None, "start_date": None, "end_date": None, "uyarilar": uyarilar, **alanlar,
     }  # fmt: skip
 
 
@@ -307,6 +310,17 @@ def plan_olustur(
             )
         yil_ici = yil_ici_ayristir(_fayda_hucresi(hucreler, harita, "yil_ici"))
         ek_parcalar = [_metin(_fayda_hucresi(hucreler, harita, "ek"))]
+        yil_saat = yillik_saat_ayristir(_fayda_hucresi(hucreler, harita, "yillik_saat"))
+        if yil_saat.saat is None and yil_saat.ek:
+            uyarilar.append(
+                m(
+                    "Yıllık verimlilik faydası saate çevrilemedi; metin ‘Ek açıklamalar’a yazıldı.",
+                    "The yearly efficiency benefit could not be converted to hours; the text was kept in the additional notes.",
+                )
+            )
+            ek_parcalar.append(f"Yıllık verimlilik (Excel): {yil_saat.ek}")
+        elif yil_saat.ek:
+            ek_parcalar.append(f"Yıllık verimlilik notu: {yil_saat.ek}")
         yil_ici_ham = _metin(_fayda_hucresi(hucreler, harita, "yil_ici"))
         if yil_ici.tutar is None and yil_ici_ham:
             uyarilar.append(
@@ -351,6 +365,8 @@ def plan_olustur(
             "year_revenue": yil_ici.tutar,
             "hours_per_month": saat.saat,
             "hours_note": saat.ek,
+            "hours_per_year": yil_saat.saat,
+            "roadmap": _kisalt(_metin(_al(hucreler, harita, "yol")), servis.METIN_ALANLARI["roadmap"][2], ("Yol haritası", "Roadmap"), uyarilar),
             "extra_note": ek_not,
             "start_date": baslangic.tarih,
             "end_date": bitis_tarihi,
@@ -376,7 +392,7 @@ def plan_olustur(
                     no, durum_kodu, tur, baslik, uyarilar,
                     status=durum, benefit_type=kayit["benefit_type"], people=adlar, other_people=diger,
                     revenue_amount=tutar.miktar, revenue_currency=tutar.para, revenue_period=tutar.donem, revenue_note=tutar.ek,
-                    year_revenue=yil_ici.tutar, hours_per_month=saat.saat,
+                    year_revenue=yil_ici.tutar, hours_per_month=saat.saat, hours_per_year=yil_saat.saat,
                     start_date=baslangic.tarih.isoformat() if baslangic.tarih else None,
                     end_date=bitis_tarihi.isoformat() if bitis_tarihi else None,
                 ),

@@ -7,6 +7,7 @@ Parti degismez: hazir olduktan sonra satirlari degistirilmez, yalniz silinebilir
 
 from __future__ import annotations
 
+import csv
 import json
 import zlib
 from collections.abc import Iterable, Iterator, Sequence
@@ -112,6 +113,10 @@ def ice_al(db: Session, parti: IngestBatch, basliklar: Sequence[str], satirlar: 
     except UygulamaHatasi as hata:
         _basarisiz(db, parti_id, hata.mesaj)
         raise
+    except csv.Error as hata:  # satirlar akarken okunur: bozuk CSV kullanici girdisidir, 500 degil 400
+        mesaj = "CSV dosyası okunamadı (kapanmamış tırnak ya da çok uzun alan)."
+        _basarisiz(db, parti_id, mesaj)
+        raise UygulamaHatasi(400, mesaj) from hata
     except Exception as hata:
         _basarisiz(db, parti_id, f"Beklenmeyen hata: {type(hata).__name__}")
         raise

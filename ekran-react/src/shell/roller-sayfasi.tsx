@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import { ChevronDown, Presentation, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -7,20 +8,18 @@ import { baslangicHarfleri, zaman } from "@/lib/bicim"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { metin, yerel } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
-import { SunumKaynaklari } from "@/sunum/sunum-kaynaklari"
 import { sunumMetin } from "@/sunum/sunum-metin"
 
 type Rol = { role: string; label: string; editable: boolean; modules: string[]; landing: string; permissions: string[]; saved: boolean }
 /** Panelde kaydi olan personel (AD ile giren ya da yoneticinin actigi). `permissions` yalniz kisiye ozel verilenlerdir; rolden gelenler `roles` icindedir. */
 type Kisi = { id: number; username: string; display_name: string; role: string; auth: string; ad_domain: string; last_login_at: string | null; permissions: string[]; deletable?: boolean }
 type Etiket = { id: string; label: string; label_en?: string }
-type Katalog = Etiket & { children: Etiket[]; personel_only?: boolean }
+type Katalog = Etiket & { children: Etiket[] }
 /** Eylem yetkisi: duz dilde ne sagladigi ve nerede kullanildigi. Rol kartindaki "Ek yetkiler" kaldirildi (2026-10-11, amaci belirsizdi);
  * yalniz kendi bolumu olan yetkiler (ornek "sunum") Rol Yonetimi'nde duzenlenir. Kayitli yetkiler rol kaydedilince korunur. */
 type Yetki = Etiket & { description: string; description_en: string; where: string; where_en: string; area: string }
 /** `can_delete_users`/`delete_account`: kullanici silme yalniz tek hesapta (sunucu zorlar); `deletable` kisi basina dugme gosterimi icin. */
 type Veri = { roles: Rol[]; catalog: Katalog[]; permission_catalog: Yetki[]; users?: Kisi[]; can_delete_users?: boolean; delete_account?: string }
-type Taslak = { modules: Set<string>; landing: string; permissions: Set<string> }
 
 function YetkiAciklamasi({ yetki, dil }: { yetki: Yetki; dil: Dil }) {
   const t = metin(dil)
@@ -106,7 +105,7 @@ function KisiSatiri({ kisi, dil, onSil }: { kisi: Kisi; dil: Dil; onSil?: (k: Ki
   )
 }
 
-/** Acilip kapanan rol kutusu: baslikta rol adi, sayfa ve kisi sayisi; icerik acilinca sayfa secimi, giris sayfasi ve roldeki personel. */
+/** Acilip kapanan rol kutusu: baslikta rol adi, sayfa ve kisi sayisi; icerik acilinca gorulen sayfalar ve roldeki personel. */
 function RolKutusu({
   rol,
   acik,
@@ -272,67 +271,39 @@ function SunumKisiSecici({
   )
 }
 
-/** Rol Yonetimi: admin her rolun gorecegi sayfalari ve giris sayfasini belirler. Sunucu da ayni kurali zorlar. */
+const ROLLER = ["roller"] as const
+
+/** Rol Yonetimi: Yonetim disindaki her modul herkese acik (2026-10-14); admin yalniz sunum yetkisini verir; giris sayfasi secimi yok (herkes Genel Bakis'la acar). Sunucu da ayni kurali zorlar. */
 export function RollerSayfasi({ dil }: { dil: Dil }) {
   const t = metin(dil)
   const s = sunumMetin(dil)
-  const [veri, setVeri] = useState<Veri | null | undefined>(undefined)
-  const [taslak, setTaslak] = useState<Record<string, Taslak>>({})
-  const [bilgi, setBilgi] = useState<Record<string, string>>({})
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ROLLER, queryFn: () => oku<Veri>("/api/v1/roller") })
+  const veri = q.isError ? null : q.data
+  /** Yazma sonucu onbellege islenir; once yoldaki yenileme iptal edilir: yazmadan once baslamis (eski veriyi tasiyan) bir yenileme
+   * sonradan donup kaydedilen yetkiyi geri almasin (yuk-render.test.tsx). */
+  const setVeri = (f: (v: Veri | undefined) => Veri | undefined) => {
+    void qc.cancelQueries({ queryKey: ROLLER })
+    qc.setQueryData<Veri>(ROLLER, f)
+  }
   const [alanBilgi, setAlanBilgi] = useState({ bekliyor: false, metin: "" })
   const [acik, setAcik] = useState<Record<string, boolean>>({})
   const [silBilgi, setSilBilgi] = useState("")
-
-  const yukle = useCallback(async () => {
-    const govde = await oku<Veri>("/api/v1/roller").catch(() => null)
-    setVeri(govde)
-    if (govde) {
-      setTaslak(Object.fromEntries(govde.roles.map((r) => [r.role, { modules: new Set(r.modules), landing: r.landing, permissions: new Set(r.permissions) }])))
-    }
-  }, [])
-
-  useEffect(() => {
-    void yukle()
-  }, [yukle])
 
   if (veri === undefined) return <p className="text-sm text-muted-foreground">{t.yukleniyor}</p>
   if (veri === null) return <p role="alert" className="text-sm text-destructive">{t.yuklenemedi}</p>
 
   const kisiler = veri.users ?? []
 
-  function degistir(rol: string, kimlik: string, secili: boolean) {
-    setTaslak((onceki) => {
-      const mevcut = onceki[rol]
-      const kume = new Set(mevcut.modules)
-      if (secili) kume.add(kimlik)
-      else kume.delete(kimlik)
-      const landing = mevcut.landing !== "ozet" && !kume.has(mevcut.landing) ? "ozet" : mevcut.landing
-      return { ...onceki, [rol]: { ...mevcut, modules: kume, landing } }
-    })
-  }
-
-  async function kaydet(rol: string) {
-    const t1 = taslak[rol]
-    setBilgi((b) => ({ ...b, [rol]: "" }))
-    try {
-      await yaz("PUT", `/api/v1/roller/${rol}`, { modules: [...t1.modules], landing: t1.landing, permissions: [...t1.permissions] })
-      setBilgi((b) => ({ ...b, [rol]: t.rolKaydedildi }))
-      await yukle()
-    } catch {
-      setBilgi((b) => ({ ...b, [rol]: t.rolKaydedilemedi }))
-    }
-  }
-
-  /** Bolumdeki (ornek Ceyrek Bazli Sunum) rol yetkisi aninda kaydedilir: rolun KAYITLI sayfalari korunur, karttaki kaydedilmemis taslak gonderilmez. */
+  /** Bolumdeki (ornek Ceyrek Bazli Sunum) rol yetkisi aninda kaydedilir. Giris sayfasi secimi 2026-10-14'te kalkti: herkes Genel Bakis'la acar. */
   async function alanYetkisiKaydet(r: Rol, yetki: string, secili: boolean) {
     const kume = new Set(r.permissions)
     if (secili) kume.add(yetki)
     else kume.delete(yetki)
     setAlanBilgi({ bekliyor: true, metin: "" })
     try {
-      const sonuc = await yaz<{ permissions: string[] }>("PUT", `/api/v1/roller/${r.role}`, { modules: r.modules, landing: r.landing, permissions: [...kume] })
+      const sonuc = await yaz<{ permissions: string[] }>("PUT", `/api/v1/roller/${r.role}`, { permissions: [...kume] })
       setVeri((v) => v && { ...v, roles: v.roles.map((x) => (x.role === r.role ? { ...x, permissions: sonuc.permissions, saved: true } : x)) })
-      setTaslak((o) => (o[r.role] ? { ...o, [r.role]: { ...o[r.role], permissions: new Set(sonuc.permissions) } } : o))
       setAlanBilgi({ bekliyor: false, metin: t.rolKaydedildi })
     } catch {
       setAlanBilgi({ bekliyor: false, metin: t.rolKaydedilemedi })
@@ -340,7 +311,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
   }
 
   /** Kullanici silme (yalniz silme yetkilisi hesap; sunucu zorlar). Hata metnini doner, basarida null: satir yerelde listeden dusurulur,
-   * boylece rol kutularindaki kaydedilmemis sayfa secimleri bozulmaz. */
+   * boylece sayfa yeniden yuklenmez. */
   async function kisiSil(k: Kisi): Promise<string | null> {
     try {
       const sonuc = await yaz<{ devredilen: number }>("DELETE", `/api/v1/roller/kisiler/${k.id}`)
@@ -361,6 +332,51 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
     try {
       const sonuc = await yaz<{ permissions: string[] }>("PUT", `/api/v1/roller/kisiler/${k.id}`, { permissions: [...kume] })
       setVeri((v) => v && { ...v, users: (v.users ?? []).map((x) => (x.id === k.id ? { ...x, permissions: sonuc.permissions } : x)) })
+      setAlanBilgi({ bekliyor: false, metin: t.rolKaydedildi })
+    } catch {
+      setAlanBilgi({ bekliyor: false, metin: t.rolKaydedilemedi })
+    }
+  }
+
+  /** Rolun gorecegi moduller aninda kaydedilir: sunucuda RoleView.modules tablosuna yazilir, kullanicilarin sol menusune yansir. */
+  async function modulYetkisiKaydet(r: Rol, kimlik: string, secili: boolean) {
+    const kume = new Set(r.modules)
+    if (secili) kume.add(kimlik)
+    else kume.delete(kimlik)
+    const yeniModuller = [...kume]
+    setAlanBilgi({ bekliyor: true, metin: "" })
+    try {
+      const sonuc = await yaz<{ modules: string[]; permissions: string[] }>("PUT", `/api/v1/roller/${r.role}`, {
+        modules: yeniModuller,
+        permissions: r.permissions,
+      })
+      setVeri((v) =>
+        v && {
+          ...v,
+          roles: v.roles.map((x) => (x.role === r.role ? { ...x, modules: sonuc.modules, saved: true } : x)),
+        }
+      )
+      setAlanBilgi({ bekliyor: false, metin: t.rolKaydedildi })
+    } catch {
+      setAlanBilgi({ bekliyor: false, metin: t.rolKaydedilemedi })
+    }
+  }
+
+  /** Bir roldeki tum modulleri tek seferde acar ya da kapatir. */
+  async function tumModulleriAyarla(r: Rol, secili: boolean) {
+    const yeniModuller = secili ? kimlikler : []
+    setAlanBilgi({ bekliyor: true, metin: "" })
+    try {
+      const sonuc = await yaz<{ modules: string[]; permissions: string[] }>("PUT", `/api/v1/roller/${r.role}`, {
+        modules: yeniModuller,
+        permissions: r.permissions,
+      })
+      setVeri((v) =>
+        v && {
+          ...v,
+          roles: v.roles.map((x) => (x.role === r.role ? { ...x, modules: sonuc.modules, saved: true } : x)),
+        }
+      )
       setAlanBilgi({ bekliyor: false, metin: t.rolKaydedildi })
     } catch {
       setAlanBilgi({ bekliyor: false, metin: t.rolKaydedilemedi })
@@ -390,8 +406,6 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
       ) : null}
       <div className="grid gap-3">
         {veri.roles.map((r) => {
-          const tas = taslak[r.role]
-          const secili = kimlikler.filter((k) => tas?.modules.has(k))
           const rolKisileri = kisiler.filter((k) => k.role === r.role)
           return (
             <RolKutusu
@@ -400,56 +414,63 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
               acik={!!acik[r.role]}
               onDegis={() => setAcik((o) => ({ ...o, [r.role]: !o[r.role] }))}
               durum={r.editable ? (r.saved ? t.rolKayitli : t.rolVarsayilan) : t.rolAdminSabit}
-              sayfaSayisi={r.editable ? secili.length : r.modules.length}
+              sayfaSayisi={r.modules.length}
               kisiSayisi={rolKisileri.length}
               dil={dil}
             >
               {r.editable ? (
                 <>
-                  <fieldset className="grid gap-2">
-                    <legend className="mb-1 text-xs font-medium text-muted-foreground">{t.rolGorecegiSayfalar}</legend>
-                    <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {veri.catalog.filter((m) => !m.personel_only || r.role === "TeamMember").map((m) => (
-                        <div key={m.id} className="grid content-start gap-1">
-                          <label className="flex items-center gap-2 text-sm font-medium">
-                            <input type="checkbox" checked={!!tas?.modules.has(m.id)} onChange={(e) => degistir(r.role, m.id, e.target.checked)} />
-                            {ad(m)}
-                          </label>
-                          {m.children.map((c) => (
-                            <label key={c.id} className="ml-6 flex items-center gap-2 text-sm">
-                              <input type="checkbox" checked={!!tas?.modules.has(c.id)} onChange={(e) => degistir(r.role, c.id, e.target.checked)} />
-                              {ad(c)}
-                            </label>
-                          ))}
-                        </div>
-                      ))}
+                  <div className="grid gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-xs font-medium text-muted-foreground">
+                        {t.rolGorecegiSayfalar} ({r.modules.length}/{kimlikler.length})
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs px-2.5"
+                          disabled={alanBilgi.bekliyor}
+                          onClick={() => void tumModulleriAyarla(r, true)}
+                        >
+                          {t.tumunuSec}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs px-2.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={alanBilgi.bekliyor}
+                          onClick={() => void tumModulleriAyarla(r, false)}
+                        >
+                          {t.tumunuTemizle}
+                        </Button>
+                      </div>
                     </div>
-                  </fieldset>
-                  <div className="flex flex-wrap items-end gap-4">
-                    <label className="grid gap-1 text-sm">
-                      <span className="text-xs font-medium text-muted-foreground">{t.rolGirisSayfasi}</span>
-                      <select
-                        className="h-9 min-w-56 rounded-md border bg-background px-2"
-                        value={tas?.landing ?? "ozet"}
-                        onChange={(e) => setTaslak((o) => (o[r.role] ? { ...o, [r.role]: { ...o[r.role], landing: e.target.value } } : o))}
-                      >
-                        <option value="ozet">{t.genelBakis}</option>
-                        {secili.map((k) => (
-                          <option key={k} value={k}>
-                            {etiket(k)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <Button type="button" size="sm" onClick={() => void kaydet(r.role)}>
-                        {t.kaydet}
-                      </Button>
-                      {bilgi[r.role] ? (
-                        <span role="status" className="text-sm text-muted-foreground">
-                          {bilgi[r.role]}
-                        </span>
-                      ) : null}
+                    <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                      {kimlikler.map((k) => {
+                        const secili = r.modules.includes(k)
+                        return (
+                          <label
+                            key={k}
+                            className={`flex items-center gap-2 rounded-lg border p-2.5 text-xs font-medium transition-colors cursor-pointer select-none ${
+                              secili
+                                ? "border-primary/40 bg-primary/5 text-foreground"
+                                : "border-border/60 bg-muted/20 text-muted-foreground opacity-60 hover:opacity-90"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={secili}
+                              disabled={alanBilgi.bekliyor}
+                              onChange={(e) => void modulYetkisiKaydet(r, k, e.target.checked)}
+                              className="size-4 rounded border-input text-primary focus:ring-primary"
+                            />
+                            <span className="truncate">{etiket(k)}</span>
+                          </label>
+                        )
+                      })}
                     </div>
                   </div>
                 </>
@@ -487,9 +508,9 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
           </div>
           <CardDescription>{s.alanAciklama}</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <CardContent className="grid gap-6">
           <section className="grid content-start gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">1 · {s.kimYonetir}</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{s.kimYonetir}</h3>
             {veri.permission_catalog
               .filter((y) => y.area === "sunum")
               .map((y) => (
@@ -515,10 +536,6 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
             <p role="status" className="text-xs text-muted-foreground">
               {alanBilgi.metin || s.aninda}
             </p>
-          </section>
-          <section className="grid content-start gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">2 · {s.kaynaklarBaslik}</h3>
-            <SunumKaynaklari dil={dil} />
           </section>
         </CardContent>
       </Card>

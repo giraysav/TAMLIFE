@@ -205,6 +205,26 @@ describe("ModulYayi", () => {
     expect(screen.getByRole("img", { name: "Teknocan" })).toBeInTheDocument()
   })
 
+  it("yalin modda yalnizca gorsel cizilir, modul dugmesi cikmaz", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+      },
+    )
+    render(
+      <ModulYayi
+        yalin
+        arkaPlan={{ src: "sahne.jpg", alt: "Teknocan" }}
+        ogeler={[{ anahtar: "onedesk", etiket: "Onedesk", ikon: <span />, renk: ["#fb7185", "#e11d48"] }]}
+      />,
+    )
+    expect(screen.getByRole("img", { name: "Teknocan" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Onedesk" })).not.toBeInTheDocument()
+  })
+
   it("alt verilmezse yayin altinda ek alan cizilmez", () => {
     vi.stubGlobal(
       "ResizeObserver",

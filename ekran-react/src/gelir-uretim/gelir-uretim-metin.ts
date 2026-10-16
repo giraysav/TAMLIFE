@@ -11,6 +11,14 @@ export type Fayda = (typeof FAYDALAR)[number]
 export type Durum = (typeof DURUMLAR)[number]
 export type Para = (typeof PARALAR)[number]
 export type Donem = (typeof DONEMLER)[number]
+export const ONAYLAR = ["bekliyor", "onayli", "reddedildi"] as const
+export type Onay = (typeof ONAYLAR)[number]
+/** Yeni giriste zorunlu alanlar (sunucu servis.ZORUNLU ile ayni sira: kullanicinin Excel basliklari). */
+export const ZORUNLU = [
+  "people", "title", "status_note", "roadmap", "description", "customers", "revenue_amount", "year_revenue", "hours_per_month", "hours_per_year",
+  "extra_note", "start_date", "end_date",
+] as const
+export type ZorunluAlan = (typeof ZORUNLU)[number]
 
 export type Kisi = { id: number; name: string }
 export type Kayit = {
@@ -29,6 +37,8 @@ export type Kayit = {
   year_revenue: number | null
   hours_per_month: number | null
   hours_note: string
+  hours_per_year: number | null
+  roadmap: string
   extra_note: string
   start_date: string | null
   end_date: string | null
@@ -38,6 +48,13 @@ export type Kayit = {
   created_at: string | null
   updated_by: string
   updated_at: string | null
+  created_by_id: number | null
+  approval: Onay
+  approval_note: string
+  approved_by: string
+  approved_at: string | null
+  /** Bos zorunlu alanlar (eski kayitlarda olabilir; yeni giriste bos kalamaz). */
+  eksik: ZorunluAlan[]
 }
 export type Ozet = {
   is_sayisi: number
@@ -48,8 +65,16 @@ export type Ozet = {
   tek_seferlik_gelir: Partial<Record<Para, number>>
   yil_ici_gelir: number
   aylik_saat: number
+  yillik_saat: number
 }
-export type Liste = { items: Kayit[]; ozet: Ozet; secenekler: { personel: { id: number; ad: string }[]; yillar: number[] }; yazabilir: boolean }
+export type OnayBilgisi = { sahip: { id: number; ad: string } | null; yonetebilir: boolean; bekleyen: number; benim: number | null }
+export type Liste = {
+  items: Kayit[]
+  ozet: Ozet
+  secenekler: { personel: { id: number; ad: string }[]; yillar: number[] }
+  onay: OnayBilgisi
+  yazabilir: boolean
+}
 
 export const SATIR_DURUMLARI = ["yeni", "var", "tekrar", "hatali"] as const
 export type SatirDurumu = (typeof SATIR_DURUMLARI)[number]
@@ -68,6 +93,7 @@ export type OnizlemeSatiri = {
   revenue_note: string
   year_revenue: number | null
   hours_per_month: number | null
+  hours_per_year: number | null
   start_date: string | null
   end_date: string | null
   uyarilar: string[]
@@ -89,8 +115,9 @@ const TR = {
   kpiIsAlt: (devam: number, tamam: number) => `${devam} devam · ${tamam} tamamlandı`,
   kpiIsSuzulu: (toplam: number) => `${toplam} kayıttan`,
   kpiAylik: "Aylık gelir faydası",
-  kpiYilIci: "Yıl içi gelir",
+  kpiYilIci: "Yıllık gelir faydası",
   kpiSaat: "Aylık efor kazancı",
+  kpiYilSaat: (n: string) => `yıllık ${n} saat`,
   saat: "saat",
   saatAy: "saat/ay",
   tekSeferlik: "tek seferlik",
@@ -117,7 +144,7 @@ const TR = {
   sonucYokAlt: "Aramayı ya da filtreleri değiştirmeyi deneyin.",
   devamEdiyor: "devam ediyor",
   tarihYok: "Tarih yok",
-  yilIciKisa: "Yıl içi",
+  yilIciKisa: "Yıllık",
   tutarYok: "Tutar yok",
   // enumlar
   tur_: { proje: "Proje", inisiyatif: "TAM inisiyatifi" } satisfies Record<Tur, string>,
@@ -139,9 +166,11 @@ const TR = {
   gelirBilgisi: "Gelir faydası",
   tutar: "Tutar",
   tutarNotu: "Tutar notu",
-  yilIci: "Yıl içi gelir (TL)",
+  yilIci: "Yıllık gelir faydası (TL/12 ay)",
   verimlilikBilgisi: "Verimlilik faydası",
   aylikSaat: "Aylık efor kazancı",
+  yillikSaat: "Yıllık efor kazancı",
+  yolHaritasi: "Yol haritası",
   eforNotu: "Efor notu",
   ekAciklama: "Ek açıklamalar",
   baslangic: "Başlangıç tarihi",
@@ -152,20 +181,24 @@ const TR = {
   // form
   formYeni: "Yeni kayıt",
   formDuzenle: "Kaydı düzenle",
-  formAciklama: "Alanları doldurun. Sayısal olmayan tutar ve efor bilgileri not alanlarına yazılır.",
-  baslikAlani: "Başlık",
+  formAciklama: "Yıldızlı alanların hepsi zorunlu (Excel başlıkları). Fayda yoksa sayı alanlarına 0 yazın; açıklamayı not alanlarına ekleyin.",
+  formOnayNotu: "Kaydettiğinizde iş modül sahibinin onayına gider; onaylanınca listeye, toplamlara ve çeyrek sunuma girer.",
+  baslikAlani: "İşin özeti",
   baslikZorunlu: "Başlık zorunlu.",
+  zorunluEksik: (alanlar: string) => `Zorunlu alanlar boş: ${alanlar}.`,
+  yolAlani: "Yol haritası",
+  yilSaatAlani: "Yıllık efor kazancı (saat/12 ay)",
   durumNotu: "Güncel durum notu",
   musterilerAlani: "Etkilenen müşteriler",
   gelirTutari: "Gelir tutarı",
   paraBirimi: "Para birimi",
   donem: "Dönem",
-  yilIciAlani: "Yıl içi gelir (TL)",
-  eforAlani: "Aylık efor kazancı (saat)",
+  yilIciAlani: "Yıllık gelir faydası (TL/12 ay)",
+  eforAlani: "Aylık efor kazancı (saat/ay)",
   ekAlani: "Ek açıklamalar",
   baslangicAlani: "Başlangıç tarihi",
   bitisAlani: "Bitiş tarihi",
-  bitisIpucu: "Boş bırakılırsa iş devam ediyor sayılır.",
+  bitisIpucu: "Süren işte planlanan bitiş tarihini yazın.",
   sayiIpucu: "Binlik ayracı olmadan yazın, ondalık için virgül ya da nokta (ör. 1250,75).",
   sayiHata: (alan: string) => `${alan}: sıfır ya da pozitif bir sayı girin (ör. 1250,75).`,
   tarihHata: "Bitiş tarihi başlangıçtan önce olamaz.",
@@ -182,7 +215,7 @@ const TR = {
   iceBaslik: "Excel'den içe aktar",
   iceAciklama: "Kaynak tablo biçimindeki .xlsx dosyası okunur; önce önizleme gösterilir, onaylayınca yalnızca yeni satırlar eklenir.",
   dosyaSec: "Excel dosyası seç (.xlsx)",
-  dosyaKural: "En fazla 5 MB ve 500 satır. Sütunlar başlıklarına göre bulunur; yalnızca ‘İşin özeti’ zorunludur. Aynı tür ve başlıktaki kayıtlar yeniden eklenmez.",
+  dosyaKural: "En fazla 5 MB ve 500 satır. Sütunlar başlıklarına göre bulunur; yalnızca ‘İşin özeti’ zorunludur. Aynı tür ve başlıktaki kayıtlar yeniden eklenmez. İçe aktarılan işler onaylı eklenir.",
   dosyaBuyuk: "Dosya çok büyük (en fazla 5 MB).",
   okunuyor: "Dosya okunuyor…",
   okunamadi: "Dosya okunamadı.",
@@ -212,6 +245,40 @@ const TR = {
   eklendiAlt: (atlanan: number) => (atlanan > 0 ? `${atlanan} satır eklenmedi (zaten var, tekrar ya da hatalı).` : ""),
   baskaDosya: "Başka dosya seç",
   eklenemedi: "İçe aktarma tamamlanamadı.",
+  // onay akisi
+  onay: "Onay",
+  onay_: { bekliyor: "Onay bekliyor", onayli: "Onaylı", reddedildi: "Reddedildi" } satisfies Record<Onay, string>,
+  tumOnaylar: "Tüm onay durumları",
+  bekleyenVar: (n: number) => `${n} iş onayınızı bekliyor.`,
+  bekleyenleriGoster: "Bekleyenleri göster",
+  sahip: "Modül sahibi",
+  sahipYok: "Atanmadı (onayı admin verir)",
+  sahipAta: "Modül sahibini seç",
+  sahipIpucu: "Personelin girdiği yeni işler bu kişinin onayına düşer. Admin her zaman onaylayabilir.",
+  sahipKaydedilemedi: "Modül sahibi kaydedilemedi.",
+  onaylaDugme: "Onayla, canlıya al",
+  reddetDugme: "Reddet",
+  geriAlDugme: "Onayı geri al",
+  retGerekce: "Ret gerekçesi (giren kişi görür):",
+  onayIslemHata: "Onay işlemi yapılamadı.",
+  onayGrup: "Onay durumu",
+  onaylayan: "Onaylayan",
+  reddeden: "Reddeden",
+  retNotu: "Ret gerekçesi",
+  bekliyorAlt: "Modül sahibi kontrol edip onaylayınca canlıya alınır.",
+  reddedildiAlt: "Düzeltip kaydettiğinizde yeniden onaya gider.",
+  eksikBilgi: (n: number) => `${n} zorunlu alan boş`,
+  // rapor
+  rapor: "Rapor",
+  excelRapor: "Excel rapor",
+  pdfRapor: "PDF rapor",
+  pdfHazirlaniyor: "PDF hazırlanıyor…",
+  pdfHata: "PDF oluşturulamadı.",
+  raporBaslik: "Gelir Faydası Sağlanan İşler Raporu",
+  raporKapsam: (n: number) => `Onaylı işler · ${n} kayıt`,
+  raporTarihi: (z: string) => `Rapor tarihi: ${z}`,
+  raporFiltre: (f: string) => `Filtre: ${f}`,
+  raporIpucu: "Rapor ekrandaki filtrelere uyan onaylı işleri kapsar.",
 }
 
 const EN: typeof TR = {
@@ -226,8 +293,9 @@ const EN: typeof TR = {
   kpiIsAlt: (devam, tamam) => `${devam} ongoing · ${tamam} completed`,
   kpiIsSuzulu: (toplam) => `of ${toplam} records`,
   kpiAylik: "Monthly revenue benefit",
-  kpiYilIci: "In-year revenue",
+  kpiYilIci: "Yearly revenue benefit",
   kpiSaat: "Monthly effort saved",
+  kpiYilSaat: (n) => `${n} hours a year`,
   saat: "hours",
   saatAy: "hours/month",
   tekSeferlik: "one-time",
@@ -252,7 +320,7 @@ const EN: typeof TR = {
   sonucYokAlt: "Try changing the search or the filters.",
   devamEdiyor: "ongoing",
   tarihYok: "No date",
-  yilIciKisa: "In-year",
+  yilIciKisa: "Yearly",
   tutarYok: "No amount",
   tur_: { proje: "Project", inisiyatif: "TAM initiative" },
   fayda_: { gelir: "Revenue", tasarruf: "Savings", verimlilik: "Efficiency" },
@@ -272,9 +340,11 @@ const EN: typeof TR = {
   gelirBilgisi: "Revenue benefit",
   tutar: "Amount",
   tutarNotu: "Amount note",
-  yilIci: "In-year revenue (TRY)",
+  yilIci: "Yearly revenue benefit (TRY/12 months)",
   verimlilikBilgisi: "Efficiency benefit",
   aylikSaat: "Monthly effort saved",
+  yillikSaat: "Yearly effort saved",
+  yolHaritasi: "Roadmap",
   eforNotu: "Effort note",
   ekAciklama: "Additional notes",
   baslangic: "Start date",
@@ -284,20 +354,24 @@ const EN: typeof TR = {
   yok: "—",
   formYeni: "New record",
   formDuzenle: "Edit record",
-  formAciklama: "Fill in the fields. Amount and effort details that are not numbers go to the note fields.",
-  baslikAlani: "Title",
+  formAciklama: "All starred fields are required (the Excel headers). Enter 0 in number fields when there is no benefit and explain in the notes.",
+  formOnayNotu: "When you save, the work goes to the module owner for approval; once approved it appears in the list, the totals and the quarterly presentation.",
+  baslikAlani: "Work summary",
   baslikZorunlu: "Title is required.",
+  zorunluEksik: (alanlar) => `Required fields are empty: ${alanlar}.`,
+  yolAlani: "Roadmap",
+  yilSaatAlani: "Yearly effort saved (hours/12 months)",
   durumNotu: "Current status note",
   musterilerAlani: "Affected customers",
   gelirTutari: "Revenue amount",
   paraBirimi: "Currency",
   donem: "Period",
-  yilIciAlani: "In-year revenue (TRY)",
-  eforAlani: "Monthly effort saved (hours)",
+  yilIciAlani: "Yearly revenue benefit (TRY/12 months)",
+  eforAlani: "Monthly effort saved (hours/month)",
   ekAlani: "Additional notes",
   baslangicAlani: "Start date",
   bitisAlani: "End date",
-  bitisIpucu: "If left empty the work is treated as ongoing.",
+  bitisIpucu: "For ongoing work enter the planned end date.",
   sayiIpucu: "Write without a thousands separator; use a comma or a dot for decimals (e.g. 1250.75).",
   sayiHata: (alan) => `${alan}: enter zero or a positive number (e.g. 1250.75).`,
   tarihHata: "The end date cannot be before the start date.",
@@ -313,7 +387,7 @@ const EN: typeof TR = {
   iceBaslik: "Import from Excel",
   iceAciklama: "An .xlsx file in the source table layout is read; a preview is shown first and only new rows are added once you confirm.",
   dosyaSec: "Choose Excel file (.xlsx)",
-  dosyaKural: "At most 5 MB and 500 rows. Columns are found by their headers; only ‘İşin özeti’ (work summary) is required. Records with the same type and title are not added again.",
+  dosyaKural: "At most 5 MB and 500 rows. Columns are found by their headers; only ‘İşin özeti’ (work summary) is required. Records with the same type and title are not added again. Imported work is added as approved.",
   dosyaBuyuk: "The file is too large (max 5 MB).",
   okunuyor: "Reading file…",
   okunamadi: "The file could not be read.",
@@ -343,6 +417,38 @@ const EN: typeof TR = {
   eklendiAlt: (atlanan) => (atlanan > 0 ? `${atlanan} rows were not added (already exist, repeated or invalid).` : ""),
   baskaDosya: "Choose another file",
   eklenemedi: "The import could not be completed.",
+  onay: "Approval",
+  onay_: { bekliyor: "Awaiting approval", onayli: "Approved", reddedildi: "Rejected" },
+  tumOnaylar: "All approval states",
+  bekleyenVar: (n) => `${n} items are waiting for your approval.`,
+  bekleyenleriGoster: "Show pending",
+  sahip: "Module owner",
+  sahipYok: "Not assigned (an admin approves)",
+  sahipAta: "Choose the module owner",
+  sahipIpucu: "New work entered by staff goes to this person for approval. An admin can always approve.",
+  sahipKaydedilemedi: "The module owner could not be saved.",
+  onaylaDugme: "Approve and publish",
+  reddetDugme: "Reject",
+  geriAlDugme: "Withdraw approval",
+  retGerekce: "Reason for rejecting (the person who entered it sees this):",
+  onayIslemHata: "The approval action failed.",
+  onayGrup: "Approval status",
+  onaylayan: "Approved by",
+  reddeden: "Rejected by",
+  retNotu: "Reason for rejecting",
+  bekliyorAlt: "It goes live once the module owner checks and approves it.",
+  reddedildiAlt: "Correct it and save to send it for approval again.",
+  eksikBilgi: (n) => `${n} required fields empty`,
+  rapor: "Report",
+  excelRapor: "Excel report",
+  pdfRapor: "PDF report",
+  pdfHazirlaniyor: "Preparing PDF…",
+  pdfHata: "The PDF could not be created.",
+  raporBaslik: "Revenue-Benefit Work Report",
+  raporKapsam: (n) => `Approved work · ${n} records`,
+  raporTarihi: (z) => `Report date: ${z}`,
+  raporFiltre: (f) => `Filter: ${f}`,
+  raporIpucu: "The report covers the approved work matching the filters on screen.",
 }
 
 export const gelirUretimMetin = (dil: Dil) => (dil === "en" ? EN : TR)

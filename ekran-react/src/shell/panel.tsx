@@ -252,13 +252,7 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
     }
   }, [kullanici.is_admin, secili])
 
-  // Rol bazli giris sayfasi: adres bos acildiysa rolun giris sayfasina git (gecmise yeni kayit eklemeden).
-  useEffect(() => {
-    if (hashId() === "" && kullanici.landing && kullanici.landing !== "ozet" && izinli.has(kullanici.landing)) {
-      window.location.replace(`#/${kullanici.landing}`)
-      setSecili(kullanici.landing)
-    }
-  }, [kullanici.landing, izinli])
+  // Rol bazli giris sayfasi 2026-10-14'te kalkti: panel herkes icin Genel Bakis'la acilir.
 
   useEffect(() => {
     const degisti = () => setSecili(hashId() || "ozet")
@@ -302,21 +296,21 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
             <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} dugmeSinifi={UST_BAR_DUGME} />
           </div>
         </header>
-        <main className={`flex flex-1 flex-col gap-6 p-4 sm:p-6 ${aktif === "ozet" ? "min-h-0 !gap-0 !py-3" : ""}`}>
+        <main className={`flex flex-1 flex-col gap-6 p-4 sm:p-6 ${aktif === "ozet" ? "min-h-0 !gap-0 !py-3" : aktif === "takvim" ? "min-h-0 !py-3" : ""}`}>
           <Suspense fallback={<p className="text-sm text-muted-foreground">{t.yukleniyor}</p>}>
           {aktif === "ozet" ? (
             <div className="mx-auto flex min-h-0 w-full max-w-[87.5rem] flex-1 flex-col justify-center-safe gap-3">
               <OzetOrbit dil={dil} onGit={sec} />
               <Suspense fallback={null}>
-                <EkipOzeti dil={dil} onGit={sec} sikisik />
+                <EkipOzeti dil={dil} onGit={sec} />
               </Suspense>
             </div>
           ) : aktif === "profil" ? (
             <ProfilSayfasi kullanici={kullanici} dil={dil} onKaydedildi={onProfilDegisti} />
           ) : ustId === "yonetim" && kullanici.is_admin ? (
             <YonetimSayfasi dil={dil} bolum={altId ?? ""} digerleri={digerYonetim} />
-          ) : aktif === "musteri" ? (
-            <MusteriSayfasi dil={dil} yazabilir={kullanici.is_admin} />
+          ) : aktif === "musteri" || aktif === "baglantili" || aktif === "toptan" ? (
+            <MusteriSayfasi key={aktif} dil={dil} yazabilir={kullanici.is_admin} yol={aktif} />
           ) : aktif === "onedesk" ? (
             <OnedeskSayfasi dil={dil} admin={kullanici.is_admin} />
           ) : aktif === "takvim" ? (

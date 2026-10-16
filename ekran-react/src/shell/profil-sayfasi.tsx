@@ -1,12 +1,14 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import type { FormEvent, ReactNode } from "react"
-import { Lock } from "lucide-react"
+import { Camera, Lock, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { baslangicHarfleri } from "@/lib/bicim"
+import { fotoAdresi, kareJpeg } from "@/lib/foto"
 import type { Kullanici, Profil } from "@/lib/oturum"
-import { hataMesaji, yaz } from "@/lib/sorgu"
+import { hataMesaji, yaz, yukle } from "@/lib/sorgu"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
@@ -25,6 +27,77 @@ function AlanKutusu({ etiket, kimlik, sinif = "", children }: { etiket: string; 
       <Label htmlFor={kimlik}>{etiket}</Label>
       {children}
     </div>
+  )
+}
+
+/** Profil fotografi: hesap kartindaki donen halkali dairenin aynisi; kisi fotografini secer (kare kirpilir, 256 px JPEG) ya da kaldirir. */
+function ProfilFotografi({ kullanici, dil, onDegisti }: { kullanici: Kullanici; dil: Dil; onDegisti?: () => void }) {
+  const t = metin(dil)
+  const secici = useRef<HTMLInputElement>(null)
+  const [surum, setSurum] = useState<number | null>(kullanici.profile?.photo_version ?? null)
+  const [durum, setDurum] = useState<{ tur: "bos" | "calisiyor" | "tamam" | "hata"; metin: string }>({ tur: "bos", metin: "" })
+
+  async function isle(is: () => Promise<{ photo_version: number | null }>, basari: string) {
+    setDurum({ tur: "calisiyor", metin: "" })
+    try {
+      setSurum((await is()).photo_version)
+      setDurum({ tur: "tamam", metin: basari })
+      onDegisti?.()
+    } catch (hata) {
+      setDurum({ tur: "hata", metin: hataMesaji(hata, t.profilFotoHata) })
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t.profilFoto}</CardTitle>
+        <CardDescription>{t.profilFotoAciklama}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-center gap-5">
+        <span className="relative flex size-24 shrink-0 items-center justify-center">
+          <span
+            aria-hidden
+            className="tl-hareket absolute inset-0 rounded-full"
+            style={{ background: "conic-gradient(from 0deg, #ffc72c, #00a3e0, #ffc72c 60%, transparent 85%)", animation: "tl-donus 5s linear infinite" }}
+          />
+          {surum ? (
+            <img src={fotoAdresi(surum)} alt={t.profilFoto} className="relative size-[5.25rem] rounded-full border-4 border-tl-navy bg-tl-navy object-cover" />
+          ) : (
+            <span className="relative flex size-[5.25rem] items-center justify-center rounded-full bg-tl-navy text-2xl font-black text-tl-yellow">{baslangicHarfleri(kullanici.display_name || kullanici.username)}</span>
+          )}
+        </span>
+        <div className="grid gap-2">
+          <input
+            ref={secici}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            aria-label={t.profilFotoSec}
+            onChange={(e) => {
+              const dosya = e.target.files?.[0]
+              e.target.value = ""
+              if (dosya) void isle(async () => yukle<{ photo_version: number }>("/api/v1/session/photo", await kareJpeg(dosya), "image/jpeg"), t.profilFotoKaydedildi)
+            }}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={() => secici.current?.click()} disabled={durum.tur === "calisiyor"}>
+              <Camera aria-hidden className="size-4" />
+              {t.profilFotoSec}
+            </Button>
+            {surum ? (
+              <Button type="button" variant="outline" onClick={() => void isle(() => yaz("DELETE", "/api/v1/session/photo"), t.profilFotoKaldirildi)} disabled={durum.tur === "calisiyor"}>
+                <Trash2 aria-hidden className="size-4" />
+                {t.profilFotoKaldir}
+              </Button>
+            ) : null}
+          </div>
+          <span role="status" className={`text-sm ${durum.tur === "hata" ? "text-destructive" : "text-muted-foreground"}`}>
+            {durum.metin}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -69,6 +142,7 @@ export function ProfilSayfasi({ kullanici, dil, onKaydedildi }: { kullanici: Kul
 
   return (
     <div className="grid max-w-3xl gap-4">
+      <ProfilFotografi kullanici={kullanici} dil={dil} onDegisti={onKaydedildi} />
       <Card>
         <CardHeader>
           <CardTitle>{t.profil}</CardTitle>

@@ -1,48 +1,49 @@
 import { expect, test } from "@playwright/test"
+import { buyukHarf as B } from "../src/lib/buyuk-harf"  // ekran sidebar disinda buyuk harf ve Turkce karaktersiz gosterir
 
 const KULLANICI = process.env.E2E_USER ?? "admin"
 const PAROLA = process.env.E2E_PASS ?? ""
 
 test("oturum yokken giris ekrani, menu ve veri yok", async ({ page }) => {
   await page.goto("/#/admin")
-  await expect(page.getByRole("button", { name: "Giriş" })).toBeVisible()
+  await expect(page.getByRole("button", { name: B("Giriş") })).toBeVisible()
   await expect(page.getByText("Genel Durum")).toHaveCount(0)
 })
 
 test("yanlis parola reddedilir", async ({ page }) => {
   await page.goto("/")
-  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
-  await page.getByLabel("Şifre").fill("kesinlikle-yanlis")
-  await page.getByRole("button", { name: "Giriş" }).click()
-  await expect(page.getByRole("alert")).toContainText("hatalı")
-  await expect(page.getByLabel("Şifre")).toHaveValue("")
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill("kesinlikle-yanlis")
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("alert")).toContainText(B("hatalı"))
+  await expect(page.getByLabel(B("Şifre"))).toHaveValue("")
 })
 
 test("giris, menu, yonetim ve cikis", async ({ page }) => {
   test.skip(!PAROLA, "E2E_PASS tanimli degil")
   await page.goto("/")
-  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
-  await page.getByLabel("Şifre").fill(PAROLA)
-  await page.getByRole("button", { name: "Giriş" }).click()
-  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
   await page.locator("button[aria-haspopup='menu']").click()
   await page.getByRole("menuitem", { name: "Yönetim" }).click()
   await expect(page).toHaveURL(/#\/yonetim\/durum$/)
   await expect(page.getByText(/ORACLE_REPORTDB/)).toBeVisible()
   await page.locator("button[aria-haspopup='menu']").click()
   await page.getByRole("menuitem", { name: "Çıkış" }).click()
-  await expect(page.getByRole("button", { name: "Giriş" })).toBeVisible()
+  await expect(page.getByRole("button", { name: B("Giriş") })).toBeVisible()
   await page.goto("/#/admin")
-  await expect(page.getByRole("button", { name: "Giriş" })).toBeVisible()
+  await expect(page.getByRole("button", { name: B("Giriş") })).toBeVisible()
 })
 
 test("Ctrl+K arama yonetim bolumlerini bulur", async ({ page }) => {
   test.skip(!PAROLA, "E2E_PASS tanimli degil")
   await page.goto("/")
-  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
-  await page.getByLabel("Şifre").fill(PAROLA)
-  await page.getByRole("button", { name: "Giriş" }).click()
-  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
   await page.keyboard.press("Control+k")
   await page.getByPlaceholder("Modül ara…").fill("veri girişi")
   await page.getByRole("button", { name: /Yönetim › Veri Girişi/ }).click()
@@ -53,10 +54,10 @@ test("Ctrl+K arama yonetim bolumlerini bulur", async ({ page }) => {
 test("eski /veri adresi Yonetim > Veritabani bolumune yonlenir ve tablolar listelenir", async ({ page }) => {
   test.skip(!PAROLA, "E2E_PASS tanimli degil")
   await page.goto("/")
-  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
-  await page.getByLabel("Şifre").fill(PAROLA)
-  await page.getByRole("button", { name: "Giriş" }).click()
-  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
   await page.goto("/#/veri")
   await expect(page).toHaveURL(/#\/yonetim\/veritabani$/)
   await expect(page.getByRole("heading", { name: "Yönetim › Veritabanı", level: 1 })).toBeVisible()
@@ -68,10 +69,10 @@ test("eski /veri adresi Yonetim > Veritabani bolumune yonlenir ve tablolar liste
 
 async function girisYap(page: import("@playwright/test").Page) {
   await page.goto("/")
-  await page.getByLabel("Kullanıcı adı (AD/LDAP)").fill(KULLANICI)
-  await page.getByLabel("Şifre").fill(PAROLA)
-  await page.getByRole("button", { name: "Giriş" }).click()
-  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
 }
 
 test("yan menu: grup sirasi, ok ile ac/kapat, Onedesk adi", async ({ page }) => {
@@ -110,7 +111,7 @@ test("kullanici karti sol altta: profil, yonetim, talepler, dil, cikis", async (
   await expect(page.getByRole("heading", { name: "Profil", level: 1 })).toBeVisible()
   await expect(page.getByText("Bilgilerinizi buradan güncelleyebilirsiniz.")).toBeVisible()
   // Yalniz AD/LDAP kullanici adi kilitli; ad, soyad, telefon, sirket, adres ve web adresi duzenlenir.
-  await expect(page.getByLabel("Kullanıcı adı (AD/LDAP)")).toBeDisabled()
+  await expect(page.getByLabel(B("Kullanıcı adı (AD/LDAP)"))).toBeDisabled()
   for (const alan of ["Ad", "Soyad", "Telefon", "Şirket", "Web adresi", "Adres"]) {
     await expect(page.getByLabel(alan, { exact: true })).toBeEditable()
   }
@@ -158,7 +159,7 @@ test("sayfa icinde geri oku: modulden genel bakisa doner", async ({ page }) => {
   await page.getByRole("button", { name: "Geri" }).click()
   await expect(page.getByRole("heading", { name: "Müşteri Yönetimi", level: 1 })).toBeVisible()
   await page.getByRole("button", { name: "Geri" }).click()
-  await expect(page.getByRole("heading", { name: `Hoş geldin, ${KULLANICI}` })).toBeVisible()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
 })
 
 test("rol yonetimi: uc rol, admin sabit, yonetim modulleri role verilemez", async ({ page }) => {

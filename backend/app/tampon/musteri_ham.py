@@ -29,21 +29,10 @@ from app.ortak import UygulamaHatasi, eslestirme_anahtari, tr_kucuk
 
 KAYNAK = "musteri_ham"
 SAYFA = "Müşteri Kartı"
-ACIKLAMA_SAYFASI = "Açıklama"
 DOSYA_ADI = "TAM_Musteri_Ham_Veri_Sablonu.xlsx"
 AZAMI_TAMSAYI = 1_000_000_000
-EVET_HAYIR = ("Evet", "Hayır")
 URL_AYRACI = " ; "
 ARAMA_SATIRI = 15  # baslik satiri bu kadar satir icinde aranir
-
-# grup -> (ekranda ad, baslik dolgu rengi, yazi rengi)
-GRUPLAR = {
-    "kimlik": ("Kimlik", "0055A5", "FFFFFF"),
-    "operasyon": ("Operasyon", "002855", "FFFFFF"),
-    "iletisim": ("Ekip & İletişim", "00A3E0", "FFFFFF"),
-    "izleme": ("İzleme", "4A6572", "FFFFFF"),
-}
-ZORUNLU_DOLGU, ZORUNLU_YAZI = "FFC72C", "002855"
 
 
 @dataclass(frozen=True)
@@ -182,12 +171,6 @@ KOLON = {
     "tam": "owner_id",
     "cati": "parent_id",
 }
-SABLON_DISI = (
-    "Ekip (Destech) / Kritik CI / RACI matrisleri",
-    "ICT-SMS ve APN gelirleri",
-    "Aylık rapor geçmişi",
-    "Final skor (kriterden otomatik)",
-)
 
 # Baska sistemlerin liste dosyalari: ayni alanin farkli basliklari (harf / bosluk / noktalama farki gozetilmez).
 TAKMA_ADLAR: dict[str, tuple[str, ...]] = {
@@ -200,7 +183,25 @@ TAKMA_ADLAR: dict[str, tuple[str, ...]] = {
     "sales_manager": ("Satış Yöneticisi Adı", "Satış Müdürü"),
     "tac_name": ('TAC "AD SOYAD"', "TAC Ad Soyad", "TAC"),
 }
-LISTE_BICIMI_ALANLARI = ("customer_no", "tam", "unvan")  # bu uc alan takma adlarla varsa dosya bir "musteri / TAM listesi"dir
+LISTE_BICIMI_ALANLARI = ("customer_no", "tam", "unvan")
+
+# Iceri alinan alanlar = sablondaki sutunlar (2026-10-15 kullanici sablonu). Katalogun geri kalani (NCST, envanter, FT, sayaclar,
+# Cacti, ayri rapor) bu dosyadan OKUNMAZ: o basliklar dosyada olsa da "taninmayan sutun" sayilir, karta dokunulmaz.
+ICE_ALINAN: tuple[str, ...] = ("tam", "unvan", "cati", "customer_no", "segment", "sector", *ILETISIM_ALANLARI)
+
+# Sablon sutunlari (sira, baslik, Excel genisligi): cati / istirak genis bicimi, musteri basina degil (cati, istirak) cifti basina satir.
+SABLON: tuple[tuple[str, float | None], ...] = (
+    ("Sorumlu TAM", 24),
+    ("Çatı Müşteri Ünvanı", 18.86),
+    ("Çatı Müşteri No", 16),
+    ("Çatı_to_İştirak Müşteri No", 24.57),
+    ("İştirak Müşteri Ünvanı", 25),
+    ("İştirak Müşteri No", 18),
+    ("Segment", 16),
+    ("Sektör", None),
+    *((_ILETISIM_BASLIKLARI[a], {"sales_manager": 22, "presales_manager": 16, "tac_email": 17, "sol_kmt_email": 21, "mobil_kmt_name": 19,
+                                 "mobil_kmt_email": 23, "mobil_kmt_detail": 20}.get(a)) for a in ILETISIM_ALANLARI),
+)  # fmt: skip  # bu uc alan takma adlarla varsa dosya bir "musteri / TAM listesi"dir
 
 _BASLIK_SONEKI = re.compile(r"\s*\*+\s*$")  # 'Müşteri Ünvanı *' zorunlu isareti
 
@@ -214,9 +215,9 @@ def _takma_anahtar(baslik: object) -> str:
     return re.sub(r"[^0-9a-zçğıöşü]", "", _anahtar(baslik))
 
 
-_TANIMLI = {_anahtar(a.baslik): a.anahtar for a in ALANLAR}
-_TAKMA = {_takma_anahtar(a.baslik): a.anahtar for a in ALANLAR}
-_TAKMA.update({_takma_anahtar(ad): alan for alan, adlar in TAKMA_ADLAR.items() for ad in adlar})
+_TANIMLI = {_anahtar(a.baslik): a.anahtar for a in ALANLAR if a.anahtar in ICE_ALINAN}
+_TAKMA = {_takma_anahtar(a.baslik): a.anahtar for a in ALANLAR if a.anahtar in ICE_ALINAN}
+_TAKMA.update({_takma_anahtar(ad): alan for alan, adlar in TAKMA_ADLAR.items() if alan in ICE_ALINAN for ad in adlar})
 
 
 def baslik_alani(baslik: object) -> str | None:
@@ -281,7 +282,7 @@ def no_ekle(mevcut: object, yeni: Iterable[str]) -> tuple[list[str], list[str]]:
 _GENIS = {
     "cati_unvan": ("Çatı Müşteri Ünvanı", "Çatı Müşteri Adı", "Çatı Ünvan", "Çatı"),
     "cati_no": ("Çatı Müşteri No", "Çatı No"),
-    "cati_to": ("Çatı_to_İştirak", "Çatı to İştirak"),
+    "cati_to": ("Çatı_to_İştirak Müşteri No", "Çatı_to_İştirak", "Çatı to İştirak"),
     "istirak_unvan": ("İştirak Müşteri Ünvanı", "İştirak Müşteri Adı", "İştirak Ünvan", "İştirak"),
     "istirak_no": ("İştirak Müşteri No", "İştirak No"),
 }
@@ -396,13 +397,14 @@ def uyum_raporu(basliklar: Sequence[object]) -> dict[str, Any]:
     if genis:
         basliklar = genis_donustur([str(b) for b in basliklar], [])[0]
     harita = sutun_haritasi(basliklar)
-    eksik = [a.baslik for a in ALANLAR if a.anahtar not in harita]
+    alanlar = [a for a in ALANLAR if a.anahtar in ICE_ALINAN]
+    eksik = [a.baslik for a in alanlar if a.anahtar not in harita]
     fazla = [str(b) for b in basliklar if baslik_alani(b) is None]
-    zorunlu_eksik = [a.baslik for a in ALANLAR if a.zorunlu and a.anahtar not in harita]
+    zorunlu_eksik = [a.baslik for a in alanlar if a.zorunlu and a.anahtar not in harita]
     takma = any(_anahtar(b) not in _TANIMLI and baslik_alani(b) for b in basliklar)
     bicim = "genis" if genis else ("liste" if takma and all(a in harita for a in LISTE_BICIMI_ALANLARI) else "sablon")
     return {
-        "toplam": len(ALANLAR),
+        "toplam": len(alanlar),
         "eslesen": len(harita),
         "alanlar": [{"sutun": str(basliklar[i]), "alan": ALAN[a].baslik} for a, i in sorted(harita.items(), key=lambda x: x[1])],
         "eksik": eksik,
@@ -502,8 +504,8 @@ def dosya_oku(veri: bytes, dosya: str = "") -> dict[str, Any]:
         raise UygulamaHatasi(
             400,
             m(
-                "Dosyada müşteri kartı sütunları bulunamadı (örn. Müşteri Ünvanı / Müşteri Adı, Müşteri No). Şablonu indirip ona göre doldurun.",
-                "No customer card columns found in the file (e.g. Müşteri Ünvanı / Müşteri Adı, Müşteri No). Download the template and fill it in.",
+                "Dosyada müşteri kartı sütunları bulunamadı (örn. Çatı Müşteri Ünvanı, İştirak Müşteri Ünvanı, Sorumlu TAM). Şablonu indirip ona göre doldurun.",
+                "No customer card columns found in the file (e.g. Çatı Müşteri Ünvanı, İştirak Müşteri Ünvanı, Sorumlu TAM). Download the template and fill it in.",
             ),
         )
     _, _, ad, basliklar, satirlar = max(adaylar, key=lambda a: (a[0], a[1]))
@@ -546,24 +548,29 @@ def kart_degerleri(c: Customer, kayit: CustomerTeam | None, adlar: dict[int, str
     return deger
 
 
-def musteri_satirlari(db: Session) -> list[list[Any]]:
-    """Tum musteriler (cati, ardindan istirakleri; ad sirasi) icin katalog sirasinda deger listeleri."""
+def sablon_satirlari(db: Session) -> list[list[Any]]:
+    """Dolu sablon: SABLON sirasinda; her cati bir satir (istirak sutunlari bos), ardindan her istiraki catisiyla bir satir."""
     musteriler = list(db.scalars(select(Customer)))
     kisiler = {u.id: u for u in db.scalars(select(AppUser))}
     kayitlar = iletisim_kayitlari(db)
-    adlar = {c.id: c.name for c in musteriler}
+    tum = {c.id: c for c in musteriler}
     cocuklar: dict[int, list[Customer]] = {}
     for c in musteriler:
-        if c.parent_id:
+        if c.parent_id in tum:
             cocuklar.setdefault(c.parent_id, []).append(c)
-    sira = sorted((c for c in musteriler if not c.parent_id), key=lambda c: tr_kucuk(c.name or ""))
-    sirali: list[Customer] = []
-    for kok in sira:
-        sirali.append(kok)
-        sirali.extend(sorted(cocuklar.get(kok.id, []), key=lambda c: tr_kucuk(c.name or "")))
-    gorulen = {c.id for c in sirali}
-    sirali.extend(c for c in musteriler if c.id not in gorulen)
-    return [[kart_degerleri(c, kayitlar.get(c.id), adlar, kisiler)[a.anahtar] for a in ALANLAR] for c in sirali]
+
+    def satir(c: Customer, cati: Customer | None) -> list[Any]:
+        kayit = kayitlar.get(c.id)
+        tam = kisi_adi(kisiler.get(c.owner_id)) if c.owner_id else ""
+        kimlik = [cati.name, cati.customer_no or "", "", c.name, c.customer_no or ""] if cati else [c.name, c.customer_no or "", "", "", ""]
+        iletisim = [(getattr(kayit, a, None) or "") if kayit else "" for a in ILETISIM_ALANLARI]
+        return [tam, *kimlik, c.segment or "", c.sector or "", *iletisim]
+
+    sonuc: list[list[Any]] = []
+    for kok in sorted((c for c in musteriler if c.parent_id not in tum), key=lambda c: tr_kucuk(c.name or "")):
+        sonuc.append(satir(kok, None))
+        sonuc.extend(satir(c, kok) for c in sorted(cocuklar.get(kok.id, []), key=lambda c: tr_kucuk(c.name or "")))
+    return sonuc
 
 
 # --- Sablon (.xlsx) -----------------------------------------------------------------------------------------------
@@ -575,76 +582,30 @@ def _yaz(ws: Any, satir: int, sutun: int, deger: object) -> Any:
 
 
 def sablon_olustur(db: Session, dolu: bool = False) -> bytes:
-    """.xlsx baytlari. dolu=False: yalniz basliklar + aciklama; dolu=True: paneldeki kartlarin GERCEK degerleriyle."""
+    """.xlsx baytlari, kullanicinin verdigi sablonla ayni (2026-10-15): tek sayfa, koyu mavi baslik, filtreli, C2'den sabit.
+    dolu=False: yalniz basliklar; dolu=True: paneldeki kartlarin GERCEK degerleriyle (ornek / uydurma deger yok)."""
     from openpyxl import Workbook
-    from openpyxl.comments import Comment
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.styles import Alignment, Color, Font, PatternFill
     from openpyxl.utils import get_column_letter
-    from openpyxl.worksheet.datavalidation import DataValidation
 
-    satirlar = musteri_satirlari(db) if dolu else []
     wb = Workbook()
     ws = wb.active
     ws.title = SAYFA
-    ince = Side(style="thin", color="B8C4D6")
-    for sutun, a in enumerate(ALANLAR, 1):
-        _, dolgu, yazi = GRUPLAR[a.grup]
-        if a.zorunlu:
-            dolgu, yazi = ZORUNLU_DOLGU, ZORUNLU_YAZI
-        h = _yaz(ws, 1, sutun, a.baslik)
-        h.font = Font(bold=True, color=yazi, size=11)
-        h.fill = PatternFill("solid", start_color=dolgu)
+    dolgu = PatternFill("solid", fgColor=Color(theme=4, tint=-0.4999))  # Vurgu 1, %50 koyu
+    for sutun, (baslik, genislik) in enumerate(SABLON, 1):
+        h = _yaz(ws, 1, sutun, baslik)
+        h.font = Font(bold=True, color="FFFFFF")
+        h.fill = dolgu
         h.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        h.border = Border(left=ince, right=ince, top=ince, bottom=ince)
-        h.comment = Comment(f"{a.kart}\n{a.kural}" + ("\nZORUNLU" if a.zorunlu else ""), "TAM Life", width=340, height=120)
-        ws.column_dimensions[get_column_letter(sutun)].width = max(16, min(34, len(a.baslik) + 6))
-    ws.row_dimensions[1].height = 34
-    ws.freeze_panes = "B2"
-    for i, satir in enumerate(satirlar, 2):
+        if genislik:
+            ws.column_dimensions[get_column_letter(sutun)].width = genislik
+    ws.row_dimensions[1].height = 33.95
+    ws.freeze_panes = "C2"
+    for i, satir in enumerate(sablon_satirlari(db) if dolu else [], 2):
         for sutun, deger in enumerate(satir, 1):
             if deger not in ("", None):
                 _yaz(ws, i, sutun, deger)
-
-    son = max(5000, len(satirlar) + 1000) + 1
-    harf = {a.anahtar: get_column_letter(i) for i, a in enumerate(ALANLAR, 1)}
-
-    def dogrulama(tip: str, anahtar: str, hata: str, **ek: Any) -> None:
-        dv = DataValidation(type=tip, allow_blank=True, showErrorMessage=True, errorTitle="Geçersiz değer", error=hata, **ek)
-        dv.add(f"{harf[anahtar]}2:{harf[anahtar]}{son}")
-        ws.add_data_validation(dv)
-
-    dogrulama("list", "segment", "Segment: " + ", ".join(SEGMENTLER), formula1='"' + ",".join(SEGMENTLER) + '"')
-    dogrulama("list", "ayri_rapor", "Evet ya da Hayır seçin.", formula1='"' + ",".join(EVET_HAYIR) + '"')
-    for a in ALANLAR:
-        if a.tip == "tamsayi":
-            dogrulama(
-                "whole", a.anahtar, "Sıfır ya da pozitif tam sayı girin.", operator="between", formula1="0", formula2=str(AZAMI_TAMSAYI)
-            )
-
-    ak = wb.create_sheet(ACIKLAMA_SAYFASI)
-    for sutun, b in enumerate(("Sütun", "Grup", "Zorunlu", "Karttaki yeri", "Biçim / kural"), 1):
-        h = ak.cell(row=1, column=sutun, value=b)
-        h.font = Font(bold=True, color="FFFFFF")
-        h.fill = PatternFill("solid", start_color="002855")
-    for i, a in enumerate(ALANLAR, 2):
-        for sutun, v in enumerate((a.baslik, GRUPLAR[a.grup][0], "Evet" if a.zorunlu else "", a.kart, a.kural), 1):
-            _yaz(ak, i, sutun, v).alignment = Alignment(vertical="top", wrap_text=True)
-    n = len(ALANLAR) + 3
-    notlar = (
-        "Genel kurallar",
-        f"Veriyi '{SAYFA}' sayfasına müşteri başına tek satır girin. Başlık satırı sabit değildir; panel başlıkları kendisi bulur.",
-        "Sarı başlık zorunlu alandır. Her başlığın notunda o alanın kuralı yazar.",
-        "Yükledikten sonra önce ÖNİZLEME yapılır (güncellenecek / yeni / hatalı satırlar); onayınızla kartlara yazılır ve geri alınabilir.",
-        "Kural: boş hücre karta dokunmaz, dolu hücre karttaki değeri günceller. Eşleşme önce Müşteri No, sonra ünvanla yapılır.",
-        "Başka bir listenin başlıkları da tanınır (Müşteri Adı, TAM Temsilcisi, Çatı/İştirak Müşteri Ünvanı vb.).",
-        "Şablona girmeyenler (kendi yükleme yolları var): " + ", ".join(SABLON_DISI) + ".",
-    )
-    for i, metin in enumerate(notlar):
-        ak.cell(row=n + i, column=1, value=metin).font = Font(bold=(i == 0))
-    for h, genislik in zip("ABCDE", (24, 16, 9, 34, 80), strict=True):
-        ak.column_dimensions[h].width = genislik
-    ak.freeze_panes = "A2"
-
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(SABLON))}{max(ws.max_row, 2)}"  # baslik satirinda filtre (kullanici sablonundaki gibi)
     cikti = io.BytesIO()
     wb.save(cikti)
     return cikti.getvalue()

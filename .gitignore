@@ -12,12 +12,15 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+~$*.xlsx
 
 # aylik rapor PDF arsivi (yerel)
 data/reports/
+/backend/data/reports/
 
 # calisma verisi: panel loglari, yedekler, SQLite, eski uretim geri alma kopyalari (sir icerebilir)
 backend/var/
+/var/
 !backend/.env.example
 
 # cevrimdisi ceviri modeli (126 MB; kurulum\ceviri_kur.ps1 kopyalar ya da indirir)

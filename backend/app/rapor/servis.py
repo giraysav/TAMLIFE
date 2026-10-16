@@ -563,3 +563,38 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
         satir["atilan" if c.id in atilanlar else "bekleyen"] += 1
     sirali = sorted(satirlar.values(), key=lambda s: (s["id"] is None, tr_kucuk(s["ad"])))  # "-" satiri hep sonda
     return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen")}}
+
+
+# --- Cacti: musteriye ait baglantilar ve donem grafigi -------------------------------------------
+def cacti_ayar(db: Session, user: Principal, musteri_id: int) -> dict:
+    from app.rapor import cacti
+
+    musteri = musteri_getir(db, user, musteri_id)
+    yil, ay = donem()
+    return {"baglantilar": musteri.cacti_urls or [], "hazir": cacti.hazir(),
+            "duzenleyebilir": bool(user.is_admin or user.role == "admin"),
+            "kilitli": bool(aktif_gonderim(db, musteri.id, yil, ay)), "yil": yil, "ay": ay}
+
+
+def cacti_kaydet(db: Session, user: Principal, musteri_id: int, baglantilar: list[str]) -> dict:
+    from app.rapor import cacti
+
+    if not (user.is_admin or user.role == "admin"):
+        raise RaporHata(403, "Grafik bağlantılarını yalnız yönetici değiştirebilir.")
+    musteri = musteri_getir(db, user, musteri_id)
+    yil, ay = donem()
+    _sla_kilidi(db, musteri.id, yil, ay)
+    musteri.cacti_urls = cacti.baglantilar(baglantilar)
+    db.flush()
+    return cacti_ayar(db, user, musteri.id)
+
+
+def cacti_grafikleri(db: Session, user: Principal, musteri_id: int) -> dict:
+    from app.rapor import cacti
+
+    musteri = musteri_getir(db, user, musteri_id)
+    yil, ay = donem()
+    ids = cacti.baglantilar(musteri.cacti_urls or [])
+    grafikler = cacti.grafikler(ids, yil, ay, rapor_klasoru() / "cacti" / str(musteri.id),
+                               kilitli=bool(aktif_gonderim(db, musteri.id, yil, ay)))
+    return {"yil": yil, "ay": ay, "grafikler": grafikler}

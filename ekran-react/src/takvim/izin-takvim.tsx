@@ -1,46 +1,83 @@
 import { useLayoutEffect, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, FileText, Presentation, Umbrella, Users, Video } from "lucide-react"
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, ClipboardList, FileText, Umbrella, Users, Video } from "lucide-react"
 import { Cekmece } from "@/components/cekmece"
-import { Alan, Bildirim, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, SayfaKabi, Yukleniyor } from "@/components/sayfa-ui"
+import { Alan, Bildirim, DUGME, DUGME_SARI, GIRDI, HataKutu, SayfaKabi, Yukleniyor } from "@/components/sayfa-ui"
 import { bugunYerel, sayi } from "@/lib/bicim"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
 import type { Ozet } from "@/takvim/takvim-grafigi"
-import { DURUM_RENK, DURUM_SIRASI, takvimMetin } from "@/takvim/takvim-metin"
+import { DURUM_RENK, DURUM_SIRASI, gunZemini, takvimMetin } from "@/takvim/takvim-metin"
 import { ILK_TARIH, ILK_YIL } from "@/lib/yillar"
 
-type Gun = { tarih: string; durum: string; online: number; yuzyuze: number; toplanti_ozeti?: string }
+/** kurum: ekipte herkeste ayni gun (Turkcell'li Takvimi; sunucu takvim/kurum_takvimi.py), "Varsayilana don" bu duruma doner. */
+type Gun = {
+  tarih: string
+  durum: string
+  durum2?: string // yarim gun: gunun ikinci yarisi (her yari 0,5 gun)
+  online: number
+  yuzyuze: number
+  toplanti_ozeti?: string
+  yapilan_isler?: string
+  kurum?: { durum: string; aciklama: string; durum2?: string | null }
+}
 
-const EN_COK_OZET = 4000 // sunucudaki sinirla ayni (takvim/servis.py EN_COK_OZET)
-type Ay = { yil: number; ay: number; gunler: Gun[]; ozet: Ozet }
+const EN_COK_OZET = 4000 // sunucudaki sinirla ayni (takvim/servis.py EN_COK_OZET); yapilan isler icin de
+/** yil_ozet: ustteki sayilar kisinin YIL toplamidir (2026-10-15 kullanici istegi); gorunen = her gunun ekranda gorunen durumu. */
+type Ay = { yil: number; ay: number; gunler: Gun[]; ozet: Ozet; yil_ozet?: Ozet & { gorunen: Record<string, number>; ozet_gunu?: number } }
 
 function iso(y: number, a: number, g: number): string {
   return `${y}-${String(a).padStart(2, "0")}-${String(g).padStart(2, "0")}`
 }
 
-function DurumSecici({ deger, onDegis, dil, etiket }: { deger: string; onDegis: (d: string) => void; dil: Dil; etiket: string }) {
+/** Gun durumu: tiklama tek durum secer; ikiYari iken Ctrl/⌘ ile tiklama ikinci yariyi ekler ya da kaldirir (yarim gun, kutu ikiye bolunur). */
+function DurumSecici({
+  deger,
+  deger2 = null,
+  onDegis,
+  dil,
+  etiket,
+  ikiYari = false,
+}: {
+  deger: string
+  deger2?: string | null
+  onDegis: (d: string, d2: string | null) => void
+  dil: Dil
+  etiket: string
+  ikiYari?: boolean
+}) {
   const t = takvimMetin(dil)
+  function sec(k: string, cift: boolean) {
+    if (!cift || !ikiYari) return onDegis(k, null)
+    if (k === deger2) return onDegis(deger, null)
+    if (k === deger) return deger2 ? onDegis(deger2, null) : undefined
+    onDegis(deger, k)
+  }
   return (
     <fieldset className="grid gap-1.5">
       <legend className="mb-1 text-[0.625rem] font-black uppercase tracking-wide text-slate-500">{etiket}</legend>
       <div className="grid grid-cols-2 gap-2">
-        {DURUM_SIRASI.map((k) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={deger === k}
-            onClick={() => onDegis(k)}
-            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-black transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
-              deger === k ? "border-tl-navy bg-tl-navy/5 text-tl-navy ring-1 ring-tl-navy" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <span aria-hidden className="size-3 shrink-0 rounded-full" style={{ background: DURUM_RENK[k] }} />
-            {t.durumlar[k]}
-          </button>
-        ))}
+        {DURUM_SIRASI.map((k) => {
+          const secili = deger === k || deger2 === k
+          return (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={secili}
+              onClick={(e) => sec(k, e.ctrlKey || e.metaKey)}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-black transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
+                secili ? "border-tl-navy bg-tl-navy/5 text-tl-navy ring-1 ring-tl-navy" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <span aria-hidden className="size-3 shrink-0 rounded-full" style={{ background: DURUM_RENK[k] }} />
+              {t.durumlar[k]}
+              {secili && deger2 ? <span className="ml-auto font-mono text-[0.625rem]">½</span> : null}
+            </button>
+          )
+        })}
       </div>
+      {ikiYari ? <p className="text-[0.6875rem] font-semibold text-slate-500">{t.ikinciYari}</p> : null}
     </fieldset>
   )
 }
@@ -71,11 +108,13 @@ function GunFormu({ tarih, gun, dil, onBitti }: { tarih: string; gun: Gun | unde
   const t = takvimMetin(dil)
   const qc = useQueryClient()
   const [durum, setDurum] = useState(gun?.durum ?? "calisiyor")
+  const [durum2, setDurum2] = useState<string | null>(gun?.durum2 ?? null)
   const [online, setOnline] = useState(String(gun?.online ?? 0))
   const [yuzyuze, setYuzyuze] = useState(String(gun?.yuzyuze ?? 0))
   const [ozet, setOzet] = useState(gun?.toplanti_ozeti ?? "")
+  const [isler, setIsler] = useState(gun?.yapilan_isler ?? "")
   const kaydet = useMutation({
-    mutationFn: (govde: { durum: string; online: number; yuzyuze: number; toplanti_ozeti: string }) => yaz("PUT", "/api/v1/takvim/gun", { tarih, ...govde }),
+    mutationFn: (govde: { durum: string; durum2: string | null; online: number; yuzyuze: number; toplanti_ozeti: string; yapilan_isler: string }) => yaz("PUT", "/api/v1/takvim/gun", { tarih, ...govde }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["takvim"] })
       onBitti()
@@ -83,11 +122,21 @@ function GunFormu({ tarih, gun, dil, onBitti }: { tarih: string; gun: Gun | unde
   })
   function gonder(olay: FormEvent) {
     olay.preventDefault()
-    kaydet.mutate({ durum, online: Number(online) || 0, yuzyuze: Number(yuzyuze) || 0, toplanti_ozeti: ozet })
+    kaydet.mutate({ durum, durum2, online: Number(online) || 0, yuzyuze: Number(yuzyuze) || 0, toplanti_ozeti: ozet, yapilan_isler: isler })
   }
   return (
     <form onSubmit={gonder} className="grid gap-5">
-      <DurumSecici deger={durum} onDegis={setDurum} dil={dil} etiket={t.durum} />
+      <DurumSecici
+        deger={durum}
+        deger2={durum2}
+        ikiYari
+        onDegis={(d, d2) => {
+          setDurum(d)
+          setDurum2(d2)
+        }}
+        dil={dil}
+        etiket={t.durum}
+      />
       <div className="grid grid-cols-2 gap-3">
         <Alan etiket={t.online}>
           <input type="number" min={0} max={50} className={`${GIRDI} !py-2.5 font-mono`} value={online} onChange={(e) => setOnline(e.target.value)} />
@@ -101,10 +150,13 @@ function GunFormu({ tarih, gun, dil, onBitti }: { tarih: string; gun: Gun | unde
         <button type="submit" className={`${DUGME_SARI} !min-w-0 flex-1`} disabled={kaydet.isPending}>
           {kaydet.isPending ? t.kaydediliyor : t.kaydet}
         </button>
-        <button type="button" className={DUGME} disabled={kaydet.isPending} onClick={() => kaydet.mutate({ durum: "calisiyor", online: 0, yuzyuze: 0, toplanti_ozeti: "" })}>
+        <button type="button" className={DUGME} disabled={kaydet.isPending} onClick={() => kaydet.mutate({ durum: gun?.kurum?.durum ?? "calisiyor", durum2: gun?.kurum?.durum2 ?? null, online: 0, yuzyuze: 0, toplanti_ozeti: "", yapilan_isler: "" })}>
           {t.varsayilanaDon}
         </button>
       </div>
+      <Alan etiket={t.yapilanIsler} ipucu={t.yapilanIslerIpucu}>
+        <BuyuyenKutu deger={isler} onDegis={setIsler} ornek={t.yapilanIslerOrnek} />
+      </Alan>
       <Alan etiket={t.toplantiOzeti} ipucu={t.toplantiOzetiIpucu}>
         <BuyuyenKutu deger={ozet} onDegis={setOzet} ornek={t.toplantiOzetiOrnek} />
       </Alan>
@@ -140,7 +192,7 @@ function TopluFormu({ dil, baslangic, onBitti }: { dil: Dil; baslangic: string; 
           <input type="date" required min={bas} className={`${GIRDI} !py-2.5`} value={son} onChange={(e) => setSon(e.target.value)} />
         </Alan>
       </div>
-      <DurumSecici deger={durum} onDegis={setDurum} dil={dil} etiket={t.durum} />
+      <DurumSecici deger={durum} onDegis={(d) => setDurum(d)} dil={dil} etiket={t.durum} />
       <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
         <input type="checkbox" className="size-4 accent-[#002855]" checked={atla} onChange={(e) => setAtla(e.target.checked)} />
         {t.haftaSonuAtla}
@@ -159,7 +211,30 @@ function TopluFormu({ dil, baslangic, onBitti }: { dil: Dil; baslangic: string; 
   )
 }
 
-/** Izin&Takvim Yonetimi: kisi kendi gun durumunu, izinlerini ve toplantilarini aylik takvimde girer (tek gun ya da toplu aralik). */
+type Sayac = { kod: string; etiket: string; deger: string | number; renk?: string; ikon?: typeof Video; ikonSinif?: string }
+
+/** Gosterim: takvime veri girilen her alanin bu aydaki toplam adedi, KPI karosu biciminde. Renk noktasi ya da simge gun kutusundakiyle aynidir,
+ * boylece kutucuklar ayni zamanda takvimin gosterimidir. Gun durumu sayilari ekranda gorunen durumdur (kayitsiz is gunu Calisiyor, hafta sonu Hafta Sonu). */
+function Gosterim({ t, sayaclar, baslik }: { t: ReturnType<typeof takvimMetin>; sayaclar: Sayac[]; baslik: string }) {
+  return (
+    <section aria-label={t.simgeler} title={baslik} className="grid shrink-0 grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+      {sayaclar.map(({ kod, etiket, deger, renk, ikon: Ikon, ikonSinif }) => (
+        <div key={kod} role="group" aria-label={`${etiket}: ${deger}`} className="relative min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-sm">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {Ikon ? <Ikon aria-hidden className={`size-3.5 shrink-0 ${ikonSinif ?? ""}`} /> : <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: renk }} />}
+            <span className="truncate text-[0.625rem] font-black uppercase text-slate-500" title={etiket}>
+              {etiket}
+            </span>
+          </div>
+          <div className="mt-1 font-mono text-xl font-black leading-none text-tl-navy">{deger}</div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+/** Izin&Takvim Yonetimi: giris yapan kisinin kendi takvimi (gun durumu, izin, toplanti, toplanti ozeti, yapilan isler; tek gun ya da toplu aralik).
+ * Baskasinin verisi burada gorunmez. Sayfa tek ekrandir: ay izgarasi kalan yuksekligi doldurur, kaydirma cubugu cikmaz. */
 export function IzinTakvim({ dil }: { dil: Dil }) {
   const t = takvimMetin(dil)
   const simdi = new Date()
@@ -174,6 +249,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
   const ilkGun = (new Date(yil, ay - 1, 1).getDay() + 6) % 7
   const gunSayisi = new Date(yil, ay, 0).getDate()
   const hucreler: (number | null)[] = [...Array<null>(ilkGun).fill(null), ...Array.from({ length: gunSayisi }, (_, i) => i + 1)]
+  const haftaSayisi = Math.ceil(hucreler.length / 7)
 
   const ilkAy = yil === ILK_YIL && ay === 1 // 2026 oncesine gidilmez
   function git(fark: number) {
@@ -182,10 +258,25 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
     setYil(d.getFullYear())
     setAy(d.getMonth() + 1)
   }
-  const o = q.data?.ozet
+  // Gosterim sayilari kisinin YIL toplami (sunucu yil_ozet): gun durumu ekranda gorunen haliyle (kayitsiz gun is gunu ya da hafta sonu,
+  // yarim gun 0,5), metin alanlari dolu gun sayisi
+  const o = q.data?.yil_ozet
+  const durumSayisi: Record<string, number> = { ...Object.fromEntries(DURUM_SIRASI.map((k) => [k, 0])), ...o?.gorunen }
+  const ozetGunu = o?.ozet_gunu ?? 0
+  const isGunu = o?.is_gunu ?? 0
+  const hazir = q.data !== undefined
+  const sayaclar: Sayac[] = [
+    { kod: "izin", etiket: t.izinGunu, deger: hazir ? sayi(o?.izin_gun) : "—", ikon: Umbrella, ikonSinif: "text-amber-500" },
+    { kod: "online", etiket: t.toplantiOnline, deger: hazir ? (o?.online ?? 0) : "—", ikon: Video, ikonSinif: "text-tl-blue" },
+    { kod: "yuzyuze", etiket: t.kutuYuzYuze, deger: hazir ? (o?.yuzyuze ?? 0) : "—", ikon: Users, ikonSinif: "text-emerald-600" },
+    { kod: "ozet", etiket: t.toplantiOzeti, deger: hazir ? ozetGunu : "—", ikon: FileText, ikonSinif: "text-slate-500" },
+    { kod: "isler", etiket: t.yapilanIsler, deger: hazir ? isGunu : "—", ikon: ClipboardList, ikonSinif: "text-tl-navy" },
+    ...DURUM_SIRASI.filter((k) => k !== "calisiyor").map((k) => ({ kod: k, etiket: t.durumlar[k], deger: hazir ? durumSayisi[k] : "—", renk: DURUM_RENK[k] })),
+    { kod: "calisiyor", etiket: t.durumlar.calisiyor, deger: hazir ? durumSayisi.calisiyor : "—", renk: DURUM_RENK.calisiyor },
+  ]
 
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <SayfaKabi ikon={CalendarDays} baslik={t.izinBaslik} aciklama={t.izinAciklama}>
         <button type="button" className={DUGME} onClick={() => setToplu(true)}>
           <CalendarRange aria-hidden className="size-4" />
@@ -193,25 +284,20 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
         </button>
       </SayfaKabi>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi etiket={t.izinGunu} deger={sayi(o?.izin_gun)} ikon={Umbrella} ton="sari" />
-        <Kpi etiket={t.toplantiOnline} deger={o?.online ?? "—"} ikon={Video} ton="mavi" />
-        <Kpi etiket={t.toplantiYuzYuze} deger={o?.yuzyuze ?? "—"} ikon={Users} ton="yesil" />
-        <Kpi etiket={t.kayitliGun} deger={o?.kayitli_gun ?? "—"} ikon={Presentation} ton="gri" />
-      </div>
+      <Gosterim t={t} sayaclar={sayaclar} baslik={t.yilToplami(yil)} />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-lg font-black text-tl-navy">
+      <section className="flex min-h-[24rem] flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <h3 className="text-base font-black text-tl-navy">
             {t.aylar[ay - 1]} {yil}
           </h3>
           <div className="flex items-center gap-2">
-            <button type="button" className={`${DUGME} !px-2.5`} onClick={() => git(-1)} disabled={ilkAy} aria-label={t.oncekiAy}>
+            <button type="button" className={`${DUGME} !px-2.5 !py-1.5`} onClick={() => git(-1)} disabled={ilkAy} aria-label={t.oncekiAy}>
               <ChevronLeft aria-hidden className="size-4" />
             </button>
             <button
               type="button"
-              className={DUGME}
+              className={`${DUGME} !py-1.5`}
               onClick={() => {
                 setYil(simdi.getFullYear())
                 setAy(simdi.getMonth() + 1)
@@ -219,7 +305,7 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
             >
               {t.bugun}
             </button>
-            <button type="button" className={`${DUGME} !px-2.5`} onClick={() => git(1)} aria-label={t.sonrakiAy}>
+            <button type="button" className={`${DUGME} !px-2.5 !py-1.5`} onClick={() => git(1)} aria-label={t.sonrakiAy}>
               <ChevronRight aria-hidden className="size-4" />
             </button>
           </div>
@@ -231,93 +317,66 @@ export function IzinTakvim({ dil }: { dil: Dil }) {
           <HataKutu metin={t.yuklenemedi} tekrar={() => void q.refetch()} tekrarEtiket={t.tekrar} />
         ) : (
           <>
-            <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-black uppercase tracking-wide text-slate-500">
+            <div className="grid shrink-0 grid-cols-7 gap-1 text-center text-[0.6875rem] font-black uppercase tracking-wide text-slate-500">
               {t.gunler.map((g) => (
                 <span key={g}>{g}</span>
               ))}
             </div>
-            <div className="mt-1.5 grid grid-cols-7 gap-1.5">
+            <div className="mt-1 grid min-h-0 flex-1 grid-cols-7 gap-1" style={{ gridTemplateRows: `repeat(${haftaSayisi}, minmax(0, 1fr))` }}>
               {hucreler.map((g, i) => {
                 if (g === null) return <span key={`b${i}`} aria-hidden />
                 const tarih = iso(yil, ay, g)
                 const kayit = gunler.get(tarih)
                 const haftaSonu = (ilkGun + g - 1) % 7 >= 5
                 const durum = kayit?.durum ?? (haftaSonu ? "hafta_sonu" : "calisiyor")
-                const renkli = kayit !== undefined && kayit.durum !== "calisiyor"
+                const durum2 = kayit?.durum2
+                const renkli = (kayit !== undefined && durum !== "calisiyor") || durum2 !== undefined // ust bardaki renkle dolu kutu
+                const kurumAdi = kayit?.kurum && kayit.kurum.durum === durum && (kayit.kurum.durum2 ?? undefined) === durum2 ? kayit.kurum.aciklama : ""
+                const durumAdi = durum2 ? `${t.durumlar[durum]} / ${t.durumlar[durum2]}` : t.durumlar[durum]
+                const ipucu = [kurumAdi, kayit?.yapilan_isler, kayit?.toplanti_ozeti].filter(Boolean).join("\n\n")
                 return (
                   <button
                     key={tarih}
                     type="button"
                     onClick={() => setSecili(tarih)}
-                    aria-label={`${g} ${t.aylar[ay - 1]}: ${t.durumlar[durum]}${kayit && kayit.online + kayit.yuzyuze > 0 ? `, ${kayit.online}/${kayit.yuzyuze}` : ""}${kayit?.toplanti_ozeti ? `, ${t.toplantiOzeti}` : ""}`}
-                    title={kayit?.toplanti_ozeti || undefined}
-                    className={`group relative flex min-h-[5.5rem] flex-col items-stretch gap-1.5 rounded-xl border p-1 text-left transition-all sm:p-2 sm:min-h-[7rem] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
+                    aria-label={`${g} ${t.aylar[ay - 1]}: ${durumAdi}${kurumAdi ? ` (${kurumAdi})` : ""}${kayit && kayit.online + kayit.yuzyuze > 0 ? `, ${kayit.online}/${kayit.yuzyuze}` : ""}${kayit?.toplanti_ozeti ? `, ${t.toplantiOzeti}` : ""}${kayit?.yapilan_isler ? `, ${t.yapilanIsler}` : ""}`}
+                    title={ipucu || undefined}
+                    className={`flex min-h-0 flex-col items-stretch gap-0.5 overflow-hidden rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
                       tarih === bugun ? "border-tl-navy ring-2 ring-tl-yellow/70" : "border-slate-200"
-                    } ${haftaSonu && !renkli ? "bg-slate-50" : "bg-white"}`}
-                    style={renkli ? { background: `${DURUM_RENK[durum]}1a`, borderColor: `${DURUM_RENK[durum]}66` } : undefined}
+                    } ${renkli ? "text-white" : ""}`}
+                    style={{ background: gunZemini(durum, durum2, renkli), borderColor: renkli ? DURUM_RENK[durum] : undefined }}
                   >
                     <span className="flex items-center justify-between gap-1">
-                      <span className={`font-mono text-base font-black leading-none ${tarih === bugun ? "text-tl-navy" : haftaSonu ? "text-slate-400" : "text-slate-700"}`}>{g}</span>
-                      {kayit?.toplanti_ozeti ? <FileText aria-hidden className="hidden size-4 text-slate-500 sm:block" /> : null}
+                      <span className={`font-mono text-sm font-black leading-none ${renkli ? "text-white" : tarih === bugun ? "text-tl-navy" : haftaSonu ? "text-slate-500" : "text-slate-700"}`}>{g}</span>
+                      <span className="flex items-center gap-0.5">
+                        {kayit?.yapilan_isler ? <ClipboardList aria-hidden className={`size-3.5 ${renkli ? "text-white" : "text-tl-navy"}`} /> : null}
+                        {kayit?.toplanti_ozeti ? <FileText aria-hidden className={`size-3.5 ${renkli ? "text-white" : "text-slate-500"}`} /> : null}
+                      </span>
                     </span>
-                    <span aria-hidden className="size-3 shrink-0 rounded-full sm:hidden" style={{ background: DURUM_RENK[durum] }} />
-                    {renkli ? (
-                      <span className="hidden w-fit max-w-full truncate rounded-md px-2 py-0.5 text-xs font-black leading-tight text-white sm:block" style={{ background: DURUM_RENK[durum] }}>
-                        {t.durumlar[durum]}
-                      </span>
-                    ) : (
-                      <span className="hidden items-center gap-1.5 text-xs font-bold leading-tight text-slate-500 sm:flex">
-                        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: DURUM_RENK[durum] }} />
-                        <span className="truncate">{t.durumlar[durum]}</span>
-                      </span>
-                    )}
+                    <span className={`flex min-w-0 items-center gap-1 text-[0.6875rem] font-bold leading-tight ${renkli ? "text-white" : "text-slate-600"}`}>
+                      <span aria-hidden className={`size-2 shrink-0 rounded-full ${renkli ? "ring-1 ring-white" : ""}`} style={{ background: DURUM_RENK[durum] }} />
+                      <span className="hidden truncate sm:inline">{kurumAdi || durumAdi}</span>
+                    </span>
                     {kayit && kayit.online + kayit.yuzyuze > 0 ? (
-                      <span className="flex flex-col gap-0.5 font-mono text-sm font-black sm:flex-row sm:gap-3">
+                      <span className="flex flex-wrap gap-1 font-mono text-xs font-black">
                         {kayit.online > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-tl-blue">
-                            <Video aria-hidden className="size-4" />
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-tl-blue px-1.5 py-0.5 leading-none text-white shadow-sm ring-1 ring-white">
+                            <Video aria-hidden className="size-3.5" strokeWidth={2.75} />
                             {kayit.online}
                           </span>
                         ) : null}
                         {kayit.yuzyuze > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-600">
-                            <Users aria-hidden className="size-4" />
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-600 px-1.5 py-0.5 leading-none text-white shadow-sm ring-1 ring-white">
+                            <Users aria-hidden className="size-3.5" strokeWidth={2.75} />
                             {kayit.yuzyuze}
                           </span>
                         ) : null}
-                      </span>
-                    ) : null}
-                    {kayit?.toplanti_ozeti ? (
-                      <span className="mt-auto hidden sm:block">
-                        <span className="line-clamp-3 whitespace-pre-line text-xs font-medium leading-snug text-slate-600">{kayit.toplanti_ozeti}</span>
                       </span>
                     ) : null}
                   </button>
                 )
               })}
             </div>
-            <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
-              {DURUM_SIRASI.map((k) => (
-                <li key={k} className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
-                  <span aria-hidden className="size-2.5 rounded-sm" style={{ background: DURUM_RENK[k] }} />
-                  {t.durumlar[k]}
-                </li>
-              ))}
-            </ul>
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
-              <li className="flex items-center gap-1.5">
-                <Video aria-hidden className="size-4 text-tl-blue" />
-                {t.toplantiOnline}
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Users aria-hidden className="size-4 text-emerald-600" />
-                {t.toplantiYuzYuze}
-              </li>
-              <li className="flex items-center gap-1.5">
-                <FileText aria-hidden className="size-4 text-slate-500" />
-                {t.toplantiOzeti}
-              </li>
-            </ul>
           </>
         )}
       </section>

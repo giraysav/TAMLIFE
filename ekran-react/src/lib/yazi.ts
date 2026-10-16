@@ -9,7 +9,7 @@ import { useSyncExternalStore } from "react"
 export type YaziBoyutu = "normal" | "buyuk" | "cok"
 
 export const YAZI_OLCEKLERI: Record<YaziBoyutu, number> = { normal: 1, buyuk: 1.125, cok: 1.25 }
-export const YAZI_VARSAYILAN: YaziBoyutu = "buyuk"
+const YAZI_VARSAYILAN: YaziBoyutu = "buyuk"
 
 const ANAHTAR = "tamlife.yazi"
 const OLAY = "tamlife:yazi"
