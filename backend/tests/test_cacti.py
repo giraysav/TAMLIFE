@@ -30,6 +30,7 @@ def png():
 def ayar(monkeypatch, tmp_path):
     for key in ("USERNAME", "PASSWORD", "USERNAME_DPAPI", "PASSWORD_DPAPI", "REALM", "PATH", "MODE"):
         monkeypatch.delenv("TAMLIFE_CACTI_" + key, raising=False)
+    monkeypatch.delenv("TAMLIFE_LOOKOUTEYES_URL", raising=False)
     monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(tmp_path / "reports"))
 
 
@@ -138,13 +139,19 @@ def test_api_csrf_musteri_ve_sirlar(client, monkeypatch):
     client.post("/api/v1/session/logout", headers=hdr)
     monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMember")
     hdr = login_ok(client)
-    assert client.put(yol, headers=hdr, json={"baglantilar": ["8"]}).status_code == 403
+    # Standart (2026-10-17): sorumlu personel kendi musterisinin grafik baglantisini tanimlar; admin olmasi gerekmez.
+    assert client.get(yol).json()["data"]["duzenleyebilir"] is True
+    r = client.put(yol, headers=hdr, json={"baglantilar": ["8"]})
+    assert r.status_code == 200 and r.json()["data"]["baglantilar"] == ["8"]
     with Session(engine()) as db:
         db.add(AppUser(id=2, username="other", display_name="Other", role="TeamMember"))
         db.add(Customer(id=2, external_key="cacti-other", name="Other", owner_id=2))
+        db.add(Customer(id=3, external_key="cacti-ist", name="Ist", owner_id=2, parent_id=1))  # catisi bende, sorumlusu baskasi
         db.commit()
     assert client.get("/api/v1/musteri/2/rapor/cacti").status_code == 404
     assert client.get("/api/v1/musteri/2/rapor/cacti/grafikler").status_code == 404
+    assert client.put("/api/v1/musteri/2/rapor/cacti", headers=hdr, json={"baglantilar": ["9"]}).status_code == 404  # baskasinin musterisi
+    assert client.put("/api/v1/musteri/3/rapor/cacti", headers=hdr, json={"baglantilar": ["9"]}).status_code == 200  # catinin sorumlusu
 
 
 def test_tarayi_ci_kimligi_stdin_ile_alir(monkeypatch):
@@ -216,7 +223,7 @@ def test_bozuk_onbellek_yeniden_alinir(monkeypatch, tmp_path):
     assert len(calls) == 2
 
 
-LOE = "https://trafik.superonline.net/lookouteyes/Modules/Graph.aspx?ct=Stock&miid=741942&fn=AVG&val=val_delay"
+LOE = "http://lookouteyes/lookouteyes/Modules/Graph.aspx?ct=Stock&miid=741942&fn=AVG&val=val_delay"  # personelin bildigi ic adres
 
 
 @pytest.mark.parametrize(
@@ -250,14 +257,12 @@ def test_lookouteyes_gecersiz(deger):
         cacti.grafik_id(deger)
 
 
-def test_lookouteyes_tarayiciya_alanlarla_gider_ve_baslik_alir(monkeypatch):
+def test_lookouteyes_kisinin_kimligiyle_dogrudan_adrese_gider_ve_baslik_alir(monkeypatch):
     import json
     import shutil
     import subprocess
 
-    monkeypatch.setenv(cacti_kimlik.KULLANICI_ANAHTARI, cacti_kimlik.koru("synthetic-user"))
-    monkeypatch.setenv(cacti_kimlik.PAROLA_ANAHTARI, cacti_kimlik.koru("synthetic-password"))
-    monkeypatch.setattr(shutil, "which", lambda _: "node")
+    monkeypatch.setattr(shutil, "which", lambda _: "node")  # sunucu DPAPI hesabi tanimsiz: Lookouteyes icin gerekmez
     encoded = base64.b64encode(png()).decode()
 
     class Process:
@@ -267,11 +272,14 @@ def test_lookouteyes_tarayiciya_alanlarla_gider_ve_baslik_alir(monkeypatch):
             pass
 
         def communicate(self, data=None, **kwargs):
-            assert json.loads(data)["items"] == [{"tur": "loe", "ct": "Stock", "miid": "741942", "fn": "AVG", "val": "val_delay"}, {"tur": "cacti", "id": "7"}]
+            govde = json.loads(data)
+            assert (govde["username"], govde["password"], govde["loeOrigin"]) == ("ayse", "kisi-parolasi", "http://lookouteyes")
+            assert govde["items"] == [{"tur": "loe", "ct": "Stock", "miid": "741942", "fn": "AVG", "val": "val_delay"}, {"tur": "cacti", "id": "7"}]
             return json.dumps({"images": [encoded, encoded], "titles": ["BR - MERKEZ\x07 - INT", ""]}), None
 
     monkeypatch.setattr(subprocess, "Popen", Process)
-    result = cacti.indir([LOE, "7"], 2026, 9)
+    result = cacti.indir([LOE, "7"], 2026, 9, ("ayse", "kisi-parolasi"))
+    assert "kisi-parolasi" not in json.dumps(result)
     assert [g["anahtar"] for g in result] == ["loe-741942-avg-val_delay", "cacti-7"]
     aralik = "01.09.2026 00:00 – 30.09.2026 23:59"  # Eylul raporu: tam takvim ayi, Turkiye saati
     assert [g["baslik"] for g in result] == [f"BR - MERKEZ  - INT · {aralik}", f"Cacti #7 · {aralik}"]
@@ -284,5 +292,39 @@ def test_lookouteyes_http_yonteminde_reddedilir(monkeypatch):
     monkeypatch.setenv(cacti_kimlik.PAROLA_ANAHTARI, cacti_kimlik.koru("synthetic-password"))
     monkeypatch.setenv("TAMLIFE_CACTI_MODE", "http")
     with pytest.raises(cacti.CactiHata) as exc:
-        cacti.indir([LOE], 2026, 9)
+        cacti.indir([LOE], 2026, 9, ("ayse", "p"))
     assert exc.value.kod == 503
+
+
+def test_lookouteyes_eski_kanonik_bicim_ve_adres_ayari(monkeypatch):
+    eski = "https://trafik.superonline.net/lookouteyes/Modules/Graph.aspx?ct=Stock&miid=741942&fn=AVG&val=val_delay"
+    assert cacti.lookouteyes_mu(eski) and cacti.grafik_id(eski) == LOE
+    assert cacti.loe_kok() == "http://lookouteyes"
+    monkeypatch.setenv("TAMLIFE_LOOKOUTEYES_URL", "https://trafik.superonline.net/")
+    assert cacti.loe_kok() == "https://trafik.superonline.net"
+    monkeypatch.setenv("TAMLIFE_LOOKOUTEYES_URL", "http://evil.test")
+    with pytest.raises(cacti.CactiHata):
+        cacti.loe_kok()
+
+
+def test_lookouteyes_parolasiz_428_ve_parola_dogrulama(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(cacti, "indir", lambda *a: calls.append(a) or [])
+    with pytest.raises(cacti.CactiHata) as exc:
+        cacti.grafikler([LOE], 2026, 9, tmp_path)
+    assert exc.value.kod == 428 and not calls  # kayit yok, parola yok: ag erisimi yapilmaz
+    for kotu in ("", None, 5, "x" * 257):
+        with pytest.raises(cacti.CactiHata) as exc:
+            cacti.kisi_kimligi("ayse", kotu)
+        assert exc.value.kod == 400 and "x" * 20 not in str(exc.value)
+    assert cacti.kisi_kimligi("ayse", "p") == ("ayse", "p")
+
+
+def test_lookouteyes_kayitli_donem_parola_istemez(monkeypatch, tmp_path):
+    def indir(ids, yil, ay, kimlik=None):
+        assert kimlik == ("ayse", "p")
+        return [{"anahtar": cacti.anahtar(LOE), "baslik": "BR", "gorsel": "data:image/png;base64," + base64.b64encode(png()).decode()}]
+
+    monkeypatch.setattr(cacti, "indir", indir)
+    assert cacti.grafikler([LOE], 2026, 9, tmp_path, kimlik=("ayse", "p"))
+    assert cacti.grafikler([LOE], 2026, 9, tmp_path)[0]["baslik"] == "BR"  # ayni ay ikinci acilis: dosyadan, parolasiz

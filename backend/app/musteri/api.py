@@ -341,8 +341,8 @@ def cacti_ayar(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: 
 
 
 @router.put("/musteri/{musteri_id:int}/rapor/cacti")
-def cacti_kaydet(musteri_id: KimlikTipi, body: CactiGovde, e: Erisim = Depends(musteri_erisim),
-                 db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+def cacti_kaydet(musteri_id: KimlikTipi, body: CactiGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    # require_veri_yazma (yalniz admin) bilincli olarak yok: grafik baglantisini sorumlu personel de tanimlar (rs._cacti_duzenleyebilir).
     sonuc = _yap(db, lambda: rs.cacti_kaydet(db, e.user, musteri_id, body.baglantilar), yaz=True)
     _denetim(e.user, "rapor.cacti_ayar", f"musteri={musteri_id} adet={len(body.baglantilar)}")
     return sonuc
@@ -352,3 +352,16 @@ def cacti_kaydet(musteri_id: KimlikTipi, body: CactiGovde, e: Erisim = Depends(m
 def cacti_grafikleri(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     # Senkron endpoint FastAPI threadpool'unda calisir; ag I/O event loop'u tutmaz.
     return _yap(db, lambda: rs.cacti_grafikleri(db, e.user, musteri_id))
+
+
+class CactiParola(BaseModel):
+    # Uzunluk servis katmaninda denetlenir: sema siniri 422 yanitinda girdiyi geri yazardi.
+    parola: str
+
+
+@router.post("/musteri/{musteri_id:int}/rapor/cacti/grafikler")
+def cacti_grafikleri_kisi(musteri_id: KimlikTipi, body: CactiParola, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Kisinin kendi LDAP hesabiyla Lookouteyes alimi; parola yalniz bu istekte kullanilir, saklanmaz ve gunluge yazilmaz."""
+    sonuc = _yap(db, lambda: rs.cacti_grafikleri(db, e.user, musteri_id, body.parola))
+    _denetim(e.user, "rapor.cacti_kisi_alim", f"musteri={musteri_id}")
+    return sonuc

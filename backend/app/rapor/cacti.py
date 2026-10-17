@@ -27,7 +27,11 @@ AZAMI_BAYT = 3 * 1024 * 1024
 TARAYICI_SURESI = 110  # sn; cacti-grafik.mjs toplam siniri (aylik grafik cizimi gunlukten yavas), surec bundan 15 sn sonra oldurulur
 _KILIT = threading.BoundedSemaphore(2)
 # Lookouteyes (personelin actigi grafik): Graph.aspx sayfasi tek <img> icerir, resmi Graph.ashx s/e (Unix sn) araligiyla cizer.
-LOE_ADRES = ORIGIN + "/lookouteyes/Modules/Graph.aspx"
+# Saklanan bicim personelin bildigi ic adrestir; istegin gidecegi kok TAMLIFE_LOOKOUTEYES_URL (varsayilan dogrudan lookouteyes).
+LOE_ADRES = "http://lookouteyes/lookouteyes/Modules/Graph.aspx"
+LOE_ESKI_ADRES = ORIGIN + "/lookouteyes/Modules/Graph.aspx"  # 2026-10-17 ilk surumun kanonik bicimi (kayitli deneme baglantilari)
+LOE_KOKLER = ("http://lookouteyes", "https://lookouteyes", ORIGIN)
+AZAMI_PAROLA = 256
 LOE_SAYFALAR = ("/lookouteyes/modules/graph.aspx", "/lookouteyes/modules/graph.ashx")
 LOE_SUNUCULAR = ("lookouteyes", "trafik.superonline.net")
 LOE_ALANLAR = (  # (parametre, kalip, varsayilan); s/e/r0 gibi zaman alanlari yok sayilir, donem rapordan gelir
@@ -70,7 +74,22 @@ def _lookouteyes(u) -> str | None:
 
 
 def lookouteyes_mu(kimlik: str) -> bool:
-    return kimlik.startswith(LOE_ADRES + "?")
+    return kimlik.startswith((LOE_ADRES + "?", LOE_ESKI_ADRES + "?"))
+
+
+def loe_kok() -> str:
+    """Lookouteyes isteklerinin kok adresi. Yalniz bilinen adresler: baska sunucuya vekillik yok."""
+    kok_ = os.environ.get("TAMLIFE_LOOKOUTEYES_URL", "http://lookouteyes").strip().rstrip("/")
+    if kok_ not in LOE_KOKLER:
+        raise CactiHata(503, "Lookouteyes adres ayarı geçersiz.")
+    return kok_
+
+
+def kisi_kimligi(kullanici: str, parola: object) -> tuple[str, str]:
+    """Grafigi isteyen kisinin LDAP kimligi (parola o istek icin; saklanmaz, gunluge ve hataya yazilmaz)."""
+    if not isinstance(parola, str) or not parola or len(parola) > AZAMI_PAROLA or not kullanici:
+        raise CactiHata(400, "LDAP parolası geçersiz.")
+    return kullanici, parola
 
 
 def lookouteyes_alanlari(kimlik: str) -> dict[str, str]:
@@ -195,14 +214,20 @@ def png_dogrula(veri: bytes) -> None:
         raise CactiHata(502, "Cacti PNG dosyası tamamlanmamış.")
 
 
-def indir(ids: list[str], yil: int, ay: int) -> list[dict]:
-    if not hazir():
+PAROLA_GEREKLI = "Lookouteyes grafikleri kendi LDAP hesabınızla alınır: parolanızı girin."
+
+
+def indir(ids: list[str], yil: int, ay: int, kimlik: tuple[str, str] | None = None) -> list[dict]:
+    """kimlik verilirse (grafigi isteyen kisi) tum alim o hesapla yapilir; verilmezse sunucudaki DPAPI hesabi (yalniz Cacti ID'leri)."""
+    if kimlik is None and any(lookouteyes_mu(k) for k in ids):
+        raise CactiHata(428, PAROLA_GEREKLI)
+    if kimlik is None and not hazir():
         raise CactiHata(503, "Cacti LDAP hesabı sunucuda tanımlanmamış.")
     if os.environ.get("TAMLIFE_CACTI_MODE", "browser") == "browser":
-        return _tarayici(ids, yil, ay)
+        return _tarayici(ids, yil, ay, kimlik)
     if any(lookouteyes_mu(k) for k in ids):
         raise CactiHata(503, "Lookouteyes grafikleri yalnız tarayıcı yöntemiyle alınır (TAMLIFE_CACTI_MODE=browser).")
-    kullanici, parola = cacti_kimlik.oku()
+    kullanici, parola = kimlik or cacti_kimlik.oku()
     opener = build_opener(_Yonlendirme(), HTTPCookieProcessor(http.cookiejar.CookieJar()))
     try:
         sayfa = _oku(opener, kok() + "index.php").decode("utf-8", errors="replace")
@@ -251,7 +276,7 @@ def indir(ids: list[str], yil: int, ay: int) -> list[dict]:
         raise CactiHata(502, "Cacti erişimi başarısız. Ağ, TLS ve LDAP ayarlarını kontrol edin.") from from_error
 
 
-def grafikler(ids: list[str], yil: int, ay: int, dizin: Path, *, kilitli: bool = False) -> list[dict]:
+def grafikler(ids: list[str], yil: int, ay: int, dizin: Path, *, kilitli: bool = False, kimlik: tuple[str, str] | None = None) -> list[dict]:
     if not ids:
         return []
     iz = hashlib.sha256(json.dumps([kok(), ids]).encode()).hexdigest()[:20]
@@ -283,13 +308,15 @@ def grafikler(ids: list[str], yil: int, ay: int, dizin: Path, *, kilitli: bool =
         return kayit
     if kilitli:
         raise CactiHata(409, "Gönderilen dönemin kayıtlı Cacti grafikleri bulunamadı.")
+    if kimlik is None and any(lookouteyes_mu(k) for k in ids):
+        raise CactiHata(428, PAROLA_GEREKLI)  # dönem kaydı yok: kişinin parolasıyla bir kez alınır
     if not _KILIT.acquire(blocking=False):
         raise CactiHata(429, "Cacti grafik alma işlemi sürüyor; kısa süre sonra tekrar deneyin.")
     try:
         kayit = oku()
         if kayit is not None:
             return kayit
-        kayit = indir(ids, yil, ay)
+        kayit = indir(ids, yil, ay, kimlik) if kimlik else indir(ids, yil, ay)
         dizin.mkdir(parents=True, exist_ok=True)
         import tempfile
 
@@ -313,7 +340,7 @@ def _baslik(kimlik: str, ad: object) -> str:
     return f"Lookouteyes #{lookouteyes_alanlari(kimlik)['miid']}" if lookouteyes_mu(kimlik) else f"Cacti #{kimlik}"
 
 
-def _tarayici(ids: list[str], yil: int, ay: int) -> list[dict]:
+def _tarayici(ids: list[str], yil: int, ay: int, kimlik: tuple[str, str] | None = None) -> list[dict]:
     import shutil
     import subprocess
 
@@ -321,10 +348,11 @@ def _tarayici(ids: list[str], yil: int, ay: int) -> list[dict]:
     if node is None:
         raise CactiHata(503, "Cacti grafik alımı için Node.js bulunamadı.")
     bas, son = ay_araligi(yil, ay)
-    kullanici, parola = cacti_kimlik.oku()
+    kullanici, parola = kimlik or cacti_kimlik.oku()
     govde = json.dumps(
         {
             "base": kok(),
+            "loeOrigin": loe_kok(),
             "username": kullanici,
             "password": parola,
             "realm": os.environ.get("TAMLIFE_CACTI_REALM", "2"),

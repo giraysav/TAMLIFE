@@ -1,10 +1,10 @@
-import { cleanup, render, renderHook, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ReactNode } from "react"
 import { CactiKarti, useCacti } from "@/musteri/cacti-paneli"
 import { RaporOnizleme } from "@/musteri/rapor-onizleme"
-import { oku } from "@/lib/sorgu"
+import { oku, yaz } from "@/lib/sorgu"
 
 vi.mock("@/lib/sorgu", () => ({ oku: vi.fn(), yaz: vi.fn(), hataMesaji: (_h: unknown, text: string) => text }))
 afterEach(() => { cleanup(); vi.clearAllMocks() })
@@ -32,6 +32,27 @@ describe("Cacti aylik rapor", () => {
     expect(screen.queryByLabelText(/parola|password/i)).not.toBeInTheDocument()
     expect(screen.getByText(/LDAP hesabı: Tanımlı/)).toBeInTheDocument()
     expect(screen.getByRole("button",{name:"Tekrar dene"})).toBeInTheDocument()
+  })
+  it("Lookouteyes icin 428 gelince kisinin parolasini sorar, tek istekte gonderir ve alani temizler", async () => {
+    const loe = "http://lookouteyes/lookouteyes/Modules/Graph.aspx?ct=Stock&miid=1&fn=AVG&val=val_delay"
+    vi.mocked(oku).mockImplementation(async url => {
+      if (url.endsWith("/grafikler")) throw Object.assign(new Error("parola"), {durum:428})
+      return {...ayar,baglantilar:[loe],hazir:false}
+    })
+    vi.mocked(yaz).mockResolvedValue({yil:2026,ay:9,grafikler:[grafik]})
+    function Kart(){const cacti=useCacti("/rapor"); return <><CactiKarti cacti={cacti} ingilizce={false}/><span>{cacti.engel ? "engelli" : "hazir"}</span></>}
+    render(<Kart/>,{wrapper:wrapper()})
+    const alan = await screen.findByLabelText(/Parolanız/)
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByText(/LDAP hesabı: /)).not.toBeInTheDocument()  // sunucu hesabi Lookouteyes'ta kullanilmaz
+    expect(screen.getByText("engelli")).toBeInTheDocument()
+    fireEvent.change(alan, {target:{value:"gizli-parola"}})
+    expect(alan).toHaveValue("gizli-parola")
+    fireEvent.click(screen.getByRole("button",{name:"Grafikleri al"}))
+    await waitFor(() => expect(screen.getByText("hazir")).toBeInTheDocument())
+    expect(yaz).toHaveBeenCalledWith("POST", "/rapor/cacti/grafikler", expect.objectContaining({}))
+    expect(screen.queryByLabelText(/Parolanız/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Rapora eklenen grafik/)).toBeInTheDocument()
   })
   it("grafik tanimli degilse ag erisimi yapmaz ve PDF'i engellemez", async () => {
     vi.mocked(oku).mockResolvedValue({...ayar,baglantilar:[],hazir:false})

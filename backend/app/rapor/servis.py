@@ -30,7 +30,7 @@ from app.authz import yonetici_mi
 from app.dil import m, secili
 from app.kullanicilar import kullanici_kaydi, personel
 from app.models import Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
-from app.musteri.servis import MusteriHata, musteri_getir, rapor_birimi_mi
+from app.musteri.servis import MusteriHata, kullanici_id, musteri_getir, rapor_birimi_mi
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
 from app.rapor import ceviri, eposta, sla, sla_analiz
@@ -566,22 +566,34 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
 
 
 # --- Cacti: musteriye ait baglantilar ve donem grafigi -------------------------------------------
+def _cacti_duzenleyebilir(db: Session, user: Principal, musteri: Customer) -> bool:
+    """Grafik baglantilarini kim tanimlar (STANDART, kullanici karari 2026-10-17: "grafikler degisebilir, personel kendisi
+    girsin"): admin ya da musterinin sorumlu personeli (istirakte catinin sorumlusu da). Yonetici baskasinin musterisini degistirmez."""
+    if user.is_admin or user.role == "admin":
+        return True
+    uid = kullanici_id(db, user)
+    if uid is None:
+        return False
+    ust = db.get(Customer, musteri.parent_id) if musteri.parent_id else None
+    return musteri.owner_id == uid or bool(ust and ust.owner_id == uid)
+
+
 def cacti_ayar(db: Session, user: Principal, musteri_id: int) -> dict:
     from app.rapor import cacti
 
     musteri = musteri_getir(db, user, musteri_id)
     yil, ay = donem()
     return {"baglantilar": musteri.cacti_urls or [], "hazir": cacti.hazir(),
-            "duzenleyebilir": bool(user.is_admin or user.role == "admin"),
+            "duzenleyebilir": _cacti_duzenleyebilir(db, user, musteri),
             "kilitli": bool(aktif_gonderim(db, musteri.id, yil, ay)), "yil": yil, "ay": ay}
 
 
 def cacti_kaydet(db: Session, user: Principal, musteri_id: int, baglantilar: list[str]) -> dict:
     from app.rapor import cacti
 
-    if not (user.is_admin or user.role == "admin"):
-        raise RaporHata(403, "Grafik bağlantılarını yalnız yönetici değiştirebilir.")
     musteri = musteri_getir(db, user, musteri_id)
+    if not _cacti_duzenleyebilir(db, user, musteri):
+        raise RaporHata(403, "Grafik bağlantılarını müşterinin sorumlu personeli ya da admin değiştirebilir.")
     yil, ay = donem()
     _sla_kilidi(db, musteri.id, yil, ay)
     musteri.cacti_urls = cacti.baglantilar(baglantilar)
@@ -589,12 +601,15 @@ def cacti_kaydet(db: Session, user: Principal, musteri_id: int, baglantilar: lis
     return cacti_ayar(db, user, musteri.id)
 
 
-def cacti_grafikleri(db: Session, user: Principal, musteri_id: int) -> dict:
+def cacti_grafikleri(db: Session, user: Principal, musteri_id: int, parola: object = None) -> dict:
+    """Donem grafikleri. Lookouteyes icin kayit yoksa 428: arayuz kisinin LDAP parolasini sorar ve `parola` ile yeniden ister;
+    alim o kisinin hesabiyla yapilir (panel kullanici adi), parola saklanmaz."""
     from app.rapor import cacti
 
     musteri = musteri_getir(db, user, musteri_id)
     yil, ay = donem()
     ids = cacti.baglantilar(musteri.cacti_urls or [])
+    kimlik = cacti.kisi_kimligi(user.username, parola) if parola is not None else None
     grafikler = cacti.grafikler(ids, yil, ay, rapor_klasoru() / "cacti" / str(musteri.id),
-                               kilitli=bool(aktif_gonderim(db, musteri.id, yil, ay)))
+                               kilitli=bool(aktif_gonderim(db, musteri.id, yil, ay)), kimlik=kimlik)
     return {"yil": yil, "ay": ay, "grafikler": grafikler}

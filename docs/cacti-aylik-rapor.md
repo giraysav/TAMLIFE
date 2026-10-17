@@ -1,8 +1,22 @@
 # Cacti aylık rapor grafikleri
 
-Müşteri Yönetimi → müşteri kartı → Aylık Rapor → CACTI kartında yönetici her satıra bir grafik ID veya tam grafik bağlantısı tanımlar (en fazla 6). Sorumlu personel grafikleri görüntüler; tanımları yalnız yönetici değiştirir. Kaynak sabit: https://trafik.superonline.net. Başka sunucuya URL vekilliği yapılmaz.
+Müşteri Yönetimi → müşteri kartı → Aylık Rapor → CACTI kartında (sağ sütun, SLA kartlarının altı) her satıra bir Lookouteyes grafik bağlantısı ya da Cacti grafik ID tanımlanır (en fazla 6). **Standart (2026-10-17 kullanıcı kararı, grafikler değişebildiği için):** bağlantıları müşterinin sorumlu personeli (iştirakte çatının sorumlusu da) kendi girer ve değiştirir; admin de değiştirebilir, yönetici başkasının müşterisini değiştirmez. Rapor gönderilince o dönemin tanımları kilitlenir. Yalnız bilinen adreslere gidilir (Lookouteyes / trafik.superonline.net); başka sunucuya URL vekilliği yapılmaz.
 
 Rapor açıldığında önceki takvim ayının (Türkiye UTC+3) başlangıcı ve sonu kullanılır; kayan son 30 gün kullanılmaz. Örneğin Ekim 2026 raporu 1–30 Eylül verisini alır. PNG'ler aynı rapor şablonuna, PDF'e ve mevcut Outlook EML akışındaki PDF ekine girer. E-posta kendiliğinden gönderilmez.
+
+## Lookouteyes grafikleri (2026-10-17)
+
+Personelin kullandığı grafik Cacti değil, Lookouteyes'tır: `http://lookouteyes/lookouteyes/Modules/Graph.aspx?ct=Stock&miid=…&fn=AVG&val=…`. Kart bu bağlantıyı (Graph.aspx ya da Graph.ashx; iç ad ya da ağ geçidi biçimi) kabul eder ve `http://lookouteyes/...` biçiminde saklar.
+
+**Kimlik (kullanıcı kararı 2026-10-17):** Lookouteyes grafiği grafiği isteyen kişinin kendi LDAP hesabıyla alınır; `.env`'deki DPAPI hesabı Lookouteyes için kullanılmaz. Dönem kaydı yoksa `GET …/cacti/grafikler` 428 döner, kart parola sorar, `POST …/cacti/grafikler {parola}` panel kullanıcı adı + bu parolayla bir kez alır. Parola saklanmaz, günlüğe/denetime/hata metnine yazılmaz (şema sınırı yok: 422 girdiyi geri yazardı; uzunluk servis katmanında). Sonuç dönem dosyasına yazıldığı için aynı ay yeniden parola sorulmaz. Cacti ID'leri ile Lookouteyes aynı istekte ise tüm alım kişinin hesabıyla yapılır.
+
+**Adres:** İstek kökü `TAMLIFE_LOOKOUTEYES_URL` (varsayılan `http://lookouteyes`; izinli: `http://lookouteyes`, `https://lookouteyes`, `https://trafik.superonline.net`). Bu sunucudan (LADIN01, 172.28.100.7) `lookouteyes` (10.222.244.213) 80/443 kapalıdır (2026-10-17 ölçümü): doğrudan alım için ağ ekibinden 172.28.100.7 → 10.222.244.213 TCP 80 (varsa 443) izni gerekir. İzin gelene kadar `TAMLIFE_LOOKOUTEYES_URL=https://trafik.superonline.net` ile ağ geçidi kullanılabilir. `http://` adresinde Lookouteyes giriş formu parolayı ağda şifresiz taşır; `https://lookouteyes` açıksa o tercih edilmelidir. Yalnız Lookouteyes tanımlı müşteride trafik.superonline.net'e hiç gidilmez. Alım sırası:
+
+1. `/lookouteyes/DefaultMetro.aspx` → oturum yoksa `/lookouteyes/Pages/Login/Login.aspx?CALLBACK=…`; kişinin kullanıcı adı + parolası (Domain alanını sunucu doldurur).
+2. `/lookouteyes/Modules/Graph.aspx?ct&miid&fn&val`: grafik adı (`ametric_name`, yoksa `metric_name`) ve `<img id="graph">` data alanları okunur.
+3. `/lookouteyes/Modules/Graph.ashx?<data alanları>&s=<ay başı>&e=<ay sonu>&r=<rastgele>`: sayfanın yakınlaştırmasıyla aynı istek. Eylül raporu için `s=1788210000` (01.09.2026 00:00 TR), `e=1790801999` (30.09.2026 23:59:59 TR). GIF/JPEG gelirse PNG'ye çevrilir. PDF başlığı `<grafik adı> · 01.09.2026 00:00 – 30.09.2026 23:59`.
+
+Oturumsuz Graph.ashx boş gövde döndürür. `TAMLIFE_CACTI_MODE=http` Lookouteyes'ı desteklemez. Eksen etiketleri Lookouteyes sunucusunun saat dilimiyle çizilir; ilk canlı denemede ilk/son etiket kontrol edilmelidir.
 
 ## Sunucu ayarları
 
