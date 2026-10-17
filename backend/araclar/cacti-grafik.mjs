@@ -6,7 +6,33 @@ const cfg = JSON.parse(input)
 input = ''
 const origin = 'https://trafik.superonline.net'
 let browser
-const timeout = setTimeout(() => { void browser?.close() }, 65000)
+const timeout = setTimeout(() => { void browser?.close() }, 110000)
+const PNG = Buffer.from([137,80,78,71,13,10,26,10])
+const MAX = 3145728
+
+async function image(page, href) {
+  // Use Chrome networking, including the authenticated gateway session.
+  // All browser requests and redirects remain restricted to the configured origin.
+  const response = await page.goto(href, {timeout:30000,waitUntil:'load'})
+  if (!response || !response.ok() || Number(response.headers()['content-length'] || 0) > MAX)
+    throw new Error('graph')
+  const data = await response.body()
+  if (!data.length || data.length > MAX) throw new Error('image')
+  if (data.subarray(0,8).equals(PNG)) return data.toString('base64')
+  // Lookouteyes may serve GIF/JPEG: re-encode in the page (no extra package), the server validates PNG again.
+  const type = (response.headers()['content-type'] || '').split(';')[0].trim().toLowerCase()
+  if (!['image/gif','image/jpeg','image/bmp','image/webp'].includes(type)) throw new Error('image')
+  return page.evaluate(async ({b64, type}) => {
+    const img = new Image()
+    img.src = `data:${type};base64,${b64}`
+    await img.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    canvas.getContext('2d').drawImage(img, 0, 0)
+    return canvas.toDataURL('image/png').split(',')[1]
+  }, {b64:data.toString('base64'), type})
+}
 try {
   browser = await chromium.launch({ channel: 'chrome', headless: true })
   const context = await browser.newContext({ acceptDownloads: false, serviceWorkers: 'block' })
@@ -42,24 +68,38 @@ try {
     await form.locator('button[type="submit"],input[type="submit"],input[type="image"]').first().click()
     await cactiUser.waitFor({state:'hidden',timeout:12000})
   }
-  const images = []
-  for (const id of cfg.ids) {
+  const images = [], titles = []
+  for (const item of cfg.items) {
+    if (item.tur === 'loe') {
+      // Lookouteyes: Graph.aspx holds one <img id="graph" data-ct/miid/fn/val/s/e>; its zoom (gShow) requests
+      // Graph.ashx?<data>&r=<random>. Same request here, with the report month as s/e (Unix seconds).
+      const pageUrl = new URL('/lookouteyes/Modules/Graph.aspx', origin)
+      for (const key of ['ct','miid','fn','val']) pageUrl.searchParams.set(key, String(item[key]))
+      const response = await page.goto(pageUrl.href, {timeout:20000,waitUntil:'domcontentloaded'})
+      if (!response || !response.ok() || !new URL(page.url()).pathname.toLowerCase().startsWith('/lookouteyes/modules/'))
+        throw new Error('page')
+      const found = await page.evaluate(() => {
+        const graph = document.getElementById('graph')
+        const name = [window.ametric_name, window.metric_name].find(v => typeof v === 'string' && v.trim()) || ''
+        return graph ? {data:{...graph.dataset}, name} : null
+      })
+      if (!found || String(found.data.miid) !== String(item.miid)) throw new Error('page')
+      const url = new URL('Graph.ashx', pageUrl)
+      for (const [key, value] of Object.entries({...found.data, s:cfg.start, e:cfg.end, r:Math.random()}))
+        if (/^[a-z0-9]{1,10}$/i.test(key)) url.searchParams.set(key, String(value))
+      images.push(await image(page, url.href))
+      titles.push(found.name)
+      continue
+    }
     const url = new URL('graph_image.php', cfg.base)
     for (const [key, value] of Object.entries({
-      local_graph_id:id, graph_start:cfg.start, graph_end:cfg.end,
+      local_graph_id:item.id, graph_start:cfg.start, graph_end:cfg.end,
       graph_width:1000, graph_height:300, image_format:'png',
     })) url.searchParams.set(key, String(value))
-    // Use Chrome networking, including the authenticated gateway session.
-    // All browser requests and redirects remain restricted to the configured origin.
-    const response = await page.goto(url.href, {timeout:10000,waitUntil:'load'})
-    if (!response || !response.ok() || Number(response.headers()['content-length'] || 0) > 3145728)
-      throw new Error('graph')
-    const data = await response.body()
-    if (data.length > 3145728 || !data.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))
-      throw new Error('image')
-    images.push(data.toString('base64'))
+    images.push(await image(page, url.href))
+    titles.push('')
   }
-  process.stdout.write(JSON.stringify({images}))
+  process.stdout.write(JSON.stringify({images, titles}))
 } catch {
   // Never emit browser exceptions, URLs with queries, page bodies, user or password.
   process.stdout.write(JSON.stringify({error:'Cacti kurumsal oturumu veya grafik alımı başarısız. LDAP hesabı, erişim izni, MFA ve grafik ID bilgilerini kontrol edin.'}))

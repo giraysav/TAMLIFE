@@ -49,7 +49,7 @@ export function CactiKarti({ cacti, ingilizce }: { cacti: ReturnType<typeof useC
       {a ? <p className="text-xs">{text("LDAP hesabı", "LDAP account")}: {a.hazir ? text("Tanımlı ••••", "Configured ••••") : text("Tanımlanmamış", "Not configured")}</p> : null}
       {a?.duzenleyebilir && !a.kilitli ? (
         <div className="space-y-2">
-          <label className="block text-xs" htmlFor="cacti-baglantilar">{text("Grafik ID veya bağlantısı — her satıra bir grafik (en fazla 6)", "Graph ID or URL — one per line (up to 6)")}</label>
+          <label className="block text-xs" htmlFor="cacti-baglantilar">{text("Lookouteyes grafik bağlantısı (Graph.aspx) ya da Cacti grafik ID — her satıra bir grafik (en fazla 6)", "Lookouteyes graph URL (Graph.aspx) or Cacti graph ID — one per line (up to 6)")}</label>
           <textarea id="cacti-baglantilar" className={GIRDI} rows={4} maxLength={12000} value={duzenleme ?? a.baglantilar.join("\n")} onChange={e => setDuzenleme(e.target.value)} disabled={mesgul} />
           <button type="button" className={DUGME} disabled={mesgul || duzenleme === null} onClick={() => void kaydet()}>{text("Kaydet", "Save")}</button>
         </div>

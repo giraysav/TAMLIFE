@@ -24,7 +24,18 @@ from app.rapor import cacti_kimlik
 ORIGIN = "https://trafik.superonline.net"
 AZAMI_GRAFIK = 6
 AZAMI_BAYT = 3 * 1024 * 1024
+TARAYICI_SURESI = 110  # sn; cacti-grafik.mjs toplam siniri (aylik grafik cizimi gunlukten yavas), surec bundan 15 sn sonra oldurulur
 _KILIT = threading.BoundedSemaphore(2)
+# Lookouteyes (personelin actigi grafik): Graph.aspx sayfasi tek <img> icerir, resmi Graph.ashx s/e (Unix sn) araligiyla cizer.
+LOE_ADRES = ORIGIN + "/lookouteyes/Modules/Graph.aspx"
+LOE_SAYFALAR = ("/lookouteyes/modules/graph.aspx", "/lookouteyes/modules/graph.ashx")
+LOE_SUNUCULAR = ("lookouteyes", "trafik.superonline.net")
+LOE_ALANLAR = (  # (parametre, kalip, varsayilan); s/e/r0 gibi zaman alanlari yok sayilir, donem rapordan gelir
+    ("ct", r"[A-Za-z]{1,20}", "Stock"),
+    ("miid", r"[0-9]{1,10}", ""),
+    ("fn", r"[A-Za-z]{1,10}", "AVG"),
+    ("val", r"[A-Za-z0-9_]{1,40}", ""),
+)
 
 
 class CactiHata(UygulamaHatasi):
@@ -38,12 +49,51 @@ def kok() -> str:
     return ORIGIN + yol
 
 
+def _lookouteyes(u) -> str | None:
+    """Lookouteyes Graph.aspx/Graph.ashx baglantisi ise kanonik Graph.aspx adresi (istek her zaman ORIGIN'e gider), degilse None.
+    Ic ad (http://lookouteyes) bu sunucudan erisilemez; ayni yol ag gecidinde /lookouteyes/ altinda acilir (2026-10-17 kontrolu)."""
+    if u.path.lower() not in LOE_SAYFALAR:
+        return None
+    if u.scheme not in ("http", "https") or (u.hostname or "").lower() not in LOE_SUNUCULAR or u.port or u.username or u.password or u.fragment:
+        raise CactiHata(400, "Yalnız lookouteyes / trafik.superonline.net grafik bağlantıları kabul edilir.")
+    q = parse_qs(u.query)
+    alanlar = {}
+    for ad, kalip, varsayilan in LOE_ALANLAR:
+        degerler = q.get(ad, [varsayilan] if varsayilan else [])
+        if len(degerler) != 1 or not re.fullmatch(kalip, degerler[0]):
+            raise CactiHata(400, f"Lookouteyes bağlantısında geçerli tek bir '{ad}' olmalı.")
+        alanlar[ad] = degerler[0]
+    if not 1 <= int(alanlar["miid"]) <= 2147483647:
+        raise CactiHata(400, "Lookouteyes miid pozitif bir tam sayı olmalı.")
+    alanlar["miid"] = str(int(alanlar["miid"]))
+    return LOE_ADRES + "?" + urlencode(alanlar)
+
+
+def lookouteyes_mu(kimlik: str) -> bool:
+    return kimlik.startswith(LOE_ADRES + "?")
+
+
+def lookouteyes_alanlari(kimlik: str) -> dict[str, str]:
+    return {k: v[0] for k, v in parse_qs(urlsplit(kimlik).query).items()}
+
+
+def anahtar(kimlik: str) -> str:
+    if lookouteyes_mu(kimlik):
+        a = lookouteyes_alanlari(kimlik)
+        return f"loe-{a['miid']}-{a['fn']}-{a['val']}".lower()
+    return f"cacti-{kimlik}"
+
+
 def grafik_id(deger: str) -> str:
+    """Cacti grafik ID'si (sayi) ya da kanonik Lookouteyes Graph.aspx adresi."""
     deger = deger.strip()
     if not deger.isascii():
         raise CactiHata(400, "Grafik ID veya Cacti bağlantısı geçersiz.")
     if not deger.isdecimal():
         u = urlsplit(deger)
+        loe = _lookouteyes(u)
+        if loe is not None:
+            return loe
         izinli = {kok() + ad for ad in ("graph.php", "graph_image.php", "graph_view.php")}
         if u.username or u.password or u.fragment or f"{u.scheme}://{u.netloc}{u.path}" not in izinli:
             raise CactiHata(400, "Yalnız trafik.superonline.net grafik bağlantıları kabul edilir.")
@@ -72,6 +122,13 @@ def ay_araligi(yil: int, ay: int) -> tuple[int, int]:
     bas = datetime(yil, ay, 1, tzinfo=tz)
     son = datetime(yil + (ay == 12), ay % 12 + 1, 1, tzinfo=tz)
     return int(bas.timestamp()), int(son.timestamp()) - 1
+
+
+def aralik_metni(yil: int, ay: int) -> str:
+    """Grafik basligindaki rapor araligi (Turkiye saati), or. '01.09.2026 00:00 – 30.09.2026 23:59'."""
+    tz = timezone(timedelta(hours=3))
+    bas, son = (datetime.fromtimestamp(t, tz) for t in ay_araligi(yil, ay))
+    return f"{bas:%d.%m.%Y %H:%M} – {son:%d.%m.%Y %H:%M}"
 
 
 class _Yonlendirme(HTTPRedirectHandler):
@@ -143,6 +200,8 @@ def indir(ids: list[str], yil: int, ay: int) -> list[dict]:
         raise CactiHata(503, "Cacti LDAP hesabı sunucuda tanımlanmamış.")
     if os.environ.get("TAMLIFE_CACTI_MODE", "browser") == "browser":
         return _tarayici(ids, yil, ay)
+    if any(lookouteyes_mu(k) for k in ids):
+        raise CactiHata(503, "Lookouteyes grafikleri yalnız tarayıcı yöntemiyle alınır (TAMLIFE_CACTI_MODE=browser).")
     kullanici, parola = cacti_kimlik.oku()
     opener = build_opener(_Yonlendirme(), HTTPCookieProcessor(http.cookiejar.CookieJar()))
     try:
@@ -183,7 +242,7 @@ def indir(ids: list[str], yil: int, ay: int) -> list[dict]:
             grafikler.append(
                 {
                     "anahtar": f"cacti-{kimlik}",
-                    "baslik": f"Cacti #{kimlik} · {yil}-{ay:02d}",
+                    "baslik": f"Cacti #{kimlik} · {aralik_metni(yil, ay)}",
                     "gorsel": "data:image/png;base64," + base64.b64encode(veri).decode("ascii"),
                 }
             )
@@ -207,7 +266,7 @@ def grafikler(ids: list[str], yil: int, ay: int, dizin: Path, *, kilitli: bool =
                 if not isinstance(kayit, list) or len(kayit) != len(ids):
                     return None
                 for kimlik, g in zip(ids, kayit, strict=True):
-                    if not isinstance(g, dict) or g.get("anahtar") != f"cacti-{kimlik}" or not isinstance(g.get("baslik"), str):
+                    if not isinstance(g, dict) or g.get("anahtar") != anahtar(kimlik) or not isinstance(g.get("baslik"), str):
                         return None
                     gorsel = g.get("gorsel")
                     onek = "data:image/png;base64,"
@@ -246,6 +305,14 @@ def grafikler(ids: list[str], yil: int, ay: int, dizin: Path, *, kilitli: bool =
         _KILIT.release()
 
 
+def _baslik(kimlik: str, ad: object) -> str:
+    """Grafik basligi: Lookouteyes sayfasindaki ad (kisa ad, yoksa tam metrik adi), yoksa ID. Kontrol karakteri ve uzunluk sinirli."""
+    temiz = re.sub(r"[\x00-\x1f\x7f]+", " ", ad).strip()[:160] if isinstance(ad, str) else ""
+    if temiz:
+        return temiz
+    return f"Lookouteyes #{lookouteyes_alanlari(kimlik)['miid']}" if lookouteyes_mu(kimlik) else f"Cacti #{kimlik}"
+
+
 def _tarayici(ids: list[str], yil: int, ay: int) -> list[dict]:
     import shutil
     import subprocess
@@ -261,7 +328,7 @@ def _tarayici(ids: list[str], yil: int, ay: int) -> list[dict]:
             "username": kullanici,
             "password": parola,
             "realm": os.environ.get("TAMLIFE_CACTI_REALM", "2"),
-            "ids": ids,
+            "items": [{"tur": "loe", **lookouteyes_alanlari(k)} if lookouteyes_mu(k) else {"tur": "cacti", "id": k} for k in ids],
             "start": bas,
             "end": son,
         }
@@ -302,7 +369,7 @@ def _tarayici(ids: list[str], yil: int, ay: int) -> list[dict]:
     except OSError:
         raise CactiHata(503, "Cacti tarayıcı işlemi başlatılamadı.") from None
     try:
-        cikti, _ = p.communicate(govde, timeout=80)
+        cikti, _ = p.communicate(govde, timeout=TARAYICI_SURESI + 15)
     except subprocess.TimeoutExpired:
         if os.name == "nt":
             subprocess.run(
@@ -323,16 +390,19 @@ def _tarayici(ids: list[str], yil: int, ay: int) -> list[dict]:
         if not isinstance(sonuc, dict):
             raise TypeError
         images = sonuc.get("images")
+        basliklar = sonuc.get("titles")
         if p.returncode or not isinstance(images, list) or len(images) != len(ids):
             raise ValueError
+        if not isinstance(basliklar, list) or len(basliklar) != len(ids):
+            basliklar = [""] * len(ids)
         sonuc = []
-        for kimlik, encoded in zip(ids, images, strict=True):
+        for kimlik, encoded, ad in zip(ids, images, basliklar, strict=True):
             veri = base64.b64decode(encoded, validate=True)
             if len(veri) > AZAMI_BAYT:
                 raise ValueError
             png_dogrula(veri)
             sonuc.append(
-                {"anahtar": f"cacti-{kimlik}", "baslik": f"Cacti #{kimlik} · {yil}-{ay:02d}", "gorsel": "data:image/png;base64," + encoded}
+                {"anahtar": anahtar(kimlik), "baslik": f"{_baslik(kimlik, ad)} · {aralik_metni(yil, ay)}", "gorsel": "data:image/png;base64," + encoded}
             )
         return sonuc
     except (ValueError, TypeError, KeyError):

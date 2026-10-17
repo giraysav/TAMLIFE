@@ -214,3 +214,75 @@ def test_bozuk_onbellek_yeniden_alinir(monkeypatch, tmp_path):
     next(tmp_path.glob("*.json")).write_text('[{"anahtar":"cacti-7","baslik":"Test","gorsel":"https://evil.test/x.png"}]', encoding="utf-8")
     cacti.grafikler(["7"], 2026, 9, tmp_path)
     assert len(calls) == 2
+
+
+LOE = "https://trafik.superonline.net/lookouteyes/Modules/Graph.aspx?ct=Stock&miid=741942&fn=AVG&val=val_delay"
+
+
+@pytest.mark.parametrize(
+    "deger",
+    [
+        "http://lookouteyes/lookouteyes/Modules/Graph.aspx?ct=Stock&miid=741942&fn=AVG&val=val_delay",
+        "https://TRAFIK.superonline.net/lookouteyes/modules/graph.aspx?val=val_delay&miid=0741942",
+        "http://lookouteyes/lookouteyes/Modules/Graph.ashx?ct=Stock&miid=741942&fn=AVG&val=val_delay&e=1&s=0&r0=5",
+    ],
+)
+def test_lookouteyes_baglantisi_kanonik(deger):
+    assert cacti.grafik_id(deger) == LOE
+    assert cacti.anahtar(LOE) == "loe-741942-avg-val_delay"
+
+
+@pytest.mark.parametrize(
+    "deger",
+    [
+        "http://evil.test/lookouteyes/Modules/Graph.aspx?miid=1&val=val_delay",
+        "http://lookouteyes:8080/lookouteyes/Modules/Graph.aspx?miid=1&val=val_delay",
+        "http://u:p@lookouteyes/lookouteyes/Modules/Graph.aspx?miid=1&val=val_delay",
+        "http://lookouteyes/lookouteyes/Modules/Graph.aspx?miid=1",
+        "http://lookouteyes/lookouteyes/Modules/Graph.aspx?miid=1&miid=2&val=v",
+        "http://lookouteyes/lookouteyes/Modules/Graph.aspx?miid=0&val=v",
+        "http://lookouteyes/lookouteyes/Modules/Graph.aspx?miid=1&val=a%27b",
+        "http://lookouteyes/lookouteyes/Modules/Graph.aspx?miid=1&val=v#x",
+    ],
+)
+def test_lookouteyes_gecersiz(deger):
+    with pytest.raises(cacti.CactiHata):
+        cacti.grafik_id(deger)
+
+
+def test_lookouteyes_tarayiciya_alanlarla_gider_ve_baslik_alir(monkeypatch):
+    import json
+    import shutil
+    import subprocess
+
+    monkeypatch.setenv(cacti_kimlik.KULLANICI_ANAHTARI, cacti_kimlik.koru("synthetic-user"))
+    monkeypatch.setenv(cacti_kimlik.PAROLA_ANAHTARI, cacti_kimlik.koru("synthetic-password"))
+    monkeypatch.setattr(shutil, "which", lambda _: "node")
+    encoded = base64.b64encode(png()).decode()
+
+    class Process:
+        returncode = 0
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def communicate(self, data=None, **kwargs):
+            assert json.loads(data)["items"] == [{"tur": "loe", "ct": "Stock", "miid": "741942", "fn": "AVG", "val": "val_delay"}, {"tur": "cacti", "id": "7"}]
+            return json.dumps({"images": [encoded, encoded], "titles": ["BR - MERKEZ\x07 - INT", ""]}), None
+
+    monkeypatch.setattr(subprocess, "Popen", Process)
+    result = cacti.indir([LOE, "7"], 2026, 9)
+    assert [g["anahtar"] for g in result] == ["loe-741942-avg-val_delay", "cacti-7"]
+    aralik = "01.09.2026 00:00 – 30.09.2026 23:59"  # Eylul raporu: tam takvim ayi, Turkiye saati
+    assert [g["baslik"] for g in result] == [f"BR - MERKEZ  - INT · {aralik}", f"Cacti #7 · {aralik}"]
+    assert cacti.aralik_metni(2026, 2) == "01.02.2026 00:00 – 28.02.2026 23:59"
+    assert cacti.aralik_metni(2025, 12) == "01.12.2025 00:00 – 31.12.2025 23:59"
+
+
+def test_lookouteyes_http_yonteminde_reddedilir(monkeypatch):
+    monkeypatch.setenv(cacti_kimlik.KULLANICI_ANAHTARI, cacti_kimlik.koru("synthetic-user"))
+    monkeypatch.setenv(cacti_kimlik.PAROLA_ANAHTARI, cacti_kimlik.koru("synthetic-password"))
+    monkeypatch.setenv("TAMLIFE_CACTI_MODE", "http")
+    with pytest.raises(cacti.CactiHata) as exc:
+        cacti.indir([LOE], 2026, 9)
+    assert exc.value.kod == 503
