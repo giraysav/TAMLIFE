@@ -93,6 +93,8 @@ class AppUser(Base):
     address: Mapped[str] = mapped_column(String(500), default="", server_default="")
     website: Mapped[str] = mapped_column(String(200), default="", server_default="")
     permissions: Mapped[list | None] = mapped_column(JSON, nullable=True)  # kisiye verilen ek yetkiler (rolgorunum.YETKILER); role eklenir
+    # Sahibi oldugu modul (katalog anahtari: tamsms, tamapn, toptan, baglantili); dolu ise musteri sorumlusu (TAM) secilemez
+    module_owner: Mapped[str] = mapped_column(String(40), default="", server_default="")
 
 
 class AuditEvent(Base):

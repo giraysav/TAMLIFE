@@ -156,6 +156,16 @@ def personel(db: Session) -> list[AppUser]:
     return list(db.scalars(select(AppUser).where(*personel_kosulu()).order_by(AppUser.display_name, AppUser.username)))
 
 
+def musteri_personeli_mi(kisi: AppUser | None) -> bool:
+    """Musteri sorumlusu (TAM) olabilir mi: personel ve bir modulun sahibi degil (modul sahibi musteri listesinde yer almaz)."""
+    return personel_mi(kisi) and not (kisi.module_owner or "").strip()  # type: ignore[union-attr]
+
+
+def musteri_personeli(db: Session) -> list[AppUser]:
+    """Musteri Yonetimi personel listesi: personel kumesi eksi modul sahipleri (kullanici karari 2026-10-17)."""
+    return [k for k in personel(db) if musteri_personeli_mi(k)]
+
+
 def silme_yetkilisi_ad() -> str:
     """Kullanici silebilen TEK hesabin adi (KULLANICI_SILME_YETKILISI, varsayilan admin); bos ayar = kimse silemez."""
     return get_settings().kullanici_silme_yetkilisi.strip().lower()

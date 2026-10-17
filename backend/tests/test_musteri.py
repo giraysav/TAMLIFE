@@ -320,3 +320,16 @@ def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):
         r = db.query(Report).filter_by(customer_id=mid).one()
         g = db.query(ReportDispatch).filter_by(customer_id=mid).one()
         assert r.user_id == kisi.id and g.sender_id == kisi.id
+
+
+def test_modul_sahibi_musteri_personel_listesinde_yer_almaz(veri):
+    """Modul sahibi (ICT SMS, APN, Toptan, Baglantili Araclar) TAM secenegi olmaz, musteri sorumlusu yapilamaz (2026-10-17)."""
+    with Session(engine()) as db:
+        db.add(AppUser(id=3, username="modulcu", display_name="Modul Sahibi", role="TeamMember", module_owner="tamapn"))
+        db.commit()
+    hdr = login_ok(veri)
+    tam = {k["id"] for k in veri.get("/api/v1/musteri/secenekler").json()["data"]["tam"]}
+    assert 2 in tam and 3 not in tam
+    assert 3 not in {k["id"] for k in veri.get("/api/v1/musteri/1").json()["data"]["tam_secenekleri"]}
+    assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 3}, headers=hdr).status_code == 404
+    assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 2}, headers=hdr).status_code == 200
