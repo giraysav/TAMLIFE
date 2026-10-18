@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
 import { Activity, Building2, FileText, ListChecks, Mail, Network, Pencil, Phone, Plus, Trash2 } from "lucide-react"
-import { sayi } from "@/lib/bicim"
+import { adaGoreSirala, sayi } from "@/lib/bicim"
 import { ApiHata, hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { Cekmece } from "@/components/cekmece"
 import { Alan, Bolum, Bos, DUGME, DUGME_ANA, GIRDI, Rozet, Satir, VeriTablosu } from "@/components/sayfa-ui"
@@ -265,6 +265,11 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const o = kart.operasyon
   const duzenlenebilir = e.kimlik_duzenle || e.iletisim_duzenle
   const mobilNot = (kart.iletisim.mobil_kmt_detail ?? "").trim()
+  const catiSecenekleri = adaGoreSirala(
+    (kart.cati_secenekleri ?? (k.cati ? [{ id: k.cati.id, ad: k.cati.unvan }] : [])).filter((c) => c.id !== id),
+    (c) => c.ad,
+  )
+  const tamSecenekleri = adaGoreSirala(kart.tam_secenekleri ?? [], (u) => u.ad)
 
   return (
     <div className="space-y-4 font-sans">
@@ -351,7 +356,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                         <Alan etiket={t.cati} sinif="min-w-0">
                           <select id="k-cati" aria-label={t.cati} className={GIRDI} value={catiId} onChange={(ev) => setCatiId(ev.target.value)} required>
                             <option value="">{t.catiSeciniz}</option>
-                            {(kart.cati_secenekleri ?? (k.cati ? [{ id: k.cati.id, ad: k.cati.unvan }] : [])).filter((c) => c.id !== id).map((c) => (
+                        {catiSecenekleri.map((c) => (
                               <option key={c.id} value={c.id}>{c.ad}</option>
                             ))}
                           </select>
@@ -381,7 +386,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                     {e.tam_degistir && kart.tam_secenekleri ? (
                       <Alan etiket={t.sorumluTam} sinif="min-w-0">
                         <select id="k-tam" value={tam} onChange={(ev) => setTam(ev.target.value)} className={GIRDI}>
-                          {kart.tam_secenekleri.map((u) => (
+                      {tamSecenekleri.map((u) => (
                             <option key={u.id} value={u.id}>
                               {u.ad}
                             </option>

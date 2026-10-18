@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db import engine
+from app.db import engine, kullanici_oturumu
 from app.ekip import servis
-from app.models import AppUser, Customer, ProjectItem, Report, ScoringExclusion
+from app.models import AppUser, CalendarDay, Customer, ProjectItem, Report, ScoringExclusion
 from app.ortak import rapor_donemi, simdi
 
 
@@ -25,13 +23,16 @@ def _giris(client, monkeypatch, kullanici: str, rol: str) -> dict[str, str]:
 def _kurulum(client, monkeypatch) -> dict[str, int]:
     """ayse: 2 cati (1 skorlu) + ayri raporlu istirak, 1 rapor; mehmet: yuksek risk, puanlama disi; mudur yonetici."""
     hdr = _giris(client, monkeypatch, "ayse", "TeamMember")
-    bugun = datetime.now().date()
+    bugun = servis._bugun()
     assert (
         client.put(
             "/api/v1/takvim/gun", json={"tarih": bugun.isoformat(), "durum": "yillik_izin", "online": 2, "yuzyuze": 1}, headers=hdr
         ).status_code
         == 200
     )
+    with kullanici_oturumu("ayse") as k:
+        k.add(CalendarDay(day=bugun.replace(month=1, day=15), status="calisiyor", online_count=4, face_count=3))
+        k.commit()
     _giris(client, monkeypatch, "mehmet", "TeamMember")
     _giris(client, monkeypatch, "mudur", "TeamMngr")
     with Session(engine()) as db:
@@ -76,13 +77,17 @@ def test_ekip_ozeti_yonetici_tum_ekibi_gorur(client, monkeypatch):
     # siralama agirlik puanina gore; puanlama disi (mehmet) en altta
     assert veri["satirlar"][0]["ad"] == "ayse"
     a = s["ayse"]
-    assert a["musteri"] == 2 and a["rapor_beklenen"] == 3 and a["rapor_atilan"] == 1 and a["uyum"] == 33
+    bugun = servis._bugun()
+    rapor_yil, rapor_ay = rapor_donemi(bugun)
+    donem_sayisi = rapor_ay if rapor_yil == bugun.year else 0
+    assert a["musteri"] == 2 and a["rapor_beklenen"] == 3 * donem_sayisi and a["rapor_atilan"] == 1
+    assert a["uyum"] == round(100 / (3 * donem_sayisi))
     assert (a["alarm"], a["sikayet"], a["talep"], a["kapanan"], a["risk"]) == (2, 1, 3, 4, 3)
     assert a["final_skor"] == 80.0 and a["agirlik_puani"] == 40.0
-    assert a["bugun"] == "yillik_izin" and a["bugun_ad"] == "Yıllık İzin" and (a["online"], a["yuzyuze"]) == (2, 1)
+    assert a["bugun"] == "yillik_izin" and a["bugun_ad"] == "Yıllık İzin" and (a["online"], a["yuzyuze"]) == (6, 4)
     assert a["proje_acik"] == 2 and a["proje_kapanan"] == 1 and [i["baslik"] for i in a["onemli_isler"]] == ["Kritik iş"]
     assert (
-        "skoru 80,0" in a["cumle"] and "bugün yıllık izin" in a["cumle"] and "1/3 rapor" in a["cumle"] and "kritik seviyede" in a["cumle"]
+        "skoru 80,0" in a["cumle"] and "bugün yıllık izin" in a["cumle"] and f"1/{3 * donem_sayisi} rapor" in a["cumle"] and "kritik seviyede" in a["cumle"]
     )
     m = s["mehmet"]
     assert m["puanlama_disi"] is True and m["final_skor"] is None and m["risk"] == 17 and m["bugun"] is None
@@ -134,8 +139,12 @@ def test_ekip_ozeti_her_modulun_kutusu(client, monkeypatch):
     assert [x["id"] for x in veri["moduller"]] == [i for i in menu if i in k] and set(menu) <= set(k)  # menu sirasi, eksiksiz
     assert (k["musteri"]["deger"], k["musteri"]["alt"]) == (3, "çatı · 2 iştirak")  # ayse 2 + mehmet 1 cati; ayse 2 istirak
     assert k["onedesk"]["deger"] == 2 + 1 + 3 + 10 + 7 and k["onedesk"]["ton"] == "kirmizi"
-    assert k["rapor"]["deger"] == "1/4" and k["proje"]["deger"] == 2 and "1 yüksek/kritik" in k["proje"]["alt"]
-    assert k["takvim_ozet"]["deger"] == 3  # ayse bugun 2 online + 1 yuz yuze
+    bugun = servis._bugun()
+    rapor_yil, rapor_ay = rapor_donemi(bugun)
+    donem_sayisi = rapor_ay if rapor_yil == bugun.year else 0
+    assert k["rapor"]["deger"] == f"1/{4 * donem_sayisi}" and str(bugun.year) in k["rapor"]["alt"]
+    assert k["proje"]["deger"] == 2 and "1 yüksek/kritik" in k["proje"]["alt"]
+    assert k["takvim_ozet"]["deger"] == 10  # ayse: yil icinde 6 online + 4 yuz yuze
     # kullanici 2026-10-14 13:36Z cikardi
     assert not {"takvim", "tamsms", "tamapn", "sunum", "baglantili", "toptan"} & set(k)
     assert k["talep"]["deger"] == 0 and k["radar"]["deger"] is None  # ReportDB verisi yok: uydurma sayi yok

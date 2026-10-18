@@ -131,7 +131,7 @@ def test_kaynak_listesi_ve_yalniz_yetkili_degistirir(veri, monkeypatch):
     assert veri.get("/api/v1/sunum/donem").status_code == 403
     # sunum modulu verilirse 200:
     _cikis(veri, {"X-CSRF-Token": veri.cookies.get("tamlife_csrf")})
-    admin_hdr = login_ok(veri)
+    admin_hdr = _giris(veri, monkeypatch, "admin")
     veri.put("/api/v1/roller/TeamMember", json={"modules": ["takvim", "sunum"], "landing": "ozet"}, headers=admin_hdr)
     _cikis(veri, admin_hdr)
     _giris(veri, monkeypatch, "TeamMember")
@@ -275,40 +275,18 @@ def _kalem(kimlik, sahip, kategori, olusma: date, durum="devam", kapanis: date |
     return ProjectItem(id=kimlik, owner_id=sahip, category=kategori, title=f"Is {kimlik}", status=durum, closed_date=kapanis, created_at=an, updated_at=son)
 
 
-def test_sayilarla_tam_ekibi_kategori_ve_toplanti_sayilari(veri):
-    """Ceyrekte yurutulen is = ceyrek sonundan once acilmis, ceyrek basindan once kapanmamis; onceki ceyrek ayni olcuyle; toplantilar takvimden."""
-    bas, son = donem_araligi(YIL, CEYREK)
-    onceki_bas, _ = donem_araligi(*_geri(YIL, CEYREK, 1))
-    eski = onceki_bas - timedelta(days=100)
-    with Session(engine()) as db:
-        db.add_all(
-            [
-                _kalem(1, 2, "proje", bas),  # bu ceyrekte acildi, suruyor
-                _kalem(2, 2, "proje", onceki_bas, durum="kapandi", kapanis=bas - timedelta(days=1)),  # onceki ceyrekte kapandi: yalniz onceki ceyrekte aktif
-                _kalem(3, 2, "proje", eski),  # eskiden acildi, suruyor: iki ceyrekte de aktif
-                _kalem(4, 1, "ddos", bas, durum="kapandi", kapanis=bas + timedelta(days=1)),  # sahibi admin: '—' satiri; bu ceyrekte acildi ve kapandi
-                _kalem(5, 2, "calisma", eski, durum="kapandi", guncelleme=bas + timedelta(days=2)),  # kapanis tarihi bos: son guncelleme gununde kapanmis sayilir
-                _kalem(6, 2, "topoloji", son + timedelta(days=1)),  # ceyrek sonrasinda acildi: sayilmaz
-            ]
-        )
-        db.commit()
-    with kullanici_oturumu("ayse") as k:
-        k.add(CalendarDay(day=bas, status="calisiyor", online_count=3, face_count=2))
-        k.add(CalendarDay(day=onceki_bas, status="calisiyor", online_count=5, face_count=1))
-        k.commit()
+def test_sayilarla_tam_ekibi_yonetici_ozeti_proje_kartini_tekrarlamaz(veri):
+    """Sayılarla TAM; gelir, müşteri, utilizasyon ve ekip büyüklüğünü özetler, proje tablosunu tekrar etmez."""
     hdr = login_ok(veri)
     _kaynak_sec(veri, hdr, ["sayilar"])
     (oge,) = _donem(veri, YIL, CEYREK)["ogeler"]
     v = oge["veri"]
     kpi = {k["kod"]: k for k in v["kpi"]}
-    assert v["stil"] == "sayilar" and list(kpi) == ["proje", "ddos", "topoloji", "dc_tasima", "calisma", "yuz_yuze", "online"]
-    assert (kpi["proje"]["deger"], kpi["proje"]["onceki"], kpi["proje"]["alt"], kpi["proje"]["alt_en"]) == (2, 2, "1 açıldı · 0 kapandı", "1 opened · 0 closed")
-    assert (kpi["ddos"]["deger"], kpi["ddos"]["alt"]) == (1, "1 açıldı · 1 kapandı")
-    assert (kpi["calisma"]["deger"], kpi["calisma"]["alt"]) == (1, "0 açıldı · 1 kapandı")
-    assert kpi["topoloji"]["deger"] == 0 and kpi["dc_tasima"]["deger"] == 0
-    assert (kpi["yuz_yuze"]["deger"], kpi["yuz_yuze"]["onceki"], kpi["online"]["deger"], kpi["online"]["onceki"]) == (2, 1, 3, 5)
-    assert [s["ad"] for s in v["tablo"]["sutunlar"]] == ["TAM", "Proje", "DDoS optimizasyonu", "Topoloji iyileştirme", "DC taşıma", "Çalışma", "Toplam"]
-    assert v["tablo"]["satirlar"] == [["Ayse Test", 2, 0, 0, 0, 1, 3], ["—", 0, 1, 0, 0, 0, 1]]  # admin sahipli is tek '—' satirinda, sonda
+    assert v["stil"] == "sayilar" and list(kpi) == ["gelir", "yillik_gelir", "fayda", "musteri", "utilizasyon", "tam"]
+    assert kpi["gelir"]["deger"] == 0 and kpi["yillik_gelir"]["deger"] == 0 and kpi["fayda"]["deger"] == 0
+    assert (kpi["musteri"]["deger"], kpi["musteri"]["alt"]) == (3, "2 çatı · 1 iştirak")
+    assert kpi["utilizasyon"]["deger"] == 50 and kpi["tam"]["deger"] == 1
+    assert "tablo" not in v
 
 
 def test_tanitim_olculmus_sayilar_verir(veri):

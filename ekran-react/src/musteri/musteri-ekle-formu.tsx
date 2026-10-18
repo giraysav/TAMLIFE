@@ -10,6 +10,7 @@ import { portfoyMetin } from "@/musteri/portfoy-metin"
 import { useMusteriYolu } from "@/musteri/musteri-yolu"
 import type { Dil } from "@/shell/metin"
 import { sorguAyarla } from "@/shell/rota"
+import { adaGoreSirala } from "@/lib/bicim"
 
 type Tur = "ana" | "istirak"
 
@@ -24,6 +25,8 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
   const [segment, setSegment] = useState("")
   const [tamId, setTamId] = useState("")
   const [hata, setHata] = useState("")
+  const catiSecenekleri = adaGoreSirala(secenek.catilar, (c) => c.ad)
+  const tamSecenekleri = adaGoreSirala(secenek.tam, (k) => k.ad)
 
   const cati = secenek.catilar.find((c) => String(c.id) === catiId)
   const ekle = useMutation({
@@ -92,7 +95,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
         <Alan etiket={t.cati} ipucu={secenek.catilar.length === 0 ? t.catiYok : undefined}>
           <select className={`${GIRDI} !py-2.5`} value={catiId} onChange={(e) => setCatiId(e.target.value)} required>
             <option value="">{t.catiSec}</option>
-            {secenek.catilar.map((c) => (
+            {catiSecenekleri.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.ad}
               </option>
@@ -128,7 +131,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
       <Alan etiket={t.tamSec}>
         <select className={`${GIRDI} !py-2.5`} value={tamId} onChange={(e) => setTamId(e.target.value)} disabled={!secenek.yonetici}>
           <option value="">{secenek.yonetici ? (cati ? `${t.cati}` : t.tamKendi) : t.tamKendi}</option>
-          {secenek.tam.map((k) => (
+          {tamSecenekleri.map((k) => (
             <option key={k.id} value={k.id}>
               {k.ad}
             </option>

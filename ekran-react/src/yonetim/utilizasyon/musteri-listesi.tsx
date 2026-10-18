@@ -7,6 +7,7 @@ import { Alan, Bildirim, Bos, DUGME, DUGME_SARI, GIRDI, HataKutu, Panel, Rozet, 
 import { ANAHTAR } from "@/yonetim/api"
 import type { MusteriEkleSonucu, MusteriListesi as MusteriListesiVeri, MusteriSatiri, MusteriSilSonucu } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
+import { adaGoreSirala } from "@/lib/bicim"
 import { ym } from "@/yonetim/metin"
 
 const DUGME_TEHLIKE =
@@ -69,7 +70,7 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
   const secenek = useQuery({ queryKey: ["musteri", "secenekler"], queryFn: () => oku<{ tam: { id: number; ad: string }[] }>("/api/v1/musteri/secenekler"), enabled: ekleAcik })
   const hepsi = sorgu.data?.items
   const liste = useMemo(() => hepsi ?? [], [hepsi])
-  const catilar = useMemo(() => liste.filter((s) => s.parent_id === null), [liste])
+  const catilar = useMemo(() => adaGoreSirala(liste.filter((s) => s.parent_id === null), (s) => s.name), [liste])
   const aranan = ara.trim().toLocaleLowerCase("tr-TR")
   // Personel filtresi: secenekler listedeki sorumlulardan gelir (sayilariyla); "Sorumlusuz" sahibi olmayanlar icindir.
   const personel = useMemo(() => {
@@ -279,7 +280,7 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
                 <Alan etiket={m.tam}>
                   <select className={GIRDI} value={tamId} onChange={(e) => setTamId(e.target.value)}>
                     <option value="">{m.tamVarsayilan}</option>
-                    {(secenek.data?.tam ?? []).map((k) => (
+                    {adaGoreSirala(secenek.data?.tam ?? [], (k) => k.ad).map((k) => (
                       <option key={k.id} value={k.id}>
                         {k.ad}
                       </option>

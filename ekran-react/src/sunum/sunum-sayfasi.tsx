@@ -22,6 +22,31 @@ import { takvimMetin } from "@/takvim/takvim-metin"
 
 const KUCUK_DUGME = `${DUGME} !px-2.5 !py-1`
 
+/** Tam ekranda buyuk tanitim tek sayfa; genis ozetler yarim, kisa kartlar ceyrek sayfa kaplar. */
+export function sunumSayfalari(ogeler: Oge[]): Oge[][] {
+  const sayfalar: Oge[][] = []
+  let sayfa: Oge[] = []
+  let doluluk = 0
+  const agirlik = (o: Oge) => (o.veri && tanitimMi(o.veri) ? 4 : o.veri && sayilarMi(o.veri) ? 2 : 1)
+  for (const o of ogeler) {
+    const a = agirlik(o)
+    if (sayfa.length && doluluk + a > 4) {
+      sayfalar.push(sayfa)
+      sayfa = []
+      doluluk = 0
+    }
+    sayfa.push(o)
+    doluluk += a
+    if (doluluk === 4) {
+      sayfalar.push(sayfa)
+      sayfa = []
+      doluluk = 0
+    }
+  }
+  if (sayfa.length) sayfalar.push(sayfa)
+  return sayfalar
+}
+
 /**
  * Ceyrek Bazli Sunum: ust yonetim icin KISA ozet. Panelin her modulunun kendi alani (kart) vardir; o ceyrekte verisi olmasa da alan durur.
  * Hangi alanlarin hangi sirayla yer alacagi "Sunum icerigi" penceresinden secilir; yetkili kartlari surukleyerek de tasiyabilir.
@@ -172,17 +197,17 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
     return null
   }
 
-  /** Bir alanin karti. slaytta: ayrinti acik, tasima ve yonetici dugmeleri yok. */
+  /** Bir alanin karti. Slaytta yalniz ozet gorunur; tasma ve ic kaydirma uretecek ayrinti acilmaz. */
   function kart(o: Oge, slaytta = false) {
     const ad = yerel(dil, o.ad, o.ad_en)
     const ortak = {
       baslik: ad,
       rozet: rozet(o),
-      zaman: kisa(o),
+      zaman: slaytta ? "" : kisa(o),
       zamanAciklama: alt(o),
       eylem: slaytta ? undefined : eylem(o),
-      acik: slaytta || !!acik[o.kaynak],
-      onAc: (a: boolean) => setAcik((s) => ({ ...s, [o.kaynak]: a })),
+      acik: !slaytta && !!acik[o.kaynak],
+      onAc: slaytta ? undefined : (a: boolean) => setAcik((s) => ({ ...s, [o.kaynak]: a })),
       surukle: slaytta ? undefined : surukle(o),
     }
     const veri = o.veri
@@ -211,13 +236,13 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
     }
     if (takvimMi(o.kaynak, veri)) {
       return (
-        <SunumKarti {...ortak} ayrinti={{ etiket: t.ayrintiKisi(veri.uyeler.length), icerik: <TakvimAyrinti veri={veri} t={tt} /> }}>
+        <SunumKarti {...ortak} ayrinti={slaytta ? undefined : { etiket: t.ayrintiKisi(veri.uyeler.length), icerik: <TakvimAyrinti veri={veri} t={tt} /> }}>
           <TakvimOzet veri={veri} t={tt} />
         </SunumKarti>
       )
     }
     if (veri.kpi.length === 0 && !(veri.tablo && veri.tablo.satirlar.length > 0)) return bos(t.veriYok)
-    const ayrinti = veri.tablo && veri.tablo.satirlar.length > 0 ? { etiket: t.ayrintiSatir(veri.tablo.satirlar.length), icerik: <AyrintiTablosu tablo={veri.tablo} dil={dil} baslik={ad} /> } : undefined
+    const ayrinti = !slaytta && veri.tablo && veri.tablo.satirlar.length > 0 ? { etiket: t.ayrintiSatir(veri.tablo.satirlar.length), icerik: <AyrintiTablosu tablo={veri.tablo} dil={dil} baslik={ad} /> } : undefined
     if (sayilarMi(veri)) {
       return (
         <SunumKarti {...ortak} genis ayrinti={ayrinti}>
@@ -336,9 +361,35 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
       <Cekmece acik={senkron} onKapat={() => setSenkron(false)} baslik={`${t.senkron} · ${t.ceyrekKisa(ceyrek)} ${yil}`} aciklama={t.senkronAciklama} kapatEtiketi={t.kapat} genis>
         {senkron ? <SunumSenkron dil={dil} yil={yil} ceyrek={ceyrek} /> : null}
       </Cekmece>
-      {slayt && v && ogeler.length > 0 ? (
-        <SunumSlayt adet={ogeler.length} ciz={(i) => kart(ogeler[i], true)} adlar={ogeler.map((o) => yerel(dil, o.ad, o.ad_en))} baslik={`${t.baslik} · ${t.ceyrekKisa(v.ceyrek)} ${v.yil}`} t={t} onKapat={() => setSlayt(false)} />
-      ) : null}
+      {slayt && v && ogeler.length > 0 ? (() => {
+        const sayfalar = sunumSayfalari(ogeler)
+        return (
+          <SunumSlayt
+            adet={sayfalar.length}
+            ciz={(i) => {
+              const sayfa = sayfalar[i]
+              const genisVar = sayfa.some((o) => !!o.veri && (sayilarMi(o.veri) || tanitimMi(o.veri)))
+              return (
+              <div className="grid h-full min-h-0 grid-flow-row-dense grid-cols-2 grid-rows-2 gap-3">
+                {sayfa.map((o, sira) => {
+                  const genis = !!o.veri && (sayilarMi(o.veri) || tanitimMi(o.veri))
+                  const tam = !!o.veri && tanitimMi(o.veri)
+                  const tek = sayfa.length === 1
+                  const ikiKisa = !genisVar && sayfa.length === 2
+                  const ucKisaIlk = !genisVar && sayfa.length === 3 && sira === 0
+                  const genisYanindaTek = genisVar && sayfa.length === 2 && !genis
+                  return <div key={o.kaynak} className={`min-h-0 [&>section]:h-full ${genis || tek || genisYanindaTek ? "col-span-2" : ""} ${tam || tek || ikiKisa || ucKisaIlk ? "row-span-2" : ""}`}>{kart(o, true)}</div>
+                })}
+              </div>
+              )
+            }}
+            adlar={sayfalar.map((sayfa) => sayfa.map((o) => yerel(dil, o.ad, o.ad_en)).join(" · "))}
+            baslik={`${t.baslik} · ${t.ceyrekKisa(v.ceyrek)} ${v.yil}`}
+            t={t}
+            onKapat={() => setSlayt(false)}
+          />
+        )
+      })() : null}
     </div>
   )
 }

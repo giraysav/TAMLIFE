@@ -5,7 +5,7 @@ OZETTE_YOK modulleri karo acmaz (kullanici 2026-10-14 13:36Z cikardi: Izin&Takvi
 Kapsam modulun kendi kuralidir:
   - kisiye bagli veri (musteri, rapor, proje, Onedesk acik kayitlari, TAM Takvim toplantilari) Ekip Ozeti satirlarindan gelir:
     yonetici tum ekip, TeamMember yalniz kendisi;
-  - ekip geneli moduller (Gelir Faydasi, Talepler, Radar): Gelir Faydasi sunumdaki ozetin bu ceyrekteki ilk degerleridir
+  - ekip geneli moduller (Gelir Faydasi, Talepler, Radar): Gelir Faydasi sunumdaki ozetin bu yildaki ilk degerleridir
     (sunum/servis kaynak fonksiyonu; tek hesap, ayni sayi iki yerde farkli cikmaz).
 Bir modulun ozeti hata verirse kutu "—" gosterir ve uygulama gunlugune yazilir; Genel Bakis acilmaya devam eder.
 Sayilar uydurulmaz: veri yoksa deger None, arayuz "—" yazar.
@@ -26,7 +26,6 @@ from app.navigation import PRESENTATION, navigation_for
 from app.radar.servis import adaylar as radar_adaylari
 from app.rolgorunum import etkin
 from app.session import Principal
-from app.takvim.servis import bu_ceyrek
 
 log = logging.getLogger(__name__)
 
@@ -55,11 +54,11 @@ def _kpi_degeri(kaynak: dict, sira: int) -> object:
     return kpi[sira]["deger"] if len(kpi) > sira else None
 
 
-def _ekip_geneli(db: Session) -> dict[str, Callable[[], dict]]:
-    """Sunum kaynaklarindan bu ceyregin ozeti (gec import: sunum ekip modulunu bilmez, dongu yok)."""
+def _ekip_geneli(db: Session, yil: int) -> dict[str, Callable[[], dict]]:
+    """Sunum kaynaklarindan tum yilin ozeti (gec import: sunum ekip modulunu bilmez, dongu yok)."""
     from app.sunum import servis as sunum
 
-    yil, ceyrek = bu_ceyrek()
+    ceyrek = 0
     donem = sunum.donem_adi(yil, ceyrek)
 
     def gelir_uretim() -> dict:
@@ -84,7 +83,7 @@ def _ekip_geneli(db: Session) -> dict[str, Callable[[], dict]]:
     return {"gelir_uretim": gelir_uretim, "radar": radar, "talep": talep}
 
 
-def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict]) -> list[dict]:
+def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict], yil: int) -> list[dict]:
     """Kullanicinin menusundeki moduller sirasiyla (Yonetim, yalniz-admin ve OZETTE_YOK haric) birer kutu."""
     menude = [
         str(o["id"])
@@ -116,7 +115,7 @@ def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict]) -> list[d
         "rapor": lambda: {
             "deger": f"{atilan}/{beklenen}" if beklenen else None,
             "alt": m(
-                f"dönem raporu · %{round(100 * atilan / beklenen)} uyum", f"period reports · {round(100 * atilan / beklenen)}% compliance"
+                f"{yil} raporları · %{round(100 * atilan / beklenen)} uyum", f"{yil} reports · {round(100 * atilan / beklenen)}% compliance"
             )
             if beklenen
             else m("rapor birimi yok", "no report units"),
@@ -124,10 +123,10 @@ def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict]) -> list[d
         "proje": lambda: {"deger": acik_proje, "alt": m(f"açık · {onemli} yüksek/kritik", f"open · {onemli} high/critical"), "ton": "sari"},
         "takvim_ozet": lambda: {
             "deger": online + yuzyuze,
-            "alt": m(f"bu ay · {online} online · {yuzyuze} yüz yüze", f"this month · {online} online · {yuzyuze} in person"),
+            "alt": m(f"{yil} · {online} online · {yuzyuze} yüz yüze", f"{yil} · {online} online · {yuzyuze} in person"),
         },
     }
-    hesap = {**_ekip_geneli(db), **yerel}
+    hesap = {**_ekip_geneli(db, yil), **yerel}
 
     kutular = []
     for anahtar in menude:

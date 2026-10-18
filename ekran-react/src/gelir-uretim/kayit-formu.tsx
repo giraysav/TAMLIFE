@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Cekmece } from "@/components/cekmece"
 import { ALT_BASLIK_BANDI, ALT_BASLIK_YAZISI, Alan, Bildirim, DUGME, DUGME_ANA, GIRDI } from "@/components/sayfa-ui"
 import { hataMesaji, yaz } from "@/lib/sorgu"
+import { adaGoreSirala } from "@/lib/bicim"
 import type { Dil } from "@/shell/metin"
 import { DONEMLER, DURUMLAR, FAYDALAR, PARALAR, TURLER, ZORUNLU, gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
 import type { Donem, Durum, Fayda, Kayit, Para, Tur, ZorunluAlan } from "@/gelir-uretim/gelir-uretim-metin"
@@ -192,7 +193,7 @@ export function KayitFormu({
   const kisiler = useMemo(() => {
     const liste: (KisiSecenegi & { pasif: boolean })[] = personel.map((p) => ({ ...p, pasif: false }))
     for (const p of kayit?.people ?? []) if (!liste.some((x) => x.id === p.id)) liste.push({ id: p.id, ad: p.name, pasif: true })
-    return liste
+    return adaGoreSirala(liste, (p) => p.ad)
   }, [personel, kayit])
 
   const girdi = (alan: Serbest, etiket: string, azami: number, ek: { sayisal?: boolean; tarih?: boolean } = {}) => (

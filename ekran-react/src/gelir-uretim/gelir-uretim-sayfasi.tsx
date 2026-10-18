@@ -5,7 +5,7 @@ import { BadgeCheck, CalendarRange, ListChecks, Plus, Search, SearchX, Timer, Tr
 import type { LucideIcon } from "lucide-react"
 import { Alan, Bildirim, BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, Rozet, SayfaKabi } from "@/components/sayfa-ui"
 import { Skeleton } from "@/components/ui/skeleton"
-import { para, sayi } from "@/lib/bicim"
+import { adaGoreSirala, para, sayi } from "@/lib/bicim"
 import { useGecikmeli } from "@/lib/kanca"
 import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
@@ -305,7 +305,7 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
           <Alan etiket={t.tam}>
             <select className={GIRDI} value={tam} onChange={(e) => setTam(e.target.value)}>
               <option value="">{t.tumTam}</option>
-              {(veri?.secenekler.personel ?? []).map((p) => (
+              {adaGoreSirala(veri?.secenekler.personel ?? [], (p) => p.ad).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.ad}
                 </option>

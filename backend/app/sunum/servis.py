@@ -30,7 +30,7 @@ import json
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -299,65 +299,29 @@ def _radar(db: Session, yil: int, ceyrek: int) -> dict:
     }
 
 
-# Sayilarla TAM Ekibi (ust yonetim sunumunun 3. slayti): proje kategorileri + toplantilar, onceki ceyrekle birlikte
-SAYI_KATEGORILERI = (
-    ("proje", "Proje", "Projects"),
-    ("ddos", "DDoS optimizasyonu", "DDoS optimization"),
-    ("topoloji", "Topoloji iyileştirme", "Topology improvement"),
-    ("dc_tasima", "DC taşıma", "DC migration"),
-    ("calisma", "Çalışma", "Work items"),
-)
-
-
-def _acilis(k: ProjectItem) -> date | None:
-    return k.created_at.date() if k.created_at else None
-
-
-def _kapanis(k: ProjectItem) -> date | None:
-    """Kapanis tarihi; kapali ama tarihi girilmemis kalem son guncelleme gununde kapanmis sayilir."""
-    if k.closed_date:
-        return k.closed_date
-    return k.updated_at.date() if k.status == "kapandi" and k.updated_at else None
-
-
-def _ceyrekte_aktif(k: ProjectItem, bas: date, son: date) -> bool:
-    """Ceyrekte yurutulen is: ceyrek sonundan once acilmis ve ceyrek basindan once kapanmamis."""
-    acilis, kapanis = _acilis(k), _kapanis(k)
-    return acilis is not None and acilis <= son and (kapanis is None or kapanis >= bas)
-
-
 def _sayilar(db: Session, yil: int, ceyrek: int) -> dict:
-    bas, son = donem_araligi(yil, ceyrek)
-    onceki_bas, onceki_son = donem_araligi(*_bir_onceki(yil, ceyrek))
-    kalemler = list(db.scalars(select(ProjectItem)))
-    adlar = {u.id: (u.display_name or u.username) for u in personel(db)}  # tek personel kumesi; yonetici/admin sahipli isler tek '—' satirinda
-    kpi: list[dict] = []
-    tamlar: dict[int | None, list] = {}
-    for i, (kod, ad, ad_en) in enumerate(SAYI_KATEGORILERI):
-        kume = [k for k in kalemler if k.category == kod]
-        aktif = [k for k in kume if _ceyrekte_aktif(k, bas, son)]
-        acilan = sum(1 for k in aktif if (_acilis(k) or bas) >= bas)
-        kapanan = sum(1 for k in aktif if (c := _kapanis(k)) is not None and c <= son)
-        onceki = sum(1 for k in kume if _ceyrekte_aktif(k, onceki_bas, onceki_son))
-        kpi.append(_kpi(ad, ad_en, len(aktif), alt=f"{acilan} açıldı · {kapanan} kapandı", alt_en=f"{acilan} opened · {kapanan} closed", onceki=onceki, kod=kod))
-        for k in aktif:
-            sahip = k.owner_id if k.owner_id in adlar else None
-            satir = tamlar.setdefault(sahip, [adlar.get(sahip, "—"), *([0] * (len(SAYI_KATEGORILERI) + 1))])
-            satir[1 + i] += 1
-            satir[-1] += 1
-    toplanti = takvim_ekibi(db, yil, ceyrek)["genel"]
-    onceki_toplanti = takvim_ekibi(db, *_bir_onceki(yil, ceyrek))["genel"]
-    kpi += [
-        _kpi("Yüz yüze buluşma", "Face-to-face meetings", toplanti["yuzyuze"], onceki=onceki_toplanti["yuzyuze"], kod="yuz_yuze"),
-        _kpi("Online toplantı", "Online meetings", toplanti["online"], onceki=onceki_toplanti["online"], kod="online"),
-    ]
+    """Ust yonetim icin tek bakista ekip ozeti; proje kartinin tekrarini uretmez."""
+    gelir = gelir_uretim_ozeti(db, yil, ceyrek)
+    portfoy_ozeti = _portfoy(db, yil, ceyrek)
+    utilizasyon = _utilizasyon(db, yil, ceyrek)
+
+    def deger(veri: dict, ad: str) -> float | None:
+        return next((k["deger"] for k in veri.get("kpi", []) if k["ad"] == ad), None)
+
+    cati = deger(portfoy_ozeti, "Çatı müşteri") or 0
+    istirak = deger(portfoy_ozeti, "İştirak") or 0
+    aylik_gelir = deger(gelir, "Aylık gelir TRY") or 0
+    yil_ici_gelir = deger(gelir, "Yıl içi gelir") or 0
     return {
         "stil": "sayilar",
-        "kpi": kpi,
-        "tablo": {
-            "sutunlar": [_sutun("TAM", "TAM"), *(_sutun(ad, ad_en) for _, ad, ad_en in SAYI_KATEGORILERI), _sutun("Toplam", "Total")],
-            "satirlar": sorted(tamlar.values(), key=lambda s: (s[0] == "—", tr_kucuk(s[0]))),
-        },
+        "kpi": [
+            _kpi("Aylık gelir faydası (TRY)", "Monthly revenue benefit (TRY)", aylik_gelir, kod="gelir"),
+            _kpi("Yıl içi gelir faydası (TRY)", "In-year revenue benefit (TRY)", yil_ici_gelir, kod="yillik_gelir"),
+            _kpi("Fayda sağlanan iş", "Work delivering benefit", deger(gelir, "Fayda sağlanan iş") or 0, kod="fayda"),
+            _kpi("Müşteri", "Customers", cati + istirak, alt=f"{int(cati)} çatı · {int(istirak)} iştirak", alt_en=f"{int(cati)} parent · {int(istirak)} affiliates", kod="musteri"),
+            _kpi("Ortalama utilizasyon", "Average utilization", deger(utilizasyon, "Ortalama skor"), kod="utilizasyon"),
+            _kpi("TAM", "TAMs", len(personel(db)), kod="tam"),
+        ],
     }
 
 
@@ -430,7 +394,7 @@ class Kaynak:
 KAYNAKLAR: dict[str, Kaynak] = {
     "sayilar": Kaynak(
         "Sayılarla TAM Ekibi", "TAM Team in Numbers",
-        "Çeyrekte yürütülen proje, DDoS, topoloji, DC taşıma ve çalışma sayıları; yüz yüze ve online toplantılar (önceki çeyrekle).", "Projects, DDoS, topology, DC migration and work items run in the quarter, plus face-to-face and online meetings (vs. the previous quarter).",
+        "Gelir faydası, müşteri sayısı, utilizasyon ve ekip büyüklüğünü tek bakışta gösteren yönetici özeti.", "Executive snapshot of revenue benefit, customer count, utilization and team size.",
         "proje", _sayilar,
     ),
     "tanitim": Kaynak(

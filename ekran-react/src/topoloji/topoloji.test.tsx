@@ -54,6 +54,7 @@ describe("TopoMaker ekrani", () => {
       </QueryClientProvider>,
     )
     expect(screen.getByText("Envanter Yüklenmesi Bekleniyor")).toBeInTheDocument()
+    await screen.findByText("Test Müşteri")
     fireEvent.click(screen.getByRole("button", { name: /Analizi Başlat/ }))
     expect(screen.getByText(/Önce bir CSV veya XLSX/)).toBeInTheDocument()
     expect(fetchSahte.mock.calls.filter((c) => String(c[0]).includes("/topoloji/"))).toHaveLength(0)
@@ -83,6 +84,7 @@ describe("TopoMaker ekrani", () => {
         <TopoMaker dil="tr" musteriId={7} />
       </QueryClientProvider>,
     )
+    await screen.findByText("Test Müşteri")
     fireEvent.change(container.querySelector("input[type=file]") as HTMLInputElement, { target: { files: [new File(["x"], "a.xlsx")] } })
     fireEvent.click(screen.getByRole("button", { name: /Analizi Başlat/ }))
     expect(await screen.findByText("Lokasyon kolonu bulunamadı.")).toBeInTheDocument()

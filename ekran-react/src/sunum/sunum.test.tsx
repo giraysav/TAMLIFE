@@ -3,7 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { RollerSayfasi } from "@/shell/roller-sayfasi"
-import { SunumSayfasi } from "@/sunum/sunum-sayfasi"
+import { SunumSayfasi, sunumSayfalari } from "@/sunum/sunum-sayfasi"
+import type { Oge } from "@/sunum/sunum-tipleri"
 
 afterEach(() => {
   cleanup()
@@ -101,6 +102,15 @@ describe("Ceyrek Bazli Sunum sayfasi", () => {
     expect(screen.queryByRole("button", { name: "Approve presentation" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Full-screen presentation" })).toBeInTheDocument() // herkes sunabilir
   })
+
+  it("TAM Takvim ozet halkasi izin yerine online ve yuz yuze toplantilari gosterir", async () => {
+    sahteSunucu({ "/api/v1/sunum/donem": donem([oge("takvim", "TAM Takvim özeti", "TAM Calendar summary", { genel: { ...OZET, online: 4, yuzyuze: 3 }, uyeler: [] })]) })
+    sarmala(<SunumSayfasi dil="tr" />)
+    const kart = await screen.findByRole("region", { name: "TAM Takvim özeti" })
+    expect(within(kart).getByRole("img", { name: "Online toplantı: 4, Yüz yüze toplantı: 3" })).toBeInTheDocument()
+    expect(within(kart).getByText("Toplam toplantı")).toBeInTheDocument()
+    expect(within(kart).queryByText(/İzin ve tatil günü/)).not.toBeInTheDocument()
+  })
 })
 
 /** Kisa ozet duzeni icin yeni bicimli kaynaklar (sunucu: app/sunum/servis.py). */
@@ -125,11 +135,13 @@ const ONEDESK = oge("onedesk", "Onedesk özeti", "Onedesk summary", {
 const SAYILAR = oge("sayilar", "Sayılarla TAM Ekibi", "TAM Team in Numbers", {
   stil: "sayilar",
   kpi: [
-    kpi("Proje", "Projects", 23, { alt: "5 açıldı · 3 kapandı", alt_en: "5 opened · 3 closed", onceki: 20, kod: "proje" }),
-    kpi("Yüz yüze buluşma", "Face-to-face meetings", 112, { onceki: 88, kod: "yuz_yuze" }),
-    kpi("Online toplantı", "Online meetings", 900, { onceki: 924, kod: "online" }),
+    kpi("Aylık gelir faydası (TRY)", "Monthly revenue benefit (TRY)", 250000, { kod: "gelir" }),
+    kpi("Yıl içi gelir faydası (TRY)", "In-year revenue benefit (TRY)", 1800000, { kod: "yillik_gelir" }),
+    kpi("Fayda sağlanan iş", "Work delivering benefit", 12, { kod: "fayda" }),
+    kpi("Müşteri", "Customers", 48, { alt: "31 çatı · 17 iştirak", alt_en: "31 parent · 17 affiliates", kod: "musteri" }),
+    kpi("Ortalama utilizasyon", "Average utilization", 74.5, { kod: "utilizasyon" }),
+    kpi("TAM", "TAMs", 9, { kod: "tam" }),
   ],
-  tablo: { sutunlar: [sutun("TAM"), sutun("Proje", "Projects"), sutun("Toplam", "Total")], satirlar: [["Ayse Test", 23, 23]] },
 })
 const TANITIM = oge(
   "tanitim",
@@ -200,24 +212,13 @@ describe("Ceyrek Bazli Sunum: kisa ozet duzeni", () => {
     expect(screen.getByRole("button", { name: /Kaldır/ })).toBeInTheDocument()
   })
 
-  it("Sayilarla TAM Ekibi: yuvarlak sayaclar; onceki ceyrek degeri; fark oku yalniz gecmis ceyrekte", async () => {
+  it("Sayilarla TAM Ekibi: gelir, musteri, utilizasyon ve ekip buyuklugunu ozetler", async () => {
     sahteSunucu({ "/api/v1/sunum/donem": donem([SAYILAR], { ceyrek: 4 }) })
     sarmala(<SunumSayfasi dil="tr" />)
     expect(await screen.findByRole("heading", { name: "Sayılarla TAM Ekibi" })).toBeInTheDocument()
-    expect(screen.getByText("23")).toBeInTheDocument()
-    expect(screen.getByText("112")).toBeInTheDocument()
-    expect(screen.getByText("900")).toBeInTheDocument()
-    expect(screen.getByText("5 açıldı · 3 kapandı")).toBeInTheDocument()
-    expect(screen.getAllByText(/Ç3:/).length).toBe(3) // onceki ceyrek etiketi
-    expect(screen.queryByText(/▲|▼/)).not.toBeInTheDocument() // devam eden ceyrek tamamlanmis ceyrekle kiyaslanmaz
-    cleanup()
-
-    sahteSunucu({ "/api/v1/sunum/donem": donem([SAYILAR], { ceyrek: 1, zaman: "gecmis" }) })
-    sarmala(<SunumSayfasi dil="tr" />)
-    expect(await screen.findByText("▲ 3")).toBeInTheDocument() // 23 - 20
-    expect(screen.getByText("▲ 24")).toBeInTheDocument() // 112 - 88
-    expect(screen.getByText("▼ 24")).toBeInTheDocument() // 900 - 924
-    expect(screen.getAllByText(/Ç4 2025:/).length).toBe(3) // Ç1'in oncesi: onceki yilin Ç4'u
+    for (const deger of ["250.000", "1.800.000", "12", "48", "74,5", "9"]) expect(screen.getByText(deger)).toBeInTheDocument()
+    expect(screen.getByText("31 çatı · 17 iştirak")).toBeInTheDocument()
+    expect(screen.queryByText("Proje")).not.toBeInTheDocument()
   })
 
   it("TAM Life tanitimi: amac, kapsam, fayda, kac satir kod, hangi dil, kod ne yapiyor", async () => {
@@ -247,14 +248,14 @@ describe("Ceyrek Bazli Sunum: kisa ozet duzeni", () => {
     sahteSunucu({ "/api/v1/sunum/donem": donem([SAYILAR, TANITIM, ONEDESK]) })
     sarmala(<SunumSayfasi dil="en" />)
     expect(await screen.findByRole("heading", { name: "TAM Team in Numbers" })).toBeInTheDocument()
-    expect(screen.getByText("5 opened · 3 closed")).toBeInTheDocument()
+    expect(screen.getByText("31 parent · 17 affiliates")).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "The single-screen panel of the TAM team" })).toBeInTheDocument()
     expect(screen.getByText("Bring it into one screen.")).toBeInTheDocument()
     expect(screen.getByText("Server: API and business rules")).toBeInTheDocument()
     expect(screen.getByText("2 modules")).toBeInTheDocument()
     expect(screen.getByText("Current quarter · computed live")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Open all details" })).toBeInTheDocument()
-    expect(screen.getAllByText(/Q3:/).length).toBe(3)
+    expect(screen.getByText("Monthly revenue benefit (TRY)")).toBeInTheDocument()
   })
 })
 
@@ -354,18 +355,26 @@ describe("Ceyrek Bazli Sunum: icerik penceresi, surukle-birak, onay ve tam ekran
     await waitFor(() => expect(cagrilar.find((c) => c.yol.includes("/sunum/onay"))?.govde).toMatchObject({ onay: false }))
   })
 
-  it("tam ekran sunum alanlari tek tek slayt olarak gosterir", async () => {
+  it("tam ekran sunum kartlari ayni sayfaya sigdirir; ayrinti ve kaydirma acmaz", async () => {
     sahteSunucu({ "/api/v1/sunum/donem": IKI, "/api/v1/sunum/kaynaklar": TUMU })
     sarmala(<SunumSayfasi dil="tr" />)
     fireEvent.click(await screen.findByRole("button", { name: "Tam ekran sunum" }))
     const slayt = await screen.findByRole("dialog", { name: "Tam ekran sunum" })
-    expect(within(slayt).getByText("1 / 2")).toBeInTheDocument()
-    expect(within(slayt).getByRole("heading", { level: 2, name: "TAM Takvim özeti" })).toBeInTheDocument()
-    fireEvent.keyDown(slayt, { key: "ArrowRight" })
-    expect(within(slayt).getByText("2 / 2")).toBeInTheDocument()
-    expect(within(slayt).getByText("Delta Lojistik")).toBeInTheDocument() // slaytta ayrinti acik
+    expect(within(slayt).getByText("1 / 1")).toBeInTheDocument()
+    expect(within(slayt).getByRole("heading", { level: 3, name: "TAM Takvim özeti" })).toBeInTheDocument()
+    expect(within(slayt).getByRole("heading", { name: "Onedesk özeti" })).toBeInTheDocument()
+    expect(within(slayt).queryByText("Delta Lojistik")).not.toBeInTheDocument()
+    expect(within(slayt).queryByRole("table")).not.toBeInTheDocument()
+    expect(slayt.querySelector("main")).toHaveClass("overflow-hidden")
     fireEvent.keyDown(slayt, { key: "Escape" })
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Tam ekran sunum" })).toBeNull())
+  })
+
+  it("tam ekran sayfalari icerik agirligina gore dort kisa karti birlestirir", () => {
+    const kisa = [0, 1, 2, 3, 4].map((n) => oge(`k${n}`, `Kart ${n}`, `Card ${n}`, { kpi: [kpi("Değer", "Value", n)] }))
+    expect(sunumSayfalari(kisa as Oge[]).map((s) => s.length)).toEqual([4, 1])
+    expect(sunumSayfalari([SAYILAR as Oge, ...(kisa.slice(0, 2) as Oge[])]).map((s) => s.length)).toEqual([3])
+    expect(sunumSayfalari([TANITIM as Oge, ...(kisa.slice(0, 2) as Oge[])]).map((s) => s.length)).toEqual([1, 2])
   })
 
   it("veri senkronu: once karsilastirir (farkli alan ve degisen KPI), Senkronla ile yeniler", async () => {

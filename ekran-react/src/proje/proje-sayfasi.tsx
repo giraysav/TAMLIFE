@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { FileSpreadsheet, FolderKanban, Pencil, Printer, Trash2 } from "lucide-react"
 import { Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, SayfaKabi, Yukleniyor } from "@/components/sayfa-ui"
-import { zaman } from "@/lib/bicim"
+import { adaGoreSirala, zaman } from "@/lib/bicim"
 import { apiYolu } from "@/lib/http"
 import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
@@ -125,7 +125,7 @@ function YeniProje({ v, dil, kapat }: { v: Ekran; dil: Dil; kapat: () => void })
     >
       <div className="grid gap-2 sm:grid-cols-4">
         <select aria-label={t.sorumlu} className={GIRDI} value={f.owner_id} disabled={!v.yonetici} onChange={(e) => setF({ ...f, owner_id: Number(e.target.value) })}>
-          {v.tamlar.map((k) => (
+          {adaGoreSirala(v.tamlar, (k) => k.ad).map((k) => (
             <option key={k.id} value={k.id}>
               {k.ad}
             </option>
@@ -303,7 +303,7 @@ function MusteriCalismalari({ dil }: { dil: Dil }) {
       catiTam.set(m.id, m.istirak ? son : m.tam_id)
       if (!m.istirak && m.tam_id) tamlar.set(m.tam_id, m.tam)
     }
-    return { catiTam, tamlar: [...tamlar.entries()].sort((a, b) => a[1].localeCompare(b[1], "tr")) }
+    return { catiTam, tamlar: adaGoreSirala([...tamlar.entries()], (k) => k[1]) }
   }, [v])
   const aranan = ara.trim().toLocaleLowerCase("tr-TR")
   const gorunen = (v?.musteriler ?? []).filter((m) => (!tam || String(catiTam.get(m.id)) === tam) && (!aranan || m.ad.toLocaleLowerCase("tr-TR").includes(aranan)))

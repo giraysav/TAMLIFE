@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { FolderKanban, Gauge, Network, ShieldCheck, Truck, Users, Video, Wrench } from "lucide-react"
+import { BadgeDollarSign, BriefcaseBusiness, Gauge, TrendingUp, UserRoundCheck, Users } from "lucide-react"
 import { sayi } from "@/lib/bicim"
 import { yerel } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
@@ -7,12 +7,18 @@ import { sunumMetin } from "@/sunum/sunum-metin"
 import type { GenelVeri } from "@/sunum/sunum-tipleri"
 import { kpiAlt } from "@/sunum/sunum-kartlari"
 
-const IKON: Record<string, LucideIcon> = { proje: FolderKanban, ddos: ShieldCheck, topoloji: Network, dc_tasima: Truck, calisma: Wrench, yuz_yuze: Users, online: Video }
+const IKON: Record<string, LucideIcon> = {
+  gelir: BadgeDollarSign,
+  yillik_gelir: TrendingUp,
+  fayda: BriefcaseBusiness,
+  musteri: Users,
+  utilizasyon: Gauge,
+  tam: UserRoundCheck,
+}
 
 /**
- * Sayilarla TAM Ekibi: ust yonetim sunumundaki yuvarlak sayaclar (Proje, DDoS, Topoloji, DC tasima, Calisma, yuz yuze / online).
- * Altinda onceki ceyregin degeri; `farkli` (gecmis/tamamlanmis ceyrek) ise yukari/asagi fark da gosterilir. Devam eden ceyrek
- * tamamlanmis ceyrekle kiyaslanirsa yaniltici 'dusus' goruneceginden orada yalniz onceki deger yazilir.
+ * Sayilarla TAM Ekibi: gelir faydasi, musteri, utilizasyon ve ekip buyuklugunu tek bakista gosteren ust yonetim ozeti.
+ * Kaynak onceki donem degeri verirse tamamlanmis ceyrekte fark da gosterilir.
  */
 export function SayilarSeridi({ veri, dil, oncekiEtiket, farkli }: { veri: GenelVeri; dil: Dil; oncekiEtiket: string; farkli: boolean }) {
   const t = sunumMetin(dil)

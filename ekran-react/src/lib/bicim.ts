@@ -1,6 +1,12 @@
 /** Gosterim bicimleri. Sunucu ISO tarih/zaman verir; ekranda arayuz dilinin bicimi kullanilir (varsayilan tr-TR). */
 
 let yerel = "tr-TR"
+const AD_SIRALAYICI = new Intl.Collator("tr-TR", { sensitivity: "base", numeric: true })
+
+/** Kisi ve musteri adlarini Turkce alfabe duzeninde siralar; kaynak diziyi degistirmez. */
+export function adaGoreSirala<T>(liste: readonly T[], ad: (oge: T) => string): T[] {
+  return [...liste].sort((a, b) => AD_SIRALAYICI.compare(ad(a).trim(), ad(b).trim()))
+}
 
 /** Arayuz dili degisince App cagirir: sayi, para, tarih ve sure bicimleri dile uyar. */
 export function bicimDili(dil: "tr" | "en") {

@@ -3,6 +3,7 @@ import type { ComponentProps } from "react"
 import { Bildirim, GIRDI, Rozet } from "@/components/sayfa-ui"
 import type { AgacMusterisi, KaynakDurumu, KriterSonucu, SkorAgaci } from "@/yonetim/api"
 import type { YM } from "@/yonetim/metin"
+import { adaGoreSirala } from "@/lib/bicim"
 
 /** Utilizasyon alt bolumlerinin ortak parcalari. */
 
@@ -56,7 +57,7 @@ export function degerYaz(d: unknown): string {
 /** Agactaki tum cati musteriler (personel altindakiler + atanmamis), ada gore. */
 export function tumCatilar(agac: SkorAgaci): AgacMusterisi[] {
   const liste = [...agac.personel.flatMap((p) => p.musteriler), ...agac.atanmamis]
-  return liste.sort((a, b) => a.ad.localeCompare(b.ad, "tr"))
+  return adaGoreSirala(liste, (a) => a.ad)
 }
 
 /** Kaynak durumlari + hesap uyarilari (renk + metin). */

@@ -6,7 +6,7 @@ import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Panel, VeriTa
 import { ANAHTAR } from "@/yonetim/api"
 import type { AtamaSonucu, SkorAgaci, SkorMusterisi, SkorOnizleme } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
-import { zaman } from "@/lib/bicim"
+import { adaGoreSirala, zaman } from "@/lib/bicim"
 import { ym } from "@/yonetim/metin"
 import { AGAC_YOLU, KaynakListesi, KriterDokumu, TamamRozeti, skorYaz } from "@/yonetim/utilizasyon/ortak"
 
@@ -35,7 +35,7 @@ export function TopluAtama({ dil }: { dil: Dil }) {
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
   })
 
-  const personel = agac.data?.tum_personel ?? []
+  const personel = adaGoreSirala(agac.data?.tum_personel ?? [], (p) => p.ad)
   const veri = on.data
   const tamamlar = (veri?.musteriler ?? []).filter((m) => m.tamam).map((m) => m.id)
   const acik = veri?.musteriler.find((m) => m.id === dokum) ?? null

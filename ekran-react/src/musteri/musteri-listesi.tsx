@@ -4,7 +4,7 @@ import { Briefcase, Building2, ChevronLeft, ChevronRight, CircleAlert, MessageSq
 import { Cekmece } from "@/components/cekmece"
 import { BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, SayfaKabi } from "@/components/sayfa-ui"
 import { Skeleton } from "@/components/ui/skeleton"
-import { sayi } from "@/lib/bicim"
+import { adaGoreSirala, sayi } from "@/lib/bicim"
 import { oku, sorguMetni } from "@/lib/sorgu"
 import { MusteriEkleFormu } from "@/musteri/musteri-ekle-formu"
 import { MusteriKarti } from "@/musteri/portfoy-kart"
@@ -12,6 +12,8 @@ import type { PortfoyKart, Secenekler } from "@/musteri/portfoy-kart"
 import { portfoyMetin } from "@/musteri/portfoy-metin"
 import { useGecikmeli } from "@/lib/kanca"
 import type { Dil } from "@/shell/metin"
+import { hashParcala } from "@/shell/rota"
+import { useMusteriYolu } from "@/musteri/musteri-yolu"
 
 type Portfoy = {
   items: PortfoyKart[]
@@ -26,14 +28,25 @@ const SAYFA_ADEDI = 24
 /** Musteri Yonetimi portfoyu: cati musteri kartlari, KPI seridi, segment/TAM/arama filtreleri, sagdan acilan "Musteri ekle" formu. */
 export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = portfoyMetin(dil)
-  const [arama, setArama] = useState("")
-  const [segment, setSegment] = useState("")
-  const [tam, setTam] = useState("")
+  const yol = useMusteriYolu()
+  const ilkSorgu = hashParcala().sorgu
+  const [arama, setArama] = useState(() => ilkSorgu.get("q") ?? "")
+  const [segment, setSegment] = useState(() => ilkSorgu.get("segment") ?? "")
+  const [tam, setTam] = useState(() => ilkSorgu.get("tam") ?? "")
   const [sayfa, setSayfa] = useState(1)
   const [formAcik, setFormAcik] = useState(false)
   const q = useGecikmeli(arama.trim())
 
   useEffect(() => setSayfa(1), [q, segment, tam])
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (arama.trim()) params.set("q", arama.trim())
+    if (segment) params.set("segment", segment)
+    if (tam) params.set("tam", tam)
+    const sorguMetni = params.toString()
+    const hedef = `#/${yol}${sorguMetni ? `?${sorguMetni}` : ""}`
+    if (window.location.hash !== hedef) window.history.replaceState(window.history.state, "", hedef)
+  }, [arama, segment, tam, yol])
 
   const sorgu = { q, segment, tam, page: sayfa, per_page: SAYFA_ADEDI }
   const portfoy = useQuery({
@@ -44,6 +57,7 @@ export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolea
   const secenek = useQuery({ queryKey: ["musteri", "secenekler"], queryFn: () => oku<Secenekler>("/api/v1/musteri/secenekler") })
 
   const veri = portfoy.data
+  const tamSecenekleri = adaGoreSirala(secenek.data?.tam ?? [], (k) => k.ad)
   const filtreVar = Boolean(q || segment || tam)
   const ozet = veri?.ozet
 
@@ -74,12 +88,12 @@ export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolea
             <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <input type="search" value={arama} onChange={(e) => setArama(e.target.value)} placeholder={t.ara} maxLength={100} className={`${GIRDI} !py-2.5 pl-9`} />
           </label>
-          {secenek.data?.yonetici && secenek.data.tam.length > 1 ? (
+          {secenek.data?.yonetici && tamSecenekleri.length > 1 ? (
             <label className="grid gap-0.5">
               <span className="sr-only">{t.tam}</span>
               <select value={tam} onChange={(e) => setTam(e.target.value)} className={`${GIRDI} !w-auto min-w-44 !py-2.5`}>
                 <option value="">{t.tumTam}</option>
-                {secenek.data.tam.map((k) => (
+                {tamSecenekleri.map((k) => (
                   <option key={k.id} value={k.id}>
                     {k.ad}
                   </option>

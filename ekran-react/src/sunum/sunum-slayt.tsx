@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import type { sunumMetin } from "@/sunum/sunum-metin"
 
 /**
- * Tam ekran sunum: her alan bir slayt (sunum sirasiyla). Tarayicinin tam ekran kipine gecer (Fullscreen API; desteklenmezse sayfayi kaplar).
+ * Tam ekran sunum: birbiriyle uyumlu kisa kartlari ayni slayta sigdirir. Tarayicinin tam ekran kipine gecer (Fullscreen API; desteklenmezse sayfayi kaplar).
  * Klavye: sag ok / Page Down / bosluk sonraki, sol ok / Page Up onceki, Home / End ilk / son, Esc cikar.
  */
 export function SunumSlayt({ adet, ciz, adlar, baslik, t, onKapat }: { adet: number; ciz: (i: number) => ReactNode; adlar: string[]; baslik: string; t: ReturnType<typeof sunumMetin>; onKapat: () => void }) {
@@ -66,8 +66,8 @@ export function SunumSlayt({ adet, ciz, adlar, baslik, t, onKapat }: { adet: num
           </button>
         </div>
       </header>
-      <main className="flex min-h-0 flex-1 items-start justify-center overflow-auto px-6 pb-4">
-        <div className="w-full max-w-7xl" style={{ zoom: 1.2 }}>
+      <main className="flex min-h-0 flex-1 items-stretch justify-center overflow-hidden px-6 pb-4">
+        <div className="h-full w-full max-w-7xl overflow-hidden">
           {ciz(i)}
         </div>
       </main>

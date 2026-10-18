@@ -9,7 +9,7 @@ import type { Dil } from "@/shell/metin"
 import { sunumMetin } from "@/sunum/sunum-metin"
 import { takvimMi, tanitimMi } from "@/sunum/sunum-tipleri"
 import type { GenelVeri, Hucre, KpiVeri, Oge, TabloVeri, TakvimVeri } from "@/sunum/sunum-tipleri"
-import { TakvimGrafigi, durumSerileri } from "@/takvim/takvim-grafigi"
+import { TakvimGrafigi } from "@/takvim/takvim-grafigi"
 import type { TakvimMetin } from "@/takvim/takvim-metin"
 
 const hucre = (v: Hucre | undefined, birim: string) => (v === null || v === undefined ? "—" : typeof v === "number" ? (birim ? para(v, birim) : sayi(v)) : v)
@@ -183,20 +183,18 @@ export function GenelOzet({ veri, dil }: { veri: GenelVeri; dil: Dil }) {
   )
 }
 
-/** TAM Takvim'in kisa hali: izin/tatil halkasi + toplanti sayilari. Kisi bazinda grafik Ayrinti bolumunde. */
+/** TAM Takvim'in kisa hali: yalniz online / yuz yuze toplanti dagilimi. Kisi bazinda grafik Ayrinti bolumunde. */
 export function TakvimOzet({ veri, t }: { veri: TakvimVeri; t: TakvimMetin }) {
-  const seriler = durumSerileri(t).filter((s) => s.anahtar !== "calisiyor")
-  const izinToplam = seriler.reduce((a, s) => a + (veri.genel.durumlar[s.anahtar] ?? 0), 0)
+  const seriler = [
+    { anahtar: "online", ad: t.toplantiOnline, renk: "#2563eb" },
+    { anahtar: "yuzyuze", ad: t.toplantiYuzYuze, renk: "#f5c400" },
+  ]
+  const sayilar = { online: veri.genel.online, yuzyuze: veri.genel.yuzyuze }
+  const toplam = sayilar.online + sayilar.yuzyuze
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-      <Halka dilimler={seriler.map((s) => ({ anahtar: s.anahtar, ad: s.ad, deger: veri.genel.durumlar[s.anahtar] ?? 0, renk: s.renk }))} baslik={sayi(izinToplam)} alt={t.izinTatilGunu} boyut={128} kalinlik={16} />
-      <div className="grid min-w-[11rem] flex-1 gap-3">
-        <Lejant seriler={seriler.filter((s) => (veri.genel.durumlar[s.anahtar] ?? 0) > 0)} sayilar={veri.genel.durumlar} />
-        <div className="grid grid-cols-2 gap-2">
-          <Kpi kucuk sans etiket={t.toplantiOnline} deger={sayi(veri.genel.online)} />
-          <Kpi kucuk sans etiket={t.toplantiYuzYuze} deger={sayi(veri.genel.yuzyuze)} ton="sari" />
-        </div>
-      </div>
+    <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+      <Halka dilimler={seriler.map((s) => ({ ...s, deger: sayilar[s.anahtar as keyof typeof sayilar] }))} baslik={sayi(toplam)} alt={t.toplamToplanti} boyut={136} kalinlik={18} />
+      <Lejant seriler={seriler} sayilar={sayilar} />
     </div>
   )
 }
