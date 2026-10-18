@@ -20,7 +20,7 @@ def _parti(*satirlar) -> None:
 def test_veri_yoksa_bos_ve_aciklamali(client):
     login_ok(client)
     veri = client.get("/api/v1/radar").json()["data"]
-    assert veri == {"var": False, "taze": False, "veri_zamani": None, "satirlar": []}
+    assert veri == {"var": False, "taze": False, "veri_zamani": None, "kaynak": "", "satirlar": [], "toplam_musteri": 0, "toplam_kayit": 0, "sayfa": 1, "adet": 10}
 
 
 def test_panelde_olanlar_numara_ya_da_unvanla_dislanir_siralama_toplam(client):

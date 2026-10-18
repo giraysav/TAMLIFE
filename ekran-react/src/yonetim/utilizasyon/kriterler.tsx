@@ -7,9 +7,9 @@ import { ANAHTAR } from "@/yonetim/api"
 import type { AtamaSonucu, KaynakOnizleme, KaynakSecimi, Kriter, KriterTablosu, SkorMeta } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { zaman } from "@/lib/bicim"
-import { ym } from "@/yonetim/metin"
-import type { YM } from "@/yonetim/metin"
 import { OtoMetin, degerYaz } from "@/yonetim/utilizasyon/ortak"
+import { uym } from "@/yonetim/utilizasyon/metin"
+import type { UYM } from "@/yonetim/utilizasyon/metin"
 
 type Kapsam = "parent" | "affiliate"
 const BAREM = ["b30", "b50", "b70", "b100"] as const
@@ -46,7 +46,7 @@ function kopya(k: Kriter): Kriter {
 
 /** Kriter tablolari (cati / istirak): barem hucreleri = kural, X sabit puan, agirlik, kriter basina veri kaynagi secimi. */
 export function Kriterler({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = uym(dil)
   const u = t.util
   const qc = useQueryClient()
   const [kapsam, setKapsam] = useState<Kapsam>("parent")
@@ -311,7 +311,7 @@ export function Kriterler({ dil }: { dil: Dil }) {
 }
 
 /** Servis Cesitliligi: sayilacak servisler (isaretsiz = hepsi). */
-function ServisSecimi({ tablo, dahil, t, onDegis }: { tablo: Record<string, number>; dahil: string[] | undefined; t: YM; onDegis: (dahil: string[] | undefined) => void }) {
+function ServisSecimi({ tablo, dahil, t, onDegis }: { tablo: Record<string, number>; dahil: string[] | undefined; t: UYM; onDegis: (dahil: string[] | undefined) => void }) {
   const adlar = Object.keys(tablo)
   const secili = new Set((dahil ?? adlar).map(normal))
   return (
@@ -352,7 +352,7 @@ function KaynakFormu({
   kriter: Kriter
   tur: string
   meta: SkorMeta
-  t: YM
+  t: UYM
   onUygula: (s: KaynakSecimi | undefined) => void
   onKapat: () => void
 }) {

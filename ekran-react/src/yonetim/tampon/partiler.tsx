@@ -5,15 +5,15 @@ import { Alan, Bolum, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/
 import { ANAHTAR } from "@/yonetim/api"
 import { oku, sorguMetni } from "@/lib/sorgu"
 import type { Parti, Sayfali } from "@/yonetim/api"
-import { ym } from "@/yonetim/metin"
 import { Sayfalama } from "@/yonetim/ui"
 import { zaman, sayi } from "@/lib/bicim"
+import { tm } from "@/yonetim/tampon/metin"
 
 const ADET = 10
 export const PARTI_TON = { receiving: "amber", ready: "yesil", failed: "kirmizi", rejected: "amber" } as const
 
 export function Partiler({ dil, seciliId, onSec }: { dil: Dil; seciliId: number | null; onSec: (id: number) => void }) {
-  const t = ym(dil)
+  const t = tm(dil)
   const [durum, setDurum] = useState("")
   const [sayfa, setSayfa] = useState(1)
   const sorgu = { durum, sayfa, adet: ADET }

@@ -7,7 +7,6 @@ import { sorguAyarla, useHashSorgu } from "@/shell/rota"
 import { ANAHTAR } from "@/yonetim/api"
 import type { SkorTalebi } from "@/yonetim/api"
 import { oku } from "@/lib/sorgu"
-import { ym } from "@/yonetim/metin"
 import { SkorAgaciBolumu } from "@/yonetim/utilizasyon/agac"
 import { TopluAtama } from "@/yonetim/utilizasyon/atama"
 import { Kriterler } from "@/yonetim/utilizasyon/kriterler"
@@ -15,13 +14,14 @@ import { MusteriListesi } from "@/yonetim/utilizasyon/musteri-listesi"
 import { UtilOzet } from "@/yonetim/utilizasyon/ozet"
 import { Talepler } from "@/yonetim/utilizasyon/talepler"
 import { UrunTutar } from "@/yonetim/utilizasyon/urun-tutar"
+import { uym } from "@/yonetim/utilizasyon/metin"
 
 const SEKMELER = ["ozet", "kriterler", "atama", "agac", "talepler", "veri", "musteriler"] as const
 type Sekme = (typeof SEKMELER)[number]
 
 /** TAM Utilizasyon (uretim Final Skoru Atama + Veri Yonlendirici kriter/agac ekranlari). Secili alt sekme adreste: #/yonetim/utilizasyon?sekme=kriterler. */
 export default function Utilizasyon({ dil }: { dil: Dil }) {
-  const u = ym(dil).util
+  const u = uym(dil).util
   const sorgu = useHashSorgu()
   const ham = sorgu.get("sekme") ?? ""
   const sekme: Sekme = (SEKMELER as readonly string[]).includes(ham) ? (ham as Sekme) : "ozet"

@@ -47,8 +47,13 @@ def gorunen_musteriler(db: Session, user: Principal) -> set[int] | None:
     return set(db.scalars(select(Customer.id).where(or_(Customer.owner_id == uid, Customer.parent_id.in_(benim)))))
 
 
+RADAR_KAYNAGI = "temip"  # karti olmayan TEMIP kaydi TAM Radar'indir (radar.servis); Onedesk sayilarina girmez
+
+
 def _kapsam_kosulu(idler: set[int] | None):
-    return None if idler is None else OnedeskRecord.customer_id.in_(idler or {-1})
+    if idler is not None:
+        return OnedeskRecord.customer_id.in_(idler or {-1})
+    return or_(OnedeskRecord.customer_id.is_not(None), OnedeskRecord.source != RADAR_KAYNAGI)
 
 
 def _musteri_adi():

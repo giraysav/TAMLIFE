@@ -5,13 +5,13 @@ import { YatayCubuklar } from "@/components/grafik"
 import { ANAHTAR } from "@/yonetim/api"
 import type { DagilimSatiri, SiralamaSatiri, SkorAgaci } from "@/yonetim/api"
 import { oku } from "@/lib/sorgu"
-import { ym } from "@/yonetim/metin"
 import { Gosterge } from "@/yonetim/ui"
 import { AGAC_YOLU, KaynakListesi, skorYaz, tumCatilar } from "@/yonetim/utilizasyon/ortak"
+import { uym } from "@/yonetim/utilizasyon/metin"
 
 /** Ozet: gostergeler, TAM Utilizasyon siralamasi, personel agirlik ve dagilim, veri kaynaklari. Hicbir sey yazmaz. */
 export function UtilOzet({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = uym(dil)
   const u = t.util
   const agac = useQuery({ queryKey: ANAHTAR.skorAgac, queryFn: () => oku<SkorAgaci>(AGAC_YOLU) })
   const siralama = useQuery({ queryKey: ANAHTAR.skorSiralama, queryFn: () => oku<SiralamaSatiri[]>("/api/v1/skor/siralama") })

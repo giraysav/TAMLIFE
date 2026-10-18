@@ -9,7 +9,13 @@ import Durum from "@/yonetim/bolumler/durum"
 import Kurum from "@/yonetim/bolumler/kurum"
 import Veritabani from "@/yonetim/bolumler/veritabani"
 import { ym } from "@/yonetim/metin"
+import { VeriAkislariPaneli } from "@/yonetim/tampon/akislar"
+import { GenelCsvYukle } from "@/yonetim/tampon/csv-yukle"
+import { Dagitim } from "@/yonetim/tampon/dagitim"
 import { Kaynaklar } from "@/yonetim/tampon/kaynaklar"
+import { tm } from "@/yonetim/tampon/metin"
+import { HamMusteriBolumu } from "@/yonetim/tampon/musteri-ham"
+import { TemipEslesmesi } from "@/yonetim/tampon/temip"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
 import { Rehber } from "@/yonetim/tampon/rehber"
 import { bayt, sureYaz, zaman } from "@/lib/bicim"
@@ -218,9 +224,9 @@ describe("Kural formu", () => {
     expect(within(islem).getAllByRole("option").map((o) => o.textContent)).toEqual(["Seçin…", "En sık değer"])
     expect(secim(t.kuralKaynak)).toBeInTheDocument()
     // her alanin altinda sade dilde kisa ipucu var
-    expect(screen.getByText(t.kuralIpuclari.anahtarSutunu)).toBeInTheDocument()
-    expect(screen.getByText(t.kuralIpuclari.hedef)).toBeInTheDocument()
-    expect(screen.getByText(t.kuralIpuclari.enBuyukYas)).toBeInTheDocument()
+    expect(screen.getByText(tm("tr").kuralIpuclari.anahtarSutunu)).toBeInTheDocument()
+    expect(screen.getByText(tm("tr").kuralIpuclari.hedef)).toBeInTheDocument()
+    expect(screen.getByText(tm("tr").kuralIpuclari.enBuyukYas)).toBeInTheDocument()
   })
 
   it("koşul ekleme (en fazla 5), degersiz isleçte deger alani yok, kaydet govdeyi dogru uretir", () => {
@@ -280,7 +286,6 @@ describe("Veri Girisi kaynaklari", () => {
 
 describe("Ham Musteri Verisi", () => {
   it("son partiyi onizler, satirlari gosterir ve onayla kartlara yazar", async () => {
-    const t = ym("tr")
     vi.stubGlobal("confirm", () => true)
     const kaynak = { neden: "", eksik: [], parti_sayisi: 1, hazir: true, yapilandirma: "tamam", tur: "dosya" }
     const cagrilar = sahteSunucu({
@@ -299,13 +304,13 @@ describe("Ham Musteri Verisi", () => {
       "/musteri-ham/aktarimlar": [],
       "/api/v1/tampon/kaynaklar": [{ ...kaynak, anahtar: "musteri_ham", ad: "Ham Müşteri Verisi", son: { id: 7, durum: "ready", satir: 2, zaman: null, hata: "" } }],
     })
-    sarmala(<Kaynaklar dil="tr" onYeniParti={() => {}} />)
-    fireEvent.click(await screen.findByRole("button", { name: t.ham.onizle }))
-    expect(await screen.findByText(t.ham.bicim.liste)).toBeTruthy()
+    sarmala(<HamMusteriBolumu dil="tr" onYeniParti={() => {}} />)
+    fireEvent.click(await screen.findByRole("button", { name: tm("tr").ham.onizle }))
+    expect(await screen.findByText(tm("tr").ham.bicim.liste)).toBeTruthy()
     expect(screen.getByText("TAC E-posta: geçerli bir e-posta adresi olmalı")).toBeTruthy()
-    expect(screen.getByRole("link", { name: t.ham.bosSablon })).toHaveAttribute("href", "/api/v1/tampon/musteri-ham/sablon.xlsx")
-    fireEvent.click(screen.getByRole("button", { name: t.ham.uygula(1) }))
-    expect(await screen.findByText(t.ham.uygulandi(1, 0))).toBeTruthy()
+    expect(screen.getByRole("link", { name: tm("tr").ham.bosSablon })).toHaveAttribute("href", "/api/v1/tampon/musteri-ham/sablon.xlsx")
+    fireEvent.click(screen.getByRole("button", { name: tm("tr").ham.uygula(1) }))
+    expect(await screen.findByText(tm("tr").ham.uygulandi(1, 0))).toBeTruthy()
     expect(cagrilar).toContain("POST /api/v1/tampon/musteri-ham/uygula")
   })
 })
@@ -416,15 +421,103 @@ describe("Kurum Baglantilari", () => {
 
 describe("Veri Girisi rehberi", () => {
   it("Nasil calisir: akis, kaynaklar, kural alanlari (formdaki ipucuyla ayni metin), ornekler ve geri al", () => {
-    const t = ym("tr")
+    window.localStorage.setItem("mkBolum:yonetim-tampon-rehber", "1") // varsayilan kapali (tembel): acik hatirlanmis gibi
     render(<Rehber dil="tr" />)
-    expect(screen.getByText(t.rehber.baslik)).toBeInTheDocument()
+    expect(screen.getByText(tm("tr").rehber.baslik)).toBeInTheDocument()
     expect(screen.getByText(/Tampon \(parti\)/)).toBeInTheDocument()
-    for (const b of [t.rehber.kaynaklarBaslik, t.rehber.alanlarBaslik, t.rehber.ornekBaslik, t.rehber.uygulaBaslik]) expect(screen.getByText(b)).toBeInTheDocument()
-    expect(screen.getByText(t.kuralIpuclari.eslesmeAlani)).toBeInTheDocument()
-    expect(screen.getByText(t.rehber.ornekler[0][0])).toBeInTheDocument()
+    for (const b of [tm("tr").rehber.kaynaklarBaslik, tm("tr").rehber.alanlarBaslik, tm("tr").rehber.ornekBaslik, tm("tr").rehber.uygulaBaslik]) expect(screen.getByText(b)).toBeInTheDocument()
+    expect(screen.getByText(tm("tr").kuralIpuclari.eslesmeAlani)).toBeInTheDocument()
+    expect(screen.getByText(tm("tr").rehber.ornekler[0][0])).toBeInTheDocument()
     cleanup()
     render(<Rehber dil="en" />)
     expect(screen.getByText("How does it work?")).toBeInTheDocument()
+  })
+})
+
+describe("Veri Girisi optimizasyonu", () => {
+  const a = tm("tr")
+  const akis = { yontem: "dosya", yer: "yonetim/tampon", son: null, aciklama: "" }
+
+  it("veri akislari: bayat uyarisi, durum rozetleri, baska ekrana baglanti", async () => {
+    sahteSunucu({
+      "/api/v1/tampon/akislar": {
+        akislar: [
+          { ...akis, anahtar: "oracle_reportdb", ad: "ReportDB alarm özeti", yontem: "işçi (6 dk)", son: "2026-10-06T15:25:16Z", durum: "bayat" },
+          { ...akis, anahtar: "onedesk", ad: "Onedesk kayıt aktarımı", yer: "onedesk", son: "2026-10-14T16:07:46Z", durum: "bilgi" },
+          { ...akis, anahtar: "temip", ad: "TEMIP alarm kayıtları", durum: "taze", son: "2026-10-18T07:00:00Z", acik: 5, kapali: 2, radar: 3 },
+        ],
+        dagitim: { kural: 0, etkin: 0, son_uygulama: null },
+        uyarilar: ["ReportDB alarm özeti: veri bayat"],
+        zaman: "2026-10-18T07:00:00Z",
+      },
+    })
+    sarmala(<VeriAkislariPaneli dil="tr" />)
+    expect(await screen.findByText(/1 akışta veri bayat/)).toBeTruthy()
+    expect(screen.getByText(a.akislar.durumAdi.bayat)).toBeTruthy()
+    expect(screen.getByText(/5 açık · 2 kapalı · 3 Radar'da/)).toBeTruthy()
+    const baglantilar = screen.getAllByRole("link", { name: a.akislar.git })
+    expect(baglantilar.map((x) => x.getAttribute("href"))).toEqual(["#/onedesk"]) // ayni ekrandaki akisa baglanti yok
+  })
+
+  it("dagitim ve TEMIP tembel: kapaliyken istek gitmez, kural onerisi dagitimi acar", async () => {
+    const cagrilar = sahteSunucu({ "/api/v1/tampon/kurallar": [], "/api/v1/tampon/hedefler": { hedefler: [], islemler: [], eslesme_alanlari: {} }, "/api/v1/tampon/uygulamalar": [] })
+    const ozellik = { dil: "tr" as const, parti: null, kaynakAnahtarlari: [], kural: 0, etkin: 0 }
+    const { rerender } = sarmala(
+      <>
+        <Dagitim {...ozellik} oneri={null} />
+        <TemipEslesmesi dil="tr" />
+      </>,
+    )
+    expect(screen.getByText(a.kuralRozeti(0, 0))).toBeTruthy()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(cagrilar).toEqual([])
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <Dagitim {...ozellik} oneri={{ kolon: "Müşteri No", alan: "customer_no", sayac: 1 }} />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(cagrilar.some((c) => c.includes("/api/v1/tampon/kurallar"))).toBe(true))
+    expect(cagrilar.some((c) => c.includes("/temip/eslesme"))).toBe(false)
+  })
+
+  it("TEMIP eslesmesi: sema hazir degilse komut setini, hazirsa ozet ve personeli gosterir", async () => {
+    window.localStorage.setItem("mkBolum:yonetim-tampon-temip", "1")
+    sahteSunucu({ "/api/v1/tampon/temip/eslesme": { hazir: false, neden: "0013_onedesk_temip uygulanmadı." } })
+    sarmala(<TemipEslesmesi dil="tr" />)
+    expect(await screen.findByText(/temip_kayit_ice_al\.ps1/)).toBeTruthy()
+    cleanup()
+    const ozet = { musteri: 0, acik: 0, kapali: 0 }
+    sahteSunucu({
+      "/api/v1/tampon/temip/eslesme": {
+        hazir: true,
+        ozet: { kart: { musteri: 1, acik: 2, kapali: 1 }, kart_personelsiz: ozet, radar: { musteri: 1, acik: 1, kapali: 0 }, belirsiz: ozet },
+        personel: [{ personel: "Ornek Tam", personel_kullanici: "ornek_tam", tam: true, kart: 1, musteri_no: 1, acik: 2, acik_ticketli: 1, kapali: 1 }],
+        uyari: { belirsiz_numara: [], personelsiz_kart: [], bicimsiz_kart_no: ["UZUN-NO"], kayitsiz_numarali_kart: 4 },
+        bagli_olmayan: 0,
+        toplam: 1,
+        sayfa: 1,
+        adet: 50,
+        musteriler: [{ musteri_no: "10000001", temip_unvan: "ORNEK A.S.", durum: "kart", kart_id: 3, panel_unvan: "ORNEK-A", cati: "", personel: "Ornek Tam",
+          personel_kullanici: "ornek_tam", acik: 2, acik_ticketli: 1, kapali: 1, toplam: 3, aday_kartlar: "" }],
+      },
+    })
+    sarmala(<TemipEslesmesi dil="tr" />)
+    expect(await screen.findByRole("link", { name: "ORNEK-A" })).toHaveAttribute("href", "#/musteri?m=3")
+    expect(screen.getAllByText("Ornek Tam").length).toBeGreaterThan(0)
+    expect(screen.getByText(/8 haneden uzun Müşteri No yazılı \(hiç eşleşmez\): UZUN-NO/)).toBeTruthy()
+  })
+
+  it("genel CSV: kaynak adi ve dosyayla tampona yukler", async () => {
+    const cagrilar = sahteSunucu({ "/api/v1/tampon/yukle": { id: 9, kaynak: "csv_alarm", satir: 3, durum: "ready" } })
+    const secilen: number[] = []
+    sarmala(<GenelCsvYukle dil="tr" onYeniParti={(id) => secilen.push(id)} />)
+    fireEvent.click(screen.getByRole("button", { name: a.csv.yukle }))
+    expect(await screen.findByText(a.csv.eksik)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(a.csv.kaynakAdi, { exact: false }), { target: { value: "alarm" } })
+    fireEvent.change(screen.getByLabelText(a.csv.dosya), { target: { files: [new File(["No;Adet\n1;2\n"], "a.csv", { type: "text/csv" })] } })
+    fireEvent.click(screen.getByRole("button", { name: a.csv.yukle }))
+    expect(await screen.findByText(a.csv.yuklendi(9, 3))).toBeTruthy()
+    expect(cagrilar).toContain("PUT /api/v1/tampon/yukle?kaynak=alarm&dosya=a.csv")
+    expect(secilen).toEqual([9])
   })
 })

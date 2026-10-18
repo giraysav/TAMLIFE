@@ -1,13 +1,15 @@
 import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Download, Eye, FileSpreadsheet, Undo2, Upload } from "lucide-react"
-import { Alan, Bildirim, DUGME, DUGME_ANA, DUGME_SARI, GIRDI, Rozet, VeriTablosu } from "@/components/sayfa-ui"
+import type { Dil } from "@/shell/metin"
+import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, DUGME_SARI, GIRDI, Rozet, VeriTablosu } from "@/components/sayfa-ui"
 import { apiYolu } from "@/lib/http"
 import { hataMesaji, oku, sorguMetni, yaz, yukle } from "@/lib/sorgu"
 import { zaman } from "@/lib/bicim"
 import { ANAHTAR } from "@/yonetim/api"
-import type { HamAktarim, HamGeriAl, HamOnizleme, HamSatir, HamUyum, Parti } from "@/yonetim/api"
-import type { YM } from "@/yonetim/metin"
+import type { HamAktarim, HamGeriAl, HamOnizleme, HamSatir, HamUyum, Kaynak, Parti } from "@/yonetim/api"
+import { tm } from "@/yonetim/tampon/metin"
+import type { TM } from "@/yonetim/tampon/metin"
 
 const TABAN = "/api/v1/tampon/musteri-ham"
 type Yuklenen = Parti & { uyum: HamUyum }
@@ -15,7 +17,7 @@ type Bilgi = { ton: "yesil" | "amber"; metin: string }
 const DURUM_TON = { guncelle: "sari", yeni: "yesil", hata: "kirmizi", degisiklik_yok: "gri" } as const
 
 /** Dosyanin katalogla eslesmesi: bicim, eslesen alan sayisi, eslesen / taninmayan sutunlar. */
-function UyumKarti({ u, t }: { u: HamUyum; t: YM }) {
+function UyumKarti({ u, t }: { u: HamUyum; t: TM }) {
   const h = t.ham
   return (
     <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
@@ -68,8 +70,20 @@ function Degisiklikler({ s }: { s: HamSatir }) {
   )
 }
 
-/** Kaynaklar'daki dosya yuklemesi: Ham Musteri Verisi -> tanima -> onizleme -> onayli kartlara yazma -> gecmis / geri alma. */
-export function HamMusteriVerisi({ t, sonParti, onYeniParti }: { t: YM; sonParti: { id: number; durum: string } | null; onYeniParti: (p: Parti) => void }) {
+/** Veri Girisi'nin fiilen kullanilan hatti kendi blogunda: son parti Kaynaklar sorgusundan (ayni onbellek). */
+export function HamMusteriBolumu({ dil, onYeniParti }: { dil: Dil; onYeniParti: (p: Parti) => void }) {
+  const t = tm(dil)
+  const kaynaklar = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
+  const ham = kaynaklar.data?.find((k) => k.anahtar === "musteri_ham")
+  return (
+    <Bolum anahtar="yonetim-tampon-ham" baslik={t.ham.baslik}>
+      <HamMusteriVerisi t={t} sonParti={ham?.son ?? null} onYeniParti={onYeniParti} />
+    </Bolum>
+  )
+}
+
+/** Ham Musteri Verisi -> tanima -> onizleme -> onayli kartlara yazma -> gecmis / geri alma. */
+export function HamMusteriVerisi({ t, sonParti, onYeniParti }: { t: TM; sonParti: { id: number; durum: string } | null; onYeniParti: (p: Parti) => void }) {
   const h = t.ham
   const qc = useQueryClient()
   const girdi = useRef<HTMLInputElement>(null)
@@ -82,7 +96,7 @@ export function HamMusteriVerisi({ t, sonParti, onYeniParti }: { t: YM; sonParti
   const gecmis = useQuery({ queryKey: ANAHTAR.hamAktarimlar, queryFn: () => oku<HamAktarim[]>(`${TABAN}/aktarimlar`) })
 
   const yenile = () => {
-    for (const k of [ANAHTAR.kaynaklar, ANAHTAR.partiler, ANAHTAR.ozet, ANAHTAR.hamAktarimlar]) void qc.invalidateQueries({ queryKey: k })
+    for (const k of [ANAHTAR.kaynaklar, ANAHTAR.partiler, ANAHTAR.ozet, ANAHTAR.hamAktarimlar, ANAHTAR.akislar]) void qc.invalidateQueries({ queryKey: k })
     void qc.invalidateQueries({ queryKey: ["musteri"] })
   }
   const hata = (e: unknown) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) })
@@ -139,15 +153,12 @@ export function HamMusteriVerisi({ t, sonParti, onYeniParti }: { t: YM; sonParti
 
   const o = onizleme
   return (
-    <div className="grid gap-3 rounded-xl border border-tl-blue/20 p-4">
+    <div className="grid gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="grid gap-1">
-          <span className="flex items-center gap-2 text-sm font-black text-tl-navy">
-            <FileSpreadsheet aria-hidden className="size-4" />
-            {h.baslik}
-          </span>
-          <p className="max-w-3xl text-[0.6875rem] font-bold text-slate-500">{h.aciklama}</p>
-        </div>
+        <p className="flex max-w-3xl gap-2 text-[0.6875rem] font-bold text-slate-500">
+          <FileSpreadsheet aria-hidden className="size-4 shrink-0 text-tl-navy" />
+          {h.aciklama}
+        </p>
         <span className="flex flex-wrap gap-2">
           <a className={DUGME} href={apiYolu(`${TABAN}/sablon.xlsx`)} download>
             <Download aria-hidden className="size-3.5" />

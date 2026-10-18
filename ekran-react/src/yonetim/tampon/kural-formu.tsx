@@ -4,7 +4,7 @@ import { Plus, X } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Alan, Bildirim, DUGME, DUGME_ANA, GIRDI } from "@/components/sayfa-ui"
 import type { Katalog, Kosul, KuralGovdesi } from "@/yonetim/api"
-import { ym } from "@/yonetim/metin"
+import { tm } from "@/yonetim/tampon/metin"
 
 export const BOS_KURAL: KuralGovdesi = {
   name: "",
@@ -47,7 +47,7 @@ type Props = {
 
 /** Dagitim kurali formu. Hedef katalogu SABITTIR (serbest hedef yok); islem hedef tipine gore suzulur; kural kapali baslar. */
 export function KuralFormu({ dil, katalog, baslangic, duzenleme, kaynakAnahtarlari, sutunlar, hata, kaydediliyor, onKaydet, onVazgec }: Props) {
-  const t = ym(dil)
+  const t = tm(dil)
   const ip = t.kuralIpuclari
   const [f, setF] = useState<KuralGovdesi>(baslangic)
   const set = <K extends keyof KuralGovdesi>(alan: K, deger: KuralGovdesi[K]) => setF((o) => ({ ...o, [alan]: deger }))

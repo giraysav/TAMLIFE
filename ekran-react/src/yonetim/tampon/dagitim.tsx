@@ -6,7 +6,7 @@ import { Bildirim, Bolum, DUGME, DUGME_ANA, HataKutu, Rozet, VeriTablosu, Yuklen
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Katalog, Kural, KuralGovdesi, Onizleme, PartiAyrintisi, Uygulama } from "@/yonetim/api"
-import { ym } from "@/yonetim/metin"
+import { tm } from "@/yonetim/tampon/metin"
 import { Gosterge } from "@/yonetim/ui"
 import { zaman, sayi } from "@/lib/bicim"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
@@ -29,9 +29,23 @@ function govdeye(k: Kural): KuralGovdesi {
   }
 }
 
-/** 3. adim: kurallar (sabit hedef katalogu), onizle -> uygula (onayli) -> geri al. Yazan her adim denetim kaydi uretir. */
-export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; parti: PartiAyrintisi | null; oneri: KuralOnerisi | null; kaynakAnahtarlari: string[] }) {
-  const t = ym(dil)
+type DagitimOzellik = { dil: Dil; parti: PartiAyrintisi | null; oneri: KuralOnerisi | null; kaynakAnahtarlari: string[] }
+
+/** 3. adim: kurallar (sabit hedef katalogu), onizle -> uygula (onayli) -> geri al. Yazan her adim denetim kaydi uretir.
+ *  Tembel blok: kapaliyken kural / katalog / gecmis istenmez (kullanilmayan dagitim acilisi yavaslatmaz). Analiz'den kural onerisi
+ *  gelince blok acilir. kural / etkin: baslik rozeti (Veri akislari ozetinden). */
+export function Dagitim({ kural, etkin, ...oz }: DagitimOzellik & { kural?: number; etkin?: number }) {
+  const t = tm(oz.dil)
+  const rozet = kural === undefined ? null : <Rozet ton={etkin ? "yesil" : "gri"}>{tm(oz.dil).kuralRozeti(kural, etkin ?? 0)}</Rozet>
+  return (
+    <Bolum anahtar="yonetim-tampon-dagitim" baslik={`${t.adim.dagitim} · ${t.dagitimKurallari}`} varsayilanAcik={false} tembel ac={oz.oneri?.sayac} sag={rozet}>
+      <DagitimIcerigi {...oz} />
+    </Bolum>
+  )
+}
+
+function DagitimIcerigi({ dil, parti, oneri, kaynakAnahtarlari }: DagitimOzellik) {
+  const t = tm(dil)
   const qc = useQueryClient()
   const kurallar = useQuery({ queryKey: ANAHTAR.kurallar, queryFn: () => oku<Kural[]>("/api/v1/tampon/kurallar") })
   const katalog = useQuery({ queryKey: ANAHTAR.hedefler, queryFn: () => oku<Katalog>("/api/v1/tampon/hedefler"), staleTime: Infinity })
@@ -138,7 +152,6 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
   }
 
   return (
-    <Bolum anahtar="yonetim-tampon-dagitim" baslik={`${t.adim.dagitim} · ${t.dagitimKurallari}`}>
       <div className="grid gap-4">
         <p className="text-[0.6875rem] font-bold text-slate-400">{t.adimAciklama.dagitim}</p>
         <div>
@@ -325,6 +338,5 @@ export function Dagitim({ dil, parti, oneri, kaynakAnahtarlari }: { dil: Dil; pa
           )}
         </div>
       </div>
-    </Bolum>
   )
 }

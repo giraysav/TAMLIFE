@@ -8,7 +8,7 @@ import { ANAHTAR } from "@/yonetim/api"
 import type { MusteriEkleSonucu, MusteriListesi as MusteriListesiVeri, MusteriSatiri, MusteriSilSonucu } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { adaGoreSirala } from "@/lib/bicim"
-import { ym } from "@/yonetim/metin"
+import { uym } from "@/yonetim/utilizasyon/metin"
 
 const DUGME_TEHLIKE =
   "inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-300 bg-white px-3 py-2 text-xs font-bold text-rose-600 shadow-sm transition-colors hover:bg-rose-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50"
@@ -50,7 +50,7 @@ const SIL_ONAYI = (yazi: string) => yazi.trim().toLocaleUpperCase("tr-TR").repla
  * "Tumunu sil" icin ayrica SIL yazilmasi gerekir.
  */
 export function MusteriListesi({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = uym(dil)
   const m = t.util.musteriler
   const qc = useQueryClient()
   const sorgu = useQuery({ queryKey: ANAHTAR.musteriListesi, queryFn: () => oku<MusteriListesiVeri>("/api/v1/yonetim/musteriler") })
@@ -348,7 +348,7 @@ export function MusteriListesi({ dil }: { dil: Dil }) {
 }
 
 function Satir({ s, secili, onSec, dil }: { s: MusteriSatiri; secili: boolean; onSec: (acik: boolean) => void; dil: Dil }) {
-  const m = ym(dil).util.musteriler
+  const m = uym(dil).util.musteriler
   const cati = s.parent_id === null
   return (
     <tr className={secili ? "bg-tl-yellow/15" : "hover:bg-slate-50"}>

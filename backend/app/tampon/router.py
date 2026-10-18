@@ -20,10 +20,11 @@ from app.dil import m
 from app.models import IngestBatch
 from app.ortak import KimlikTipi, UygulamaHatasi, govde_oku, iso, ok, sayfa_bilgisi
 from app.session import Principal
-from app.tampon import analiz, dagitim, depo, kaynak, musteri_aktar, musteri_ham, oracle
+from app.tampon import akislar, analiz, dagitim, depo, kaynak, musteri_aktar, musteri_ham, oracle
 
-router = APIRouter(prefix="/api/v1/tampon", tags=["tampon"], dependencies=[Depends(require_admin)])  # Yonetim alani: yeni uc eklense de admin disi giremez
-
+router = APIRouter(
+    prefix="/api/v1/tampon", tags=["tampon"], dependencies=[Depends(require_admin)]
+)  # Yonetim alani: yeni uc eklense de admin disi giremez
 
 
 def _denetim(admin: Principal, islem: str, detay: str = "") -> None:
@@ -112,6 +113,56 @@ def hedefler(admin: Principal = Depends(require_admin)) -> dict[str, Any]:
     return ok(dagitim.katalog())
 
 
+@router.get("/akislar")
+def veri_akislari(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Panele veri getiren tum yollar: son gelis, durum (taze / bayat / hata / yok), yonetildigi ekran."""
+    return ok(akislar.akislar(db))
+
+
+TEMIP_DURUMLARI = ("kart", "kart_personelsiz", "radar", "belirsiz")
+TEMIP_SAYFA = 50
+
+
+@router.get("/temip/eslesme")
+def temip_eslesme(
+    durum: str = Query(default="", max_length=20),
+    q: str = Query(default="", max_length=100),
+    sayfa: int = Query(default=1, ge=1, le=100_000),
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """TEMIP kayitlari: Musteri No -> kart -> sorumlu personel -> acik kayit (Oracle'siz; isci `temip-eslesme` ile ayni rapor)."""
+    if not akislar.temip_semasi_hazir(db):
+        return ok({"hazir": False, "neden": "0013_onedesk_temip uygulanmadı."})
+    from app.tampon import temip_kayit  # gec import: oracle zinciri yalniz bu uc acilinca yuklenir
+
+    r = temip_kayit.eslesme_raporu(db)
+    musteriler = r["musteriler"]
+    if durum in TEMIP_DURUMLARI:
+        musteriler = [x for x in musteriler if x["durum"] == durum]
+    if q.strip():
+        aranan = q.strip().casefold()
+        musteriler = [
+            x
+            for x in musteriler
+            if aranan in x["musteri_no"] or aranan in f"{x['temip_unvan']} {x['panel_unvan']} {x['personel']}".casefold()
+        ]
+    sayfa, atla, adet = sayfa_bilgisi(sayfa, TEMIP_SAYFA, len(musteriler))
+    return ok(
+        {
+            "hazir": True,
+            "ozet": r["ozet"],
+            "personel": r["personel"],
+            "uyari": r["uyari"],
+            "bagli_olmayan": r["bagli_olmayan"],
+            "toplam": len(musteriler),
+            "sayfa": sayfa,
+            "adet": adet,
+            "musteriler": musteriler[atla : atla + adet],
+        }
+    )
+
+
 # --- 1. Tampon: parti yukleme ve okuma ------------------------------------------------------------------------------
 def _yukle(veri: bytes, kaynak_adi: str, dosya: str, kullanici: str) -> dict[str, Any]:
     """Kendi oturumunda calisir (threadpool): her blok kisa islemle yazilir."""
@@ -186,7 +237,11 @@ def ham_uygula(govde: HamUygulaGovde, admin: Principal = Depends(require_admin),
     sonuc = musteri_aktar.uygula(db, govde.parti_id, govde.yeni_olustur, govde.plan_ozeti, admin.username)
     db.commit()
     o = sonuc["ozet"]
-    _denetim(admin, "tampon.musteri_ham_uygula", f"parti={govde.parti_id} kayit={sonuc['kayit_id']} guncellenen={o['guncellenen']} olusturulan={o['olusturulan']}")
+    _denetim(
+        admin,
+        "tampon.musteri_ham_uygula",
+        f"parti={govde.parti_id} kayit={sonuc['kayit_id']} guncellenen={o['guncellenen']} olusturulan={o['olusturulan']}",
+    )
     return ok(sonuc)
 
 
@@ -211,7 +266,9 @@ async def yukle(
     admin: Principal = Depends(require_admin),
 ) -> dict[str, Any]:
     """Genel CSV yuklemesi (API; arayuzde yerini Ham Musteri Verisi aldi). Cok parcali form yok: yeni bagimlilik gerektirmez."""
-    sonuc = await run_in_threadpool(_yukle, await govde_oku(request, get_settings().ingest_max_mb * 1048576), kaynak_adi, dosya, admin.username)
+    sonuc = await run_in_threadpool(
+        _yukle, await govde_oku(request, get_settings().ingest_max_mb * 1048576), kaynak_adi, dosya, admin.username
+    )
     _denetim(admin, "tampon.yukle", f"parti={sonuc['id']} kaynak={sonuc['kaynak']} satir={sonuc['satir']} durum={sonuc['durum']}")
     return ok(sonuc)
 

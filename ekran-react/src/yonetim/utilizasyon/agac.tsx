@@ -6,13 +6,13 @@ import { Bildirim, Bos, DUGME_ANA, HataKutu, Panel, Rozet, Yukleniyor } from "@/
 import { ANAHTAR } from "@/yonetim/api"
 import type { AgacMusterisi, SkorAgaci } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
-import { ym } from "@/yonetim/metin"
-import type { YM } from "@/yonetim/metin"
 import { AGAC_YOLU, KriterDokumu, TamamRozeti, skorYaz } from "@/yonetim/utilizasyon/ortak"
+import { uym } from "@/yonetim/utilizasyon/metin"
+import type { UYM } from "@/yonetim/utilizasyon/metin"
 
 /** Skor agaci (uretim Skorlari Dagit): personel -> cati -> istirak; iştirak "finale dahil" secimi ve puanlamaya girecek personel. */
 export function SkorAgaciBolumu({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = uym(dil)
   const u = t.util
   const qc = useQueryClient()
   const agac = useQuery({ queryKey: ANAHTAR.skorAgac, queryFn: () => oku<SkorAgaci>(AGAC_YOLU) })
@@ -77,7 +77,7 @@ export function SkorAgaciBolumu({ dil }: { dil: Dil }) {
   )
 }
 
-function MusteriDugumu({ m, t, kilitli, onDahil }: { m: AgacMusterisi; t: YM; kilitli: boolean; onDahil: (id: number, evet: boolean) => void }) {
+function MusteriDugumu({ m, t, kilitli, onDahil }: { m: AgacMusterisi; t: UYM; kilitli: boolean; onDahil: (id: number, evet: boolean) => void }) {
   const u = t.util
   const [acik, setAcik] = useState(false)
   return (
@@ -127,7 +127,7 @@ function MusteriDugumu({ m, t, kilitli, onDahil }: { m: AgacMusterisi; t: YM; ki
 }
 
 /** Puanlamaya girmeyen personel (uretim Final Skoru Atama > Personel filtresi). Liste tamamen degisir. */
-function PuanlamaPersoneli({ agac, t, onKaydedildi }: { agac: SkorAgaci; t: YM; onKaydedildi: () => void }) {
+function PuanlamaPersoneli({ agac, t, onKaydedildi }: { agac: SkorAgaci; t: UYM; onKaydedildi: () => void }) {
   const u = t.util
   const sunucu = new Set(agac.tum_personel.filter((p) => p.dahil).map((p) => p.id))
   const [dahil, setDahil] = useState<Set<number>>(sunucu)

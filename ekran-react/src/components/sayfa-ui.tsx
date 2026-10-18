@@ -38,14 +38,45 @@ function acikMi(anahtar: string, varsayilan: boolean): boolean {
 }
 
 /** Katlanir bolum (yerel <details>: klavye ve ekran okuyucu hazir). Acik/kapali durumu tarayicida hatirlanir. */
-export function Bolum({ anahtar, baslik, children, ek = "", varsayilanAcik = true }: { anahtar: string; baslik: string; children: ReactNode; ek?: string; varsayilanAcik?: boolean }) {
+/** Katlanir bolum (acik/kapali tarayicida hatirlanir). tembel: kapaliyken icerik (ve icindeki sorgular) kurulmaz; bir kez acilinca kalir.
+ *  ac: degeri degisince (0/undefined haric) bolum acilir: baska bir bloktan "buraya git" icin. */
+export function Bolum({
+  anahtar,
+  baslik,
+  children,
+  ek = "",
+  varsayilanAcik = true,
+  tembel = false,
+  ac,
+  sag,
+}: {
+  anahtar: string
+  baslik: string
+  children: ReactNode
+  ek?: string
+  varsayilanAcik?: boolean
+  tembel?: boolean
+  ac?: number
+  sag?: ReactNode
+}) {
   const [acik, setAcik] = useState(() => acikMi(anahtar, varsayilanAcik))
+  const [kuruldu, setKuruldu] = useState(acik)
+  const [sonAc, setSonAc] = useState(ac)
+  if (ac !== sonAc) {
+    setSonAc(ac)
+    if (ac) {
+      setAcik(true)
+      setKuruldu(true)
+    }
+  }
   return (
     <details
       open={acik}
       onToggle={(e) => {
         const yeni = e.currentTarget.open
+        if (yeni === acik) return
         setAcik(yeni)
+        if (yeni) setKuruldu(true)
         try {
           window.localStorage.setItem(ANAHTAR + anahtar, yeni ? "1" : "0")
         } catch {
@@ -57,9 +88,10 @@ export function Bolum({ anahtar, baslik, children, ek = "", varsayilanAcik = tru
       <summary className={`${BASLIK_BANDI} cursor-pointer select-none list-none transition-[filter] hover:brightness-110 [details:not([open])_&]:border-b-transparent [&::-webkit-details-marker]:hidden`}>
         <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-tl-yellow" />
         <h3 className={`flex-1 ${BASLIK_YAZISI}`}>{baslik}</h3>
+        {sag}
         <ChevronDown aria-hidden className="size-4 shrink-0 text-tl-yellow transition-transform duration-200 group-open:rotate-180" />
       </summary>
-      <div className="p-4">{children}</div>
+      <div className="p-4">{!tembel || kuruldu ? children : null}</div>
     </details>
   )
 }

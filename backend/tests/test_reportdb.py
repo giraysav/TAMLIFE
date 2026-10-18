@@ -21,7 +21,7 @@ from app.db import engine
 from app.models import Customer, IngestBatch, OnedeskRecord
 from app.onedesk import ice_al
 from app.ortak import simdi
-from app.tampon import dagitim, depo, oracle, reportdb
+from app.tampon import dagitim, depo, oracle, reportdb, temip_kayit
 from app.tampon.models import DistributionLog, DistributionRule
 from app.yonetim.models import FaultEvent
 from tests.conftest import login_ok
@@ -294,28 +294,6 @@ def test_sorgu_yalniz_tek_select_ve_kurumsal_kapsamli():
     assert "EVENTTIME < TRUNC(SYSDATE) + 1" in reportdb.SORGU.split("FROM TEMIP.VIEW_REPORT_ACTIVE")[1]  # kapanan taraf ust sinirli
 
 
-def test_kayit_sorgulari_gecerli_ve_yalniz_8_haneli_numara():
-    kapanan = oracle.sorgu_temizle(reportdb.kayit_sorgusu(False, ["10000001", "00000012"]))
-    acik_ = oracle.sorgu_temizle(reportdb.kayit_sorgusu(True, ["10000001"]))
-    for parca in ("TEMIP.VIEW_REPORT_ACTIVE", "EVENTTIME < TRUNC(SYSDATE) + 1", "IN ('10000001', '00000012')",
-                  "ROW_NUMBER() OVER (PARTITION BY INFORMATION1", "RN <= 500", "IN ('NOC DESTECH')"):  # fmt: skip
-        assert parca in kapanan
-    assert "CLOSEDBY" not in kapanan  # kisisel veri alinmaz
-    assert "ORIGINALEVENTTIME" in acik_ and "VIEW_REPORT" not in acik_
-    for kotu in ([], ["1' OR '1'='1"], ["1234567"], ["123456789"], ["abcdefgh"]):
-        with pytest.raises(reportdb.ReportdbHata):
-            reportdb.kayit_sorgusu(False, kotu)
-
-
-def test_kayit_basliklari_onedesk_sutunlariyla_eslesir():
-    basliklar = ["Müşteri No", "Müşteri Adı", "Kayıt Türü", "Durum", *[b for _, _, b in reportdb._kolonlar(False)]]
-    s = ice_al.sutunlari_bul(basliklar)
-    for alan, beklenen in (("no", "Çağrı No"), ("musteri", "Müşteri Adı"), ("musteri_no", "Müşteri No"), ("tur", "Kayıt Türü"),
-                           ("durum", "Durum"), ("lokasyon", "CI Adı"), ("kategori", "Kategori"), ("acilis", "Açılış Tarihi"),
-                           ("kapanis", "Kapanış Tarihi")):  # fmt: skip
-        assert basliklar[s[alan]] == beklenen, alan
-
-
 # --- ReportDB: tampon -----------------------------------------------------------------------------------------------
 def test_tampona_yaz_tekillestirir(client):
     pid, durum = doldur(satir("10000001", "ORNEK-A", 3, 100), satir("10000001", "ORNEK-A TEKRAR", 9, 9),
@@ -437,71 +415,6 @@ def test_birden_cok_numara_sayilar_toplanir(client):
     assert (sayilar(a), sayilar(b), sayilar(c)) == ((12, 120), (1, 2), (0, 0))
 
 
-# --- ReportDB: alarm kayit listeleri -> Onedesk ---------------------------------------------------------------------
-def _sahte_kayitlar(monkeypatch, kapanan, acik_):
-    cagrilar = []
-
-    def sahte(acik_mi, numaralar):
-        cagrilar.append((acik_mi, list(numaralar)))
-        if acik_mi:
-            return ["Çağrı No", "CI Adı", "Açılış Tarihi"], acik_
-        return ["Çağrı No", "CI Adı", "Açılış Tarihi", "Kapanış Tarihi"], kapanan
-
-    monkeypatch.setattr(reportdb, "_kayitlari_cek", sahte)
-    return cagrilar
-
-
-def _kayitlari_yenile():
-    with Session(engine()) as db:
-        parti, ozet = reportdb.kayit_partisi(db)
-        if ozet["musteri"]:
-            ozet.update(ice_al.kaynak_yenile(db, parti.id if parti else None, reportdb.ONEDESK_KAYNAGI, "alarm"))
-            db.commit()
-        return ozet
-
-
-def test_kayitlar_onedeske_numarayla_yazilir_her_turda_yenilenir(client, monkeypatch):
-    a = kart("ORNEK-A", "10000001", 3, 30)
-    b = kart("ORNEK-B", "00000012")  # bastaki sifir: Oracle'daki 8 haneli deger aranir
-    kart("ORNEK-C")  # numarasiz: dokunulmaz
-    kapanan = {"10000001": {"toplam": 9, "satirlar": [["T1", "ci-1", "2026-09-01 10:00:00", "2026-10-01 10:00:00"],
-                                                      ["T2", "ci-2", "2026-09-02 10:00:00", "2026-10-02 10:00:00"]]}}  # fmt: skip
-    acik_ = {"10000001": {"toplam": 4, "satirlar": [["T3", "ci-1", "2026-10-05 08:00:00"]]}}
-    cagrilar = _sahte_kayitlar(monkeypatch, kapanan, acik_)
-    ozet = _kayitlari_yenile()
-    assert [c[1] for c in cagrilar] == [["00000012", "10000001"]] * 2  # kapanan + acik, sirali
-    assert (ozet["musteri"], ozet["kapanan_satir"], ozet["acik_satir"], ozet["eklenen"], ozet["silinen"]) == (2, 2, 1, 3, 0)
-    with Session(engine()) as db:
-        kayitlar = {r.external_key: r for r in db.scalars(select(OnedeskRecord))}
-    assert {k: (r.customer_id, r.status, r.source, r.kind) for k, r in kayitlar.items()} == {
-        "T1": (a, "closed", "reportdb", "alarm"), "T2": (a, "closed", "reportdb", "alarm"), "T3": (a, "open", "reportdb", "alarm")}
-    assert kayitlar["T3"].location == "ci-1" and kayitlar["T1"].closed_at.month == 10
-    assert sayilar(a) == (3, 30) and sayilar(b) == (0, 0)  # sayaclar kayitlardan hesaplanmaz (ozet dagitimi yazar)
-    _sahte_kayitlar(monkeypatch, kapanan, {})  # sonraki tur: acik alarm bitti -> eski liste kalmaz
-    assert _kayitlari_yenile()["silinen"] == 3
-    with Session(engine()) as db:
-        assert {r.external_key for r in db.scalars(select(OnedeskRecord))} == {"T1", "T2"}
-    _sahte_kayitlar(monkeypatch, {}, {})  # hic kayit yok: liste bosaltilir
-    assert _kayitlari_yenile()["silinen"] == 2
-
-
-def test_numarali_kart_yoksa_sorgu_yapilmaz(client, monkeypatch):
-    kart("ORNEK-C")
-    cagrilar = _sahte_kayitlar(monkeypatch, {}, {})
-    assert _kayitlari_yenile()["musteri"] == 0 and cagrilar == []
-
-
-def test_kayitlar_kartin_tum_numaralarindan_birlesir_en_yeni_once(client, monkeypatch):
-    kart("MLP", "11111111, 22222222")
-    kapanan = {"11111111": {"toplam": 2, "satirlar": [["T1", "c", "", "2026-09-01 10:00:00"], ["T3", "c", "", "2026-09-03 10:00:00"]]},
-               "22222222": {"toplam": 1, "satirlar": [["T2", "c", "", "2026-09-02 10:00:00"]]}}  # fmt: skip
-    _sahte_kayitlar(monkeypatch, kapanan, {})
-    with Session(engine()) as db:
-        parti, _ = reportdb.kayit_partisi(db)
-        rows = list(depo.satirlari_oku(db, parti.id))
-    assert [(r[0], r[4]) for r in rows] == [("11111111", "T3"), ("22222222", "T2"), ("11111111", "T1")]
-
-
 def test_onedesk_aktarimi_once_numarayla_belirsizse_unvanla(client):
     a = kart("ORNEK-UNVAN-FARKLI", "10000001")
     kart("ORNEK-IKIZ-1", "20000002")
@@ -528,19 +441,42 @@ def test_isci_kapaliyken_hicbir_sey_yapmaz(client, sahte, kapali):
     assert sahte.baglantilar == [] and _partiler() == []
 
 
-def test_isci_senkron_tamponu_yazar_kartlara_yalniz_kural_aciksa(client, acik, monkeypatch):
+def _sahte_temip(monkeypatch):
+    """temip_kayit.calistir yerine: cagrilan kipleri toplar, ozet doner (TEMIP kayit akisi test_temip_kayit.py'de)."""
+    cagrilar = []
+
+    def sahte(db, kip="artimli", gun=30):
+        cagrilar.append(kip)
+        return {"kip": kip, "eklenen": 1, "guncellenen": 0, "acik_satir": 1, "dusen_acik": 0, "kapanan_sorgu": 0, "yeniden_baglanan": 0, "etkilenen_kart": 1}
+
+    monkeypatch.setattr(temip_kayit, "calistir", sahte)
+    monkeypatch.setattr(temip_kayit, "otomatik_kip", lambda db: "artimli")
+    return cagrilar
+
+
+def test_isci_senkron_tamponu_yazar_kartlara_yalniz_kural_aciksa_kayitlar_her_turda(client, acik, monkeypatch):
     c = kart("A", "11111111", 7, 70)
     monkeypatch.setattr(reportdb, "cek", lambda: (BASLIK, [satir("11111111", "A", 5, 50)]))
-    cagrilar = _sahte_kayitlar(monkeypatch, {}, {"11111111": {"toplam": 1, "satirlar": [["T9", "ci-9", "2026-10-05 08:00:00"]]}})
+    cagrilar = _sahte_temip(monkeypatch)
     assert isci.main(["reportdb"]) == 0
-    assert _partiler() == [("oracle_reportdb", "ready", "")] and sayilar(c) == (7, 70) and cagrilar == []  # kapali: ek sorgu yok
+    assert _partiler() == [("oracle_reportdb", "ready", "")] and sayilar(c) == (7, 70)  # kurallar kapali: sayilar yazilmaz
+    assert cagrilar == ["artimli"]  # alarm kayitlari 'Kartlara yaz'dan bagimsiz (2026-10-17)
     kurallari_ac()
     assert isci.main(["reportdb"]) == 0
-    assert sayilar(c) == (5, 50) and len(cagrilar) == 2
-    with Session(engine()) as db:
-        assert [r.external_key for r in db.scalars(select(OnedeskRecord))] == ["T9"]
+    assert sayilar(c) == (5, 50) and cagrilar == ["artimli", "artimli"]
     gunluk = (Path(os.environ["TAMLIFE_LOG_DIR"]) / "isci.log").read_text(encoding="utf-8")
-    assert "reportdb OK" in gunluk and "kartlara yazildi" in gunluk and "alarm kayitlari: 1 kart" in gunluk
+    assert "reportdb OK" in gunluk and "kartlara yazildi" in gunluk and "alarm kayitlari (artimli): +1 yeni" in gunluk
+
+
+def test_isci_temip_kayit_komutu_kapaliyken_baglanmaz_aciksa_kipi_calistirir(client, sahte, kapali, monkeypatch):
+    cagrilar = _sahte_temip(monkeypatch)
+    assert isci.main(["temip-kayit", "--kip", "tam"]) == 1 and cagrilar == [] and sahte.baglantilar == []
+    monkeypatch.setenv("ORACLE_REPORTDB_ENABLED", "true")
+    for ad, deger in GIZLI.items():
+        monkeypatch.setenv(f"ORACLE_REPORTDB_{ad}", deger)
+    assert isci.main(["temip-kayit", "--kip", "tam"]) == 0 and cagrilar == ["tam"]
+    gunluk = (Path(os.environ["TAMLIFE_LOG_DIR"]) / "isci.log").read_text(encoding="utf-8")
+    assert "temip-kayit OK" in gunluk
 
 
 def test_isci_kuru_calisma_yazmaz(client, acik, monkeypatch, capsys):

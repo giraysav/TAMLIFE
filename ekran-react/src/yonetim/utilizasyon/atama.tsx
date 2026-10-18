@@ -7,12 +7,12 @@ import { ANAHTAR } from "@/yonetim/api"
 import type { AtamaSonucu, SkorAgaci, SkorMusterisi, SkorOnizleme } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { adaGoreSirala, zaman } from "@/lib/bicim"
-import { ym } from "@/yonetim/metin"
 import { AGAC_YOLU, KaynakListesi, KriterDokumu, TamamRozeti, skorYaz } from "@/yonetim/utilizasyon/ortak"
+import { uym } from "@/yonetim/utilizasyon/metin"
 
 /** Toplu atama (uretim skor_toplu onizleme / uygula): sunucu yeniden hesaplar, onizleme yazmaz; uygula yalniz TAMAM olanlara yazar. */
 export function TopluAtama({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = uym(dil)
   const u = t.util
   const qc = useQueryClient()
   const [tamId, setTamId] = useState("")

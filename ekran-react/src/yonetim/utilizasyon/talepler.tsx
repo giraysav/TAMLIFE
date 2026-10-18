@@ -7,12 +7,12 @@ import { ANAHTAR } from "@/yonetim/api"
 import type { SkorTalebi } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { zaman } from "@/lib/bicim"
-import { ym } from "@/yonetim/metin"
 import { skorYaz } from "@/yonetim/utilizasyon/ortak"
+import { uym } from "@/yonetim/utilizasyon/metin"
 
 /** Bekleyen final skor talepleri: onayla / reddet (skor atanirsa talep zaten kendiliginden onaylanir). */
 export function Talepler({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = uym(dil)
   const u = t.util
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ANAHTAR.skorTalepler, queryFn: () => oku<{ count: number; requests: SkorTalebi[] }>("/api/v1/skor/talepler") })

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { KriterTablosu, SiralamaSatiri, SkorAgaci, SkorMeta, SkorOnizleme } from "@/yonetim/api"
-import { ym } from "@/yonetim/metin"
+import { uym } from "@/yonetim/utilizasyon/metin"
 import YonetimSayfasi from "@/yonetim/yonetim-sayfasi"
 import { TopluAtama } from "@/yonetim/utilizasyon/atama"
 import { Kriterler, normal, turCoz, xHucresi } from "@/yonetim/utilizasyon/kriterler"
@@ -76,7 +76,7 @@ describe("TAM Utilizasyon", () => {
   })
 
   it("kriter tablosu: X yazilinca diger hucreler kilitlenir; kaydet tum satirlari sunucuya gonderir", async () => {
-    const u = ym("tr").util
+    const u = uym("tr").util
     const cagrilar = sahteSunucu({ "/api/v1/skor/kriterler/parent": TABLO, "/api/v1/skor/meta": META })
     sarmala(<Kriterler dil="tr" />)
     const b70 = await screen.findByLabelText("6. Sözleşme 70")
@@ -101,7 +101,7 @@ describe("TAM Utilizasyon", () => {
   })
 
   it("ozet: siralama, personel agirlik tablosu ve veri kaynaklari cizilir", async () => {
-    const u = ym("tr").util
+    const u = uym("tr").util
     const agac: SkorAgaci = {
       kaynaklar: [
         { ad: "Panel (kart + aylık rapor)", metrikler: ["sikayet_talep"], hazir: true, neden: "" },
@@ -133,7 +133,7 @@ describe("TAM Utilizasyon", () => {
   it("Yonetim sekmeleri: TAM Utilizasyon, Genel Durum ile Veri Girisi arasinda", () => {
     sahteSunucu({})
     sarmala(<YonetimSayfasi dil="tr" bolum="durum" digerleri={[]} />)
-    const t = ym("tr")
+    const t = uym("tr")
     const nav = screen.getByRole("navigation", { name: t.bolumNav })
     const yollar = Array.from(nav.querySelectorAll("a")).map((a) => a.getAttribute("href"))
     expect(yollar).toEqual([
@@ -147,7 +147,7 @@ describe("TAM Utilizasyon", () => {
       "#/yonetim/gunlukler",
     ])
     expect(t.bolumler.utilizasyon).toBe("TAM Utilizasyon")
-    expect(ym("en").util.sekme.atama).toBe("Bulk assignment")
+    expect(uym("en").util.sekme.atama).toBe("Bulk assignment")
   })
 
   it("kriter metin hucreleri yazdikca uzayan cok satirli alan (textarea); Enter yeni satir acmaz", async () => {
@@ -157,11 +157,11 @@ describe("TAM Utilizasyon", () => {
     expect(b30.tagName).toBe("TEXTAREA")
     fireEvent.change(b30, { target: { value: "1-\n49.999" } })
     expect(b30).toHaveValue("1- 49.999")
-    expect(screen.getAllByLabelText(ym("tr").util.metrik)[0].tagName).toBe("TEXTAREA")
+    expect(screen.getAllByLabelText(uym("tr").util.metrik)[0].tagName).toBe("TEXTAREA")
   })
 
   it("toplu atama: satir kutusu tiklaninca secilir / birakilir (eksik kriterli musteri de); uygula secilenleri gonderir", async () => {
-    const u = ym("tr").util
+    const u = uym("tr").util
     const musteri = (id: number, ad: string, tamam: boolean) => ({
       id, ad, tam: "ORNEK TAM", tam_id: 2, mevcut: null, yeni: 40, fark: null, tamam, eksik: tamam ? [] : ["6. Sözleşme"], kriterler: [], son_atama: null,
     })

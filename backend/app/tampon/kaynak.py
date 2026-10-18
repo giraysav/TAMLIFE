@@ -30,6 +30,8 @@ _SLUG = re.compile(r"[^a-z0-9]+")
 
 
 _ASCII = str.maketrans("ıİşŞğĞüÜöÖçÇ", "iIsSgGuUoOcC")
+
+
 def _parti_adi(anahtar: str) -> str:
     """Oracle kaynakli parti adi (istegin dilinde)."""
     if anahtar == reportdb.KAYIT_KAYNAGI:
@@ -117,7 +119,15 @@ def _oracle_durum(db: Session) -> list[dict[str, Any]]:
 def durumlar(db: Session) -> list[dict[str, Any]]:
     """Kaynak listesi + her kaynagin son partisi ve parti sayisi."""
     liste: list[dict[str, Any]] = [
-        {"anahtar": KAYNAK, "ad": m("Ham Müşteri Verisi", "Raw Customer Data"), "tur": "dosya", "hazir": True, "neden": "", "yapilandirma": "tamam", "eksik": []},
+        {
+            "anahtar": KAYNAK,
+            "ad": m("Ham Müşteri Verisi", "Raw Customer Data"),
+            "tur": "dosya",
+            "hazir": True,
+            "neden": "",
+            "yapilandirma": "tamam",
+            "eksik": [],
+        },
     ]
     liste.extend(_oracle_durum(db))
     anahtarlar = db.scalars(select(IngestBatch.source_key).distinct()).all()
@@ -135,11 +145,19 @@ def durumlar(db: Session) -> list[dict[str, Any]]:
                     "eksik": [],
                 }
             )
+    # Kaynak basina sayi + son parti: iki sorgu (kaynak sayisindan bagimsiz)
+    sayim = {
+        k: (n, son_id)
+        for k, n, son_id in db.execute(
+            select(IngestBatch.source_key, func.count(), func.max(IngestBatch.id))
+            .where(IngestBatch.source_key.in_([x["anahtar"] for x in liste]))
+            .group_by(IngestBatch.source_key)
+        )
+    }
+    sonlar = {p.id: p for p in db.scalars(select(IngestBatch).where(IngestBatch.id.in_([s for _, s in sayim.values()])))} if sayim else {}
     for kaynak in liste:
-        son = db.scalars(
-            select(IngestBatch).where(IngestBatch.source_key == kaynak["anahtar"]).order_by(IngestBatch.id.desc()).limit(1)
-        ).first()
-        sayi = db.scalar(select(func.count()).select_from(IngestBatch).where(IngestBatch.source_key == kaynak["anahtar"])) or 0
+        sayi, son_id = sayim.get(kaynak["anahtar"], (0, None))
+        son = sonlar.get(son_id) if son_id else None
         kaynak["parti_sayisi"] = sayi
         kaynak["son"] = (
             None

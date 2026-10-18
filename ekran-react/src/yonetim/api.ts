@@ -90,6 +90,54 @@ export type Kaynak = {
   reportdb?: { kartlara_yaz: boolean; kural: number; yas_dk: number | null; taze: boolean; tazelik_dk: number }
 }
 export type BaglantiTesti = { ok: boolean; mesaj: string; ipucu: string }
+/** Veri akislari (GET /tampon/akislar): panele veri getiren tum yollar. bilgi = elle gelen dosya (tazelik beklentisi yok). */
+export type AkisDurumu = "taze" | "bayat" | "hata" | "yok" | "bilgi"
+export type VeriAkisi = {
+  anahtar: string
+  ad: string
+  yontem: string
+  yer: string
+  son: string | null
+  durum: AkisDurumu
+  aciklama: string
+  parti?: number | null
+  acik?: number
+  kapali?: number
+  radar?: number
+  sema?: boolean
+}
+export type VeriAkislari = { akislar: VeriAkisi[]; dagitim: { kural: number; etkin: number; son_uygulama: string | null }; uyarilar: string[]; zaman: string }
+/** TEMIP eslesmesi (GET /tampon/temip/eslesme): Musteri No -> kart -> sorumlu personel -> acik kayit. */
+export type TemipDurumu = "kart" | "kart_personelsiz" | "radar" | "belirsiz"
+export type TemipMusterisi = {
+  musteri_no: string
+  temip_unvan: string
+  durum: TemipDurumu
+  kart_id: number | ""
+  panel_unvan: string
+  cati: string
+  personel: string
+  personel_kullanici: string
+  acik: number
+  acik_ticketli: number
+  kapali: number
+  toplam: number
+  aday_kartlar: string
+}
+export type TemipPersoneli = { personel: string; personel_kullanici: string; tam: boolean; kart: number; musteri_no: number; acik: number; acik_ticketli: number; kapali: number }
+export type TemipEslesme =
+  | { hazir: false; neden: string }
+  | {
+      hazir: true
+      ozet: Record<TemipDurumu, { musteri: number; acik: number; kapali: number }>
+      personel: TemipPersoneli[]
+      uyari: { belirsiz_numara: string[]; personelsiz_kart: string[]; bicimsiz_kart_no: string[]; kayitsiz_numarali_kart: number }
+      bagli_olmayan: number
+      toplam: number
+      sayfa: number
+      adet: number
+      musteriler: TemipMusterisi[]
+    }
 /** Ham Musteri Verisi: dosyanin katalogla karsilastirmasi. bicim: sablon | liste (takma adlar) | genis (cati/istirak). */
 export type HamUyum = {
   toplam: number
@@ -372,6 +420,8 @@ export const ANAHTAR = {
   kurallar: ["tampon", "kurallar"] as const,
   uygulamalar: ["tampon", "uygulamalar"] as const,
   hamAktarimlar: ["tampon", "musteri-ham", "aktarimlar"] as const,
+  akislar: ["tampon", "akislar"] as const,
+  temipEslesme: ["tampon", "temip", "eslesme"] as const,
 }
 
 /** {a: "x", b: ""} -> "?a=x" (bos degerler atilir). */

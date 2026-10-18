@@ -307,6 +307,8 @@ class OnedeskRecord(Base):
         Index("ix_onedesk_closed_at", "closed_at"),
         Index("ix_onedesk_opened_at", "opened_at"),
         Index("ix_onedesk_customer", "customer_id"),
+        Index("ix_onedesk_source_key", "source", "external_key"),  # TEMIP artimli yazimi: (source, IDENTIFIER) ile bulunur
+        Index("ix_onedesk_source_mno", "source", "customer_no"),  # TAM Radar: kartsiz kayitlar Musteri No'ya gore
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     kind: Mapped[str] = mapped_column(String(40), default="")
@@ -320,7 +322,10 @@ class OnedeskRecord(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     root_cause: Mapped[str] = mapped_column(Text, default="")  # RCA: kok sebep
     resolution: Mapped[str] = mapped_column(Text, default="")
-    source: Mapped[str] = mapped_column(String(20), default="import")  # import | ornek
+    source: Mapped[str] = mapped_column(String(20), default="import")  # import | temip (ReportDB TEMIP alarmi; external_key = IDENTIFIER)
+    ticket_no: Mapped[str] = mapped_column(String(40), default="", server_default="")  # OneDesk ticket no (TEMIP ALARMOBJECTOPERATORNO)
+    customer_no: Mapped[str] = mapped_column(String(20), default="", server_default="")  # kaynaktaki Musteri No (kartsiz kayit -> TAM Radar)
+    detail: Mapped[str] = mapped_column(String(80), default="", server_default="")  # kaynak durumu: TEMIP STATE/PROBLEMSTATUS ya da Closed/<kapatan>
 
 
 class UtilCriteriaSet(Base):

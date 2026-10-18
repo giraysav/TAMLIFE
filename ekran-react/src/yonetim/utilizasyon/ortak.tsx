@@ -2,8 +2,8 @@ import { useLayoutEffect, useRef } from "react"
 import type { ComponentProps } from "react"
 import { Bildirim, GIRDI, Rozet } from "@/components/sayfa-ui"
 import type { AgacMusterisi, KaynakDurumu, KriterSonucu, SkorAgaci } from "@/yonetim/api"
-import type { YM } from "@/yonetim/metin"
 import { adaGoreSirala } from "@/lib/bicim"
+import type { UYM } from "@/yonetim/utilizasyon/metin"
 
 /** Utilizasyon alt bolumlerinin ortak parcalari. */
 
@@ -61,7 +61,7 @@ export function tumCatilar(agac: SkorAgaci): AgacMusterisi[] {
 }
 
 /** Kaynak durumlari + hesap uyarilari (renk + metin). */
-export function KaynakListesi({ kaynaklar, uyarilar, t }: { kaynaklar: KaynakDurumu[]; uyarilar: string[]; t: YM }) {
+export function KaynakListesi({ kaynaklar, uyarilar, t }: { kaynaklar: KaynakDurumu[]; uyarilar: string[]; t: UYM }) {
   const u = t.util
   return (
     <div className="grid gap-2">
@@ -91,7 +91,7 @@ export function KaynakListesi({ kaynaklar, uyarilar, t }: { kaynaklar: KaynakDur
 }
 
 /** Tek musterinin kriter dokumu: puan, katki, deger, kaynak, durum. */
-export function KriterDokumu({ kriterler, t }: { kriterler: KriterSonucu[]; t: YM }) {
+export function KriterDokumu({ kriterler, t }: { kriterler: KriterSonucu[]; t: UYM }) {
   const u = t.util
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -134,6 +134,6 @@ export function KriterDokumu({ kriterler, t }: { kriterler: KriterSonucu[]; t: Y
 }
 
 /** Tamam / Eksik rozeti. */
-export function TamamRozeti({ tamam, eksik, t }: { tamam: boolean; eksik: string[]; t: YM }) {
+export function TamamRozeti({ tamam, eksik, t }: { tamam: boolean; eksik: string[]; t: UYM }) {
   return tamam ? <Rozet ton="yesil">{t.util.tamam}</Rozet> : <Rozet ton="amber">{t.util.eksik(eksik.join(", ") || t.util.kriterYok)}</Rozet>
 }

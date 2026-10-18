@@ -6,17 +6,22 @@ import { sorguAyarla, useHashSorgu } from "@/shell/rota"
 import { ANAHTAR } from "@/yonetim/api"
 import { oku } from "@/lib/sorgu"
 import type { Kaynak, PartiAyrintisi } from "@/yonetim/api"
-import { ym } from "@/yonetim/metin"
 import { Analiz } from "@/yonetim/tampon/analiz"
 import { Dagitim } from "@/yonetim/tampon/dagitim"
 import type { KuralOnerisi } from "@/yonetim/tampon/dagitim"
+import { VeriAkislariPaneli, useVeriAkislari } from "@/yonetim/tampon/akislar"
 import { Kaynaklar } from "@/yonetim/tampon/kaynaklar"
+import { HamMusteriBolumu } from "@/yonetim/tampon/musteri-ham"
 import { Partiler } from "@/yonetim/tampon/partiler"
 import { Rehber } from "@/yonetim/tampon/rehber"
+import { TemipEslesmesi } from "@/yonetim/tampon/temip"
+import { tm } from "@/yonetim/tampon/metin"
 
-/** Veri Girisi: rehber ("Nasil calisir?") + kaynak -> 1 tampon -> 2 analiz -> 3 dagitim. Secili parti adreste (#/yonetim/tampon?parti=12): geri/ileri ve baglanti paylasimi calisir. */
+/** Veri Girisi: veri akislari (tum ice alma yollari, bayat uyarisi) -> Ham Musteri Verisi (fiilen kullanilan hat) -> kaynaklar
+ *  (+ genel CSV) -> 1 tampon -> 2 analiz -> 3 dagitim (tembel, kapali) -> TEMIP eslesmesi (tembel, kapali) -> rehber (tembel, kapali).
+ *  Secili parti adreste (#/yonetim/tampon?parti=12): geri/ileri ve baglanti paylasimi calisir. */
 export default function Tampon({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = tm(dil)
   const sorgu = useHashSorgu()
   const seciliId = Number(sorgu.get("parti")) || null
   const [oneri, setOneri] = useState<KuralOnerisi | null>(null)
@@ -32,11 +37,12 @@ export default function Tampon({ dil }: { dil: Dil }) {
   const kaynakAnahtarlari = (kaynaklar.data ?? []).filter((k) => k.tur !== "oracle").map((k) => k.anahtar)
 
   const parti = detay.data ?? null
+  const dagitimOzeti = useVeriAkislari().data?.dagitim
   return (
     <div className="grid gap-4">
-      <Rehber dil={dil} />
-
-      <Kaynaklar dil={dil} onYeniParti={(p) => sec(p.id)} />
+      <VeriAkislariPaneli dil={dil} />
+      <HamMusteriBolumu dil={dil} onYeniParti={(p) => sec(p.id)} />
+      <Kaynaklar dil={dil} onYeniParti={sec} />
       <Partiler dil={dil} seciliId={seciliId} onSec={sec} />
 
       {seciliId === null ? (
@@ -56,7 +62,9 @@ export default function Tampon({ dil }: { dil: Dil }) {
         />
       )}
 
-      <Dagitim dil={dil} parti={parti} oneri={oneri} kaynakAnahtarlari={kaynakAnahtarlari} />
+      <Dagitim dil={dil} parti={parti} oneri={oneri} kaynakAnahtarlari={kaynakAnahtarlari} kural={dagitimOzeti?.kural} etkin={dagitimOzeti?.etkin} />
+      <TemipEslesmesi dil={dil} />
+      <Rehber dil={dil} />
     </div>
   )
 }

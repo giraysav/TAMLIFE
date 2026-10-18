@@ -6,15 +6,15 @@ import { ALT_BASLIK_BANDI, ALT_BASLIK_YAZISI, Bildirim, Bolum, DUGME, DUGME_ANA,
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Analiz as AnalizTipi, Oneri, PartiAyrintisi, PartiSatirlari, SutunProfili } from "@/yonetim/api"
-import { ym } from "@/yonetim/metin"
 import { sayi, zaman } from "@/lib/bicim"
 import { PARTI_TON } from "@/yonetim/tampon/partiler"
+import { tm } from "@/yonetim/tampon/metin"
 
 export type OneriSecimi = { kolon: string; alan: string }
 
 /** Secili parti: ust serit (durum + islemler), sutun profili, anahtar onerileri, ilk satirlar. */
 export function Analiz({ dil, parti, onKuralOner, onSilindi }: { dil: Dil; parti: PartiAyrintisi; onKuralOner: (oneri: OneriSecimi) => void; onSilindi: () => void }) {
-  const t = ym(dil)
+  const t = tm(dil)
   const qc = useQueryClient()
   const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
   const yenile = () => {

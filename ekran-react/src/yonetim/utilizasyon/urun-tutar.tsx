@@ -7,14 +7,14 @@ import { ANAHTAR } from "@/yonetim/api"
 import type { SkorAgaci, UrunTutarKaydi, UrunTutarOzeti, UrunTutarYukleme } from "@/yonetim/api"
 import { hataMesaji, oku, sorguMetni, yukle } from "@/lib/sorgu"
 import { para, zaman } from "@/lib/bicim"
-import { ym } from "@/yonetim/metin"
-import type { YM } from "@/yonetim/metin"
 import { AGAC_YOLU, tumCatilar } from "@/yonetim/utilizasyon/ortak"
+import { uym } from "@/yonetim/utilizasyon/metin"
+import type { UYM } from "@/yonetim/utilizasyon/metin"
 
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 /** Ozet sutunlari (yukleme sonucu ve kayitli ozetler ayni bicimde). */
-function ozetKolonlari<T extends UrunTutarOzeti & { ad: string }>(t: YM) {
+function ozetKolonlari<T extends UrunTutarOzeti & { ad: string }>(t: UYM) {
   const u = t.util
   return [
     { baslik: u.musteri, hucre: (o: T) => <span className="font-black text-tl-navy">{o.ad}</span> },
@@ -30,7 +30,7 @@ function ozetKolonlari<T extends UrunTutarOzeti & { ad: string }>(t: YM) {
 
 /** Urun-Tutar Excel yukleme (uretim Musteri Karti > Veri Al > Urun-Tutar): secilen musterinin ailesine eslenir, ozet skora kaynak olur. */
 export function UrunTutar({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = uym(dil)
   const u = t.util
   const qc = useQueryClient()
   const girdi = useRef<HTMLInputElement>(null)

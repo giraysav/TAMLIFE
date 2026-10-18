@@ -6,16 +6,16 @@ import type { Dil } from "@/shell/metin"
 import { Bildirim, Bolum, DUGME, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
-import type { BaglantiTesti, Kaynak, Parti } from "@/yonetim/api"
-import { ym } from "@/yonetim/metin"
-import type { YM } from "@/yonetim/metin"
+import type { BaglantiTesti, Kaynak } from "@/yonetim/api"
 import { zaman } from "@/lib/bicim"
-import { HamMusteriVerisi } from "@/yonetim/tampon/musteri-ham"
+import { GenelCsvYukle } from "@/yonetim/tampon/csv-yukle"
+import { tm } from "@/yonetim/tampon/metin"
+import type { TM } from "@/yonetim/tampon/metin"
 
 type Bilgi = { ton: "yesil" | "amber"; metin: string }
 
 /** Oracle baglanti testi (alt surecte, sonuc maskeli); sonuc bildirime yazilir. */
-function useBaglantiTesti(t: YM, setBilgi: (b: Bilgi) => void) {
+function useBaglantiTesti(t: TM, setBilgi: (b: Bilgi) => void) {
   return useMutation({
     mutationFn: (anahtar: string) => yaz<BaglantiTesti>("POST", `/api/v1/tampon/kaynaklar/${encodeURIComponent(anahtar)}/test`),
     onSuccess: (s) => setBilgi({ ton: s.ok ? "yesil" : "amber", metin: [s.mesaj, s.ipucu].filter(Boolean).join(" — ") }),
@@ -24,7 +24,7 @@ function useBaglantiTesti(t: YM, setBilgi: (b: Bilgi) => void) {
 }
 
 /** Oracle kaynagi durumu: hazir/kapali, eksik anahtar, ReportDB tazeligi, baglanti testi (Veri Girisi ve Veritabani ortak). */
-function OracleDurum({ k, t, test }: { k: Kaynak; t: YM; test: UseMutationResult<BaglantiTesti, Error, string> }) {
+function OracleDurum({ k, t, test }: { k: Kaynak; t: TM; test: UseMutationResult<BaglantiTesti, Error, string> }) {
   return (
     <span className="grid justify-items-start gap-0.5">
       <Rozet ton={k.hazir ? "yesil" : "gri"}>{k.hazir ? t.canliHazir : t.canliKapali}</Rozet>
@@ -48,17 +48,16 @@ function OracleDurum({ k, t, test }: { k: Kaynak; t: YM; test: UseMutationResult
   )
 }
 
-export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti: Parti) => void }) {
-  const t = ym(dil)
+/** Kaynak listesi (dosya, Oracle, CSV partileri) + genel CSV yukleme. Ham Musteri Verisi kendi blogundadir (HamMusteriBolumu). */
+export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (id: number) => void }) {
+  const t = tm(dil)
   const [bilgi, setBilgi] = useState<Bilgi | null>(null)
   const q = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
-  const ham = q.data?.find((k) => k.anahtar === "musteri_ham")
   const test = useBaglantiTesti(t, setBilgi)
 
   return (
     <Bolum anahtar="yonetim-tampon-kaynaklar" baslik={t.kaynaklar}>
       <div className="grid gap-4">
-        <HamMusteriVerisi t={t} sonParti={ham?.son ?? null} onYeniParti={onYeniParti} />
         {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
 
         {q.isPending ? (
@@ -104,6 +103,7 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (parti:
             ]}
           />
         )}
+        <GenelCsvYukle dil={dil} onYeniParti={onYeniParti} />
       </div>
     </Bolum>
   )

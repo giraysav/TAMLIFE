@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import type { Dil } from "@/shell/metin"
 import { ALT_BASLIK_BANDI, ALT_BASLIK_YAZISI, Bolum } from "@/components/sayfa-ui"
-import { ym } from "@/yonetim/metin"
+import { tm } from "@/yonetim/tampon/metin"
 
 function Katlanir({ baslik, children }: { baslik: string; children: ReactNode }) {
   return (
@@ -31,7 +31,7 @@ function Tanimlar({ satirlar }: { satirlar: [string, string][] }) {
 /** Veri Girisi rehberi: akis (kaynak -> tampon -> analiz -> dagitim -> kart/Onedesk), kaynaklar, kural alanlari, ornekler,
  * uygula / geri al. Alan aciklamalari kural formundaki ipuclariyla ayni metinden gelir (tek kaynak). */
 export function Rehber({ dil }: { dil: Dil }) {
-  const t = ym(dil)
+  const t = tm(dil)
   const r = t.rehber
   const ip = t.kuralIpuclari
   const alanlar: [string, string][] = [
@@ -46,7 +46,7 @@ export function Rehber({ dil }: { dil: Dil }) {
     [t.enBuyukYas, ip.enBuyukYas],
   ]
   return (
-    <Bolum anahtar="yonetim-tampon-rehber" baslik={r.baslik}>
+    <Bolum anahtar="yonetim-tampon-rehber" baslik={r.baslik} varsayilanAcik={false} tembel>
       <div className="grid gap-3">
         <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5" aria-label={r.baslik}>
           {r.akis.map(([ad, ne], i) => (
