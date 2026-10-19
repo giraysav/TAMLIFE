@@ -7,6 +7,8 @@ import { ApiHata, hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { Cekmece } from "@/components/cekmece"
 import { Alan, Bolum, Bos, DUGME, DUGME_ANA, GIRDI, Rozet, Satir, VeriTablosu } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
+import { KartKayitlari } from "@/musteri/kayitlar"
+import type { KayitDurumu, KayitTuru } from "@/musteri/kayitlar"
 import { musteriMetin } from "@/musteri/musteri-metin"
 import { useMusteriYolu } from "@/musteri/musteri-yolu"
 import { sorguAyarla } from "@/shell/rota"
@@ -67,7 +69,7 @@ function Kutu({ children, ek = "" }: { children: ReactNode; ek?: string }) {
 /** Cerceve icindeki alt baslik (sari serit + lacivert buyuk harf). */
 function CerceveBasligi({ children }: { children: ReactNode }) {
   return (
-    <h3 className="mb-2.5 flex items-center gap-2 text-[0.6875rem] font-black uppercase tracking-widest text-tl-navy">
+    <h3 className="mb-1.5 flex items-center gap-2 text-[0.6875rem] font-black uppercase tracking-widest text-tl-navy">
       <span aria-hidden className="h-4 w-1 rounded-full bg-tl-yellow" />
       {children}
     </h3>
@@ -83,10 +85,10 @@ function IletisimKutusu({ g, ilet, t }: { g: (typeof ILETISIM_GRUPLARI)[number];
   const gsm = deger(gsmAlani ?? "")
   const eposta = deger(epostaAlani ?? "")
   return (
-    <div className="min-w-0 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-      <div className="mb-1.5 text-[0.625rem] font-black uppercase tracking-wide text-tl-blue">{t[g.baslik]}</div>
+    <div className="min-w-0 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+      <div className="mb-1 text-[0.625rem] font-black uppercase tracking-wide text-tl-blue">{t[g.baslik]}</div>
       {satis ? (
-        <div className="grid gap-1">
+        <div className="grid gap-0.5">
           {g.alanlar.map(([alan, etiket]) => (
             <div key={alan} className="break-words text-xs">
               <span className="font-bold text-slate-400">{t[etiket]}: </span>
@@ -95,7 +97,7 @@ function IletisimKutusu({ g, ilet, t }: { g: (typeof ILETISIM_GRUPLARI)[number];
           ))}
         </div>
       ) : (
-        <div className="grid gap-1">
+        <div className="grid gap-0.5">
           <div className="break-words text-xs font-black text-tl-navy">{ad || "—"}</div>
           {gsm ? (
             <a href={`tel:${gsm}`} className="flex items-center gap-1.5 break-all text-xs font-bold text-slate-600 hover:text-tl-blue">
@@ -116,46 +118,69 @@ function IletisimKutusu({ g, ilet, t }: { g: (typeof ILETISIM_GRUPLARI)[number];
 }
 
 /** Operasyon penceresi: yuvarlak koseli, mavi zeminli musteri karti bicimi; Alarm / Talep / Sikayet yil ici kapanan adetleri. */
-function Operasyon({ kart, t }: { kart: Kart; t: Metin }) {
+type Secim = { tur: KayitTuru; durum: KayitDurumu } | null
+
+/** Operasyon: Alarm / Talep / Sikayet "acik / yil ici kapanan"; her sayi bir dugme: o tur + durumdaki kayitlari kartin altinda listeler. */
+function Operasyon({ kart, t, secim, onSec }: { kart: Kart; t: Metin; secim: Secim; onSec: (s: Secim) => void }) {
   const s = kart.operasyon.kendi
   const d = kart.operasyon.istirak_dahil
   const kutular = [
-    [t.alarm, s.alarm_kapanan, "bg-rose-500", "text-rose-600"],
-    [t.talep, s.talep_kapanan, "bg-tl-accent", "text-tl-blue"],
-    [t.sikayet, s.sikayet_kapanan, "bg-amber-500", "text-amber-600"],
+    ["alarm", t.alarm, s.alarm, s.alarm_kapanan, "bg-rose-500", "text-rose-600"],
+    ["talep", t.talep, s.talep, s.talep_kapanan, "bg-tl-accent", "text-tl-blue"],
+    ["sikayet", t.sikayet, s.sikayet, s.sikayet_kapanan, "bg-amber-500", "text-amber-600"],
   ] as const
+  const dugme = (tur: KayitTuru, durum: KayitDurumu, deger: number, etiket: string, renk: string) => {
+    const secili = secim?.tur === tur && secim.durum === durum
+    return (
+      <button
+        type="button"
+        aria-pressed={secili}
+        aria-label={`${etiket}: ${durum === "acik" ? t.acik : t.yilIciKapanan} ${deger}`}
+        title={durum === "acik" ? t.acik : t.yilIciKapanan}
+        onClick={() => onSec(secili ? null : { tur, durum })}
+        className={`rounded-lg px-1.5 font-mono text-2xl font-black leading-tight transition-colors hover:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow ${
+          secili ? "bg-tl-yellow/40 ring-2 ring-tl-yellow" : ""
+        } ${durum === "acik" ? renk : "text-slate-500"}`}
+      >
+        {sayi(deger)}
+      </button>
+    )
+  }
   return (
-    <section aria-label={t.operasyon} className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-tl-navy via-[#003a7a] to-tl-blue p-5 text-white shadow-md ring-1 ring-tl-navy/20">
+    <section aria-label={t.operasyon} className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-tl-navy via-[#003a7a] to-tl-blue px-4 py-3 text-white shadow-md ring-1 ring-tl-navy/20">
       <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 size-48 rounded-full bg-tl-yellow/20 blur-3xl" />
       <span aria-hidden className="pointer-events-none absolute -bottom-16 left-1/4 size-44 rounded-full bg-tl-accent/25 blur-3xl" />
       <div className="relative">
-        <div className="mb-3 flex flex-wrap items-center gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-tl-yellow text-tl-navy shadow-md">
-            <Activity aria-hidden className="size-5" />
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-tl-yellow text-tl-navy shadow-md">
+            <Activity aria-hidden className="size-4" />
           </span>
-          <h3 className="text-sm font-black uppercase tracking-widest">{t.operasyon}</h3>
+          <h3 className="text-xs font-black uppercase tracking-widest">{t.operasyon}</h3>
+          <span className="text-[0.6875rem] font-bold text-white/70">
+            · {t.acik} / {t.yilIciKapanan.toLocaleLowerCase("tr")}
+          </span>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {kutular.map(([etiket, deger, serit, yazi]) => (
-            <div key={etiket} className="relative overflow-hidden rounded-2xl border border-white/60 bg-white/95 p-4 text-tl-navy shadow-sm">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {kutular.map(([tur, etiket, acik, kapanan, serit, yazi]) => (
+            <div key={tur} className="relative flex items-center justify-between gap-2 overflow-hidden rounded-xl border border-white/60 bg-white/95 py-1.5 pl-4 pr-2 text-tl-navy shadow-sm">
               <span aria-hidden className={`absolute inset-y-0 left-0 w-1.5 ${serit}`} />
-              <div className="pl-2">
-                <div className="text-[0.6875rem] font-black uppercase tracking-wide text-slate-500">{etiket}</div>
-                <div className={`mt-0.5 font-mono text-4xl font-black leading-tight ${yazi}`}>{sayi(deger)}</div>
-                <div className="mt-1 text-[0.6875rem] font-bold text-slate-500">{t.yilIciKapanan}</div>
-              </div>
+              <span className="text-[0.6875rem] font-black uppercase tracking-wide text-slate-500">{etiket}</span>
+              <span className="flex items-center gap-0.5">
+                {dugme(tur, "acik", acik, etiket, yazi)}
+                <span aria-hidden className="text-lg font-black text-slate-300">/</span>
+                {dugme(tur, "kapali", kapanan, etiket, yazi)}
+              </span>
             </div>
           ))}
         </div>
         {d ? (
-          <p className="mt-3 text-xs font-bold text-white/80">
+          <p className="mt-2 text-xs font-bold text-white/80">
             {t.istirakDahil}:{" "}
             <span className="font-mono text-white">
               {t.envanter} {sayi(d.envanter)} · {t.alarm} {sayi(d.alarm_kapanan)} · {t.talep} {sayi(d.talep_kapanan)} · {t.sikayet} {sayi(d.sikayet_kapanan)}
             </span>
           </p>
         ) : null}
-        <p className="mt-2 text-[0.6875rem] text-white/60">{t.acikAciklama}</p>
       </div>
     </section>
   )
@@ -175,6 +200,8 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const [mesaj, setMesaj] = useState<Record<string, string>>({})
   const [yeniIstirak, setYeniIstirak] = useState<string | null>(null)
   const [ciAcik, setCiAcik] = useState(false)
+  const [istirakAcik, setIstirakAcik] = useState(false)
+  const [secim, setSecim] = useState<Secim>(null)
 
   /** Form sunucu verisiyle YALNIZ duzenleme acilirken doldurulur: arka plan yenilemesi yazilani ezmez, Vazgec sonrasi eski deger donmez. */
   function duzenlemeyiAc() {
@@ -272,20 +299,19 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const tamSecenekleri = adaGoreSirala(kart.tam_secenekleri ?? [], (u) => u.ad)
 
   return (
-    <div className="space-y-4 font-sans">
+    <div className="space-y-3 font-sans">
       {/* KIMLIK: lacivert hero, sari sol vurgu */}
       <section aria-label={k.unvan} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-tl-navy to-[#003b80] text-white shadow-sm">
         <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-tl-yellow" />
-        <div className="space-y-4 p-5">
+        <div className="space-y-3 p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
             <div className="flex min-w-0 flex-1 items-start gap-3.5">
               <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-tl-yellow/30 bg-white/10 text-tl-yellow shadow-md">
                 <Building2 aria-hidden className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <h2 className="break-words text-xl font-black leading-tight sm:text-2xl">{k.unvan}</h2>
-                <p className="mt-1 text-xs font-bold text-white/70">{t.musteriKarti}</p>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <h2 className="break-words text-lg font-black leading-tight sm:text-xl">{k.unvan}</h2>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {k.segment ? <Rozet ton="sari">{k.segment}</Rozet> : null}
                   {k.sektor ? <span className="rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-[0.625rem] font-bold text-white">{k.sektor}</span> : null}
                   {k.cati ? <Rozet ton="amber">{t.istirak}</Rozet> : null}
@@ -298,27 +324,27 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                 <a
                   href={`#/${yol}?m=${k.id}&sekme=rapor`}
                   title={t.aylikRaporGonder}
-                  className="group relative flex min-w-[17rem] flex-1 items-center gap-3.5 overflow-hidden rounded-2xl bg-gradient-to-br from-tl-yellow to-amber-400 px-5 py-4 text-tl-navy shadow-[0_10px_28px_-8px_rgba(255,199,44,0.85)] ring-2 ring-white/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-8px_rgba(255,199,44,1)] focus-visible:outline-hidden focus-visible:ring-4 focus-visible:ring-white"
+                  className="group relative flex min-w-[17rem] flex-1 items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-br from-tl-yellow to-amber-400 px-4 py-2.5 text-tl-navy shadow-[0_10px_28px_-8px_rgba(255,199,44,0.85)] ring-2 ring-white/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-8px_rgba(255,199,44,1)] focus-visible:outline-hidden focus-visible:ring-4 focus-visible:ring-white"
                 >
                   <span aria-hidden className="tl-hareket pointer-events-none absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-transparent via-white/60 to-transparent" style={{ animation: "tl-parilti 3.4s ease-in-out infinite" }} />
-                  <span className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-tl-navy text-tl-yellow shadow-lg">
-                    <FileText aria-hidden className="size-7" />
+                  <span className="relative flex size-10 shrink-0 items-center justify-center rounded-xl bg-tl-navy text-tl-yellow shadow-lg">
+                    <FileText aria-hidden className="size-5" />
                   </span>
                   <span className="relative grid min-w-0 flex-1 leading-tight">
-                    <span className="text-base font-black uppercase tracking-wide">{t.aylikRaporGonder}</span>
+                    <span className="text-sm font-black uppercase tracking-wide">{t.aylikRaporGonder}</span>
                     <span className="mt-0.5 text-xs font-bold text-tl-navy/75">{t.aylikRaporAlt}</span>
                   </span>
-                  <span aria-hidden className="relative text-3xl font-black transition-transform group-hover:translate-x-0.5">
+                  <span aria-hidden className="relative text-2xl font-black transition-transform group-hover:translate-x-0.5">
                     ›
                   </span>
                 </a>
-                <Kutu ek="flex min-w-[8.5rem] flex-col justify-center">
+                <Kutu ek="flex min-w-[8.5rem] flex-col justify-center !py-2">
                   <div className="text-[0.625rem] font-black uppercase tracking-wide text-slate-400">{t.finalSkor}</div>
                   {o.final_skor === null ? (
                     <div className="text-xs font-bold text-slate-400">{t.skorCatida}</div>
                   ) : (
                     <>
-                      <div className="font-mono text-3xl font-black">%{o.final_skor.toFixed(1)}</div>
+                      <div className="font-mono text-2xl font-black">%{o.final_skor.toFixed(1)}</div>
                       {o.skor_talebi_bekliyor ? <div className="text-[0.625rem] font-bold text-amber-600">{t.skorBekliyor}</div> : null}
                     </>
                   )}
@@ -443,14 +469,14 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
               </form>
             ) : (
               <>
-                <div className="grid grid-cols-1 gap-x-6 px-4 py-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-6 px-4 py-1 sm:grid-cols-2 lg:grid-cols-3 [&_div.flex]:!py-1">
                   <div>
                     <Satir etiket={t.musteriNo}>{k.musteri_no || "—"}</Satir>
                     <Satir etiket={t.ncst}>{k.ncst || "—"}</Satir>
                     <Satir etiket={t.segment}>{k.segment || "—"}</Satir>
-                    <Satir etiket={t.sektor}>{k.sektor || "—"}</Satir>
                   </div>
                   <div>
+                    <Satir etiket={t.sektor}>{k.sektor || "—"}</Satir>
                     <Satir etiket={t.sorumluTam}>{k.tam || "—"}</Satir>
                     <Satir etiket={t.cati}>
                       {k.cati ? (
@@ -474,7 +500,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                     </Satir>
                   </div>
                 </div>
-                <div className="border-t border-slate-200 px-4 pb-4 pt-3">
+                <div className="border-t border-slate-200 px-4 pb-3 pt-2">
                   <CerceveBasligi>{t.iletisim}</CerceveBasligi>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {ILETISIM_GRUPLARI.map((g) => (
@@ -482,7 +508,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                     ))}
                   </div>
                   {mobilNot ? (
-                    <p className="mt-3 whitespace-pre-line break-words text-xs font-bold text-slate-600">
+                    <p className="mt-2 whitespace-pre-line break-words text-xs font-bold text-slate-600">
                       <span className="text-slate-400">
                         {t.mobilKmt} · {t.not}:{" "}
                       </span>
@@ -494,22 +520,35 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
             )}
           </div>
 
-          <div>
-            <div className="mb-1.5 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
+          {/* Istirakler en fazla 2 satir (kart tek ekrana sigsin); "Tumunu goster" acinca sayfa uzar */}
+          <div className="flex items-start gap-2">
+          <div className={`flex min-w-0 flex-1 flex-wrap items-center gap-1 ${istirakAcik ? "" : "max-h-[3.25rem] overflow-hidden"}`}>
+            <span className="mr-1 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
               {t.istirakler} ({k.istirakler.length})
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
+            </span>
+            <div className="contents">
               {k.istirakler.length === 0 ? <span className="text-white/60">—</span> : null}
               {k.istirakler.map((i) => (
                 <a
                   key={i.id}
                   href={`#/${yol}?m=${i.id}`}
-                  className="rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1 text-xs font-bold text-tl-navy transition-colors hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+                  className="rounded-md border border-slate-200 bg-white/90 px-2 py-0.5 text-[0.6875rem] font-bold text-tl-navy transition-colors hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
                 >
                   {i.unvan}
                 </a>
               ))}
             </div>
+          </div>
+          {k.istirakler.length > 8 ? (
+            <button
+              type="button"
+              aria-expanded={istirakAcik}
+              onClick={() => setIstirakAcik((v) => !v)}
+              className="shrink-0 rounded-md border border-tl-yellow/60 bg-tl-yellow/15 px-2 py-0.5 text-[0.6875rem] font-black text-tl-yellow hover:bg-tl-yellow/25 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+            >
+              {istirakAcik ? t.istirakDaralt : t.istirakTumu(k.istirakler.length)}
+            </button>
+          ) : null}
           </div>
         </div>
       </section>
@@ -560,13 +599,15 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
         ) : null}
       </div>
 
-      {/* OPERASYON: yuvarlak koseli mavi pencere */}
-      <Operasyon kart={kart} t={t} />
-
+      {/* OPERASYON (acik / yil ici kapanan dugmeleri) ve son raporlar yan yana: kart tek ekrana sigar */}
+      <div className={`grid gap-3 ${kart.raporlar ? "lg:grid-cols-3" : ""}`}>
+      <div className="lg:col-span-2">
+        <Operasyon kart={kart} t={t} secim={secim} onSec={setSecim} />
+      </div>
       {kart.raporlar ? (
-        <Bolum anahtar="raporlar" baslik={`${t.raporlar} (${kart.raporlar.toplam})`}>
+        <Bolum anahtar="raporlar" baslik={`${t.raporlar} (${kart.raporlar.toplam})`} ek="[&>div]:!py-2">
           {kart.raporlar.son.length === 0 ? <Bos>{t.raporYok}</Bos> : null}
-          {kart.raporlar.son.map((r, i) => (
+          {kart.raporlar.son.slice(0, 3).map((r, i) => (
             <div key={i} className="flex items-center justify-between gap-2 border-b border-slate-100 py-1.5 text-xs last:border-0">
               <span className="font-mono font-black text-slate-700">{r.donem}</span>
               <span className="truncate text-slate-400">{r.duzenleyen ?? ""}</span>
@@ -576,6 +617,10 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
           ))}
         </Bolum>
       ) : null}
+      </div>
+
+      {/* Operasyon dugmesiyle acilan kayit listesi (secilen tur + acik / kapanan); acilinca sayfa uzar */}
+      {secim ? <KartKayitlari key={`${secim.tur}-${secim.durum}`} dil={dil} id={k.id} tur={secim.tur} durum={secim.durum} onKapat={() => setSecim(null)} /> : null}
 
       <Cekmece acik={ciAcik} onKapat={() => setCiAcik(false)} baslik={t.kritikCi} aciklama={k.unvan} kapatEtiketi={t.kapat} genis>
         <MatrisTablo baslik={t.kritikCi} m={kart.kritik_ci} bos={t.satirYok} />

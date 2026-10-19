@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import re
 import threading
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -43,7 +43,18 @@ KAPANIS_PARCASI = 500
 SORGU_SINIRI = 400_000  # tek sorgu (ay dilimi) en fazla bu kadar satir
 ARTIMLI_GUN = 1
 MUTABAKAT_GUN = 30
-_KOSUL = f"{reportdb._KURUMSAL} AND {reportdb._MUSTERI}"
+# Kurumsal alarm (2026-10-18 kullanici: "nw_li_cust ile kurumsal alarmlar geliyor; domain ACCESS ve NOC DESTECH; musteri numarasiyla
+# iceri al"): NETWORK domaini, 8 haneli Musteri No (INFORMATION1; karta eslesme anahtari) ve CI'da (MANAGEDOBJECT / NODE1) nw_li_cust.
+# 2026-10-19 kullanici: "NETWORK: ACCESS'i kaldir" -> yalniz NOC DESTECH (kurumsal).
+DOMAINLER = ("NOC DESTECH",)
+CI_ARAMA = "nw_li_cust"
+_KOSUL = (
+    "REPLACE(NETWORK, '\"', '') IN ('NOC DESTECH') AND REGEXP_LIKE(INFORMATION1, '^[0-9]{8}$') "
+    "AND (INSTR(LOWER(MANAGEDOBJECT), 'nw_li_cust') > 0 OR INSTR(LOWER(NODE1), 'nw_li_cust') > 0)"
+)
+KIPLER = ("tam", "artimli", "mutabakat", "katalogdan")
+_CI_ADI = re.compile(r"CIName:\s*(\S+)")
+_TICKET = re.compile(r"^[0-9]+")
 _KIMLIK = re.compile(r"^\d{1,20}$")
 
 
@@ -453,11 +464,57 @@ def _aylar(bas: date, bugun: date) -> list[tuple[date, date]]:
     return dilimler
 
 
+def katalog_kapalilari(db: Session, bas: date, parca: int = 5_000) -> Iterator[list[dict[str, Any]]]:
+    """Son hazir katalogun ham dosyasindaki VIEW_REPORT_ACTIVE satirlari -> TEMIP sorgu satiri bicimi (KIMLIK, MNO, ...), parca parca.
+    Kosul _KOSUL ile ayni (domain, 8 haneli Musteri No, CI'da nw_li_cust); acilis `bas` ve sonrasi."""
+    import sqlite3
+
+    from app.tampon import katalog
+    from app.tampon.models import SourceCatalog, SourceCatalogObject
+
+    k = db.scalars(
+        select(SourceCatalog)
+        .where(SourceCatalog.source_key == katalog.KAYNAK, SourceCatalog.status == "ready")
+        .order_by(SourceCatalog.id.desc())
+        .limit(1)
+    ).first()
+    n = k and db.scalars(
+        select(SourceCatalogObject).where(SourceCatalogObject.catalog_id == k.id, SourceCatalogObject.owner == "TEMIP", SourceCatalogObject.name == "VIEW_REPORT_ACTIVE")
+    ).first()  # fmt: skip
+    tablo = (((n.details or {}).get("arama") or {}).get("ham_tablo") if n else "") or ""
+    yol = katalog.HAM_DIZIN / f"katalog_{k.id}.db" if k else None
+    if not tablo or yol is None or not yol.is_file():
+        raise reportdb.ReportdbHata("Ham katalog dosyası yok: önce Veri Girişi › ReportDB kataloğunu 01.01'den tarayın.")
+    sutunlar = ("IDENTIFIER", "INFORMATION1", "INFORMATION2", "ALARMOBJECTOPERATORNO", "ADDITIONALTEXT", "NODE1", "ALARMHEADER",
+                "EVENTTIME", "CLOSETIMESTAMP", "CLOSEUSERIDENTIFIER")  # fmt: skip
+    q = chr(34)
+    secim = ", ".join(f"{q}{c}{q}" for c in sutunlar)
+    domain = ", ".join("?" * len(DOMAINLER))
+    sql = (f"SELECT {secim} FROM {q}{tablo}{q} WHERE {q}__D{q} IN ({domain}) AND INFORMATION1 GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]' "
+           f"AND (INSTR(LOWER(MANAGEDOBJECT), ?) > 0 OR INSTR(LOWER(NODE1), ?) > 0) AND EVENTTIME >= ?")  # fmt: skip
+    bag = sqlite3.connect(f"{yol.as_uri()}?mode=ro", uri=True)
+    try:
+        imlec = bag.execute(sql, [*DOMAINLER, CI_ARAMA, CI_ARAMA, f"{bas:%Y-%m-%d}"])
+        while blok := imlec.fetchmany(parca):
+            cikti = []
+            for kimlik, mno, unvan, opno, metin, node1, baslik, acilis, kapanis, kapatan in blok:
+                ci = _CI_ADI.search(metin or "")
+                tk = _TICKET.match(str(opno or ""))
+                kapatan = str(kapatan or "")
+                durum = "Closed/" + (kapatan if kapatan in ("atm", "Auto-Clear") else ("-" if not kapatan else "operator"))
+                cikti.append({"KIMLIK": str(kimlik), "MNO": mno, "UNVAN": (unvan or "")[:200], "TICKET": tk.group(0) if tk else "",
+                              "CI": (ci.group(1) if ci else (node1 or ""))[:200], "BASLIK": (baslik or "")[:200], "ACILIS": acilis,
+                              "KAPANIS": kapanis, "DURUM": durum})  # fmt: skip
+            yield cikti
+    finally:
+        bag.close()
+
+
 def calistir(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dict[str, Any]:
     """TEMIP kayitlarini panele yazar. Siralama: kapananlar -> acik goruntu (kapaliyi acmaz) -> goruntuden dusenlerin kapanisi ->
     kart baglantilari -> kart sayaclari. Her adim commit eder; hata olursa yazilan kalir, sonraki tur tamamlar (yazim idempotent)."""
-    if kip not in ("tam", "artimli", "mutabakat"):
-        raise reportdb.ReportdbHata("Kip tam, artimli ya da mutabakat olmalı.")
+    if kip not in KIPLER:
+        raise reportdb.ReportdbHata("Kip tam, artimli, mutabakat ya da katalogdan olmalı.")
     bas = baslangic()
     h = harita(db)
     etkilenen: set[int] = set()
@@ -468,7 +525,17 @@ def calistir(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dic
             ozet[k] += s[k]
 
     alt_sinir = _tarih(bas)
-    if kip == "tam":
+    if kip == "katalogdan":
+        # Ilk yukleme: kapananlar Oracle'i yeniden taramadan son hazir katalogun ham dosyasindan; sonra son 1 gun Oracle'dan
+        n = 0
+        for parca in katalog_kapalilari(db, bas):
+            topla(yaz(db, (a for x in parca if (a := alanlar(x, False, h))), etkilenen, parca_commit=True))
+            n += len(parca)
+        ozet["katalog_satir"] = n
+        satirlar = _cek(kapali_sorgusu(f"GREATEST(SYSDATE - {ARTIMLI_GUN}, {alt_sinir})", "SYSDATE + 1"))
+        topla(yaz(db, (a for x in satirlar if (a := alanlar(x, False, h))), etkilenen, parca_commit=True))
+        ozet["kapali_satir"] = len(satirlar)
+    elif kip == "tam":
         for alt, ust in _aylar(bas, simdi().astimezone(TR_SAATI).date()):
             satirlar = _cek(kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)"))
             topla(yaz(db, (a for s in satirlar if (a := alanlar(s, False, h))), etkilenen, parca_commit=True))

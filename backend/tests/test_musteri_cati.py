@@ -58,5 +58,7 @@ def test_admin_ve_csrf_gerekli(veri, monkeypatch):
     veri.post("/api/v1/session/logout", headers=hdr)
     monkeypatch.setenv("TAMLIFE_LOCAL_ROLE", "TeamMember")
     hdr = login_ok(veri)
-    assert veri.put("/api/v1/musteri/2/kimlik", json={"parent_id": None}, headers=hdr).status_code == 403
-    assert "cati_secenekleri" not in veri.get("/api/v1/musteri/2").json()["data"]
+    # 2026-10-19: personel kendi kartinda cati secer, yalniz kendi catilari arasindan (Beta, id 3, ayse'nin)
+    assert veri.put("/api/v1/musteri/2/kimlik", json={"parent_id": 3}, headers=hdr).status_code == 404
+    assert 3 not in {c["id"] for c in veri.get("/api/v1/musteri/2").json()["data"]["cati_secenekleri"]}
+    assert veri.put("/api/v1/musteri/2/kimlik", json={"parent_id": None}, headers=hdr).status_code == 200

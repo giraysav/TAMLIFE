@@ -14,6 +14,10 @@ export type PortfoyKart = {
   alarm: number
   sikayet: number
   talep: number
+  /** yil ici kapanan (Onedesk kayitlari kutusu: acik / kapanan) */
+  alarm_kapanan?: number
+  sikayet_kapanan?: number
+  talep_kapanan?: number
   istirakler: { id: number; name: string }[]
 }
 export type Secenekler = { segmentler: string[]; yonetici: boolean; kendi_id: number | null; tam: { id: number; ad: string }[]; catilar: { id: number; ad: string }[] }
@@ -39,12 +43,15 @@ function SkorCubugu({ skor, etiket, yok }: { skor: number | null; etiket: string
   )
 }
 
-function Olcu({ ad, deger, ton }: { ad: string; deger: number; ton: "kirmizi" | "amber" | "mavi" }) {
-  const sinif = deger > 0 ? { kirmizi: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", mavi: "bg-blue-50 text-blue-600" }[ton] : "bg-slate-50 text-slate-300"
+/** Onedesk kayit kutusu: "acik / yil ici kapanan" (acik renkli, kapanan sonuk). */
+function Olcu({ ad, acik, kapanan, ton, ipucu }: { ad: string; acik: number; kapanan: number; ton: "kirmizi" | "amber" | "mavi"; ipucu: string }) {
+  const renk = { kirmizi: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", mavi: "bg-blue-50 text-blue-600" }[ton]
   return (
-    <div className={`rounded-xl px-2 py-1.5 text-center ${sinif}`}>
+    <div className={`rounded-xl px-2 py-1.5 text-center ${acik > 0 ? renk : kapanan > 0 ? "bg-slate-50 text-slate-500" : "bg-slate-50 text-slate-300"}`} title={ipucu}>
       <div className="text-[0.5625rem] font-black uppercase tracking-wide text-slate-400">{ad}</div>
-      <div className="font-mono text-base font-black leading-tight">{sayi(deger)}</div>
+      <div className="whitespace-nowrap font-mono text-sm font-black leading-tight">
+        {sayi(acik)} <span className="font-bold text-slate-400">/ {sayi(kapanan)}</span>
+      </div>
     </div>
   )
 }
@@ -74,11 +81,13 @@ export function MusteriKarti({ m, dil, onizleme = false }: { m: PortfoyKart; dil
           </p>
         ) : null}
         <div>
-          <p className="mb-1 text-[0.5625rem] font-black uppercase tracking-widest text-slate-400">{t.acikKayitlar}</p>
+          <p className="mb-1 text-[0.5625rem] font-black uppercase tracking-widest text-slate-400">
+            {t.onedeskKayitlar} <span className="font-bold normal-case tracking-normal">· {t.acikKapanan}</span>
+          </p>
           <div className="grid grid-cols-3 gap-2">
-            <Olcu ad={t.alarm} deger={m.alarm} ton="kirmizi" />
-            <Olcu ad={t.sikayet} deger={m.sikayet} ton="amber" />
-            <Olcu ad={t.talep} deger={m.talep} ton="mavi" />
+            <Olcu ad={t.alarm} acik={m.alarm} kapanan={m.alarm_kapanan ?? 0} ton="kirmizi" ipucu={t.acikKapanan} />
+            <Olcu ad={t.sikayet} acik={m.sikayet} kapanan={m.sikayet_kapanan ?? 0} ton="amber" ipucu={t.acikKapanan} />
+            <Olcu ad={t.talep} acik={m.talep} kapanan={m.talep_kapanan ?? 0} ton="mavi" ipucu={t.acikKapanan} />
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2">

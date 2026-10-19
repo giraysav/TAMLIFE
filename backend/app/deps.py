@@ -46,7 +46,10 @@ def require_admin(user: Principal = Depends(require_user)) -> Principal:
 
 
 def require_veri_yazma(user: Principal = Depends(require_user)) -> Principal:
-    """Veri ekleme, degistirme ve silme: yalniz admin (kullanici karari 2026-10-11). Kapsami degistirmek icin tek yer burasi."""
+    """Yalniz admin: toplu / yonetim yazmalari (Yonetim musteri toplu ekle-sil, Gelir Uretim Excel ve sahip atama).
+    2026-10-19 kullanici karari: musteri, gelir (SMS/APN) ve proje kayitlarinda herkes KENDI verisini ekler, duzenler ve siler
+    (admin hepsini, TeamMngr ekibinin = gordugu tum personelin, TeamMember yalniz kendisinin); o uclarda bu kapi YOK, sahiplik
+    servislerde (musteri_getir / silinebilir_mi, gelir _kayit, proje _getir)."""
     if not is_admin(user):
         raise HTTPException(
             status_code=403,

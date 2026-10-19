@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base
@@ -72,3 +72,41 @@ class CustomerImportRun(Base):
     record: Mapped[dict] = mapped_column(JSON, default=dict)
     reverted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reverted_by: Mapped[str] = mapped_column(String(120), default="")
+
+
+class SourceCatalog(Base):
+    """Kaynak katalogu (ham tampon): bir Oracle kaynaginin semalari / nesneleri / sutunlari ve ornek satirlari, tarama basina tek kayit.
+    Isci sureci yazar (python -m app.isci reportdb-katalog); panel yalniz okur. status: receiving | ready | failed."""
+
+    __tablename__ = "source_catalog"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_key: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="receiving")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(String(500), default="")
+
+
+class SourceCatalogObject(Base):
+    """Katalogdaki tek nesne (tablo / gorunum / es ad). parent: agacta ust nesne ('SAHIP.AD'; bos = ana nesne).
+    columns: [{ad, tip, bos_olabilir, aciklama, doluluk, farkli, ornekler}] (profil ornek satirlardan). details: es ad hedefi,
+    bagimliliklar, bolumler, indeksler. sample_data: ornek satirlar (zlib JSON); kisisel veri iceren nesnede bos."""
+
+    __tablename__ = "source_catalog_object"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    catalog_id: Mapped[int] = mapped_column(ForeignKey("source_catalog.id", ondelete="CASCADE"), index=True)
+    owner: Mapped[str] = mapped_column(String(128))
+    name: Mapped[str] = mapped_column(String(128))
+    kind: Mapped[str] = mapped_column(String(30))
+    parent: Mapped[str] = mapped_column(String(260), default="")
+    row_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # istatistik NUM_ROWS (2 milyar ustu olabilir)
+    analyzed: Mapped[str] = mapped_column(String(20), default="")
+    comment: Mapped[str] = mapped_column(String(1000), default="")
+    columns: Mapped[list] = mapped_column(JSON, default=list)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    sample_columns: Mapped[list] = mapped_column(JSON, default=list)
+    sample_rows: Mapped[int] = mapped_column(Integer, default=0)
+    sample_note: Mapped[str] = mapped_column(String(300), default="")
+    sample_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)

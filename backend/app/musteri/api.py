@@ -13,8 +13,8 @@ from starlette.concurrency import run_in_threadpool
 from app.audit import audit_log
 from app.config import get_settings
 from app.db import get_db, oturum
-from app.deps import require_veri_yazma
-from app.erisim import Erisim, modul_erisim
+from app.erisim import Erisim, modul_erisim, musteri_alani_erisim
+from app.musteri import kayitlar as mk
 from app.musteri import servis as ms
 from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, govde_oku, ok
 from app.rapor import servis as rs
@@ -23,7 +23,7 @@ from app.session import Principal
 router = APIRouter(prefix="/api/v1", tags=["musteri"])
 
 
-musteri_erisim = modul_erisim("musteri")
+musteri_erisim = musteri_alani_erisim()  # Toptan / Baglantili Araclar kartlari kendi modul yetkisiyle
 rapor_erisim = modul_erisim("rapor")
 
 
@@ -110,6 +110,21 @@ def portfoy(
     return _yap(db, lambda: ms.portfoy(db, e.user, q, tam, segment, page, per_page))
 
 
+@router.get("/musteri/{musteri_id:int}/kayitlar")
+def kart_kayitlari(
+    musteri_id: KimlikTipi,
+    tur: str = Query(pattern="^(alarm|talep|sikayet)$"),
+    durum: str = Query(pattern="^(acik|kapali)$"),
+    yil: int | None = Query(default=None, ge=2000, le=2100),
+    page: int = Query(default=1, ge=1, le=EN_BUYUK_SAYFA_NO),
+    per_page: int = Query(default=mk.SAYFA, ge=1, le=mk.EN_COK),
+    e: Erisim = Depends(musteri_erisim),
+    db: Session = Depends(get_db),
+):
+    """Kart Operasyon dugmeleri: kartin secilen turdeki acik (su an) ya da kapanan (yil ici) kayitlari."""
+    return _yap(db, lambda: mk.kart_kayitlari(db, e.user, musteri_id, tur, durum, yil, page, per_page))
+
+
 @router.get("/musteri/secenekler")
 def secenekler(e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     return _yap(db, lambda: ms.secenekler(db, e.user))
@@ -117,7 +132,7 @@ def secenekler(e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db
 
 @router.post("/musteri")
 def ekle(
-    body: YeniMusteri, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+    body: YeniMusteri, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)
 ):
     sonuc = _yap(db, lambda: ms.musteri_ekle(db, e.user, _govde(body)), yaz=True)
     if isinstance(sonuc, dict):
@@ -136,7 +151,6 @@ def kimlik(
     body: Serbest,
     e: Erisim = Depends(musteri_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     sonuc = _yap(db, lambda: ms.kimlik_guncelle(db, e.user, musteri_id, _govde(body)), yaz=True)
     if isinstance(sonuc, dict):
@@ -150,7 +164,6 @@ def iletisim(
     body: Serbest,
     e: Erisim = Depends(musteri_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     sonuc = _yap(db, lambda: ms.iletisim_kaydet(db, e.user, musteri_id, _govde(body)), yaz=True)
     if isinstance(sonuc, dict):
@@ -164,7 +177,6 @@ def sorumlu(
     body: SorumluGovde,
     e: Erisim = Depends(musteri_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     sonuc = _yap(db, lambda: ms.tam_degistir(db, e.user, musteri_id, body.owner_id), yaz=True)
     if isinstance(sonuc, dict):
@@ -174,7 +186,7 @@ def sorumlu(
 
 @router.delete("/musteri/{musteri_id:int}")
 def sil(
-    musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+    musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)
 ):
     sonuc = _yap(db, lambda: ms.sil(db, e.user, musteri_id), yaz=True)
     if isinstance(sonuc, dict):
@@ -189,7 +201,6 @@ def ayri_rapor(
     body: AyriRaporGovde,
     e: Erisim = Depends(musteri_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     return _yap(db, lambda: rs.ayri_rapor_ayarla(db, e.user, musteri_id, body.ayri_rapor), yaz=True)
 
@@ -342,7 +353,7 @@ def cacti_ayar(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: 
 
 @router.put("/musteri/{musteri_id:int}/rapor/cacti")
 def cacti_kaydet(musteri_id: KimlikTipi, body: CactiGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    # require_veri_yazma (yalniz admin) bilincli olarak yok: grafik baglantisini sorumlu personel de tanimlar (rs._cacti_duzenleyebilir).
+    # Grafik baglantisini sorumlu personel de tanimlar (rs._cacti_duzenleyebilir).
     sonuc = _yap(db, lambda: rs.cacti_kaydet(db, e.user, musteri_id, body.baglantilar), yaz=True)
     _denetim(e.user, "rapor.cacti_ayar", f"musteri={musteri_id} adet={len(body.baglantilar)}")
     return sonuc

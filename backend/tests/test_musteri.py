@@ -93,7 +93,8 @@ def test_rapor_ve_gelir_bolumleri_modul_iznine_baglidir(veri, monkeypatch):
     _giris(veri, monkeypatch, "TeamMember")
     k = veri.get("/api/v1/musteri/1").json()["data"]
     assert "raporlar" not in k and "gelirler" not in k and k["erisim"]["rapor"] is False
-    assert "tam_secenekleri" not in k and k["erisim"]["tam_degistir"] is False and k["erisim"]["sil"] is False  # yazma yalniz admin
+    assert "tam_secenekleri" not in k and k["erisim"]["tam_degistir"] is False  # sorumlu devri yalniz yonetici
+    assert k["erisim"]["sil"] is True and k["erisim"]["kimlik_duzenle"] is True  # kendi karti (2026-10-19: herkes kendi verisinde)
     assert veri.get("/api/v1/rapor/gonderilenler").status_code == 403  # rapor modulu verilmedi
 
 
@@ -142,17 +143,23 @@ def test_ekle_tam_degistir_sil_kurallari(veri, monkeypatch):
     assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 2}, headers=hdr).status_code == 200
     _cikis(veri, hdr)
 
-    hdr2 = _giris(veri, monkeypatch, "TeamMember")  # 'admin' satirina bagli Member: veri ekleme / degistirme / silme yalniz admin
-    assert veri.post("/api/v1/musteri", json={"name": "Baskasi", "owner_id": 2}, headers=hdr2).status_code == 403
-    assert veri.post("/api/v1/musteri", json={"name": "Kendi Musterim"}, headers=hdr2).status_code == 403
-    assert veri.put("/api/v1/musteri/2/sorumlu", json={"owner_id": 2}, headers=hdr2).status_code == 403
-    assert veri.put("/api/v1/musteri/2/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 403
-    assert veri.put("/api/v1/musteri/2/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 403
-    assert veri.delete("/api/v1/musteri/2", headers=hdr2).status_code == 403
-    kart = veri.get("/api/v1/musteri/2")
-    assert kart.status_code == 200  # okuma serbest; yazma dugmeleri arayuzde kapali
-    assert not any(kart.json()["data"]["erisim"][k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "tam_degistir", "ayri_rapor_sec"))
-    assert "tam_secenekleri" not in kart.json()["data"]
+    # 'admin' satirina (id 1) bagli Member (2026-10-19 kullanici karari): yalniz KENDI verisinde ekler, duzenler, siler.
+    # Kart 1 artik ayse'nin (id 2); kart 2 (istirak) ve 'Gama Alt' id 1'in.
+    hdr2 = _giris(veri, monkeypatch, "TeamMember")
+    assert veri.post("/api/v1/musteri", json={"name": "Baskasi", "owner_id": 2}, headers=hdr2).status_code == 403  # baskasi adina ekleyemez
+    kendi = veri.post("/api/v1/musteri", json={"name": "Kendi Musterim"}, headers=hdr2)
+    assert kendi.status_code == 200 and kendi.json()["data"]["owner_id"] == 1  # kendi adina acilir
+    assert veri.put("/api/v1/musteri/2/sorumlu", json={"owner_id": 2}, headers=hdr2).status_code == 403  # devir yalniz yonetici
+    assert veri.put("/api/v1/musteri/2/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 200
+    assert veri.put("/api/v1/musteri/2/kimlik", json={"parent_id": 3}, headers=hdr2).status_code == 404  # baskasinin catisina baglayamaz
+    assert veri.put("/api/v1/musteri/2/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 200
+    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 404  # baskasinin karti
+    assert veri.delete("/api/v1/musteri/3", headers=hdr2).status_code == 404
+    kart = veri.get("/api/v1/musteri/2").json()["data"]
+    assert all(kart["erisim"][k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "ayri_rapor_sec"))
+    assert kart["erisim"]["tam_degistir"] is False and "tam_secenekleri" not in kart
+    assert {c["id"] for c in kart["cati_secenekleri"]} == {kendi.json()["data"]["id"]}  # yalniz kendi catilari (kart 1 ayse'nin)
+    assert veri.delete(f"/api/v1/musteri/{ist}", headers=hdr2).status_code == 200  # kendi kartini siler
     _cikis(veri, hdr2)
 
     hdr3 = _giris(veri, monkeypatch, "admin")
@@ -162,7 +169,7 @@ def test_ekle_tam_degistir_sil_kurallari(veri, monkeypatch):
     erisim = veri.get("/api/v1/musteri/2").json()["data"]["erisim"]
     assert all(erisim[k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "tam_degistir", "ayri_rapor_sec"))
     r = veri.delete("/api/v1/musteri/1", headers=hdr3)
-    assert r.status_code == 200 and r.json()["data"]["silinen"] == 3  # cati + 2 istirak
+    assert r.status_code == 200 and r.json()["data"]["silinen"] == 2  # cati + kalan istirak (Gama Alt"i Member sildi)
     assert veri.get("/api/v1/musteri/1").status_code == 404 and veri.get("/api/v1/musteri/2").status_code == 404
 
 

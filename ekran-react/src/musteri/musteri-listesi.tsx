@@ -25,7 +25,7 @@ type Portfoy = {
 
 const SAYFA_ADEDI = 24
 
-/** Musteri Yonetimi portfoyu: cati musteri kartlari, KPI seridi, segment/TAM/arama filtreleri, sagdan acilan "Musteri ekle" formu. */
+/** Musteri Yonetimi portfoyu: KPI seridi, segment/TAM/arama filtreleri, cati musteri kartlari (Onedesk kayitlari: acik / yil ici kapanan), sagdan acilan "Musteri ekle" formu. */
 export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean }) {
   const t = portfoyMetin(dil)
   const yol = useMusteriYolu()
@@ -50,11 +50,11 @@ export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolea
 
   const sorgu = { q, segment, tam, page: sayfa, per_page: SAYFA_ADEDI }
   const portfoy = useQuery({
-    queryKey: ["musteri", "portfoy", sorgu],
+    queryKey: ["musteri", "portfoy", yol, sorgu],
     queryFn: () => oku<Portfoy>(`/api/v1/musteri/portfoy${sorguMetni(sorgu)}`),
     placeholderData: keepPreviousData,
   })
-  const secenek = useQuery({ queryKey: ["musteri", "secenekler"], queryFn: () => oku<Secenekler>("/api/v1/musteri/secenekler") })
+  const secenek = useQuery({ queryKey: ["musteri", "secenekler", yol], queryFn: () => oku<Secenekler>("/api/v1/musteri/secenekler") })
 
   const veri = portfoy.data
   const tamSecenekleri = adaGoreSirala(secenek.data?.tam ?? [], (k) => k.ad)

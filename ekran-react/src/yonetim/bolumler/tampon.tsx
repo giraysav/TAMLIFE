@@ -10,14 +10,16 @@ import { Analiz } from "@/yonetim/tampon/analiz"
 import { Dagitim } from "@/yonetim/tampon/dagitim"
 import type { KuralOnerisi } from "@/yonetim/tampon/dagitim"
 import { VeriAkislariPaneli, useVeriAkislari } from "@/yonetim/tampon/akislar"
+import { ReportdbKatalogu } from "@/yonetim/tampon/katalog"
 import { Kaynaklar } from "@/yonetim/tampon/kaynaklar"
 import { HamMusteriBolumu } from "@/yonetim/tampon/musteri-ham"
 import { Partiler } from "@/yonetim/tampon/partiler"
+import { PgKataloglari } from "@/yonetim/tampon/pg-katalog"
 import { Rehber } from "@/yonetim/tampon/rehber"
 import { TemipEslesmesi } from "@/yonetim/tampon/temip"
 import { tm } from "@/yonetim/tampon/metin"
 
-/** Veri Girisi: veri akislari (tum ice alma yollari, bayat uyarisi) -> Ham Musteri Verisi (fiilen kullanilan hat) -> kaynaklar
+/** Veri Girisi: ReportDB ham katalogu (ilk alan: sema -> tablo -> alt tablo -> sutun + ornek) -> PostgreSQL kataloglari (ONENTDB / ONEDESKDB) -> veri akislari (tum ice alma yollari, bayat uyarisi) -> Ham Musteri Verisi (fiilen kullanilan hat) -> kaynaklar
  *  (+ genel CSV) -> 1 tampon -> 2 analiz -> 3 dagitim (tembel, kapali) -> TEMIP eslesmesi (tembel, kapali) -> rehber (tembel, kapali).
  *  Secili parti adreste (#/yonetim/tampon?parti=12): geri/ileri ve baglanti paylasimi calisir. */
 export default function Tampon({ dil }: { dil: Dil }) {
@@ -40,6 +42,8 @@ export default function Tampon({ dil }: { dil: Dil }) {
   const dagitimOzeti = useVeriAkislari().data?.dagitim
   return (
     <div className="grid gap-4">
+      <ReportdbKatalogu dil={dil} />
+      <PgKataloglari dil={dil} />
       <VeriAkislariPaneli dil={dil} />
       <HamMusteriBolumu dil={dil} onYeniParti={(p) => sec(p.id)} />
       <Kaynaklar dil={dil} onYeniParti={sec} />

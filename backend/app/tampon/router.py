@@ -20,7 +20,7 @@ from app.dil import m
 from app.models import IngestBatch
 from app.ortak import KimlikTipi, UygulamaHatasi, govde_oku, iso, ok, sayfa_bilgisi
 from app.session import Principal
-from app.tampon import akislar, analiz, dagitim, depo, kaynak, musteri_aktar, musteri_ham, oracle
+from app.tampon import akislar, analiz, dagitim, depo, katalog, kaynak, musteri_aktar, musteri_ham, oracle, postgres, temip_atama
 
 router = APIRouter(
     prefix="/api/v1/tampon", tags=["tampon"], dependencies=[Depends(require_admin)]
@@ -119,8 +119,164 @@ def veri_akislari(admin: Principal = Depends(require_admin), db: Session = Depen
     return ok(akislar.akislar(db))
 
 
+# --- Ham katalog (ReportDB sema -> nesne -> alt nesne -> sutun agaci) -------------------------------------------------
+@router.get("/katalog")
+def katalog_agaci(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Son hazir katalogun agaci (sutunlar nesne acilinca), calisan tarama ve son hata."""
+    return ok(katalog.agac(db))
+
+
+@router.get("/katalog/nesne/{nesne_id}")
+def katalog_nesnesi(nesne_id: KimlikTipi, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(katalog.nesne(db, nesne_id))
+
+
+@router.get("/katalog/nesne/{nesne_id}/ornek")
+def katalog_ornegi(
+    nesne_id: KimlikTipi,
+    grup: str = Query(default="", max_length=60),
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """grup bos: genel ornek; grup = domain degeri: o domain'de arama metnini iceren ornek satirlar."""
+    return ok(katalog.ornek(db, nesne_id, grup))
+
+
+DOMAIN_SORGUSU = Query(default=[], max_length=10)  # tekrarlanan ?domain=ACCESS&domain=NOC%20DESTECH
+
+
+@router.get("/katalog/veri")
+def katalog_verisi(
+    nesne: KimlikTipi,
+    domain: list[str] = DOMAIN_SORGUSU,
+    sayfa: int = Query(default=1, ge=1, le=100_000),
+    adet: int = Query(default=100, ge=1, le=katalog.VERI_SAYFA_EN_COK),
+    q: str = Query(default="", max_length=100),
+    filtre: str = Query(default="", max_length=20_000),
+    sirala: str = Query(default="", max_length=128),
+    yon: str = Query(default="asc", pattern="^(asc|desc)$"),
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Ham tampon okuyucu: secili domainlerin arama metnini iceren satirlari; filtre = {sutun: [degerler]} (JSON), q = tum sutunlarda."""
+    return ok(katalog.veri(db, nesne, [d[:60] for d in domain], sayfa, adet, q, filtre, sirala, yon))
+
+
+@router.get("/katalog/veri/degerler")
+def katalog_degerleri(
+    nesne: KimlikTipi,
+    sutun: str = Query(max_length=128),
+    domain: list[str] = DOMAIN_SORGUSU,
+    q: str = Query(default="", max_length=100),
+    filtre: str = Query(default="", max_length=20_000),
+    ara: str = Query(default="", max_length=100),
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Excel filtresi acilir listesi: sutunun farkli degerleri (adetli), diger filtreler uygulanmis."""
+    return ok(katalog.degerler(db, nesne, [d[:60] for d in domain], sutun, q, filtre, ara))
+
+
+@router.post("/katalog/yenile")
+def katalog_yenile(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Isciyi ayri surecte baslatir (panel Oracle'a baglanmaz); tarama ~15 sn, bitince katalog 'ready' olur."""
+    sonuc = katalog.yenile(db, admin.username)
+    _denetim(admin, "tampon.katalog_yenile", f"basladi={sonuc['basladi']}")
+    return ok(sonuc)
+
+
+# --- PostgreSQL kaynaklari (ONENTDB / ONEDESKDB, 2026-10-19): durum, katalog agaci, nesne, yenile ------------------------------
+def _pg_kaynagi(kaynak: str) -> str:
+    if kaynak not in postgres.KAYNAKLAR:
+        raise HTTPException(status_code=404, detail="Bilinmeyen PostgreSQL kaynağı.")
+    return kaynak
+
+
+@router.get("/pg")
+def pg_kaynaklari(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Kaynak basina durum (yalniz anahtar adlari) ve son katalogun ozeti; adres / parola yok."""
+    sonuc = []
+    for k, t in postgres.KAYNAKLAR.items():
+        a = postgres.agac(db, k)
+        sonuc.append({"id": k, "label": t.label, "acma_anahtari": t.enabled_key, **postgres.durum(k), "katalog": a["katalog"], "son": a["son"], "calisiyor": a["calisiyor"]})
+    return ok(sonuc)
+
+
+@router.get("/pg/{kaynak}/katalog")
+def pg_katalog(kaynak: str, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(postgres.agac(db, _pg_kaynagi(kaynak)))
+
+
+@router.get("/pg/nesne/{nesne_id}")
+def pg_nesne(nesne_id: KimlikTipi, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(postgres.nesne(db, nesne_id))
+
+
+@router.post("/pg/{kaynak}/katalog/yenile")
+def pg_katalog_yenile(kaynak: str, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Isciyi ayri surecte baslatir (panel PostgreSQL'e baglanmaz)."""
+    sonuc = postgres.yenile(db, _pg_kaynagi(kaynak), admin.username)
+    _denetim(admin, "tampon.pg_katalog_yenile", f"kaynak={kaynak} basladi={sonuc['basladi']}")
+    return ok(sonuc)
+
+
 TEMIP_DURUMLARI = ("kart", "kart_personelsiz", "radar", "belirsiz")
 TEMIP_SAYFA = 50
+
+
+class TemipAtamaGovde(BaseModel):
+    """kart_id: personelin mevcut kartina ekle (isim karisikligi); tam_id: personele yeni kart ac (unvan bos ise TEMIP unvani)."""
+
+    musteri_no: str = Field(max_length=20)
+    kart_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
+    tam_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
+    unvan: str = Field(default="", max_length=150)
+
+
+class TemipKaldirGovde(BaseModel):
+    musteri_no: str = Field(max_length=20)
+
+
+@router.get("/temip/kartlar")
+def temip_kart_ara(
+    q: str = Query(default="", max_length=100),
+    tam: int | None = Query(default=None, ge=1, le=2_147_483_647),
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Elle atama icin kart arama (unvan ya da numara); tam: yalniz o personelin kartlari."""
+    return ok(temip_atama.kart_ara(db, q, tam))
+
+
+@router.get("/temip/personel")
+def temip_personel(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Atanabilir personel (Musteri Yonetimi personel listesi)."""
+    return ok(temip_atama.personeller(db))
+
+
+@router.get("/temip/atamalar")
+def temip_atamalari(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(temip_atama.atamalar(db))
+
+
+@router.post("/temip/ata")
+def temip_ata(govde: TemipAtamaGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Eslesmeyen TEMIP Musteri No'sunu karta elle ata (CRM unvan hatasi): numara kartin Musteri No'suna eklenir, kayitlar baglanir."""
+    if (govde.kart_id is None) == (govde.tam_id is None):
+        raise HTTPException(status_code=400, detail="Mevcut kart (kart_id) ya da yeni kart için personel (tam_id) seçin.")
+    if govde.kart_id is not None:
+        sonuc = temip_atama.ata(db, govde.musteri_no, govde.kart_id, admin.username)
+    else:
+        sonuc = temip_atama.personele_ata(db, admin, govde.musteri_no, govde.tam_id or 0, govde.unvan)
+    _denetim(admin, "tampon.temip_ata", f"musteri_no={sonuc['musteri_no']} kart={sonuc['kart_id']} yeni={sonuc['yeni_kart']} kayit={sonuc['kayit']}")
+    return ok(sonuc)
+
+
+@router.post("/temip/ata/kaldir")
+def temip_ata_kaldir(govde: TemipKaldirGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    sonuc = temip_atama.kaldir(db, govde.musteri_no, admin.username)
+    _denetim(admin, "tampon.temip_ata_kaldir", f"musteri_no={sonuc['musteri_no']} kart={sonuc['kart_id']}")
+    return ok(sonuc)
 
 
 @router.get("/temip/eslesme")

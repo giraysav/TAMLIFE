@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import Column, Table, delete, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
+from app import musteri_alani
 from app.authz import is_admin, yonetici_mi
 from app.gelir.servis import tum_gelirler, unvan_tasi
 from app.kullanicilar import kullanici_kaydi, musteri_personeli, musteri_personeli_mi
@@ -70,11 +71,22 @@ def simdi() -> datetime:
 
 # --- yetki ve kapsam -------------------------------------------------------------------------
 def eylem_yetkisi(user: Principal, eylem: str) -> bool:
-    """Uretim eylem_yetkisi: add/duzenle/sync modul erisimiyle gelir; delete, final_skor_atama, talep_yonetimi
-    yalniz yonetici. (Moduli gorme kurali cagiranda: erisim kapisi.)"""
+    """Uretim eylem_yetkisi: add/duzenle/sync/delete modul erisimiyle gelir (2026-10-19 kullanici karari: herkes KENDI verisinde
+    duzenler ve siler; sahiplik musteri_getir / silinebilir_mi ile); final_skor_atama, talep_yonetimi yalniz yonetici."""
     if yonetici_mi(user):
         return True
-    return eylem in {"add", "duzenle", "sync"}
+    return eylem in {"add", "duzenle", "sync", "delete"}
+
+
+def silinebilir_mi(db: Session, user: Principal, musteri: Customer) -> bool:
+    """Yonetici (admin, TeamMngr) gordugu her karti; personel yalniz sorumlusu oldugu karti siler. Silme istirakleri de goturur:
+    baskasinin istiraki altindaysa personel silemez."""
+    if yonetici_mi(user):
+        return True
+    uid = kullanici_id(db, user)
+    if uid is None or musteri.owner_id != uid:
+        return False
+    return db.scalar(select(Customer.id).where(Customer.parent_id == musteri.id, or_(Customer.owner_id.is_(None), Customer.owner_id != uid)).limit(1)) is None
 
 
 def kullanici_id(db: Session, user: Principal) -> int | None:
@@ -118,7 +130,10 @@ def liste(db: Session, user: Principal, arama: str = "", sayfa: int = 1, adet: i
         sorgu = sorgu.where(or_(Customer.name.ilike(kalip, escape="\\"), Customer.segment.ilike(kalip, escape="\\")))
     toplam = db.scalar(select(func.count()).select_from(sorgu.subquery())) or 0
     satirlar = db.scalars(sorgu.order_by(Customer.name, Customer.id).offset((sayfa - 1) * adet).limit(adet)).all()
-    sahipler = {u.id: (u.display_name or u.username) for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in satirlar if c.owner_id})))}
+    sahipler = {
+        u.id: (u.display_name or u.username)
+        for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in satirlar if c.owner_id})))
+    }
     return {
         "items": [
             {
@@ -166,17 +181,12 @@ def secenekler(db: Session, user: Principal) -> dict:
     }
 
 
-def portfoy(
-    db: Session, user: Principal, arama: str = "", tam_id: int | None = None, segment: str = "", sayfa: int = 1, adet: int = PORTFOY_SAYFA
-) -> dict:
-    """Cati musterilerin kart listesi (uretim 'Musterilerim'): iştirakler cati kartinin icinde; arama iştirak adini da kapsar.
-
-    Member yalniz kendi musterilerini ve catisi kendisinde olan iştirakleri gorur; yonetici hepsini.
-    """
-    adet = min(max(1, adet), EN_FAZLA_SAYFA_BASINA)
-    yonetici = yonetici_mi(user)
+def portfoy_catilari(
+    db: Session, user: Principal, arama: str = "", tam_id: int | None = None, segment: str = ""
+) -> tuple[list[Customer], set[int] | None]:
+    """Portfoy filtresine (arama / TAM / segment) uyan cati kartlari ve kullanicinin gorebildigi kart kimlikleri (None = hepsi)."""
     gorunen: set[int] | None = None
-    if not yonetici:
+    if not yonetici_mi(user):
         uid = kullanici_id(db, user)
         benim = select(Customer.id).where(Customer.owner_id == uid) if uid else select(Customer.id).where(Customer.id == -1)
         gorunen = set(db.scalars(select(Customer.id).where(or_(Customer.owner_id == uid, Customer.parent_id.in_(benim))))) if uid else set()
@@ -194,7 +204,18 @@ def portfoy(
         if gorunen is not None:
             alt = alt.where(Customer.id.in_(gorunen or {-1}))
         cati = cati.where(or_(Customer.name.ilike(kalip, escape="\\"), Customer.segment.ilike(kalip, escape="\\"), Customer.id.in_(alt)))
-    tum = db.scalars(cati.order_by(Customer.name, Customer.id)).all()
+    return list(db.scalars(cati.order_by(Customer.name, Customer.id))), gorunen
+
+
+def portfoy(
+    db: Session, user: Principal, arama: str = "", tam_id: int | None = None, segment: str = "", sayfa: int = 1, adet: int = PORTFOY_SAYFA
+) -> dict:
+    """Cati musterilerin kart listesi (uretim 'Musterilerim'): iştirakler cati kartinin icinde; arama iştirak adini da kapsar.
+
+    Member yalniz kendi musterilerini ve catisi kendisinde olan iştirakleri gorur; yonetici hepsini.
+    """
+    adet = min(max(1, adet), EN_FAZLA_SAYFA_BASINA)
+    tum, gorunen = portfoy_catilari(db, user, arama, tam_id, segment)
     toplam = len(tum)
     sayfa = max(1, min(sayfa, max(1, math.ceil(toplam / adet))))
     parca = tum[(sayfa - 1) * adet : sayfa * adet]
@@ -205,7 +226,10 @@ def portfoy(
     altlar: dict[int, list[Customer]] = {}
     for a in db.scalars(alt_sorgu.order_by(Customer.name)):
         altlar.setdefault(a.parent_id, []).append(a)
-    sahipler = {u.id: (u.display_name or u.username) for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in parca if c.owner_id} or {-1})))}
+    sahipler = {
+        u.id: (u.display_name or u.username)
+        for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in parca if c.owner_id} or {-1})))
+    }
     skorlu = [c.score for c in tum if c.score]
     return {
         "items": [
@@ -219,6 +243,9 @@ def portfoy(
                 "alarm": c.alarm_count or 0,
                 "sikayet": c.complaint_count or 0,
                 "talep": c.request_count or 0,
+                "alarm_kapanan": c.alarm_closed_count or 0,  # Onedesk kayitlari kutusu: acik / yil ici kapanan
+                "sikayet_kapanan": c.complaint_closed_count or 0,
+                "talep_kapanan": c.request_closed_count or 0,
                 "istirakler": [{"id": a.id, "name": a.name} for a in altlar.get(c.id, [])],
             }
             for c in parca
@@ -297,7 +324,9 @@ def rapor_birimi_mi(musteri: Customer) -> bool:
 def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] | None) -> dict:
     musteri = musteri_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id).order_by(func.lower(Customer.name))))
-    sahipler = {u.id: u for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in [musteri, *istirakler] if c.owner_id})))}
+    sahipler = {
+        u.id: u for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in [musteri, *istirakler] if c.owner_id})))
+    }
     tam = sahipler.get(musteri.owner_id)
     ust = db.get(Customer, musteri.parent_id) if musteri.parent_id else None
     adlar = {eslestirme_anahtari(c.name) for c in [musteri, *istirakler] if c.name}
@@ -324,7 +353,15 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
             "ft_hacim": musteri.ft_volume or VARSAYILAN_TUTAR,
             "tam_ft": musteri.tam_ft or VARSAYILAN_TUTAR,
             "final_skor": round(musteri.score or 0, 1) if musteri.parent_id is None else None,
-            "skor_talebi_bekliyor": (db.scalar(select(func.count()).select_from(ScoreApprovalRequest).where(ScoreApprovalRequest.customer_id == musteri.id, ScoreApprovalRequest.status == "pending")) or 0) > 0,
+            "skor_talebi_bekliyor": (
+                db.scalar(
+                    select(func.count())
+                    .select_from(ScoreApprovalRequest)
+                    .where(ScoreApprovalRequest.customer_id == musteri.id, ScoreApprovalRequest.status == "pending")
+                )
+                or 0
+            )
+            > 0,
             "kendi": _sayilar([musteri]),
             "istirak_dahil": _sayilar([musteri, *istirakler]) if istirakler else None,
         },
@@ -337,7 +374,9 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
     rapor_izni = erisim("rapor")
     if rapor_izni:
         sorgu = select(Report).where(Report.customer_id == musteri.id)
-        raporlar = db.scalars(sorgu.order_by(Report.report_year.desc(), Report.report_month.desc(), Report.id.desc()).limit(RAPOR_ADEDI)).all()
+        raporlar = db.scalars(
+            sorgu.order_by(Report.report_year.desc(), Report.report_month.desc(), Report.id.desc()).limit(RAPOR_ADEDI)
+        ).all()
         kart["raporlar"] = {
             "toplam": db.scalar(select(func.count()).select_from(Report).where(Report.customer_id == musteri.id)) or 0,
             "son": [
@@ -360,7 +399,9 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         if apn_izni:
             kart["gelirler"]["apn"] = _gelirler(db, ApnRevenue, adlar, ek=("installation_pct",))
 
-    yazma = is_admin(user)  # veri ekleme/degistirme/silme yalniz admin (deps.require_veri_yazma ile ayni kural)
+    # 2026-10-19 kullanici karari: karti gorebilen (personel: kendi karti ve istiraki; yonetici: hepsi) duzenler; silme silinebilir_mi
+    yazma = True
+    yonetici = yonetici_mi(user)
     kart["erisim"] = {
         "rapor": rapor_izni,
         "gelir": sms_izni or apn_izni,
@@ -368,15 +409,19 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "kimlik_duzenle": yazma and eylem_yetkisi(user, "duzenle"),
         "iletisim_duzenle": yazma,
         "istirak_ekle": yazma and eylem_yetkisi(user, "add"),
-        "sil": yazma and eylem_yetkisi(user, "delete"),
-        "tam_degistir": yazma,
+        "sil": silinebilir_mi(db, user, musteri),
+        "tam_degistir": yonetici,  # sorumlu devri yalniz yonetici (tam_degistir)
         "rapor_geri_al": is_admin(user),
         "ayri_rapor_sec": yazma and musteri.parent_id is not None,
     }
     if yazma:
         kart["cati_secenekleri"] = [
             {"id": c.id, "ad": c.name}
-            for c in db.scalars(select(Customer).where(Customer.parent_id.is_(None), Customer.id != musteri.id).order_by(Customer.name, Customer.id))
+            for c in db.scalars(
+                select(Customer)
+                .where(Customer.parent_id.is_(None), Customer.id != musteri.id, *([] if yonetici else [Customer.owner_id == kullanici_id(db, user)]))
+                .order_by(Customer.name, Customer.id)
+            )  # personel istirakini yalniz kendi catisina baglar
         ]
         secenek = {u.id: u for u in musteri_personeli(db)}
         if musteri.owner_id and musteri.owner_id not in secenek:  # eski kayit: personel olmayan sahip secili gorunsun
@@ -387,6 +432,8 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
             ({"id": u.id, "ad": u.display_name or u.username} for u in secenek.values()),
             key=lambda u: (u["ad"] or "").lower(),
         )
+    if not yonetici:
+        kart.pop("tam_secenekleri", None)  # sorumlu devri yalniz yonetici
     return kart
 
 
@@ -400,7 +447,13 @@ def _gelirler(db: Session, model: Any, adlar: set[str], ek: tuple[str, ...] = ()
     return {
         "toplam": {p: round(t, 2) for p, t in toplam.items()},
         "son": [
-            {"donem": f"{k.month:02d}.{k.year}", "tutar": k.amount, "para": k.currency, "musteri": k.customer_name, **{a: getattr(k, a) for a in ek}}
+            {
+                "donem": f"{k.month:02d}.{k.year}",
+                "tutar": k.amount,
+                "para": k.currency,
+                "musteri": k.customer_name,
+                **{a: getattr(k, a) for a in ek},
+            }
             for k in kayitlar[:GELIR_ADEDI]
         ],
     }
@@ -448,17 +501,24 @@ def kimlik_guncelle(db: Session, user: Principal, musteri_id: int, govde: dict) 
                 raise MusteriHata(400, "Müşteri kendisinin çatısı olamaz.")
             # Kilit sirasi sabit: eszamanli A->B ve B->A degisiklikleri dongu olusturmasin.
             kilitli = {
-                c.id: c for c in db.scalars(
-                    select(Customer).where(Customer.id.in_([musteri.id, yeni_cati])).order_by(Customer.id)
-                    .with_for_update().execution_options(populate_existing=True)
+                c.id: c
+                for c in db.scalars(
+                    select(Customer)
+                    .where(Customer.id.in_([musteri.id, yeni_cati]))
+                    .order_by(Customer.id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             }
             ust = kilitli.get(yeni_cati)
-            if ust is None:
-                raise MusteriHata(404, "Çatı müşteri bulunamadı.")
+            if ust is None or not (yonetici_mi(user) or ust.owner_id == kullanici_id(db, user)):
+                raise MusteriHata(404, "Çatı müşteri bulunamadı.")  # personel yalniz kendi catisini secer; baskasininki sizdirilmaz
             if ust.parent_id is not None:
                 raise MusteriHata(400, "Bir iştirak çatı müşteri olarak seçilemez.")
-            if yeni_cati != musteri.parent_id and db.scalar(select(Customer.id).where(Customer.parent_id == musteri.id).limit(1)) is not None:
+            if (
+                yeni_cati != musteri.parent_id
+                and db.scalar(select(Customer.id).where(Customer.parent_id == musteri.id).limit(1)) is not None
+            ):
                 raise MusteriHata(409, "Bu müşterinin iştiraklerini önce başka bir çatıya taşıyın.")
     if "name" in govde:
         yeni_ad = _metin(govde, "name", "Müşteri Ünvanı", 150, zorunlu=True)
@@ -550,6 +610,12 @@ def iletisim_kaydet(db: Session, user: Principal, musteri_id: int, govde: dict) 
     return iletisim_sozlugu(db, musteri.id)
 
 
+def _dis_anahtar(anahtar: str) -> str:
+    """external_key tum alanlarda tekil: ayni unvan Musteri Yonetimi'nde ve Toptan'da ayri kart olabilir."""
+    alan = musteri_alani.secili()
+    return (f"panel-{anahtar}" if alan == musteri_alani.VARSAYILAN else f"{alan}-{anahtar}")[:80]
+
+
 def musteri_ekle(db: Session, user: Principal, govde: dict) -> dict:
     """Uretim add_customer. Yonetici disi baskasi adina ya da baskasinin catisi altina ekleyemez."""
     if not eylem_yetkisi(user, "add"):
@@ -571,7 +637,9 @@ def musteri_ekle(db: Session, user: Principal, govde: dict) -> dict:
             raise MusteriHata(403, "Başka bir personel adına müşteri ekleyemezsiniz.")
         if ust is not None and not gorunur_mu(db, user, ust):
             raise MusteriHata(403, "Bu müşteri başka bir TAM temsilcisine ait.")
-    tam_id = istenen_tam or (ust.owner_id if ust else (uid if musteri_personeli_mi(ben) else None))  # yonetici/admin/modul sahibi kendi adina musteri sahibi olmaz
+    tam_id = istenen_tam or (
+        ust.owner_id if ust else (uid if musteri_personeli_mi(ben) else None)
+    )  # yonetici/admin/modul sahibi kendi adina musteri sahibi olmaz
     if istenen_tam:
         tam = db.get(AppUser, istenen_tam)
         if not musteri_personeli_mi(tam):
@@ -580,7 +648,7 @@ def musteri_ekle(db: Session, user: Principal, govde: dict) -> dict:
     if any(eslestirme_anahtari(c.name or "") == anahtar for c in db.scalars(select(Customer))):
         raise MusteriHata(409, "Bu ünvanla kayıtlı başka bir müşteri var.")
     yeni = Customer(
-        name=ad, segment=segment, owner_id=tam_id, parent_id=ust.id if ust else None, external_key=f"panel-{anahtar}"[:80], status=""
+        name=ad, segment=segment, owner_id=tam_id, parent_id=ust.id if ust else None, external_key=_dis_anahtar(anahtar), status=""
     )
     db.add(yeni)
     db.flush()
@@ -660,8 +728,9 @@ def agaci_sil(db: Session, kokler: list[int]) -> int:
 
 
 def sil(db: Session, user: Principal, musteri_id: int) -> dict:
-    """Musteriyi ve istiraklerini (bagli rapor, taslak, gonderim, skor kayitlariyla) siler. Yalniz yonetici."""
-    if not eylem_yetkisi(user, "delete"):
-        raise MusteriHata(403, "Yetki yok.")
+    """Musteriyi ve istiraklerini (bagli rapor, taslak, gonderim, skor kayitlariyla) siler. Yonetici her karti, personel yalniz
+    kendi kartini (silinebilir_mi)."""
     musteri = musteri_getir(db, user, musteri_id)
+    if not silinebilir_mi(db, user, musteri):
+        raise MusteriHata(403, "Yalnızca sorumlusu olduğunuz müşteriyi silebilirsiniz.")
     return {"silinen": agaci_sil(db, [musteri.id])}

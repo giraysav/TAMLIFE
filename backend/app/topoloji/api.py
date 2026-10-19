@@ -12,13 +12,13 @@ from starlette.concurrency import run_in_threadpool
 
 from app.audit import audit_log
 from app.db import get_db
-from app.erisim import Erisim, modul_erisim
+from app.erisim import Erisim, musteri_alani_erisim
 from app.musteri import servis as musteri_servis
 from app.ortak import govde_oku, ok
 from app.topoloji import servis
 
 router = APIRouter(prefix="/api/v1/topoloji", tags=["topoloji"])
-topoloji_erisim = modul_erisim("musteri")
+topoloji_erisim = musteri_alani_erisim()
 BUYUK = "Dosya 10 MB sınırını aşıyor."
 
 

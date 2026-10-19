@@ -1,0 +1,188 @@
+"""TEMIP Musteri No'sunu karta ELLE atama (2026-10-18 kullanici istegi: "bazi musterilerde CRM kaynakli unvan hatasi var; eslesmeyen
+musterileri manuel atamak icin fonksiyon ekle").
+
+Kural degismez: eslesme yalniz numarayla. Atama numarayi kartin Musteri No alanina EKLER (varsa dokunmaz); kayitlar hemen o karta
+baglanir, kart sayaclari yenilenir (Oracle'a gidilmez). Numara kartta durdugu icin sonraki iceri alma turlari ve Ham Musteri Verisi
+aktarimlari (numaralar birikir, silinmez) atamayi korur. Elle atamalar ayarda listelenir; geri alma yalniz bu listedeki numarayi
+karttan siler. Yalniz admin (Veri Girisi).
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.models import AppSetting, AppUser, Customer, OnedeskRecord
+from app.onedesk.ice_al import sayaclari_yenile
+from app.ortak import UygulamaHatasi, iso, simdi
+from app.session import Principal
+from app.tampon import temip_kayit
+from app.tampon.eslestirme import anahtar, musteri_anahtarlari
+
+ATAMA_AYARI = "temip.manuel_atamalar"
+_NO = re.compile(r"^\d{8}$")
+NO_ALANI_UZUNLUK = 200  # customer.customer_no
+
+
+class AtamaHata(UygulamaHatasi):
+    pass
+
+
+def _liste(db: Session) -> list[dict[str, Any]]:
+    a = db.get(AppSetting, ATAMA_AYARI)
+    return list(a.value) if a is not None and isinstance(a.value, list) else []
+
+
+def _liste_yaz(db: Session, liste: list[dict[str, Any]], kullanici: str) -> None:
+    a = db.get(AppSetting, ATAMA_AYARI)
+    if a is None:
+        db.add(AppSetting(key=ATAMA_AYARI, value=liste, updated_by=kullanici, updated_at=simdi()))
+    else:
+        a.value, a.updated_by, a.updated_at = liste, kullanici, simdi()
+
+
+def _surum_tazele(db: Session) -> None:
+    """Eslesme / Radar onbellekleri TEMIP surumune bakar: kart baglantisi degisti."""
+    a = db.get(AppSetting, temip_kayit.SURUM_AYARI)
+    deger = dict(a.value) if a is not None and isinstance(a.value, dict) else {}
+    deger["an"] = simdi().isoformat()
+    if a is None:
+        db.add(AppSetting(key=temip_kayit.SURUM_AYARI, value=deger, updated_by="temip_atama", updated_at=simdi()))
+    else:
+        a.value, a.updated_at = deger, simdi()
+
+
+def _bagla(db: Session) -> dict[str, int]:
+    etkilenen: set[int] = set()
+    degisen = temip_kayit.yeniden_bagla(db, temip_kayit.harita(db), etkilenen)
+    sayaclari_yenile(db, etkilenen)
+    _surum_tazele(db)
+    return {"yeniden_baglanan": degisen, "etkilenen_kart": len(etkilenen)}
+
+
+def _dogrula(db: Session, musteri_no: str) -> tuple[str, int, str]:
+    """(numara, kayit sayisi, TEMIP unvani). Numara 8 haneli, TEMIP kaydi olan ve HICBIR kartta yazili olmayan numara olmali."""
+    no = (musteri_no or "").strip()
+    if not _NO.match(no):
+        raise AtamaHata(400, "Müşteri No 8 haneli olmalı.")
+    kosul = (OnedeskRecord.source == temip_kayit.KAYNAK_ADI, OnedeskRecord.customer_no == no)
+    kayit = db.scalar(select(func.count()).select_from(OnedeskRecord).where(*kosul))
+    if not kayit:
+        raise AtamaHata(404, "Bu Müşteri No için TEMIP kaydı yok.")
+    return no, kayit, db.scalar(select(func.max(OnedeskRecord.customer_label)).where(*kosul)) or ""
+
+
+def _numara_sahipleri(db: Session, no: str) -> list[Customer]:
+    k = anahtar(no)
+    return [c for c in db.scalars(select(Customer).where(Customer.customer_no.is_not(None))) if k in musteri_anahtarlari(c.customer_no)]
+
+
+def _kaydet(db: Session, no: str, unvan: str, kayit: int, kart: Customer, kullanici: str, yeni_kart: bool) -> dict[str, Any]:
+    liste = [a for a in _liste(db) if a.get("musteri_no") != no]
+    tam = db.get(AppUser, kart.owner_id) if kart.owner_id else None
+    liste.insert(0, {"musteri_no": no, "temip_unvan": unvan, "kart_id": kart.id, "kart": kart.name, "personel": (tam.display_name or tam.username) if tam else "",
+                     "yeni_kart": yeni_kart, "kayit": kayit, "kim": kullanici, "zaman": iso(simdi())})  # fmt: skip
+    _liste_yaz(db, liste[:500], kullanici)
+    sonuc = _bagla(db)
+    db.commit()
+    return {
+        "musteri_no": no,
+        "kart_id": kart.id,
+        "kart": kart.name,
+        "kart_musteri_no": kart.customer_no,
+        "yeni_kart": yeni_kart,
+        "kayit": kayit,
+        **sonuc,
+    }
+
+
+def ata(db: Session, musteri_no: str, kart_id: int, kullanici: str) -> dict[str, Any]:
+    """Isim karisikligi: TEMIP Musteri No'sunu (personelin) MEVCUT kartina ekler ve kayitlari baglar. Numara baska kartta yaziliysa 409."""
+    no, kayit, unvan = _dogrula(db, musteri_no)
+    kart = db.get(Customer, kart_id)
+    if kart is None:
+        raise AtamaHata(404, "Kart bulunamadı.")
+    sahipler = _numara_sahipleri(db, no)
+    if any(c.id == kart.id for c in sahipler):
+        raise AtamaHata(409, "Bu numara zaten bu kartta yazılı.")
+    if sahipler:
+        raise AtamaHata(409, f"Bu numara başka kartta yazılı: {', '.join(c.name for c in sahipler)}. Önce o karttan çıkarın.")
+    onceki = (kart.customer_no or "").strip()
+    yeni = f"{onceki}, {no}" if onceki else no
+    if len(yeni) > NO_ALANI_UZUNLUK:
+        raise AtamaHata(409, "Kartın Müşteri No alanı dolu (200 karakter); önce gereksiz numaraları temizleyin.")
+    kart.customer_no = yeni
+    db.flush()
+    return _kaydet(db, no, unvan, kayit, kart, kullanici, yeni_kart=False)
+
+
+def personele_ata(db: Session, user: Principal, musteri_no: str, tam_id: int, unvan: str = "") -> dict[str, Any]:
+    """Musteri hicbir kartta yoksa: secilen personel (TAM) adina YENI kart acar (unvan: verilen ya da TEMIP unvani; Musteri No ile).
+    Kart 'Musteri ekle' kurallariyla acilir (ayni unvanli kart varsa 409, personel gecerli olmali)."""
+    no, kayit, temip_unvan = _dogrula(db, musteri_no)
+    if sahipler := _numara_sahipleri(db, no):
+        raise AtamaHata(409, f"Bu numara zaten kartta yazılı: {', '.join(c.name for c in sahipler)}.")
+    ad = " ".join((unvan or temip_unvan).split())[:150]
+    if not ad:
+        raise AtamaHata(400, "Kart ünvanı gerekli.")
+    from app.musteri import servis as ms
+
+    yeni = ms.musteri_ekle(db, user, {"name": ad, "owner_id": tam_id})
+    kart = db.get(Customer, yeni["id"])
+    kart.customer_no = no
+    db.flush()
+    return _kaydet(db, no, temip_unvan, kayit, kart, user.username, yeni_kart=True)
+
+
+def personeller(db: Session) -> list[dict[str, Any]]:
+    """Atanabilir personel: Musteri Yonetimi personel listesi (TAM; modul sahipleri haric)."""
+    from app.kullanicilar import musteri_personeli
+
+    return [{"id": u.id, "ad": u.display_name or u.username} for u in musteri_personeli(db)]
+
+
+def kaldir(db: Session, musteri_no: str, kullanici: str) -> dict[str, Any]:
+    """Elle atamayi geri alir: numara karttan silinir, kayitlar yeniden baglanir (TAM Radar'a doner). Atamayla acilan kart SILINMEZ
+    (karta sonradan veri girilmis olabilir); gerekiyorsa Musteri Yonetimi'nden silinir."""
+    no = (musteri_no or "").strip()
+    liste = _liste(db)
+    atama = next((a for a in liste if a.get("musteri_no") == no), None)
+    if atama is None:
+        raise AtamaHata(404, "Bu numara için elle atama yok.")
+    kart = db.get(Customer, int(atama["kart_id"]))
+    if kart is not None and kart.customer_no:
+        k = anahtar(no)
+        parcalar = [p.strip() for p in re.split(r"[,;/\n]+", kart.customer_no) if p.strip() and anahtar(p) != k]
+        kart.customer_no = ", ".join(parcalar) or None
+    _liste_yaz(db, [a for a in liste if a.get("musteri_no") != no], kullanici)
+    db.flush()
+    sonuc = _bagla(db)
+    db.commit()
+    return {"musteri_no": no, "kart_id": atama["kart_id"], **sonuc}
+
+
+def atamalar(db: Session) -> list[dict[str, Any]]:
+    return _liste(db)
+
+
+def kart_ara(db: Session, q: str, tam_id: int | None = None, adet: int = 15) -> list[dict[str, Any]]:
+    """Atama icin kart arama (unvan ya da numara; harf / Turkce karakter farksiz). tam_id: yalniz o personelin kartlari (bos arama
+    o personelin tum kartlarini listeler)."""
+    from app.ortak import normal
+
+    aranan = normal(q or "")
+    if len(aranan) < 2 and not tam_id:
+        return []
+    sorgu = select(Customer).order_by(Customer.name)
+    if tam_id:
+        sorgu = sorgu.where(Customer.owner_id == tam_id)
+    sonuc = []
+    for c in db.scalars(sorgu):
+        if not aranan or aranan in normal(c.name or "") or aranan in (c.customer_no or ""):
+            sonuc.append({"id": c.id, "ad": c.name, "musteri_no": c.customer_no or "", "istirak": c.parent_id is not None})
+            if len(sonuc) >= adet:
+                break
+    return sonuc

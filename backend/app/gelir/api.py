@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.audit import audit_log
 from app.db import get_db
-from app.deps import require_veri_yazma
 from app.erisim import Erisim, modul_erisim
 from app.gelir import servis as gs
 from app.ortak import KimlikTipi, ok
@@ -56,7 +55,7 @@ def sms_liste(yil: int | None = Yil, e: Erisim = Depends(sms_erisim), db: Sessio
 
 
 @router.post("/sms")
-def sms_ekle(body: Serbest, e: Erisim = Depends(sms_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+def sms_ekle(body: Serbest, e: Erisim = Depends(sms_erisim), db: Session = Depends(get_db)):
     return _yaz(db, e.user, lambda: gs.sms_ekle(db, e.user, body.model_dump()), "gelir.sms_ekle", "tamsms")
 
 
@@ -66,14 +65,13 @@ def sms_guncelle(
     body: Serbest,
     e: Erisim = Depends(sms_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     return _yaz(db, e.user, lambda: gs.sms_guncelle(db, e.user, kayit_id, body.model_dump()), "gelir.sms_guncelle", "tamsms")
 
 
 @router.delete("/sms/{kayit_id:int}")
 def sms_sil(
-    kayit_id: KimlikTipi, e: Erisim = Depends(sms_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+    kayit_id: KimlikTipi, e: Erisim = Depends(sms_erisim), db: Session = Depends(get_db)
 ):
     return _yaz(db, e.user, lambda: gs.sms_sil(db, e.user, kayit_id), "gelir.sms_sil", "tamsms")
 
@@ -86,7 +84,7 @@ def kurulum_liste(yil: int | None = Yil, e: Erisim = Depends(apn_erisim), db: Se
 
 @router.post("/apn/kurulum")
 def kurulum_ekle(
-    body: Serbest, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+    body: Serbest, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db)
 ):
     return _yaz(db, e.user, lambda: gs.kurulum_ekle(db, e.user, body.model_dump()), "gelir.apn_kurulum_ekle", "tamapn")
 
@@ -97,14 +95,13 @@ def kurulum_guncelle(
     body: Serbest,
     e: Erisim = Depends(apn_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     return _yaz(db, e.user, lambda: gs.kurulum_guncelle(db, e.user, kayit_id, body.model_dump()), "gelir.apn_kurulum_guncelle", "tamapn")
 
 
 @router.delete("/apn/kurulum/{kayit_id:int}")
 def kurulum_sil(
-    kayit_id: KimlikTipi, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+    kayit_id: KimlikTipi, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db)
 ):
     return _yaz(db, e.user, lambda: gs.kurulum_sil(db, e.user, kayit_id), "gelir.apn_kurulum_sil", "tamapn")
 
@@ -117,7 +114,7 @@ def calisma_liste(e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db)
 
 @router.post("/apn/calisma")
 def calisma_ekle(
-    body: Serbest, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+    body: Serbest, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db)
 ):
     return _yaz(db, e.user, lambda: gs.calisma_ekle(db, e.user, body.model_dump()), "gelir.apn_calisma_ekle", "tamapn")
 
@@ -128,13 +125,12 @@ def calisma_guncelle(
     body: Serbest,
     e: Erisim = Depends(apn_erisim),
     db: Session = Depends(get_db),
-    _y: Principal = Depends(require_veri_yazma),
 ):
     return _yaz(db, e.user, lambda: gs.calisma_guncelle(db, e.user, kayit_id, body.model_dump()), "gelir.apn_calisma_guncelle", "tamapn")
 
 
 @router.delete("/apn/calisma/{kayit_id:int}")
 def calisma_sil(
-    kayit_id: KimlikTipi, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)
+    kayit_id: KimlikTipi, e: Erisim = Depends(apn_erisim), db: Session = Depends(get_db)
 ):
     return _yaz(db, e.user, lambda: gs.calisma_sil(db, e.user, kayit_id), "gelir.apn_calisma_sil", "tamapn")

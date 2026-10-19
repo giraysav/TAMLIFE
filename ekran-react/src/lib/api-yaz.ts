@@ -1,4 +1,4 @@
-import { apiYolu, csrfBasliklari, oturumYok } from "@/lib/http"
+import { apiYolu, csrfBasliklari, musteriAlaniBasligi, oturumYok } from "@/lib/http"
 
 export type Sonuc<T> = {
   ok: boolean
@@ -16,7 +16,7 @@ function hataMetni(govde: unknown): string {
 
 async function gonder<T>(yontem: string, yol: string, basliklar: Record<string, string> | undefined, govde: BodyInit | undefined): Promise<Sonuc<T>> {
   try {
-    const cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: basliklar, body: govde })
+    const cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: { ...musteriAlaniBasligi(yol), ...basliklar }, body: govde })
     if (oturumYok(cevap)) window.dispatchEvent(new Event("tamlife:oturum-bitti"))
     const json = (await cevap.json().catch(() => null)) as Record<string, unknown> | null
     return {

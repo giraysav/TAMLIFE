@@ -7,7 +7,7 @@ import { Bildirim, DUGME, DUGME_ANA, HataKutu, Panel, Rozet, Yukleniyor } from "
 import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { zaman } from "@/lib/bicim"
-import type { AdBaglantisi, AdTesti, KurumBaglantisi, OracleBaglantisi } from "@/yonetim/api"
+import type { AdBaglantisi, AdTesti, KurumBaglantisi, OracleBaglantisi, PostgresBaglantisi } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
 import type { YM } from "@/yonetim/metin"
 import { DurumRozeti } from "@/yonetim/ui"
@@ -39,7 +39,7 @@ function Ayarlar({ satirlar }: { satirlar: [string, string][] }) {
 }
 
 /** Test dugmesi + adim adim sonuc (AD ve Oracle ayni gorunum). */
-function TestAlani({ test, t, etiket, bekliyor, notu, tamam }: { test: UseMutationResult<AdTesti, Error, void>; t: YM; etiket: string; bekliyor: string; notu: string; tamam: string }) {
+function TestAlani({ test, t, etiket, bekliyor, notu, tamam, adimAdi }: { test: UseMutationResult<AdTesti, Error, void>; t: YM; etiket: string; bekliyor: string; notu: string; tamam: string; adimAdi?: Record<string, string> }) {
   const k = t.kurum
   return (
     <div className="grid gap-2">
@@ -60,7 +60,7 @@ function TestAlani({ test, t, etiket, bekliyor, notu, tamam }: { test: UseMutati
                 <span className="w-24 shrink-0">
                   <DurumRozeti durum={a.durum} t={t} />
                 </span>
-                <span className="w-64 shrink-0 font-black text-tl-navy">{k.adim[a.adim] ?? a.baslik}</span>
+                <span className="w-64 shrink-0 font-black text-tl-navy">{(adimAdi ?? k.adim)[a.adim] ?? a.baslik}</span>
                 <span className="min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-[0.6875rem] text-slate-500">{a.ayrinti || a.baslik}</span>
               </li>
             ))}
@@ -163,6 +163,7 @@ export default function Kurum({ dil }: { dil: Dil }) {
   if (q.isError) return <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
   const liste = q.data.baglantilar
   const oracle = liste.filter((b): b is OracleBaglantisi => b.tur === "oracle")
+  const postgres = liste.filter((b): b is PostgresBaglantisi => b.tur === "postgres")
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -206,8 +207,48 @@ export default function Kurum({ dil }: { dil: Dil }) {
               <OracleKarti b={b} t={t} tetik={tetik} />
             </section>
           ))}
+          {postgres.map((b) => (
+            <section key={b.id} id={`kurum-${b.id}`}>
+              <PostgresKarti b={b} t={t} tetik={tetik} />
+            </section>
+          ))}
         </>
       ) : null}
     </div>
+  )
+}
+
+/** PostgreSQL karti (ONENTDB / ONEDESKDB, 2026-10-19): Oracle karti duzeni; veritabani adi ve SSL kipi, parola yalniz tanimli mi. */
+function PostgresKarti({ b, t, tetik }: { b: PostgresBaglantisi; t: YM; tetik: number }) {
+  const k = t.kurum
+  const test = useTest(`/api/v1/yonetim/kurum/${encodeURIComponent(b.id)}/test`, tetik, b.state === "ready")
+  const i = b.bilgiler
+  const kat = b.katalog
+  return (
+    <Panel baslik={`${b.label} · PostgreSQL`} sag={<Rozet ton={DURUM_TON[b.state]}>{k.durum[b.state] ?? b.state}</Rozet>}>
+      <div className="grid gap-4">
+        <p className="max-w-3xl text-xs font-bold text-slate-600">{k.pgNe[b.id] ?? ""}</p>
+        {b.state === "disabled" ? <Bildirim>{k.oracleKapali(b.acma_anahtari)}</Bildirim> : null}
+        {b.missing.length > 0 ? (
+          <Bildirim ton="amber">
+            {k.eksik}: <code>{b.missing.join(", ")}</code>
+          </Bildirim>
+        ) : null}
+        <Ayarlar
+          satirlar={[
+            [k.sunucuAdresi, i.sunucu || k.tanimsiz],
+            [k.port, String(i.port)],
+            [k.veritabani, i.veritabani || k.tanimsiz],
+            [k.kullanici, i.kullanici || k.tanimsiz],
+            [k.parola, i.parola ? k.tanimli : k.tanimsiz],
+            [k.ssl, i.ssl],
+            [k.zamanAsimi, k.saniye(i.zaman_asimi)],
+            [k.sonKatalog, kat ? `#${kat.id} · ${kat.durum} · ${zaman(kat.bitis ?? kat.baslangic)}` : k.katalogYok],
+          ]}
+        />
+        <p className="text-[0.625rem] font-bold text-slate-400">{k.gizlilik}</p>
+        {b.state === "ready" ? <TestAlani test={test} t={t} etiket={k.test} bekliyor={k.pgTestEdiliyor} notu={k.pgTestNotu} tamam={k.pgTamam} adimAdi={k.pgAdim} /> : null}
+      </div>
+    </Panel>
   )
 }

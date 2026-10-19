@@ -21,6 +21,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app import musteri_alani
+
 
 class Base(DeclarativeBase):
     """Ortak panel DB'si (Alembic)."""
@@ -67,6 +69,8 @@ TABLE_OWNER = {
     "distribution_rule": "ingest",
     "distribution_log": "ingest",
     "customer_import_run": "ingest",
+    "source_catalog": "ingest",
+    "source_catalog_object": "ingest",
     "fault_event": "yonetim",
 }
 
@@ -117,6 +121,8 @@ class Customer(Base):
     status: Mapped[str] = mapped_column(String(40), default="")
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)  # sorumlu TAM
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"), nullable=True)  # bos = cati
+    # Kartin modulu (musteri | toptan | baglantili; app.musteri_alani): sorgular istegin alanina suzulur, yeni kart o alanda acilir
+    modul: Mapped[str] = mapped_column(String(20), default=musteri_alani.secili, server_default="musteri", index=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)  # final skor, yalniz cati
     # --- Musteri karti (uretim customers). Tutarlar uretimdeki gibi metin: "0,00 TL" bicimi
     customer_no: Mapped[str | None] = mapped_column(String(200), nullable=True)  # birden cok numara virgulle
@@ -309,6 +315,8 @@ class OnedeskRecord(Base):
         Index("ix_onedesk_customer", "customer_id"),
         Index("ix_onedesk_source_key", "source", "external_key"),  # TEMIP artimli yazimi: (source, IDENTIFIER) ile bulunur
         Index("ix_onedesk_source_mno", "source", "customer_no"),  # TAM Radar: kartsiz kayitlar Musteri No'ya gore
+        Index("ix_onedesk_durum_musteri", "status", "customer_id"),  # Musteri Yonetimi: portfoyun acik kayitlari
+        Index("ix_onedesk_musteri_durum_kapanis", "customer_id", "status", "closed_at"),  # kart: yil boyu kapananlar
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     kind: Mapped[str] = mapped_column(String(40), default="")

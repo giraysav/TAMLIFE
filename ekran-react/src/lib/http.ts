@@ -15,6 +15,15 @@ export function dilBasligi(): Record<string, string> {
   }
 }
 
+/** Toptan / Baglantili Araclar kartlari Musteri Yonetimi'nden ayridir (sunucu app.musteri_alani): bu ekranlardayken musteri karti
+ *  uclarina (musteri, topoloji, rapor gonderimi) X-Musteri-Alani gider. Diger uclara gitmez; baslik yoksa alan Musteri Yonetimi'dir. */
+const ALANLI_MODULLER = ["toptan", "baglantili"]
+const ALANLI_UCLAR = ["/api/v1/musteri", "/api/v1/topoloji", "/api/v1/rapor/gonderim/"]
+export function musteriAlaniBasligi(yol: string): Record<string, string> {
+  const modul = window.location.hash.replace(/^#\/?/, "").split(/[?/]/)[0]
+  return ALANLI_MODULLER.includes(modul) && ALANLI_UCLAR.some((u) => yol.startsWith(u)) ? { "X-Musteri-Alani": modul } : {}
+}
+
 /** Durum degistiren isteklerde CSRF basligi (cift gonderim cerezi). */
 export function csrfBasliklari(ekstra: Record<string, string> = {}): Record<string, string> {
   const eslesme = document.cookie.match(/(?:^|;\s*)tamlife_csrf=([^;]+)/)

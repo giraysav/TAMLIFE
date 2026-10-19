@@ -261,14 +261,25 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
   })
 
-  it("Operasyon penceresi mavi zeminli: Alarm, Talep, Sikayet yil ici kapanan adetleri", async () => {
-    sahteSunucu({ "/api/v1/musteri/9": KART })
+  it("Operasyon: Alarm, Talep, Sikayet acik / yil ici kapanan dugmeleri; tiklayinca o kayitlar listelenir, ikinci tiklama kapatir", async () => {
+    const cagrilar = sahteSunucu({
+      "/api/v1/musteri/9/kayitlar": { tur: "talep", durum: "kapali", yil: 2026, toplam: 0, sayfa: 1, adet: 10, kayitlar: [] },
+      "/api/v1/musteri/9": KART,
+    })
     sarmala(<MusteriKarti id={9} dil="tr" />)
     await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
     const pencere = screen.getByRole("region", { name: "Operasyon" })
-    expect(pencere).toHaveClass("rounded-3xl", "from-tl-navy", "to-tl-blue")
+    expect(pencere).toHaveClass("rounded-2xl", "from-tl-navy", "to-tl-blue")
     const kutular = ["Alarm", "Talep", "Şikayet"].map((e) => within(pencere).getByText(e).parentElement?.textContent)
-    expect(kutular).toEqual(["Alarm11Yıl içi kapanan", "Talep33Yıl içi kapanan", "Şikayet2Yıl içi kapanan"])
+    expect(kutular).toEqual(["Alarm0/11", "Talep0/33", "Şikayet0/2"])
+    expect(screen.queryByRole("region", { name: /kapanan talep kayıtları/ })).toBeNull() // kapanan tablosu varsayilan yok
+    const dugme = within(pencere).getByRole("button", { name: "Talep: Yıl içi kapanan 33" })
+    fireEvent.click(dugme)
+    expect(dugme).toHaveAttribute("aria-pressed", "true")
+    expect(await screen.findByRole("region", { name: "2026 yılında kapanan talep kayıtları" })).toBeTruthy()
+    expect(cagrilar.some((c) => c.yol.includes("/api/v1/musteri/9/kayitlar?tur=talep&durum=kapali"))).toBe(true)
+    fireEvent.click(dugme)
+    expect(screen.queryByRole("region", { name: /kapanan talep kayıtları/ })).toBeNull()
   })
 
   it("Duzenle tek formu acar (kimlik + ekip ve iletisim); tek Kaydet once iletisimi sonra kimligi gonderir", async () => {

@@ -284,6 +284,7 @@ function MusteriCalismalari({ dil }: { dil: Dil }) {
     onMutate: () => setDurum(t.kaydediliyor),
     onSuccess: (r, d) => {
       setDurum(r.zaman ? t.kaydedildiZaman(zaman(r.zaman)) : t.kaydedildiZaman(""))
+      void qc.invalidateQueries({ queryKey: ANAHTAR, exact: true }) // personel ozeti isaretleri de sayar
       qc.setQueryData<Calisma>([...ANAHTAR, "musteri"], (eski) => {
         if (!eski) return eski
         const mevcut = eski.isaretler[String(d.id)] ?? {}

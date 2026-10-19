@@ -7,8 +7,8 @@ import { useHashSorgu } from "@/shell/rota"
 import { TopoMaker } from "@/topoloji/topo-maker"
 
 /** Musteri Yonetimi: #/musteri liste, ?m=<id> musteri karti, ?m=<id>&sekme=rapor aylik rapor, ?m=<id>&sekme=topoloji TopoMaker
- *  Baglantili Araclar (#/baglantili) ve Toptan (#/toptan) simdilik ayni ekrani kendi yollariyla acar
- *  (uretimde kartin arac bolumundeki modal; header geri oku bir onceki ekrana doner). */
+ *  Baglantili Araclar (#/baglantili) ve Toptan (#/toptan) ayni ekrani kendi yollariyla ve KENDI kartlariyla acar (2026-10-19: veri
+ *  Musteri Yonetimi'nden ayri; sunucu app.musteri_alani, istek basligi lib/http musteriAlaniBasligi). */
 export function MusteriSayfasi({ dil, yazabilir, yol = "musteri" }: { dil: Dil; yazabilir: boolean; yol?: string }) {
   return (
     <MusteriYolu.Provider value={yol}>

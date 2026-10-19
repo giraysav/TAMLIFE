@@ -15,7 +15,7 @@ from __future__ import annotations
 import io
 from datetime import date
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app import dil
@@ -125,6 +125,21 @@ def kalem_sil(db: Session, user: Principal, kalem_id: int) -> None:
     db.delete(kalem)
 
 
+def _musteri_isaretleri(db: Session, user: Principal) -> list[tuple[str, int | None]]:
+    """Gorunen musterilerdeki 'yapildi' isaretleri: (kategori, cati TAM'i). Kapsam musteriler() ile ayni."""
+    ust = aliased(Customer)
+    sorgu = (
+        select(ProjectCustomerWork.category, func.coalesce(ust.owner_id, Customer.owner_id))
+        .join(Customer, Customer.id == ProjectCustomerWork.customer_id)
+        .outerjoin(ust, Customer.parent_id == ust.id)
+        .where(ProjectCustomerWork.done.is_(True), ProjectCustomerWork.category.in_(list(KATEGORILER)))
+    )
+    if not yonetici_mi(user):
+        uid = kullanici_kaydi(db, user).id
+        sorgu = sorgu.where(or_(Customer.owner_id == uid, ust.owner_id == uid))
+    return [(k, s) for k, s in db.execute(sorgu).all()]
+
+
 def ekran(db: Session, user: Principal) -> dict:
     """Ozet + proje listesi (en son guncellenen ustte) + sorumlu secenekleri."""
     yonetici = yonetici_mi(user)
@@ -150,6 +165,12 @@ def ekran(db: Session, user: Principal) -> dict:
         if k.category in KATEGORILER:
             d[k.category] += 1
         d["kapanan" if k.status == "kapandi" else "devam_eden"] += 1
+    # 2026-10-19 kullanici istegi: Musteri Bazli Calismalar'da isaretlenen kutu da personelin ilgili kategori sutununa yazilir
+    # (musteri basina kategori basina 1; istirak catisinin TAM'ina sayilir, Excel suzgeciyle ayni kural).
+    for kategori, sahip_id in _musteri_isaretleri(db, user):
+        sahip = sahip_id if sahip_id in kimlikler else None
+        d = ozet.setdefault(sahip, {"tam": _ad(db.get(AppUser, sahip_id)) if sahip else dil.m("Atanmamış", "Unassigned"), **dict.fromkeys(KATEGORILER, 0), "kapanan": 0, "devam_eden": 0})
+        d[kategori] += 1
     for d in ozet.values():
         d["toplam"] = sum(d[c] for c in KATEGORILER)
     ozet_listesi = [d for _, d in sorted(ozet.items(), key=lambda kv: (kv[0] is None, -kv[1]["toplam"], eslestirme_anahtari(kv[1]["tam"])))]

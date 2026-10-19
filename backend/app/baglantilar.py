@@ -22,7 +22,8 @@ def connections() -> list[dict[str, object]]:
     return [
         {"id": "ad", "slot": "AD", "tur": "dizin", "configured": directory.configured()},
         {"id": "oracle_reportdb", "slot": "ORACLE_REPORTDB", "tur": "veritabani", "configured": acik_mi("ORACLE_REPORTDB_ENABLED")},
-        {"id": "onent", "slot": "ONENTDB", "tur": "veritabani", "configured": acik_mi("ONENTDB_DB_ENABLED")},
+        {"id": "onent", "slot": "ONENTDB", "tur": "veritabani", "configured": acik_mi("ONENTDB_PG_ENABLED")},  # 2026-10-19: PostgreSQL
+        {"id": "onedesk", "slot": "ONEDESKDB", "tur": "veritabani", "configured": acik_mi("ONEDESKDB_PG_ENABLED")},
         {"id": "galapagos", "slot": "GALAPAGOSDB", "tur": "veritabani", "configured": acik_mi("GALAPAGOSDB_DB_ENABLED")},
     ]
 
@@ -47,6 +48,10 @@ def ad_ayarlari() -> dict[str, object]:
     }
 
 
+# 2026-10-19 kullanici: ONENTDB PostgreSQL'dir (tampon/postgres pg_onent); eski Oracle yuvasi (ONENTDB_DB_*) Kurum Baglantilari'nda gosterilmez.
+GIZLI_ORACLE = ("oracle_onent",)
+
+
 def integrations() -> dict[str, object]:
     """Kurum bagimliliklarinin durumu. Oracle: yalniz anahtar adlari ve durum; AD: ek olarak gizli olmayan ayar ozeti."""
     settings = get_settings()
@@ -64,7 +69,7 @@ def integrations() -> dict[str, object]:
         }
     )
     for source in SOURCES:
-        if source.id.endswith("_import"):
+        if source.id.endswith("_import") or source.id in GIZLI_ORACLE:
             continue
         enabled = acik_mi(source.enabled_key)
         missing = oracle_eksikleri(source) if enabled else []
@@ -72,6 +77,11 @@ def integrations() -> dict[str, object]:
         items.append(
             {"id": source.id, "label": source.label, "state": state, "description": "Salt okunur dis kaynak (cekim isci surecte)", "missing": missing}
         )
+    from app.tampon import postgres
+
+    for k, t in postgres.KAYNAKLAR.items():
+        d = postgres.durum(k)
+        items.append({"id": k, "label": t.label, "state": d["state"], "description": "Salt okunur PostgreSQL kaynagi (katalog isci surecte)", "missing": d["eksik"]})
     return {"items": items, "runtime": {"network": "kapali (canli baglanti yok)", "assets": "yerel"}}
 
 
@@ -90,7 +100,7 @@ def _son_parti(db: Session, anahtar: str) -> dict[str, object] | None:
 def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
     """Yonetim > Kurum Baglantilari: AD/LDAPS + Oracle kaynaklari (REPORTDB, ONENTDB, GALAPAGOSDB). Gizli deger yok; Oracle'da
     adres/servis/kullanici yalniz tanimli mi. Canli baglanti yalniz test ucunda (ayri surec)."""
-    from app.tampon import oracle, reportdb
+    from app.tampon import oracle, postgres, reportdb
 
     sonuc: list[dict[str, object]] = []
     for i in integrations()["items"]:  # type: ignore[union-attr]
@@ -106,4 +116,7 @@ def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
             if i["id"] == reportdb.KAYNAK:
                 ek["reportdb"] = reportdb.durum(db)
             sonuc.append({**i, **ek})
+        elif i["id"] in postgres.KAYNAKLAR:
+            sonuc.append({**i, "tur": "postgres", "acma_anahtari": postgres.KAYNAKLAR[i["id"]].enabled_key, "bilgiler": postgres.bilgiler(i["id"]),
+                          "katalog": postgres.agac(db, i["id"])["katalog"]})  # fmt: skip
     return sonuc

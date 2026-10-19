@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Radar } from "lucide-react"
+import { Link2, Radar } from "lucide-react"
+import { AtamaPaneli, ElleAtamalar, atamaMetin } from "@/components/temip-atama"
+import type { AtamaHedefi } from "@/components/temip-atama"
 import { Bildirim, BosKutu, DUGME, GIRDI, HataKutu, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { sayi, zaman } from "@/lib/bicim"
 import { hataMesaji, oku, sorguMetni } from "@/lib/sorgu"
@@ -35,11 +37,15 @@ type Kayitlar = { musteri_no: string; unvan: string; toplam: number; sayfa: numb
 const ADET = 50
 
 /** TAM Radar: Musteri No'su hicbir kartla eslesmeyen TEMIP alarm kayitlari, musteri bazinda; elle giris yok. Sikayet/talep OneDesk'ten gelir (erisim bekleniyor). */
-export function RadarSayfasi({ dil }: { dil: Dil }) {
+/** yonetici (admin): her satirda "Personele ata" (TEMIP Musteri No'sunu personelin mevcut kartina ekle ya da personele yeni kart ac;
+ *  Veri Girisi > TEMIP eslesmesi ile ayni bilesen ve ayni uclar) ve elle atamalar listesi. */
+export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: boolean }) {
   const t = radarMetin(dil)
   const [sayfa, setSayfa] = useState(1)
   const [arama, setArama] = useState("")
   const [secili, setSecili] = useState<string | null>(null)
+  const [hedef, setHedef] = useState<AtamaHedefi | null>(null)
+  const a = atamaMetin(dil)
   const q = useQuery({
     queryKey: ["radar", sayfa, arama],
     queryFn: () => oku<RadarVeri>(`/api/v1/radar${sorguMetni({ sayfa, adet: ADET, q: arama.trim() || undefined })}`),
@@ -115,10 +121,18 @@ export function RadarSayfasi({ dil }: { dil: Dil }) {
                   ? [
                       {
                         baslik: "",
-                        hucre: (a: Aday) => (
-                          <button type="button" className={DUGME} aria-expanded={secili === a.musteri_no} onClick={() => setSecili(secili === a.musteri_no ? null : a.musteri_no)}>
-                            {secili === a.musteri_no ? t.kapat : t.kayitlar}
-                          </button>
+                        hucre: (s: Aday) => (
+                          <span className="flex flex-wrap justify-end gap-1">
+                            {yonetici ? (
+                              <button type="button" className={DUGME} onClick={() => setHedef({ musteri_no: s.musteri_no, temip_unvan: s.unvan })}>
+                                <Link2 aria-hidden className="size-3.5" />
+                                {a.karttaAta}
+                              </button>
+                            ) : null}
+                            <button type="button" className={DUGME} aria-expanded={secili === s.musteri_no} onClick={() => setSecili(secili === s.musteri_no ? null : s.musteri_no)}>
+                              {secili === s.musteri_no ? t.kapat : t.kayitlar}
+                            </button>
+                          </span>
                         ),
                       },
                     ]
@@ -137,6 +151,8 @@ export function RadarSayfasi({ dil }: { dil: Dil }) {
               </div>
             ) : null}
             {kayitModu && secili ? <KayitListesi musteriNo={secili} dil={dil} /> : null}
+            {yonetici && hedef ? <AtamaPaneli key={hedef.musteri_no} dil={dil} hedef={hedef} onKapat={() => setHedef(null)} /> : null}
+            {yonetici && kayitModu ? <ElleAtamalar dil={dil} /> : null}
             <p className="text-[0.6875rem] font-bold text-slate-400">
               {kayitModu ? t.dipnotKayit : t.dipnot}
               {v.veri_zamani ? ` · ${t.veriZamani}: ${kayitModu ? zaman(v.veri_zamani) : v.veri_zamani}` : ""}

@@ -18,8 +18,11 @@ from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.config import get_settings
 from app.models import KullaniciBase
+
+musteri_alani.kur()  # Customer sorgulari istegin musteri alanina suzulur (Toptan / Baglantili Araclar ayri kartlar)
 
 KIMLIK_CARPANI = 1_000_000
 SQLITE_BEKLEME_SN = 30

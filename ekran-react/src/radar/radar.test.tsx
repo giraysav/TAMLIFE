@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { RadarSayfasi } from "@/radar/radar-sayfasi"
 
@@ -65,4 +65,51 @@ describe("Musteri Radar sayfasi", () => {
     sunucu({ var: false, taze: false, veri_zamani: null, satirlar: [] })
     expect(await screen.findByText(/ReportDB verisi henüz alınmadı/)).toBeInTheDocument()
   })
+
+  it("yonetici: Personele ata -> personel sec -> yeni kart ac; uye kullanicida dugme yok", async () => {
+    vi.stubGlobal("confirm", () => true)
+    const radar = {
+      var: true, taze: true, veri_zamani: "2026-10-17T18:00:00Z", kaynak: "kayit", toplam_musteri: 1, toplam_kayit: 3, sayfa: 1, adet: 50,
+      satirlar: [{ sira: 1, musteri_no: "22306933", unvan: "TURK EKONOMI BANKASI A.S.", aktif: 1, kapanan: 2, toplam: 3, ticketli: 1, son_kayit: null, kart_adayi: null }],
+    }  // prettier-ignore
+    const cagrilar: { yol: string; govde: unknown }[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (girdi: string, ayar?: RequestInit) => {
+        const yol = String(girdi)
+        cagrilar.push({ yol: `${ayar?.method ?? "GET"} ${yol}`, govde: typeof ayar?.body === "string" ? JSON.parse(ayar.body) : null })
+        const veri = yol.includes("/temip/personel") ? [{ id: 5, ad: "Ornek Tam" }]
+          : yol.includes("/temip/kartlar") ? []
+          : yol.includes("/temip/atamalar") ? []
+          : yol.includes("/temip/ata") ? { musteri_no: "22306933", kart: "TEB YENI", kayit: 3, yeniden_baglanan: 3, yeni_kart: true }
+          : radar  // prettier-ignore
+        return new Response(JSON.stringify({ status: "success", data: veri }), { status: 200, headers: { "Content-Type": "application/json" } })
+      }),
+    )
+    const { unmount } = render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RadarSayfasi dil="tr" />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("TURK EKONOMI BANKASI A.S.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Personele ata" })).toBeNull() // yalniz admin
+    unmount()
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RadarSayfasi dil="tr" yonetici />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Personele ata" }))
+    const panel = await screen.findByRole("region", { name: "22306933 numarasını personele ata" })
+    const secim = within(panel).getByLabelText("Personel") as HTMLSelectElement
+    await waitFor(() => expect(secim.options.length).toBe(2))
+    fireEvent.change(secim, { target: { value: "5" } })
+    fireEvent.click(within(panel).getByRole("tab", { name: "Yeni kart aç" }))
+    expect((within(panel).getByLabelText("Yeni kartın ünvanı") as HTMLInputElement).value).toBe("TURK EKONOMI BANKASI A.S.")
+    fireEvent.click(within(panel).getByRole("button", { name: "Yeni kart aç ve ata" }))
+    expect(await within(panel).findByText("22306933 → TEB YENI: 3 kayıt karta bağlandı.")).toBeInTheDocument()
+    expect(cagrilar.find((c) => c.yol.startsWith("POST") && c.yol.endsWith("/temip/ata"))?.govde).toEqual({ musteri_no: "22306933", tam_id: 5, unvan: "TURK EKONOMI BANKASI A.S." })
+    await waitFor(() => expect(cagrilar.filter((c) => c.yol.startsWith("GET /api/v1/radar")).length).toBeGreaterThan(2)) // atama Radar listesini tazeler
+  })
 })
+

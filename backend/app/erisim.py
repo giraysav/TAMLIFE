@@ -36,3 +36,16 @@ def modul_erisim(*anahtarlar: str) -> Callable[..., Erisim]:
         return Erisim(user, gorunum.izinli, gorunum.yetkiler)
 
     return bagimlilik
+
+
+def musteri_alani_erisim() -> Callable[..., Erisim]:
+    """Musteri karti uclari: istegin alanindaki modul (musteri / toptan / baglantili; app.musteri_alani) acilabiliyorsa gecer."""
+    from app import musteri_alani
+
+    def bagimlilik(user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> Erisim:
+        gorunum = etkin(db, user)
+        if not can_open(user, get(musteri_alani.secili()), get, gorunum.izinli):
+            raise HTTPException(status_code=403, detail="Yetki yok")
+        return Erisim(user, gorunum.izinli, gorunum.yetkiler)
+
+    return bagimlilik

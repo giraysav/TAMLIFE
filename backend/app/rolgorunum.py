@@ -1,7 +1,7 @@
 """Rol gorunumleri: rolun giris sayfasi ve eylem yetkileri.
 
 Kullanici karari (2026-10-14): Yonetim alani (admin_only) disindaki her modul her personel (TeamMember) ve
-yonetici (TeamMngr) tarafindan gorulur; rol kaydi modul gizlemez. Ekleme, degistirme ve silme yalniz admindedir
+yonetici (TeamMngr) tarafindan gorulur; rol kaydi modul gizlemez. Ekleme, degistirme ve silme herkesin KENDI verisindedir (2026-10-19; toplu islemler admin)
 (deps.require_veri_yazma, modullerin kendi uclari). Admin Rol Yonetimi'nde giris sayfasini ve ek yetkileri verir.
 Veritabani okunamazsa yonetici olmayan kullanici kapali kalir (yalniz genel bakis ve profil).
 """

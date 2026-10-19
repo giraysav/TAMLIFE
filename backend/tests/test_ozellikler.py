@@ -319,12 +319,16 @@ def test_gelir_member_baskasinin_kaydini_goremez(veri, monkeypatch):
     _cikis(veri, hdr)
     hdr = _giris(veri, monkeypatch, "TeamMember")
     assert [i["proje"] for i in veri.get("/api/v1/gelir/sms").json()["data"]["items"]] == ["Y"]
-    # veri ekleme / degistirme / silme yalniz admin: Member baskasinin kaydina da kendi adina da yazamaz
-    assert veri.put(f"/api/v1/gelir/sms/{diger}", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 403
-    assert veri.delete(f"/api/v1/gelir/sms/{diger}", headers=hdr).status_code == 403
-    assert veri.post("/api/v1/gelir/sms", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 403
-    assert veri.post("/api/v1/gelir/apn/kurulum", json={"musteri": "B", "apn_adi": "x"}, headers=hdr).status_code == 403
-    assert veri.post("/api/v1/gelir/apn/calisma", json={"musteri": "B"}, headers=hdr).status_code == 403
+    # 2026-10-19 kullanici karari: Member baskasinin kaydini goremez / degistiremez (404); KENDI kaydini ekler, duzenler, siler
+    assert veri.put(f"/api/v1/gelir/sms/{diger}", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 404
+    assert veri.delete(f"/api/v1/gelir/sms/{diger}", headers=hdr).status_code == 404
+    yeni = veri.post("/api/v1/gelir/sms", json={"musteri": "B", "proje": "Z", "tutar": 1, "tam": "Ayse Test"}, headers=hdr)
+    assert yeni.status_code == 200 and kimlik_coz(yeni.json()["data"]["id"])[0] == 1  # baska TAM secse de kendi dosyasina
+    assert veri.put(f"/api/v1/gelir/sms/{yeni.json()['data']['id']}", json={"musteri": "B", "proje": "W", "tutar": 2}, headers=hdr).status_code == 200
+    assert veri.post("/api/v1/gelir/apn/kurulum", json={"musteri": "B", "apn_adi": "x"}, headers=hdr).status_code != 403  # yetki kapisi yok (alan dogrulamasi ayri)
+    assert veri.post("/api/v1/gelir/apn/calisma", json={"musteri": "B"}, headers=hdr).status_code != 403
+    with kullanici_oturumu("ayse") as k:
+        assert k.scalar(select(func.count()).select_from(SmsRevenue)) == 1  # ayse'nin dosyasina dokunulmadi
 
 
 def test_gelir_tam_dosyasina_yazilir_ve_tam_degisince_tasinir(veri):

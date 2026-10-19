@@ -10,12 +10,14 @@ import Kurum from "@/yonetim/bolumler/kurum"
 import Veritabani from "@/yonetim/bolumler/veritabani"
 import { ym } from "@/yonetim/metin"
 import { VeriAkislariPaneli } from "@/yonetim/tampon/akislar"
+import { ReportdbKatalogu } from "@/yonetim/tampon/katalog"
 import { GenelCsvYukle } from "@/yonetim/tampon/csv-yukle"
 import { Dagitim } from "@/yonetim/tampon/dagitim"
 import { Kaynaklar } from "@/yonetim/tampon/kaynaklar"
 import { tm } from "@/yonetim/tampon/metin"
 import { HamMusteriBolumu } from "@/yonetim/tampon/musteri-ham"
 import { TemipEslesmesi } from "@/yonetim/tampon/temip"
+import { atamaMetin } from "@/components/temip-atama"
 import { BOS_KURAL, KuralFormu } from "@/yonetim/tampon/kural-formu"
 import { Rehber } from "@/yonetim/tampon/rehber"
 import { bayt, sureYaz, zaman } from "@/lib/bicim"
@@ -519,5 +521,119 @@ describe("Veri Girisi optimizasyonu", () => {
     expect(await screen.findByText(a.csv.yuklendi(9, 3))).toBeTruthy()
     expect(cagrilar).toContain("PUT /api/v1/tampon/yukle?kaynak=alarm&dosya=a.csv")
     expect(secilen).toEqual([9])
+  })
+})
+
+describe("ReportDB ham veri okuyucu", () => {
+  const k = tm("tr").katalog
+  const tablo = (id: number, ad: string, ust: string, isabet: number) => ({ id, sahip: "TEMIP", ad, ust, pencere: "tüm tablo", satir: 100, isabet, oran: 1, sutunlar: [] })
+  const katalog = {
+    kaynak: "oracle_reportdb",
+    katalog: { id: 1, durum: "ready", baslangic: "2026-10-18T08:00:00Z", bitis: "2026-10-18T08:00:30Z", olusturan: "admin", ozet: { nesne: 15, sutun: 788, sure_sn: 30 }, hata: "" },
+    calisiyor: false,
+    son_hata: "",
+    semalar: [],
+    parametreler: { ara: "nw_li_", alan: "NETWORK", degerler: ["ACCESS", "NOC DESTECH"], saat: 6, satir_siniri: 1000000, eslesmeyen: [] },
+    parametre_agaci: [
+      { domain: "ACCESS", isabet: 5, satir: 100, tablolar: [tablo(2, "ACTIVEALARMS_5DK_S1", "ACTIVEALARMS_5DK", 5), tablo(9, "ALARMS", "", 0)] },
+      { domain: "NOC DESTECH", isabet: 30, satir: 100, tablolar: [tablo(2, "ACTIVEALARMS_5DK_S1", "ACTIVEALARMS_5DK", 10), tablo(3, "VIEW_REPORT_EXPORT", "", 20)] },
+    ],
+  }
+  const veri = {
+    id: 3, ad: "TEMIP.VIEW_REPORT_EXPORT", pencere: "ilk 1.000.000 satır", ara: "nw_li_", domainler: ["ACCESS", "NOC DESTECH"],
+    sutunlar: ["NODE1", "IDENTIFIER", "NETWORK"], isabetli: ["NODE1"], gizlenen_bos: 40, toplam_ham: 2, toplam: 2, sayfa: 1, adet: 100,
+    satirlar: [["nw_li_cust_a", 1, "NOC DESTECH"], ["nw_li_cust_b", 2, "NOC DESTECH"]], filtreli: [],
+  }
+
+  it("filtreler: domain dugmeleri, tarama filtresi, isabetli tablolar; bos sutun gizli, isabet vurgulu", async () => {
+    const cagrilar = sahteSunucu({ "/api/v1/tampon/katalog/veri": veri, "/api/v1/tampon/katalog": katalog })
+    sarmala(<ReportdbKatalogu dil="tr" />)
+    expect(await screen.findByText("nw_li_cust_a")).toBeTruthy()
+    expect(screen.getByText(k.taramaFiltresi("nw_li_"))).toBeTruthy()
+    expect(screen.getByText(k.gizlenenBos(40))).toBeTruthy()
+    const secenekler = within(screen.getByLabelText(k.tablo)).getAllByRole("option").map((o) => o.textContent)
+    expect(secenekler).toEqual([k.tabloSecenegi("VIEW_REPORT_EXPORT", "20"), k.tabloSecenegi("ACTIVEALARMS_5DK › ACTIVEALARMS_5DK_S1", "15")]) // isabetsiz ALARMS yok
+    expect(screen.getByText("nw_li_cust_a").className).toContain("bg-tl-yellow")
+    expect(cagrilar.some((c) => c.includes("/katalog/veri?nesne=3") && c.includes("domain=ACCESS&domain=NOC%20DESTECH"))).toBe(true)
+    fireEvent.click(screen.getByRole("button", { name: "NETWORK = ACCESS" }))
+    await waitFor(() => expect(cagrilar.some((c) => c.includes("/katalog/veri?nesne=3") && c.endsWith("domain=NOC%20DESTECH"))).toBe(true))
+    fireEvent.click(screen.getByRole("button", { name: "NETWORK = NOC DESTECH" }))
+    expect(await screen.findByText(k.domainEnAzBir)).toBeTruthy()
+  })
+
+  it("sutun basligi: Excel filtresi (deger listesi, tumunu sec, tamam) ve siralama", async () => {
+    const cagrilar = sahteSunucu({
+      "/api/v1/tampon/katalog/veri/degerler": { sutun: "NODE1", farkli: 2, kesildi: false, degerler: [{ deger: "nw_li_cust_a", adet: 1 }, { deger: "nw_li_cust_b", adet: 1 }] },
+      "/api/v1/tampon/katalog/veri": veri,
+      "/api/v1/tampon/katalog": katalog,
+    })
+    sarmala(<ReportdbKatalogu dil="tr" />)
+    fireEvent.click(await screen.findByRole("button", { name: k.filtreMenusu("NODE1") }))
+    const menu = await screen.findByRole("dialog", { name: k.filtreMenusu("NODE1") })
+    expect(await within(menu).findByText("nw_li_cust_b")).toBeTruthy()
+    fireEvent.click(within(menu).getByRole("checkbox", { name: /nw_li_cust_b/ }))
+    expect((within(menu).getByRole("checkbox", { name: k.tumunuSec }) as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(within(menu).getByRole("button", { name: k.tamam }))
+    await waitFor(() => expect(cagrilar.some((c) => c.includes(`filtre=${encodeURIComponent(JSON.stringify({ NODE1: ["nw_li_cust_a"] }))}`))).toBe(true))
+    expect(screen.queryByRole("dialog")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: k.filtreMenusu("IDENTIFIER") }))
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: k.siralaZa }))
+    await waitFor(() => expect(cagrilar.some((c) => c.includes("sirala=IDENTIFIER") && c.includes("yon=desc"))).toBe(true))
+  })
+
+  it("katalog yoksa bos kutu; yenile isciyi baslatir", async () => {
+    const cagrilar = sahteSunucu({ "/api/v1/tampon/katalog/yenile": { basladi: true, calisiyor: true }, "/api/v1/tampon/katalog": { ...katalog, katalog: null } })
+    sarmala(<ReportdbKatalogu dil="tr" />)
+    expect(await screen.findByText(k.yok)).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: k.yenile }))
+    expect(await screen.findByText(k.basladi)).toBeTruthy()
+    expect(cagrilar).toContain("POST /api/v1/tampon/katalog/yenile")
+  })
+})
+
+describe("TEMIP elle atama", () => {
+  const a = atamaMetin("tr")
+  const ozet = { musteri: 0, acik: 0, kapali: 0 }
+  const eslesme = {
+    hazir: true,
+    ozet: { kart: ozet, kart_personelsiz: ozet, radar: { musteri: 1, acik: 1, kapali: 2 }, belirsiz: ozet },
+    personel: [],
+    uyari: { belirsiz_numara: [], personelsiz_kart: [], bicimsiz_kart_no: [], kayitsiz_numarali_kart: 0 },
+    bagli_olmayan: 0, toplam: 1, sayfa: 1, adet: 50,
+    musteriler: [{ musteri_no: "22306933", temip_unvan: "TURK EKONOMI BANKASI A.S.", durum: "radar", kart_id: "", panel_unvan: "", cati: "", personel: "",
+      personel_kullanici: "", acik: 1, acik_ticketli: 1, kapali: 2, toplam: 3, aday_kartlar: "" }],
+  }  // prettier-ignore
+
+  it("Radar satirinda Karta ata: unvanla kart arar, onayla atar; elle atamalar listesi geri alinir", async () => {
+    window.localStorage.setItem("mkBolum:yonetim-tampon-temip", "1")
+    vi.stubGlobal("confirm", () => true)
+    const atamalar = [{ musteri_no: "22306933", temip_unvan: "TURK EKONOMI BANKASI A.S.", kart_id: 7, kart: "TÜRK EKONOMI BANKASI A.S", kayit: 3, kim: "admin", zaman: "2026-10-18T19:00:00Z" }]
+    const cagrilar: { yol: string; govde: unknown }[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (girdi: string, ayar?: RequestInit) => {
+        const yol = String(girdi)
+        cagrilar.push({ yol: `${ayar?.method ?? "GET"} ${yol}`, govde: typeof ayar?.body === "string" ? JSON.parse(ayar.body) : null })
+        const veri = yol.includes("/temip/personel") ? [{ id: 5, ad: "Ornek Tam" }]
+          : yol.includes("/temip/kartlar") ? [{ id: 7, ad: "TÜRK EKONOMI BANKASI A.S", musteri_no: "11245635", istirak: false }]
+          : yol.includes("/temip/ata/kaldir") ? { musteri_no: "22306933", kart_id: 7 }
+          : yol.includes("/temip/atamalar") ? atamalar
+          : yol.includes("/temip/ata") ? { musteri_no: "22306933", kart: "TÜRK EKONOMI BANKASI A.S", kayit: 3, yeniden_baglanan: 3, yeni_kart: false }
+          : eslesme  // prettier-ignore
+        return new Response(JSON.stringify({ status: "success", data: veri }), { status: 200, headers: { "Content-Type": "application/json" } })
+      }),
+    )
+    sarmala(<TemipEslesmesi dil="tr" />)
+    fireEvent.click(await screen.findByRole("button", { name: a.karttaAta }))
+    const panel = await screen.findByRole("region", { name: a.baslik("22306933") })
+    expect((within(panel).getByLabelText(a.kartAra) as HTMLInputElement).value).toBe("TURK EKONOMI") // unvandan tohum
+    fireEvent.click(await within(panel).findByRole("button", { name: a.ata }))
+    expect(await within(panel).findByText(a.atandi("22306933", "TÜRK EKONOMI BANKASI A.S", "3"))).toBeTruthy()
+    expect(cagrilar.find((c) => c.yol.startsWith("POST") && c.yol.endsWith("/temip/ata"))?.govde).toEqual({ musteri_no: "22306933", kart_id: 7 })
+    expect(cagrilar.some((c) => c.yol.includes("/temip/kartlar?q=TURK"))).toBe(true)
+    expect((await screen.findAllByText(a.liste(1))).length).toBeGreaterThan(0) // baslik + tablo aciklamasi
+    fireEvent.click(screen.getByRole("button", { name: a.geriAl }))
+    expect(await screen.findByText(a.geriAlindi("22306933"))).toBeTruthy()
+    expect(cagrilar.find((c) => c.yol.endsWith("/temip/ata/kaldir"))?.govde).toEqual({ musteri_no: "22306933" })
   })
 })

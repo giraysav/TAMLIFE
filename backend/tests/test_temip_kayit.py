@@ -80,7 +80,8 @@ def test_sorgular_tek_select_kurumsal_iki_yonlu_sinirli_kisisel_veri_yok():
     kapali = oracle.sorgu_temizle(temip_kayit.kapali_sorgusu("DATE '2026-01-01'", "SYSDATE + 1"))
     kimlik = oracle.sorgu_temizle(temip_kayit.kimlik_sorgusu(["43581308", "1"], datetime(2026, 10, 1), datetime(2026, 10, 3)))  # noqa: DTZ001 - Oracle DATE dilimsiz
     for s in (acik, kapali, kimlik):
-        assert "IN ('NOC DESTECH')" in s and "REGEXP_LIKE(INFORMATION1,'^[0-9]{8}$')" in s and "INFORMATION2 IS NOT NULL" in s
+        assert "IN ('NOC DESTECH')" in s and "REGEXP_LIKE(INFORMATION1, '^[0-9]{8}$')" in s
+        assert "INSTR(LOWER(MANAGEDOBJECT), 'nw_li_cust') > 0 OR INSTR(LOWER(NODE1), 'nw_li_cust') > 0" in s
         assert "CIName:[[:space:]]*" in s and "REGEXP_SUBSTR(ALARMOBJECTOPERATORNO, '^[0-9]+')" in s
         assert sum(s.upper().count(k) for k in (" INSERT ", " UPDATE ", " DELETE ")) == 0
     assert "TEMIP.ACTIVEALARMS_5DK" in acik and "EVENTTIME >= DATE '2026-01-01'" in acik
@@ -307,3 +308,49 @@ def test_isci_temip_eslesme_csv_yazar_oracle_istemez(client, monkeypatch, tmp_pa
     assert "karta (sorumlu TAM)" in cikti and "Ornek tam" in cikti
     musteri = next((tmp_path / "var" / "kesif").glob("temip-eslesme-*-musteri.csv")).read_text(encoding="utf-8-sig")
     assert musteri.splitlines()[0].startswith("musteri_no;temip_unvan;durum;kart_id") and "10000001;" in musteri
+
+
+def test_katalogdan_kapananlar_ham_dosyadan_acik_oracle_dan(client, monkeypatch, tmp_path):
+    """Ilk yukleme: kapananlar son hazir katalogun ham dosyasindan (kosul ayni: domain, 8 haneli Musteri No, CI'da nw_li_cust),
+    sonra son 1 gun + acik goruntu Oracle'dan."""
+    from app.tampon import katalog
+    from app.tampon.models import SourceCatalog, SourceCatalogObject
+
+    monkeypatch.setattr(katalog, "HAM_DIZIN", tmp_path)
+    a = kart("ORNEK-A", "10000001")
+    sutunlar = ["IDENTIFIER", "INFORMATION1", "INFORMATION2", "ALARMOBJECTOPERATORNO", "ADDITIONALTEXT", "NODE1", "MANAGEDOBJECT",
+                "ALARMHEADER", "EVENTTIME", "CLOSETIMESTAMP", "CLOSEUSERIDENTIFIER"]  # fmt: skip
+    with Session(engine()) as db:
+        k = SourceCatalog(source_key=katalog.KAYNAK, status="ready", started_at=katalog.simdi(), created_by="t", summary={}, error="")
+        db.add(k)
+        db.flush()
+        y = katalog.HamYazici(k.id)
+        t = y.tablo_adi("TEMIP", "VIEW_REPORT_ACTIVE")
+        y.olustur(t, sutunlar)
+        y.yaz(t, [
+            ["NOC DESTECH", 11, "10000001", "ORNEK A.S.", "10134000011 NOT", "AVAILABILITY\nCIName: nw_li_cust_a_1", "nw_li_cust_a_1", "x",
+             "AVAILABILITY", "2026-03-01 10:00:00", "2026-03-01 12:00:00", "atm"],
+            ["NOC DESTECH", 12, "20000002", "RADAR A.S.", None, "metin", "nw_li_cust_b_2", "x", "AVAILABILITY", "2026-04-01 10:00:00",
+             "2026-04-01 10:05:00", "Auto-Clear"],
+            ["NOC DESTECH", 13, "ABC", "NUMARASIZ", None, "", "nw_li_cust_c", "x", "AVAILABILITY", "2026-04-01 10:00:00", "2026-04-01 11:00:00", "atm"],
+            ["NOC DESTECH", 14, "30000003", "CI YOK", None, "", "baska_node", "baska", "AVAILABILITY", "2026-04-01 10:00:00", "2026-04-01 11:00:00", "atm"],
+            ["NOC DESTECH", 15, "10000001", "ORNEK A.S.", None, "", "nw_li_cust_a_1", "x", "AVAILABILITY", "2025-12-31 23:00:00", "2026-01-01 01:00:00", "atm"],
+        ])  # fmt: skip
+        y.kapat()
+        db.add(SourceCatalogObject(catalog_id=k.id, owner="TEMIP", name="VIEW_REPORT_ACTIVE", kind="TABLE", parent="", comment="", analyzed="",
+                                   columns=[], details={"arama": {"ham_tablo": t}}, sample_columns=sutunlar, sample_rows=0, sample_note=""))  # fmt: skip
+        db.commit()
+    tm = SahteTemip(monkeypatch)
+    tm.acik = [tsatir("2", "10000001")]
+    ozet = calistir("katalogdan")
+    assert ozet["katalog_satir"] == 2 and ozet["eklenen"] == 3  # numarasiz, CI'siz ve baslangictan once acilan alinmaz
+    k = kayitlar()
+    assert (k["11"].customer_id, k["11"].ticket_no, k["11"].location, k["11"].detail, k["11"].status) == (
+        a,
+        "10134000011",
+        "nw_li_cust_a_1",
+        "Closed/atm",
+        "closed",
+    )
+    assert (k["12"].customer_id, k["12"].location, k["12"].detail) == (None, "nw_li_cust_b_2", "Closed/Auto-Clear")  # kartsiz: TAM Radar
+    assert k["2"].status == "open" and sayac(a) == (1, 1)

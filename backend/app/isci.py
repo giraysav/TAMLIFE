@@ -7,6 +7,11 @@
   ..\\.venv\\Scripts\\python.exe -m app.isci temip-kayit --kip tam|artimli|mutabakat [--kuru] [--csv]
       TEMIP alarm kayitlari elle; 'tam' REPORTDB_KAYIT_BASLANGIC'tan (vars. 2026-01-01) bugune ilk yukleme (dakikalar surer).
       --kuru: ayni sorgular, yazmaz; Musteri No -> unvan -> kart -> sorumlu personel -> acik kayit eslesmesini gosterir.
+  ..\\.venv\\Scripts\\python.exe -m app.isci reportdb-katalog [--sema TEMIP ...] [--ornek 200]
+      Ham katalog (Veri Girisi agaci): izinli semalarin nesne -> alt nesne -> sutun yapisi + ornek satirlar (tampon/katalog).
+      Paneldeki "Yenile" ayni komutu ayri surecte baslatir.
+  ..\\.venv\\Scripts\\python.exe -m app.isci pg-katalog --kaynak pg_onent|pg_onedesk [--ornek 20]
+      PostgreSQL katalogu (ONENTDB / ONEDESKDB, salt okunur): sema -> tablo -> sutun + ornek satirlar (tampon/postgres).
   ..\\.venv\\Scripts\\python.exe -m app.isci temip-eslesme [--csv]
       Oracle'a baglanmaz: paneldeki TEMIP kayitlarinin eslesmesi (kart / TAM Radar / belirsiz / personelsiz kart, personel basina acik).
       --csv: backend/var/kesif/temip-eslesme-<zaman>-{musteri,personel}.csv (git disi; musteri unvani icerir).
@@ -31,7 +36,7 @@ from app import ariza
 from app.config import env_dosyasi_yukle, get_settings
 from app.db import oturum
 from app.ortak import UygulamaHatasi
-from app.tampon import kaynak, oracle, reportdb, temip_kayit
+from app.tampon import katalog, kaynak, oracle, postgres, reportdb, temip_kayit
 
 KILIT_BAYAT_SN = 600  # bundan eski kilit dosyasi coken calismadan kalmis sayilir
 
@@ -290,6 +295,85 @@ def temip_kayit_calistir(kip: str, kuru: bool = False, csv: bool = False) -> int
     return temip_eslesme(csv) if csv else 0
 
 
+def katalog_calistir(semalar: list[str] | None, adet: int, kullanici: str, parametre: dict | None = None) -> int:
+    """Ham katalog taramasi (yalniz SELECT: veri sozlugu + ornek satir). Ayni anda tek calisma."""
+    a = oracle.ayar(katalog.KAYNAK)
+    if not a.ENABLED:
+        return _hata("reportdb-katalog", f"{a.kaynak.enabled_key}=true degil; Oracle'a baglanilmadi.")
+    kilit = _klasor() / "isci_katalog.kilit"
+    if not kilit_al(kilit):
+        print("[-] Baska bir katalog taramasi suruyor; atlandi.")
+        return 2
+    t0 = time.time()
+    try:
+        with oturum() as db:
+            k = katalog.tara(
+                db, kullanici, semalar, adet, parametre=parametre, kalp=lambda: os.utime(kilit)
+            )  # uzun tarama: kilit bayatlamasin
+            ozet = dict(k.summary or {})
+    except Exception as e:  # noqa: BLE001 - katalog 'failed' olarak yazildi
+        return _hata("reportdb-katalog", f"basarisiz: {_mesaj(e, a)}")
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+    satir = (f"reportdb-katalog OK {time.time() - t0:.1f} sn; semalar {', '.join(ozet.get('semalar', []))}: "
+             f"{ozet.get('nesne', 0)} nesne, {ozet.get('sutun', 0)} sutun")  # fmt: skip
+    print(f"[OK] {satir}")
+    gunluge_yaz(satir)
+    return _katalogdan_kayitlar()
+
+
+def _katalogdan_kayitlar() -> int:
+    """2026-10-19 kullanici: "reportdb verileri guncellemiyor": katalog taramasi bitince alarm kayitlari ham dosyadan kartlara / TAM
+    Radar'a aktarilir (eskiden ayri 'temip-kayit --kip katalogdan' gerekiyordu). Ayni kilit: 6 dk senkronu suruyorsa atlanir."""
+    kilit = _klasor() / "isci_reportdb.kilit"
+    if not kilit_al(kilit):
+        gunluge_yaz("temip-kayit (katalogdan) atlandi: baska senkron suruyor")
+        return 0
+    t0 = time.time()
+    try:
+        with oturum() as db:
+            k = temip_kayit.calistir(db, "katalogdan")
+    except Exception as e:  # noqa: BLE001 - katalog yazildi; aktarim elle yeniden denenir
+        ariza.kaydet("TL-TAM-01", f"katalogdan kayit aktarimi: {type(e).__name__}", kaynak="isci.reportdb-katalog", kullanici=reportdb.ISCI)
+        return _hata("temip-kayit", f"katalogdan aktarim basarisiz: {type(e).__name__}: {str(e)[:200]}")
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+    satir = f"temip-kayit OK {time.time() - t0:.1f} sn; katalog sonrasi: {_kayit_ozeti(k)}"
+    print(f"[OK] {satir}")
+    gunluge_yaz(satir)
+    return 0
+
+
+def pg_katalog_calistir(kaynak: str, adet: int, kullanici: str) -> int:
+    """PostgreSQL katalogu (yalniz SELECT, salt okunur oturum). Kaynak basina ayni anda tek calisma."""
+    kilit = _klasor() / f"isci_pg_{kaynak}.kilit"
+    if not kilit_al(kilit):
+        print("[-] Bu kaynakta baska bir katalog taramasi suruyor; atlandi.")
+        return 2
+    t0 = time.time()
+    try:
+        with oturum() as db:
+            k = postgres.tara(db, kaynak, kullanici, adet)
+            ozet = dict(k.summary or {})
+    except postgres.PgHata as e:
+        return _hata("pg-katalog", f"{kaynak} {e.mesaj}")
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+    satir = f"pg-katalog OK {kaynak} {time.time() - t0:.1f} sn; {len(ozet.get('semalar', []))} sema, {ozet.get('nesne', 0)} nesne, {ozet.get('sutun', 0)} sutun"
+    print(f"[OK] {satir}")
+    gunluge_yaz(satir)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     for akim in (sys.stdout, sys.stderr):
         if hasattr(akim, "reconfigure"):
@@ -300,10 +384,25 @@ def main(argv: list[str] | None = None) -> int:
     c = alt.add_parser("cek", help="<ON EK>_IMPORT_QUERY -> tampon partisi")
     c.add_argument("kaynak", choices=sorted(oracle.KAYNAKLAR))
     t = alt.add_parser("temip-kayit", help="TEMIP alarm kayitlari: karta / TAM Radar'a (tam = ilk yukleme)")
-    t.add_argument("--kip", choices=("tam", "artimli", "mutabakat"), default="artimli")
+    t.add_argument(
+        "--kip", choices=temip_kayit.KIPLER, default="artimli", help="katalogdan: kapananlar ham katalog dosyasindan (ilk yukleme)"
+    )
     t.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
     t.add_argument("--kuru", action="store_true", help="yazmadan dene; eslesmeyi goster")
     t.add_argument("--csv", action="store_true", help="eslesmeyi var/kesif/'e CSV yaz")
+    kt = alt.add_parser("reportdb-katalog", help="ham katalog: sema -> nesne -> alt nesne -> sutun + ornek satirlar")
+    kt.add_argument("--sema", action="append", default=None, help="yalniz bu sema (tekrarlanabilir; vars. tum izinli semalar)")
+    kt.add_argument("--ornek", type=int, default=katalog.ORNEK_ADET, help="nesne basina ornek satir (1-1000)")
+    kt.add_argument("--kullanici", default="isci", help="kataloga yazilan baslatan")
+    kt.add_argument("--ara", default=None, help="sutun degerlerinde aranacak metin (vars. nw_li_cust: kurumsal alarmlar)")
+    kt.add_argument("--alan", default=None, help="domain sutunu (vars. NETWORK)")
+    kt.add_argument("--deger", action="append", default=None, help="domain degeri (tekrarlanabilir; vars. NOC DESTECH)")
+    kt.add_argument("--saat", type=int, default=None, help="bolumlu tabloda pencere (saat, vars. 6)")
+    kt.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
+    pg = alt.add_parser("pg-katalog", help="PostgreSQL katalogu (ONENTDB / ONEDESKDB): sema -> tablo -> sutun + ornek satirlar")
+    pg.add_argument("--kaynak", required=True, choices=sorted(postgres.KAYNAKLAR))
+    pg.add_argument("--ornek", type=int, default=postgres.ORNEK_ADET, help="nesne basina ornek satir (1-200)")
+    pg.add_argument("--kullanici", default="isci", help="kataloga yazilan baslatan")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
     for alt_p in (r, c):
@@ -313,9 +412,14 @@ def main(argv: list[str] | None = None) -> int:
     env_dosyasi_yukle()
     if a.is_ == "temip-eslesme":
         return temip_eslesme(a.csv)
+    if a.is_ == "pg-katalog":
+        return pg_katalog_calistir(a.kaynak, max(1, min(int(a.ornek), 200)), a.kullanici)
     hata = _istemci(a.client)
     if hata:
         return _hata(a.is_ if a.is_ != "cek" else a.kaynak, hata)
+    if a.is_ == "reportdb-katalog":
+        parametre = {"ara": a.ara, "alan": a.alan, "degerler": a.deger, "saat": a.saat}
+        return katalog_calistir(a.sema, max(1, min(int(a.ornek), 1000)), a.kullanici, parametre)
     if a.is_ == "temip-kayit":
         return temip_kayit_calistir(a.kip, a.kuru, a.csv)
     return reportdb_senkron(a.kuru) if a.is_ == "reportdb" else oracle_cek(a.kaynak, a.kuru)

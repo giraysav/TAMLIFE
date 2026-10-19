@@ -21,11 +21,9 @@ from sqlalchemy.orm import Session
 
 from app.audit import audit_log
 from app.db import get_db
-from app.deps import require_veri_yazma
 from app.erisim import Erisim, modul_erisim
 from app.ortak import KimlikTipi, ok
 from app.proje import servis
-from app.session import Principal
 
 router = APIRouter(prefix="/api/v1/proje", tags=["proje"])
 proje_erisim = modul_erisim("proje")
@@ -72,7 +70,7 @@ def ekran(e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db)):
 
 
 @router.post("/kalem")
-def kalem_ekle(body: KalemGovde, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+def kalem_ekle(body: KalemGovde, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db)):
     kimlik = servis.kalem_ekle(db, e.user, body.model_dump())
     db.commit()
     _denetim(e, "proje.ekle", f"proje={kimlik}")
@@ -80,7 +78,7 @@ def kalem_ekle(body: KalemGovde, e: Erisim = Depends(proje_erisim), db: Session 
 
 
 @router.patch("/kalem/{kalem_id}")
-def kalem_guncelle(kalem_id: KimlikTipi, body: GuncelleGovde, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+def kalem_guncelle(kalem_id: KimlikTipi, body: GuncelleGovde, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db)):
     degisiklik = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None or k == "target_date"}
     degisen = servis.kalem_guncelle(db, e.user, kalem_id, degisiklik)
     db.commit()
@@ -90,7 +88,7 @@ def kalem_guncelle(kalem_id: KimlikTipi, body: GuncelleGovde, e: Erisim = Depend
 
 
 @router.delete("/kalem/{kalem_id}")
-def kalem_sil(kalem_id: KimlikTipi, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+def kalem_sil(kalem_id: KimlikTipi, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db)):
     servis.kalem_sil(db, e.user, kalem_id)
     db.commit()
     _denetim(e, "proje.sil", f"proje={kalem_id}")
@@ -98,7 +96,7 @@ def kalem_sil(kalem_id: KimlikTipi, e: Erisim = Depends(proje_erisim), db: Sessi
 
 
 @router.post("/kalem/{kalem_id}/aksiyon")
-def aksiyon_ekle(kalem_id: KimlikTipi, body: AksiyonGovde, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db), _y: Principal = Depends(require_veri_yazma)):
+def aksiyon_ekle(kalem_id: KimlikTipi, body: AksiyonGovde, e: Erisim = Depends(proje_erisim), db: Session = Depends(get_db)):
     servis.aksiyon_ekle(db, e.user, kalem_id, body.metin)
     db.commit()
     return ok({"id": kalem_id})

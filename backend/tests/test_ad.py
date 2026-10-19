@@ -283,7 +283,7 @@ def test_kurum_baglantilari_ucu_sir_vermez_ad_testi_admin_ve_csrf(client, monkey
         monkeypatch.setenv(k, v)
     r = client.get("/api/v1/yonetim/kurum")
     b = r.json()["data"]["baglantilar"]
-    assert [x["id"] for x in b] == ["ad", "oracle_reportdb", "oracle_onent", "oracle_galapagos"]
+    assert [x["id"] for x in b] == ["ad", "oracle_reportdb", "oracle_galapagos", "pg_onent", "pg_onedesk"]  # 2026-10-19: ONENTDB PostgreSQL
     assert b[0]["state"] == "ready" and b[0]["missing"] == [] and b[0]["tur"] == "dizin"
     assert b[0]["bilgiler"] == {"sunucu": "dc.ornek.local", "port": 636, "ldaps": True, "ssl": True, "alan": "ornek.local",
                                 "ca_dosyasi": True, "grup_kisiti": True, "otomatik_ac": True}  # fmt: skip
@@ -325,7 +325,7 @@ ORACLE_ORTAM = {
 def test_kurum_oracle_kartlari_sir_vermez(client, monkeypatch):
     for k, v in ORACLE_ORTAM.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("ONENTDB_DB_ENABLED", "true")
+    monkeypatch.setenv("ONENTDB_PG_ENABLED", "true")
     login_ok(client)
     r = client.get("/api/v1/yonetim/kurum")
     b = {x["id"]: x for x in r.json()["data"]["baglantilar"]}
@@ -334,7 +334,7 @@ def test_kurum_oracle_kartlari_sir_vermez(client, monkeypatch):
     assert rdb["bilgiler"] == {"sunucu": "rapor-db.ornek.invalid", "port": 1522, "servis": "GIZLISERVIS", "kullanici": "gizli_kullanici", "parola": True, "zaman_asimi": 10,
                                "oracle_istemci": False, "sorgu_tamam": False, "sorgu_hata": rdb["bilgiler"]["sorgu_hata"]}  # fmt: skip
     assert "SELECT" in rdb["bilgiler"]["sorgu_hata"] and rdb["son_parti"] is None and rdb["reportdb"]["kartlara_yaz"] is False
-    assert b["oracle_onent"]["state"] == "incomplete" and "ONENTDB_DB_HOST" in b["oracle_onent"]["missing"]
+    assert "oracle_onent" not in b and b["pg_onent"]["tur"] == "postgres" and b["pg_onent"]["state"] == "incomplete" and "ONENTDB_PG_HOST" in b["pg_onent"]["missing"]
     assert b["oracle_galapagos"]["state"] == "disabled" and b["oracle_galapagos"]["bilgiler"]["sunucu"] == ""
     for gizli in ("cok-gizli-parola", "DELETE"):  # parola ve sorgu metni hic verilmez
         assert gizli not in r.text

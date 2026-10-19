@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { musteriAlaniBasligi } from "@/lib/http"
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -25,5 +26,19 @@ describe("oturumYok", () => {
     expect(oturumYok(new Response(null, { status: 401 }))).toBe(true)
     expect(oturumYok(new Response(null, { status: 403 }))).toBe(false)
     expect(oturumYok(new Response("{}", { status: 200 }))).toBe(false)
+  })
+})
+
+describe("musteriAlaniBasligi", () => {
+  it("Toptan / Baglantili Araclar ekraninda yalniz musteri karti uclarina alan basligi gider", () => {
+    window.location.hash = "#/toptan?m=5"
+    expect(musteriAlaniBasligi("/api/v1/musteri/5")).toEqual({ "X-Musteri-Alani": "toptan" })
+    expect(musteriAlaniBasligi("/api/v1/topoloji/analiz")).toEqual({ "X-Musteri-Alani": "toptan" })
+    expect(musteriAlaniBasligi("/api/v1/ekip/ozet")).toEqual({})
+    window.location.hash = "#/baglantili"
+    expect(musteriAlaniBasligi("/api/v1/musteri/portfoy")).toEqual({ "X-Musteri-Alani": "baglantili" })
+    window.location.hash = "#/musteri?m=5"
+    expect(musteriAlaniBasligi("/api/v1/musteri/5")).toEqual({})
+    window.location.hash = ""
   })
 })

@@ -1,13 +1,15 @@
 import { useState } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { Link2 } from "lucide-react"
 import type { Dil } from "@/shell/metin"
-import { Alan, Bildirim, Bolum, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { Alan, Bildirim, Bolum, DUGME, GIRDI, HataKutu, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
 import type { TemipDurumu, TemipEslesme, TemipMusterisi, TemipPersoneli } from "@/yonetim/api"
 import { oku, sorguMetni } from "@/lib/sorgu"
 import { sayi } from "@/lib/bicim"
 import { Gosterge, Sayfalama } from "@/yonetim/ui"
 import { tm } from "@/yonetim/tampon/metin"
+import { AtamaPaneli, ElleAtamalar, atamaMetin } from "@/components/temip-atama"
 
 const DURUMLAR: TemipDurumu[] = ["kart", "kart_personelsiz", "radar", "belirsiz"]
 const TON: Record<TemipDurumu, "yesil" | "amber" | "gri" | "kirmizi"> = { kart: "yesil", kart_personelsiz: "amber", radar: "gri", belirsiz: "kirmizi" }
@@ -33,6 +35,7 @@ function Icerik({ dil }: { dil: Dil }) {
   const [durum, setDurum] = useState<TemipDurumu | "">("")
   const [arama, setArama] = useState("")
   const [sayfa, setSayfa] = useState(1)
+  const [hedef, setHedef] = useState<{ musteri_no: string; temip_unvan: string } | null>(null)
   const sorgu = { durum, q: arama.trim(), sayfa }
   const q = useQuery({
     queryKey: [...ANAHTAR.temipEslesme, sorgu],
@@ -142,10 +145,23 @@ function Icerik({ dil }: { dil: Dil }) {
             { baslik: k.personel, hucre: (m) => m.personel || "—" },
             { baslik: k.acik, hucre: (m) => `${sayi(m.acik)} (${sayi(m.acik_ticketli)})`, sinif: "text-right font-mono" },
             { baslik: k.kapali, hucre: (m) => sayi(m.kapali), sinif: "text-right font-mono" },
+            {
+              baslik: "",
+              hucre: (m) =>
+                m.durum === "radar" ? (
+                  <button type="button" className={`${DUGME} !px-2 !py-1`} onClick={() => setHedef({ musteri_no: m.musteri_no, temip_unvan: m.temip_unvan })}>
+                    <Link2 aria-hidden className="size-3.5" />
+                    {atamaMetin(dil).karttaAta}
+                  </button>
+                ) : null,
+            },
           ]}
         />
         <Sayfalama t={t} sayfa={r.sayfa} adet={r.adet} toplam={r.toplam} onSayfa={setSayfa} />
+        <p className="text-[0.625rem] font-bold text-slate-400">{t.atama.ipucu}</p>
+        {hedef ? <AtamaPaneli key={hedef.musteri_no} dil={dil} hedef={hedef} onKapat={() => setHedef(null)} /> : null}
       </div>
+      <ElleAtamalar dil={dil} />
     </div>
   )
 }

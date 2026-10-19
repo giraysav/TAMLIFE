@@ -22,6 +22,7 @@ from app.gelir.api import router as gelir_router
 from app.gelir_uretim.api import router as gelir_uretim_router
 from app.katalog_api import router as katalog_router
 from app.musteri.api import router as musteri_router
+from app.musteri_alani import MusteriAlaniAraKatmani
 from app.onedesk.api import router as onedesk_router
 from app.ortak import UygulamaHatasi, ok
 from app.oturum_api import router as oturum_router
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
     install_security(app)
     app.add_middleware(DilAraKatmani)  # X-Dil: sunucu metinlerinin dili (app.dil.m)
+    app.add_middleware(MusteriAlaniAraKatmani)  # X-Musteri-Alani: Musteri Yonetimi / Toptan / Baglantili Araclar kartlari (app.musteri_alani)
     app.add_exception_handler(UygulamaHatasi, uygulama_hatasi)
     app.add_exception_handler(csv.Error, csv_hatasi)  # bilinen is hatasi: kod + mesaj
     app.add_exception_handler(Exception, genel_istisna)  # beklenmeyen hata: kod + kayit no, ham metin yok

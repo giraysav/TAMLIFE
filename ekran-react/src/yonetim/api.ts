@@ -34,7 +34,22 @@ export type OracleBaglantisi = KurumOrtak & {
   son_parti: { id: number; durum: string; satir: number; zaman: string | null; hata: string } | null
   reportdb?: { kartlara_yaz: boolean; kural: number; yas_dk: number | null; taze: boolean; tazelik_dk: number }
 }
-export type KurumBaglantisi = AdBaglantisi | OracleBaglantisi
+export type PgKatalogOzeti = { id: number; durum: string; baslangic: string | null; bitis: string | null; kim: string; ozet: { semalar?: string[]; nesne?: number; sutun?: number }; hata: string }
+export type PostgresBaglantisi = KurumOrtak & {
+  tur: "postgres"
+  acma_anahtari: string
+  bilgiler: { sunucu: string; port: number; veritabani: string; kullanici: string; parola: boolean; ssl: string; zaman_asimi: number }
+  katalog: PgKatalogOzeti | null
+}
+export type KurumBaglantisi = AdBaglantisi | OracleBaglantisi | PostgresBaglantisi
+export type PgKaynagi = { id: string; label: string; acma_anahtari: string; acik: boolean; eksik: string[]; hazir: boolean; state: "ready" | "incomplete" | "disabled"; katalog: PgKatalogOzeti | null; son: PgKatalogOzeti | null; calisiyor: boolean }
+export type PgNesneOzeti = { id: number; ad: string; tur: string; satir: number | null; sutun: number; aciklama: string }
+export type PgKatalogu = { kaynak: string; son: PgKatalogOzeti | null; katalog: PgKatalogOzeti | null; calisiyor: boolean; semalar: { ad: string; nesneler: PgNesneOzeti[] }[] }
+export type PgNesne = {
+  id: number; sema: string; ad: string; tur: string; satir: number | null; aciklama: string
+  sutunlar: { ad: string; tip: string; bos: boolean; aciklama: string }[]
+  ornek: { sutunlar: string[]; satirlar: unknown[][]; not: string }
+}
 export type AdAdimi = { adim: "ayar" | "dns" | "tcp" | "tls" | "oturum"; durum: "ok" | "hata"; baslik: string; ayrinti: string }
 export type AdTesti = { tamam: boolean; adimlar: AdAdimi[] }
 
@@ -107,6 +122,88 @@ export type VeriAkisi = {
   sema?: boolean
 }
 export type VeriAkislari = { akislar: VeriAkisi[]; dagitim: { kural: number; etkin: number; son_uygulama: string | null }; uyarilar: string[]; zaman: string }
+/** Ham katalog (GET /tampon/katalog): sema -> ana nesne -> alt nesne; sutunlar nesne acilinca (GET /tampon/katalog/nesne/{id}). */
+export type KatalogDugumu = {
+  id: number
+  ad: string
+  tur: string
+  satir: number | null
+  analiz: string
+  aciklama: string
+  sutun_sayisi: number
+  ornek_satir: number
+  ornek_notu: string
+  es_ad: string
+  bolum_anahtari: string[]
+  bolum_sayisi: number
+  alt: KatalogDugumu[]
+}
+export type KaynakKatalogu = {
+  kaynak: string
+  katalog: { id: number; durum: string; baslangic: string | null; bitis: string | null; olusturan: string; ozet: { semalar?: string[]; nesne?: number; sutun?: number; ornek_adet?: number; sure_sn?: number }; hata: string } | null
+  calisiyor: boolean
+  /** calisan taramanin son adimi (ornek "TEMIP.VIEW_REPORT_ACTIVE · 2026-05") */
+  ilerleme?: string
+  ilerleme_sn?: number
+  son_hata: string
+  semalar: { ad: string; nesneler: KatalogDugumu[] }[]
+  /** Arama parametreleri (ara: deger metni, alan: domain sutunu) ve Domain -> tablo -> isabetli sutun agaci */
+  parametreler?: { ara: string; alan: string; degerler: string[]; saat: number; satir_siniri: number; baslangic?: string; eslesmeyen: string[] } | Record<string, never>
+  parametre_agaci?: ParametreDali[]
+}
+export type ParametreTablosu = {
+  id: number
+  sahip: string
+  ad: string
+  ust: string
+  pencere: string
+  satir: number
+  isabet: number
+  oran: number
+  sutunlar: { ad: string; isabet: number; oran: number }[]
+}
+export type ParametreDali = { domain: string; tablolar: ParametreTablosu[]; isabet: number; satir: number }
+export type KatalogSutunu = { ad: string; tip: string; bos_olabilir: boolean; aciklama: string; doluluk?: number | null; farkli?: number; ornekler?: { deger: string; adet: number }[] }
+export type KatalogNesnesi = {
+  id: number
+  sahip: string
+  ad: string
+  tur: string
+  ust: string
+  satir: number | null
+  analiz: string
+  aciklama: string
+  sutunlar: KatalogSutunu[]
+  ayrinti: {
+    es_ad?: { sahip: string; hedef: string }
+    bolum_anahtari?: string[]
+    bolumler?: { adet: number; son: { ad: string; sira: number; satir: number | null; analiz: string }[] }
+    indeksler?: Record<string, string[]>
+    dayandigi?: string[]
+    arama?: { ara?: string; pencere?: string; domain_sutunu?: string; hata?: string; ornek_degerler?: Record<string, { deger: string; adet: number }[]> }
+  }
+  ornek_satir: number
+  ornek_notu: string
+}
+/** Ham veri okuyucu (GET /tampon/katalog/veri): secili domainlerde arama metnini iceren satirlar, Excel filtresiyle. */
+export type KatalogVerisi = {
+  id: number
+  ad: string
+  pencere: string
+  ara: string
+  domainler: string[]
+  sutunlar: string[]
+  isabetli: string[]
+  gizlenen_bos: number
+  toplam_ham: number
+  toplam: number
+  sayfa: number
+  adet: number
+  satirlar: unknown[][]
+  filtreli: string[]
+}
+export type KatalogDegerleri = { sutun: string; farkli: number; degerler: { deger: string; adet: number }[]; kesildi: boolean }
+export type KatalogOrnegi = { id: number; ad: string; basliklar: string[]; satirlar: unknown[][]; not: string; grup?: string }
 /** TEMIP eslesmesi (GET /tampon/temip/eslesme): Musteri No -> kart -> sorumlu personel -> acik kayit. */
 export type TemipDurumu = "kart" | "kart_personelsiz" | "radar" | "belirsiz"
 export type TemipMusterisi = {
@@ -407,6 +504,7 @@ export const ANAHTAR = {
   skorUrunTutar: ["skor", "urun-tutar"] as const,
   ozet: ["yonetim", "ozet"] as const,
   kurum: ["yonetim", "kurum"] as const,
+  pg: ["tampon", "pg"] as const,
   veritabani: ["yonetim", "veritabani"] as const,
   arizalar: ["yonetim", "arizalar"] as const,
   arizaKodlari: ["yonetim", "ariza-kodlari"] as const,
@@ -422,6 +520,8 @@ export const ANAHTAR = {
   hamAktarimlar: ["tampon", "musteri-ham", "aktarimlar"] as const,
   akislar: ["tampon", "akislar"] as const,
   temipEslesme: ["tampon", "temip", "eslesme"] as const,
+  temipAtamalar: ["tampon", "temip", "atamalar"] as const,
+  katalog: ["tampon", "katalog"] as const,
 }
 
 /** {a: "x", b: ""} -> "?a=x" (bos degerler atilir). */

@@ -76,7 +76,7 @@ def test_proje_acilis_durum_oncelik_aksiyon_ve_ozet(client, monkeypatch):
         assert db.scalar(select(func.count()).select_from(ProjectAction).where(ProjectAction.item_id == kimlik)) == 0
 
 
-def test_uye_yalniz_kendi_projesini_gorur_yazamaz(client, monkeypatch):
+def test_uye_yalniz_kendi_projesini_gorur_ve_yazar(client, monkeypatch):
     _giris(client, monkeypatch, "mehmet", "TeamMember")
     _giris(client, monkeypatch, "ayse", "TeamMember")
     kisiler = _kisiler()
@@ -87,14 +87,19 @@ def test_uye_yalniz_kendi_projesini_gorur_yazamaz(client, monkeypatch):
     veri = _ekran(client)  # Member yalniz kendi kalemlerini gorur
     assert [k["baslik"] for k in veri["kalemler"]] == ["Ayşe işi"] and veri["kalemler"][0]["tam_id"] == kisiler["ayse"]
     assert veri["yonetici"] is False and veri["tamlar"] == [{"id": kisiler["ayse"], "ad": "ayse"}]
-    # kalem ekleme / guncelleme / aksiyon / silme yalniz admin
+    # 2026-10-19 kullanici karari: Member KENDI kalemini ekler / gunceller / siler; baskasininki gorunmez (404)
     for istek in (
-        client.post("/api/v1/proje/kalem", json={"category": "proje", "title": "Yeni"}, headers=hdr),
         client.patch(f"/api/v1/proje/kalem/{mehmet_kalemi}", json={"status": "devam"}, headers=hdr),
         client.post(f"/api/v1/proje/kalem/{mehmet_kalemi}/aksiyon", json={"metin": "x"}, headers=hdr),
         client.delete(f"/api/v1/proje/kalem/{mehmet_kalemi}", headers=hdr),
     ):
-        assert istek.status_code == 403
+        assert istek.status_code == 404
+    yeni = client.post("/api/v1/proje/kalem", json={"category": "proje", "title": "Yeni"}, headers=hdr)
+    assert yeni.status_code == 200
+    kimlik = yeni.json()["data"]["id"]
+    assert client.patch(f"/api/v1/proje/kalem/{kimlik}", json={"status": "devam"}, headers=hdr).status_code == 200
+    assert client.post(f"/api/v1/proje/kalem/{kimlik}/aksiyon", json={"metin": "x"}, headers=hdr).status_code == 200
+    assert client.delete(f"/api/v1/proje/kalem/{kimlik}", headers=hdr).status_code == 200
 
 
 def test_musteri_bazli_calismalar_kapsam_ve_rapor(client, monkeypatch):
@@ -124,6 +129,9 @@ def test_musteri_bazli_calismalar_kapsam_ve_rapor(client, monkeypatch):
     isaret = client.get("/api/v1/proje/musteri").json()["data"]["isaretler"]
     assert isaret["2"]["ddos"]["yapildi"] is True and isaret["2"]["ddos"]["guncelleyen"] == "ayse"
     assert isaret["1"]["topoloji"] == {**isaret["1"]["topoloji"], "yapildi": False, "detay": "Planlanıyor"}
+    # personel ozeti: isaretlenen kutu ilgili kategori sutununa yazilir (istirak catisinin TAM'ina); yalniz detay sayilmaz
+    satir = next(d for d in client.get("/api/v1/proje").json()["data"]["ozet"] if d["tam"] == "ayse")
+    assert (satir["ddos"], satir["topoloji"], satir["toplam"]) == (1, 0, 1)
 
     r = client.get("/api/v1/proje/rapor.xlsx")
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/vnd.openxmlformats")
