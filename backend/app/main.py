@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app import ad
+from app import ad, isitici
 from app.audit import audit_log
 from app.config import env_dosyasi_yukle, get_settings
 from app.dil import DilAraKatmani, m
@@ -49,7 +49,12 @@ IS_PARCACIGI = 100
 @asynccontextmanager
 async def _yasam(_: FastAPI) -> AsyncIterator[None]:
     to_thread.current_default_thread_limiter().total_tokens = IS_PARCACIGI
+    isit = get_settings().env != "test"
+    if isit:
+        isitici.baslat()  # agir ozetler ilk ziyaretciden once hesaplanir (app.isitici)
     yield
+    if isit:
+        isitici.durdur()
 
 
 async def csv_hatasi(_: Request, exc: csv.Error) -> JSONResponse:

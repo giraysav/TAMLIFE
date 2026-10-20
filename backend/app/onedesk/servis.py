@@ -126,9 +126,10 @@ def _aylik(db: Session, kosul) -> list[dict]:
     return [{"ay": m, **v} for m, v in aylar.items()]
 
 
-# 2026-10-20 performans: top10 353 bin kaydi gruplar (~1 sn, indeksle de); veri 6 dk'da bir degisir. Ayni (yil, aralik, kapsam, son
-# kayit no) icin sonuc ONBELLEK_SN boyunca bellekten verilir; yeni kayit gelince (en buyuk id degisir) hemen yeniden hesaplanir.
-ONBELLEK_SN = 120
+# 2026-10-20 performans: top10 353 bin kaydi gruplar (~1 sn, indeksle de). Sonuc (yil, aralik, son kayit no, TEMIP yazim surumu) icin
+# bellekte tutulur: yeni kayit ya da isci yazimi anahtari degistirir; ONBELLEK_SN yalniz Onedesk dosya ice alma gibi diger yazimlar icin
+# ust sinir. app.isitici panel acilisinda ve veri degisince onceden hesaplar (ilk ziyaretci beklemez).
+ONBELLEK_SN = 900
 _onbellek: dict[tuple, tuple[float, dict]] = {}
 _onbellek_kilidi = threading.Lock()
 
@@ -138,7 +139,9 @@ def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[da
     toplam: araliktaki tum kayitlarin tur toplamlari."""
     yil = _yil(yil)
     bas, son = aralik or _aralik(yil)
-    anahtar = (yil, bas, son, db.scalar(select(func.max(OnedeskRecord.id))))
+    from app.tampon.temip_kayit import surum  # gec import: tampon zinciri yalniz gerekince
+
+    anahtar = (yil, bas, son, db.scalar(select(func.max(OnedeskRecord.id))), surum(db))
     with _onbellek_kilidi:
         kayit = _onbellek.get(anahtar)
     if kayit is not None and time.monotonic() - kayit[0] < ONBELLEK_SN:
