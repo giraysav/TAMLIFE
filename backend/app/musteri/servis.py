@@ -555,7 +555,7 @@ def kimlik_guncelle(db: Session, user: Principal, musteri_id: int, govde: dict) 
     if "parent_id" in govde:
         musteri.parent_id = govde["parent_id"]
     db.flush()
-    return {"unvan": musteri.name}
+    return {"unvan": musteri.name, "modul": musteri.modul}  # WHOLESALE cati Toptan'a gecer (musteri_alani._segment_alani)
 
 
 def _tamsayi(deger: object, etiket: str, en_az: int, en_cok: int) -> int:
@@ -661,7 +661,7 @@ def musteri_ekle(db: Session, user: Principal, govde: dict) -> dict:
     )
     db.add(yeni)
     db.flush()
-    return {"id": yeni.id, "owner_id": yeni.owner_id}
+    return {"id": yeni.id, "owner_id": yeni.owner_id, "modul": yeni.modul}
 
 
 def tam_degistir(db: Session, user: Principal, musteri_id: int, yeni_tam_id: object) -> dict:

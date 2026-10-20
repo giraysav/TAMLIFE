@@ -10,7 +10,7 @@ import type { Dil } from "@/shell/metin"
 import { KartKayitlari } from "@/musteri/kayitlar"
 import type { KayitDurumu, KayitTuru } from "@/musteri/kayitlar"
 import { musteriMetin } from "@/musteri/musteri-metin"
-import { useMusteriYolu } from "@/musteri/musteri-yolu"
+import { modulYolu, useMusteriYolu } from "@/musteri/musteri-yolu"
 import { sorguAyarla } from "@/shell/rota"
 
 type Sayilar = { envanter: number; alarm: number; sikayet: number; talep: number; alarm_kapanan: number; sikayet_kapanan: number; talep_kapanan: number }
@@ -245,14 +245,20 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
     }
     const tamDegisti = kart.erisim.tam_degistir && tam && Number(tam) !== kart.kimlik.tam_id
     let tamam = true
+    let modul: string | undefined
     if (kart.erisim.iletisim_duzenle) tamam = await dene("duzenle", () => yaz("PUT", `/api/v1/musteri/${id}/iletisim`, ilet))
     if (tamam && kart.erisim.kimlik_duzenle) {
       tamam = await dene("duzenle", async () => {
-        await yaz("PUT", `/api/v1/musteri/${id}/kimlik`, { ...kim, inventory: kim.inventory === "" ? 0 : Number(kim.inventory), parent_id: tur === "istirak" ? Number(catiId) : null })
-        if (tamDegisti) await yaz("PUT", `/api/v1/musteri/${id}/sorumlu`, { owner_id: Number(tam) })
+        if (tamDegisti) await yaz("PUT", `/api/v1/musteri/${id}/sorumlu`, { owner_id: Number(tam) }) // modul degismeden once (kart bu ekranda)
+        modul = (await yaz<{ modul?: string }>("PUT", `/api/v1/musteri/${id}/kimlik`, { ...kim, inventory: kim.inventory === "" ? 0 : Number(kim.inventory), parent_id: tur === "istirak" ? Number(catiId) : null })).modul
       })
     }
     if (!tamam) return
+    if (modulYolu(modul, yol) !== yol) {
+      setDuzenle(false)
+      sorguAyarla(modulYolu(modul, yol), { m: String(id) }) // segment WHOLESALE: kart Toptan'a gecti
+      return
+    }
     bildir("duzenle", t.kaydedildi)
     setDuzenle(false)
     await q.refetch()

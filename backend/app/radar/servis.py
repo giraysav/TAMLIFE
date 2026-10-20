@@ -23,6 +23,7 @@ from typing import Any
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.models import Customer, IngestBatch, OnedeskRecord
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.skor.urun_tutar import _cekirdek as unvan_cekirdegi
@@ -112,6 +113,7 @@ def _kayit_tazeligi(db: Session) -> tuple[bool, str | None]:
     return simdi() - zaman <= timedelta(minutes=reportdb.TAZELIK_DAKIKA), iso(zaman)
 
 
+@musteri_alani.tum_alanlarda
 def adaylar(db: Session, adet: int = RADAR_ADET, sayfa: int = 1, arama: str = "") -> dict[str, Any]:
     """{'var', 'taze', 'veri_zamani', 'kaynak': kayit|ozet, 'satirlar': [{sira, musteri_no, unvan, aktif, kapanan, toplam, ...}],
     'toplam_musteri', 'toplam_kayit', 'sayfa', 'adet'}. TEMIP kaydi varsa ondan (sayfali, aranabilir), yoksa eski ozet kuralindan."""
@@ -136,6 +138,7 @@ def adaylar(db: Session, adet: int = RADAR_ADET, sayfa: int = 1, arama: str = ""
     return _ozet_adaylari(db, adet)
 
 
+@musteri_alani.tum_alanlarda
 def kayitlar(db: Session, musteri_no: str, sayfa: int = 1) -> dict[str, Any]:
     """Radar musterisinin kayitlari (en yeni once, sayfali): ticket, CI, baslik, durum, acilis, kapanis."""
     if not musteri_no.isdigit() or len(musteri_no) > 20:

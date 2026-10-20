@@ -39,7 +39,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import kullanicilar
+from app import kullanicilar, musteri_alani
 from app.config import env_dosyasi_yukle
 from app.db import engine, oturum
 from app.models import AffiliateFinalFlag, AppUser, AuditEvent, Customer, CustomerTeam, IngestBatch
@@ -224,6 +224,7 @@ _MUSTERI_SUTUNLARI = (
 )  # fmt: skip
 
 
+@musteri_alani.tum_alanlarda  # kart eslesmesi tum modullerde (WHOLESALE kart Toptan'da)
 def musterileri_aktar(db: Session, eski: Kaynak, kisiler: dict[int, int], say: Counter) -> tuple[dict[int, int], dict[str, int]]:
     """({eski musteri id: yeni musteri id}, {unvan anahtari: yeni musteri id}) - ikincisi iletisim eslemesi icin."""
     satirlar = sorted(eski.satirlar("customers", _MUSTERI_SUTUNLARI), key=lambda x: x["id"] or 0)
@@ -343,6 +344,7 @@ def musterileri_aktar(db: Session, eski: Kaynak, kisiler: dict[int, int], say: C
 
 
 # --- ekip / iletisim ------------------------------------------------------------------------------------
+@musteri_alani.tum_alanlarda  # kart eslesmesi tum modullerde (WHOLESALE kart Toptan'da)
 def iletisimi_aktar(db: Session, eski: Kaynak, unvanlar: dict[str, int], say: Counter) -> None:
     satirlar = eski.satirlar("destech_contacts", ("id", "customer_name", *ILETISIM_ALANLARI))
     gorulen: set[int] = set()

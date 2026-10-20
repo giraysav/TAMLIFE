@@ -27,6 +27,7 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.models import AppSetting, Customer, OnedeskRecord
 from app.onedesk.ice_al import TR_SAATI, sayaclari_yenile, tarih_oku
 from app.ortak import simdi
@@ -124,6 +125,7 @@ def _metin(v: Any, azami: int) -> str:
     return " ".join(str(v).split())[:azami] if v not in (None, "") else ""
 
 
+@musteri_alani.tum_alanlarda
 def harita(db: Session) -> dict[str, set[int]]:
     """Musteri No anahtari -> kart id'leri (eslesme reportdb / Onedesk aktarimiyla ayni: yalniz numara)."""
     sonuc: dict[str, set[int]] = {}
@@ -251,6 +253,7 @@ def _gruplar(db: Session) -> tuple[list, list]:
     return sonuc
 
 
+@musteri_alani.tum_alanlarda
 def eslesme_raporu(db: Session) -> dict[str, Any]:
     """Paneldeki TEMIP kayitlarinin eslesmesi, SU ANKI kart numaralarina gore (sonraki turun baglayacagi hal). Kart ve personel her
     cagrida tazedir; kayit gruplari yazim surumune gore onbellekte (on binlerce kayitta gruplama istek basina tekrarlanmaz)."""
@@ -396,6 +399,7 @@ def kapanislari_cek(dusenler: list[tuple[str, datetime]], h: dict[str, set[int]]
     return sonuc
 
 
+@musteri_alani.tum_alanlarda
 def yeniden_bagla(db: Session, h: dict[str, set[int]], etkilenen: set[int]) -> int:
     """Musteri No'ya gore kart baglantisini tazeler (kart eklendi / numara degisti): kartsizdan karta ya da tersi."""
     degisen = 0
@@ -510,6 +514,7 @@ def katalog_kapalilari(db: Session, bas: date, parca: int = 5_000) -> Iterator[l
         bag.close()
 
 
+@musteri_alani.tum_alanlarda
 def calistir(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dict[str, Any]:
     """TEMIP kayitlarini panele yazar. Siralama: kapananlar -> acik goruntu (kapaliyi acmaz) -> goruntuden dusenlerin kapanisi ->
     kart baglantilari -> kart sayaclari. Her adim commit eder; hata olursa yazilan kalir, sonraki tur tamamlar (yazim idempotent)."""

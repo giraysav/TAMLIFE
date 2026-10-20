@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.models import Customer, IngestBatch, OnedeskRecord
 from app.onedesk.servis import TURLER, OnedeskHata
 from app.ortak import eslestirme_anahtari, normal, simdi
@@ -94,6 +95,7 @@ def _hucre(satir: list, indeks: int | None) -> str:
     return "" if indeks is None or indeks >= len(satir) or satir[indeks] is None else str(satir[indeks]).strip()
 
 
+@musteri_alani.tum_alanlarda
 def sayaclari_yenile(db: Session, musteri_idleri: set[int]) -> None:
     """Musteri kartindaki sayaclar kayitlardan: acik (tur basina) ve bu yil kapanan."""
     if not musteri_idleri:

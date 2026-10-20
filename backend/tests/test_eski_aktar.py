@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import eski_aktar
+from app import eski_aktar, musteri_alani
 from app.db import dispose_engines, engine
 from app.models import AffiliateFinalFlag, AppUser, AuditEvent, Base, Customer, CustomerTeam, IngestBatch
 from app.radar import servis as radar
@@ -130,6 +130,7 @@ def _kos(capsys: pytest.CaptureFixture[str], *arg: str) -> tuple[int, str]:
     return kod, capsys.readouterr().out
 
 
+@musteri_alani.tum_alanlarda  # WHOLESALE eski musteri Toptan alanina gecer; sayim tum modullerde
 def _say(model) -> int:
     with Session(engine()) as db:
         return db.scalar(select(func.count()).select_from(model)) or 0

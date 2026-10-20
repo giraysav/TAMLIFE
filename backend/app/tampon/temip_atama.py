@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.models import AppSetting, AppUser, Customer, OnedeskRecord
 from app.onedesk.ice_al import sayaclari_yenile
 from app.ortak import UygulamaHatasi, iso, simdi
@@ -99,6 +100,7 @@ def _kaydet(db: Session, no: str, unvan: str, kayit: int, kart: Customer, kullan
     }
 
 
+@musteri_alani.tum_alanlarda
 def ata(db: Session, musteri_no: str, kart_id: int, kullanici: str) -> dict[str, Any]:
     """Isim karisikligi: TEMIP Musteri No'sunu (personelin) MEVCUT kartina ekler ve kayitlari baglar. Numara baska kartta yaziliysa 409."""
     no, kayit, unvan = _dogrula(db, musteri_no)
@@ -119,6 +121,7 @@ def ata(db: Session, musteri_no: str, kart_id: int, kullanici: str) -> dict[str,
     return _kaydet(db, no, unvan, kayit, kart, kullanici, yeni_kart=False)
 
 
+@musteri_alani.tum_alanlarda
 def personele_ata(db: Session, user: Principal, musteri_no: str, tam_id: int, unvan: str = "") -> dict[str, Any]:
     """Musteri hicbir kartta yoksa: secilen personel (TAM) adina YENI kart acar (unvan: verilen ya da TEMIP unvani; Musteri No ile).
     Kart 'Musteri ekle' kurallariyla acilir (ayni unvanli kart varsa 409, personel gecerli olmali)."""
@@ -144,6 +147,7 @@ def personeller(db: Session) -> list[dict[str, Any]]:
     return [{"id": u.id, "ad": u.display_name or u.username} for u in musteri_personeli(db)]
 
 
+@musteri_alani.tum_alanlarda
 def kaldir(db: Session, musteri_no: str, kullanici: str) -> dict[str, Any]:
     """Elle atamayi geri alir: numara karttan silinir, kayitlar yeniden baglanir (TAM Radar'a doner). Atamayla acilan kart SILINMEZ
     (karta sonradan veri girilmis olabilir); gerekiyorsa Musteri Yonetimi'nden silinir."""
@@ -164,10 +168,12 @@ def kaldir(db: Session, musteri_no: str, kullanici: str) -> dict[str, Any]:
     return {"musteri_no": no, "kart_id": atama["kart_id"], **sonuc}
 
 
+@musteri_alani.tum_alanlarda
 def atamalar(db: Session) -> list[dict[str, Any]]:
     return _liste(db)
 
 
+@musteri_alani.tum_alanlarda
 def kart_ara(db: Session, q: str, tam_id: int | None = None, adet: int = 15) -> list[dict[str, Any]]:
     """Atama icin kart arama (unvan ya da numara; harf / Turkce karakter farksiz). tam_id: yalniz o personelin kartlari (bos arama
     o personelin tum kartlarini listeler)."""

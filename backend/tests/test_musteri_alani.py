@@ -77,3 +77,35 @@ def test_toptan_yalniz_modul_sahibi_ve_admin_yazar_digerleri_gorur(veri, monkeyp
     assert veri.post("/api/v1/musteri", json={"name": "Yeni Toptan", "owner_id": 2}, headers={**hdr, **TOPTAN}).status_code == 200
     assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr).status_code == 403  # Musteri Yonetimi'nde: kendisine atanmamis
     assert veri.post("/api/v1/musteri", json={"name": "Bag"}, headers={**hdr, "X-Musteri-Alani": "baglantili"}).status_code == 403  # baska modul
+
+
+def test_wholesale_cati_istirakleriyle_toptana_gecer_ve_geri_doner(veri):  # noqa: F811
+    """2026-10-20 kullanici: segmenti WHOLESALE olan kartin hedef modulu Toptan (acma, duzenleme; istirak catiyi izler)."""
+    hdr = login_ok(veri)
+    r = veri.put("/api/v1/musteri/1/kimlik", json={"segment": "WHOLESALE"}, headers=hdr)
+    assert r.status_code == 200 and r.json()["data"]["modul"] == "toptan"
+    assert _adlar(veri) == ["Beta Test Ltd"] and _adlar(veri, TOPTAN) == ["Alfa Istirak", "Alfa Test A.S."]  # istirak (2) da gecti
+    assert veri.get("/api/v1/musteri/1").status_code == 404 and veri.get("/api/v1/musteri/1", headers=TOPTAN).status_code == 200
+    r = veri.put("/api/v1/musteri/1/kimlik", json={"segment": "MA"}, headers={**hdr, **TOPTAN})  # WHOLESALE'den cikinca geri
+    assert r.json()["data"]["modul"] == "musteri" and _adlar(veri, TOPTAN) == []
+    yeni = veri.post("/api/v1/musteri", json={"name": "Toptanci A.S.", "segment": "WHOLESALE", "owner_id": 2}, headers=hdr).json()["data"]
+    assert yeni["modul"] == "toptan" and _adlar(veri, TOPTAN) == ["Toptanci A.S."]
+    # Toptan'da elle acilmis (WHOLESALE olmayan) kart yerinde kalir
+    elle = veri.post("/api/v1/musteri", json={"name": "Elle Toptan", "segment": "SA", "owner_id": 2}, headers={**hdr, **TOPTAN}).json()["data"]
+    assert elle["modul"] == "toptan"
+
+
+def test_temip_eslesmesi_toptandaki_karti_bulur(veri):  # noqa: F811
+    from app.models import OnedeskRecord
+    from app.tampon import temip_kayit
+
+    hdr = login_ok(veri)
+    veri.put("/api/v1/musteri/1/kimlik", json={"segment": "WHOLESALE", "customer_no": "12345678"}, headers=hdr)
+    with Session(engine()) as db:
+        db.add(OnedeskRecord(kind="alarm", external_key="t1", customer_id=None, status="open", customer_label="Alfa", location="", category="",
+                             root_cause="", resolution="", source="temip", ticket_no="", customer_no="12345678", detail=""))  # fmt: skip
+        db.commit()
+        etkilenen: set[int] = set()
+        assert temip_kayit.yeniden_bagla(db, temip_kayit.harita(db), etkilenen) == 1 and etkilenen == {1}  # Toptan'daki kart
+        db.commit()
+        assert db.scalar(select(OnedeskRecord.customer_id).where(OnedeskRecord.external_key == "t1")) == 1

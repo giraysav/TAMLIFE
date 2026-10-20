@@ -7,7 +7,7 @@ import { hataMesaji, yaz } from "@/lib/sorgu"
 import { MusteriKarti } from "@/musteri/portfoy-kart"
 import type { Secenekler } from "@/musteri/portfoy-kart"
 import { portfoyMetin } from "@/musteri/portfoy-metin"
-import { useMusteriYolu } from "@/musteri/musteri-yolu"
+import { modulYolu, useMusteriYolu } from "@/musteri/musteri-yolu"
 import type { Dil } from "@/shell/metin"
 import { sorguAyarla } from "@/shell/rota"
 import { adaGoreSirala } from "@/lib/bicim"
@@ -31,7 +31,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
   const cati = secenek.catilar.find((c) => String(c.id) === catiId)
   const ekle = useMutation({
     mutationFn: () =>
-      yaz<{ id: number }>("POST", "/api/v1/musteri", {
+      yaz<{ id: number; modul?: string }>("POST", "/api/v1/musteri", {
         name: unvan.trim(),
         ...(segment ? { segment } : {}),
         ...(tur === "istirak" && catiId ? { parent_id: Number(catiId) } : {}),
@@ -40,7 +40,7 @@ export function MusteriEkleFormu({ dil, secenek, onBitti }: { dil: Dil; secenek:
     onSuccess: (sonuc) => {
       void qc.invalidateQueries({ queryKey: ["musteri"] })
       onBitti()
-      sorguAyarla(yol, { m: String(sonuc.id) })
+      sorguAyarla(modulYolu(sonuc.modul, yol), { m: String(sonuc.id) }) // WHOLESALE cati Toptan'da acilir
     },
     onError: (e) => setHata(hataMesaji(e, t.eklenemedi)),
   })

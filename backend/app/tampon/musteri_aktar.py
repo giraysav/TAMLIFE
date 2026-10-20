@@ -23,6 +23,7 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.dil import m
 from app.models import (
     AppUser,
@@ -292,6 +293,7 @@ def _parti(db: Session, parti_id: int) -> IngestBatch:
     return parti
 
 
+@musteri_alani.tum_alanlarda  # kart eslesmesi tum modullerde (WHOLESALE kart Toptan'da)
 def plan_olustur(db: Session, parti_id: int, yeni_olustur: bool = False) -> dict[str, Any]:
     """Partiyi kartlarla karsilastirir; HICBIR SEY YAZMAZ. Satir durumlari: guncelle | degisiklik_yok | yeni | hata."""
     parti = _parti(db, parti_id)
@@ -602,6 +604,7 @@ def _ham_deger(v: Any) -> Any:
     return list(v) if isinstance(v, list) else v
 
 
+@musteri_alani.tum_alanlarda  # kart eslesmesi tum modullerde (WHOLESALE kart Toptan'da)
 def uygula(db: Session, parti_id: int, yeni_olustur: bool, plan_ozeti: str, kullanici: str) -> dict[str, Any]:
     """Onizlenen plani kartlara tek islemde yazar. plan_ozeti onizlemeden gelen deger; farkliysa 409."""
     with _kilit:
@@ -718,6 +721,7 @@ def kayitlar(db: Session, adet: int = 20) -> list[dict[str, Any]]:
 _BAGLI = (Report, ReportDispatch, ReportDraft, ReportRecipient, ScoreDetail, ScoreHistory, UrunTutarOzet, ProjectCustomerWork)
 
 
+@musteri_alani.tum_alanlarda  # kart eslesmesi tum modullerde (WHOLESALE kart Toptan'da)
 def geri_al(db: Session, kayit_id: int, kullanici: str) -> dict[str, Any]:
     """Aktarimi geri alir: yalniz hala aktarimin yazdigi degerde duran alanlar eski haline doner; aktarimin olusturdugu musteriler
     rapor/skor/istirak gibi baska bir kayda baglanmamissa silinir."""
