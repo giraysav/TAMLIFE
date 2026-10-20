@@ -529,10 +529,6 @@ def gonderimler(db: Session, user: Principal, musteri_id: int | None = None, yil
     if ay is not None:
         sorgu = sorgu.where(ReportDispatch.month == ay)
     sonuc = db.execute(sorgu.order_by(ReportDispatch.at.desc(), ReportDispatch.id.desc()).limit(min(sinir, 2000))).all()
-    if not yonetici_mi(user) and musteri_id is None:
-        from app.musteri.servis import gorunur_mu
-
-        sonuc = [satir for satir in sonuc if gorunur_mu(db, user, satir[1])]
     return [gonderim_ozeti(g, {c.id: c.name}) for g, c in sonuc]
 
 
@@ -540,10 +536,8 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
     """TAM basina rapor birimi sayisi ve bu ayin atilan/bekleyen rapor sayisi (uretim _build_rapor_durumu).
     Catisina dahil bir istirak icin hazirlanan rapor CATININ raporu sayilir. Satirlar tek personel kumesidir (app.kullanicilar.personel):
     yonetici icin raporu olmayan personel de 0 satiridir; sahibi yonetici/admin ya da bos olan birimler tek '-' satirinda toplanir."""
-    from app.musteri.servis import gorunur_mu
-
-    musteriler = [c for c in db.scalars(select(Customer)) if gorunur_mu(db, user, c)]
-    tum = {c.id: c for c in db.scalars(select(Customer))}
+    tum = {c.id: c for c in db.scalars(select(Customer))}  # 2026-10-20: herkes tum musterileri gorur
+    musteriler = list(tum.values())
     atilanlar: set[int] = set()
     for kimlik in db.scalars(select(Report.customer_id).where(Report.report_month == ay, Report.report_year == yil).distinct()):
         c = tum.get(kimlik)

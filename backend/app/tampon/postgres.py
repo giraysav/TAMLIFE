@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import re
-import socket
 import sys
 import zlib
 from collections.abc import Callable
@@ -28,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.tampon.models import SourceCatalog, SourceCatalogObject
-from app.tampon.oracle import deger, maskele
+from app.tampon.oracle import ag_adimlari, deger, maskele
 
 _log = logging.getLogger(__name__)
 
@@ -154,17 +153,8 @@ def erisim_adimlari(anahtar: str) -> list[dict[str, str]]:
     if eksik := a.eksikler():
         return ekle("ayar", "hata", "Bağlantı ayarı eksik", ", ".join(eksik))
     ekle("ayar", "ok", "Ayarlar tamam", f"port {a.PORT} · ssl {a.SSLMODE} · zaman aşımı {a.TIMEOUT} sn")
-    sure = max(1, min(a.TIMEOUT, 5))
-    try:
-        adres = {x[4][0] for x in socket.getaddrinfo(a.HOST, None)}
-        ekle("dns", "ok", "Sunucu adı çözüldü", f"{len(adres)} adres")
-    except OSError as exc:
-        return ekle("dns", "hata", "Sunucu adı çözülemedi", f"{type(exc).__name__}\nnslookup {a.HOST}")
-    try:
-        socket.create_connection((a.HOST, a.PORT), timeout=sure).close()
-        ekle("tcp", "ok", f"Porta ulaşıldı ({a.PORT})")
-    except OSError as exc:
-        return ekle("tcp", "hata", f"Porta ulaşılamadı ({a.PORT})", f"{type(exc).__name__}\nTest-NetConnection {a.HOST} -Port {a.PORT} · güvenlik duvarı izni gerekir")
+    if not ag_adimlari(ekle, a.HOST, a.PORT, a.TIMEOUT, "güvenlik duvarı izni gerekir"):
+        return adimlar
     try:
         with a.baglan() as conn:
             surum = conn.execute("SELECT 1, current_setting('server_version')").fetchone()

@@ -1,6 +1,7 @@
 """PostgreSQL kaynaklari (ONENTDB / ONEDESKDB): ayar / durum (parola disari cikmaz), erisim adimlari, katalog taramasi (sahte baglanti:
 yapi + ornek, kisisel sutun gizli, yetkisiz tablo yapisiyla kalir), agac / nesne uclari ve yenile kurallari. Uydurma veri; ag yok."""
 
+import socket
 from types import SimpleNamespace
 
 import pytest
@@ -70,12 +71,12 @@ def test_durum_bilgiler_parolayi_vermez_eksikleri_adla_soyler(pg_ayar, monkeypat
 
 
 def test_erisim_adimlari_tcp_kirilinca_durur(pg_ayar, monkeypatch):
-    monkeypatch.setattr(postgres.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("10.0.0.1", 0))])
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("10.0.0.1", 0))])
 
     def kapali(*a, **k):
         raise TimeoutError("timed out")
 
-    monkeypatch.setattr(postgres.socket, "create_connection", kapali)
+    monkeypatch.setattr(socket, "create_connection", kapali)
     adimlar = postgres.erisim_adimlari("pg_onent")
     assert [a["adim"] for a in adimlar] == ["ayar", "dns", "tcp"] and adimlar[-1]["durum"] == "hata" and "5433" in adimlar[-1]["baslik"]
     assert "gizli-parola-1" not in str(adimlar)

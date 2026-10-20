@@ -276,8 +276,6 @@ def bilgiler(anahtar: str) -> dict[str, Any]:
 def erisim_adimlari(anahtar: str) -> list[dict[str, str]]:
     """AD erisim testiyle ayni kalip: ayar -> DNS -> TCP -> Oracle oturumu (SELECT 1 FROM DUAL, AYRI surecte); ilk kirilan halkada
     durur. Adim: {'adim', 'durum' ('ok'|'hata'), 'baslik', 'ayrinti'}. Ipucunda sunucu adi yazilir (AD testi gibi); IP ve parola yazilmaz."""
-    import socket
-
     a = ayar(anahtar)
     adimlar: list[dict[str, str]] = []
 
@@ -291,20 +289,30 @@ def erisim_adimlari(anahtar: str) -> list[dict[str, str]]:
     if eksik:
         return ekle("ayar", "hata", "Bağlantı ayarı eksik", ", ".join(eksik))
     ekle("ayar", "ok", "Ayarlar tamam", f"port {a.PORT} · zaman aşımı {a.TIMEOUT} sn" + (" · Oracle Client (thick)" if os.environ.get("ORACLE_CLIENT_DIR", "").strip() else ""))
-    sure = max(1, min(a.TIMEOUT, 5))
-    try:
-        adres = {x[4][0] for x in socket.getaddrinfo(a.HOST, None)}
-        ekle("dns", "ok", "Sunucu adı çözüldü", f"{len(adres)} adres")
-    except OSError as exc:
-        return ekle("dns", "hata", "Sunucu adı çözülemedi", f"{type(exc).__name__}\nnslookup {a.HOST}")
-    try:
-        socket.create_connection((a.HOST, a.PORT), timeout=sure).close()
-        ekle("tcp", "ok", f"Porta ulaşıldı ({a.PORT})")
-    except OSError as exc:
-        return ekle("tcp", "hata", f"Porta ulaşılamadı ({a.PORT})", f"{type(exc).__name__}\nTest-NetConnection {a.HOST} -Port {a.PORT} · güvenlik duvarı / VPN")
+    if not ag_adimlari(ekle, a.HOST, a.PORT, a.TIMEOUT, "güvenlik duvarı / VPN"):
+        return adimlar
     sonuc = baglanti_testi(anahtar)
     ekle("oturum", "ok" if sonuc["ok"] else "hata", "Oracle oturumu (SELECT 1 FROM DUAL)", "\n".join(x for x in (sonuc["mesaj"], sonuc["ipucu"]) if x))
     return adimlar
+
+
+def ag_adimlari(ekle: Any, host: str, port: int, timeout: int, ipucu: str) -> bool:
+    """Erisim testlerinin ortak DNS -> TCP halkalari (Oracle ve PostgreSQL). Kirilirsa adimi yazar ve False doner."""
+    import socket
+
+    try:
+        adres = {x[4][0] for x in socket.getaddrinfo(host, None)}
+        ekle("dns", "ok", "Sunucu adı çözüldü", f"{len(adres)} adres")
+    except OSError as exc:
+        ekle("dns", "hata", "Sunucu adı çözülemedi", f"{type(exc).__name__}\nnslookup {host}")
+        return False
+    try:
+        socket.create_connection((host, port), timeout=max(1, min(timeout, 5))).close()
+        ekle("tcp", "ok", f"Porta ulaşıldı ({port})")
+    except OSError as exc:
+        ekle("tcp", "hata", f"Porta ulaşılamadı ({port})", f"{type(exc).__name__}\nTest-NetConnection {host} -Port {port} · {ipucu}")
+        return False
+    return True
 
 
 def _ayri_surecte_test(anahtar: str, timeout: int) -> dict[str, Any]:

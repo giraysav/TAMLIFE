@@ -118,15 +118,10 @@ def kullanici_id(db: Session, user: Principal) -> int | None:
     return db.scalar(select(AppUser.id).where(AppUser.username == user.username))
 
 
-def gorunur_mu(db: Session, user: Principal, musteri: Customer) -> bool:
-    """2026-10-20: modulu acabilen herkes alanin tum kartlarini gorur (yazma duzenleyebilir_mi ile)."""
-    return True
-
-
 def musteri_getir(db: Session, user: Principal, musteri_id: int) -> Customer:
-    """Okuma: alanda olmayan kart 404."""
+    """Okuma (2026-10-20: modulu acabilen herkes alanin tum kartlarini gorur; yazma musteri_yaz_getir). Alanda olmayan kart 404."""
     musteri = db.get(Customer, musteri_id)
-    if musteri is None or not gorunur_mu(db, user, musteri):
+    if musteri is None:
         raise MusteriHata(404, "Müşteri bulunamadı.")
     return musteri
 
@@ -206,16 +201,9 @@ def secenekler(db: Session, user: Principal) -> dict:
     }
 
 
-def portfoy_catilari(
-    db: Session, user: Principal, arama: str = "", tam_id: int | None = None, segment: str = ""
-) -> tuple[list[Customer], set[int] | None]:
-    """Portfoy filtresine (arama / TAM / segment) uyan cati kartlari ve kullanicinin gorebildigi kart kimlikleri (None = hepsi;
-    2026-10-20'den beri herkes hepsini gorur)."""
-    gorunen: set[int] | None = None
+def portfoy_catilari(arama: str = "", tam_id: int | None = None, segment: str = "") -> select:
+    """Portfoy filtresine (arama / TAM / segment) uyan cati kartlarinin sorgusu (2026-10-20: herkes tum kartlari gorur)."""
     cati = select(Customer).where(Customer.parent_id.is_(None))
-    if gorunen is not None:
-        ustler = set(db.scalars(select(Customer.parent_id).where(Customer.id.in_(gorunen or {-1}), Customer.parent_id.is_not(None))))
-        cati = cati.where(Customer.id.in_((gorunen | ustler) or {-1}))
     if tam_id:
         cati = cati.where(Customer.owner_id == tam_id)
     if segment:
@@ -223,10 +211,8 @@ def portfoy_catilari(
     if arama.strip():
         kalip = _kalip(arama)
         alt = select(Customer.parent_id).where(Customer.parent_id.is_not(None), Customer.name.ilike(kalip, escape="\\"))
-        if gorunen is not None:
-            alt = alt.where(Customer.id.in_(gorunen or {-1}))
         cati = cati.where(or_(Customer.name.ilike(kalip, escape="\\"), Customer.segment.ilike(kalip, escape="\\"), Customer.id.in_(alt)))
-    return list(db.scalars(cati.order_by(Customer.name, Customer.id))), gorunen
+    return cati.order_by(Customer.name, Customer.id)
 
 
 def portfoy(
@@ -237,14 +223,12 @@ def portfoy(
     2026-10-20: herkes tum kartlari gorur; kartin 'duzenlenebilir' bayragi kullaniciya atanmis mi (duzenleyebilir_mi).
     """
     adet = min(max(1, adet), EN_FAZLA_SAYFA_BASINA)
-    tum, gorunen = portfoy_catilari(db, user, arama, tam_id, segment)
+    tum = list(db.scalars(portfoy_catilari(arama, tam_id, segment)))
     toplam = len(tum)
     sayfa = max(1, min(sayfa, max(1, math.ceil(toplam / adet))))
     parca = tum[(sayfa - 1) * adet : sayfa * adet]
 
     alt_sorgu = select(Customer).where(Customer.parent_id.in_([c.id for c in tum] or [-1]))
-    if gorunen is not None:
-        alt_sorgu = alt_sorgu.where(Customer.id.in_(gorunen or {-1}))
     altlar: dict[int, list[Customer]] = {}
     for a in db.scalars(alt_sorgu.order_by(Customer.name)):
         altlar.setdefault(a.parent_id, []).append(a)

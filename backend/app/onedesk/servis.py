@@ -38,17 +38,11 @@ def _aralik(yil: int) -> tuple[datetime, datetime]:
     return datetime(yil, 1, 1, tzinfo=UTC), datetime(yil + 1, 1, 1, tzinfo=UTC)
 
 
-def gorunen_musteriler(db: Session, user: Principal) -> set[int] | None:
-    """None = kisit yok. 2026-10-20 kullanici karari: herkes tum verileri gorur (Onedesk analizi dahil; yazma kurali ayri)."""
-    return None
-
-
 RADAR_KAYNAGI = "temip"  # karti olmayan TEMIP kaydi TAM Radar'indir (radar.servis); Onedesk sayilarina girmez
 
 
-def _kapsam_kosulu(idler: set[int] | None):
-    if idler is not None:
-        return OnedeskRecord.customer_id.in_(idler or {-1})
+def _kapsam_kosulu():
+    """2026-10-20 kullanici karari: herkes tum verileri gorur; yalniz kartsiz TEMIP kaydi (TAM Radar'in) Onedesk sayilarina girmez."""
     return or_(OnedeskRecord.customer_id.is_not(None), OnedeskRecord.source != RADAR_KAYNAGI)
 
 
@@ -56,9 +50,8 @@ def _musteri_adi():
     return func.coalesce(func.nullif(Customer.name, ""), func.nullif(OnedeskRecord.customer_label, ""), literal("—"))
 
 
-def _kosullar(idler: set[int] | None, *ek):
-    kosul = [c for c in (_kapsam_kosulu(idler), *ek) if c is not None]
-    return and_(*kosul) if kosul else literal(True)
+def _kosullar(*ek):
+    return and_(_kapsam_kosulu(), *ek)
 
 
 def kaynak_bilgisi(db: Session) -> dict:
@@ -71,12 +64,11 @@ def durum(db: Session, user: Principal, kapsam: str, yil: int | None = None) -> 
     if kapsam not in KAPSAMLAR:
         raise OnedeskHata(400, "Kapsam acik ya da kapali olmali.")
     yil = _yil(yil)
-    idler = gorunen_musteriler(db, user)
     if kapsam == "acik":
-        kosul = _kosullar(idler, OnedeskRecord.status == "open")
+        kosul = _kosullar(OnedeskRecord.status == "open")
     else:
         bas, son = _aralik(yil)
-        kosul = _kosullar(idler, OnedeskRecord.status == "closed", OnedeskRecord.closed_at >= bas, OnedeskRecord.closed_at < son)
+        kosul = _kosullar(OnedeskRecord.status == "closed", OnedeskRecord.closed_at >= bas, OnedeskRecord.closed_at < son)
 
     ad = _musteri_adi()
     satirlar = db.execute(
@@ -146,13 +138,12 @@ def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[da
     toplam: araliktaki tum kayitlarin tur toplamlari."""
     yil = _yil(yil)
     bas, son = aralik or _aralik(yil)
-    idler = gorunen_musteriler(db, user)
-    anahtar = (yil, bas, son, frozenset(idler) if idler is not None else None, db.scalar(select(func.max(OnedeskRecord.id))))
+    anahtar = (yil, bas, son, db.scalar(select(func.max(OnedeskRecord.id))))
     with _onbellek_kilidi:
         kayit = _onbellek.get(anahtar)
     if kayit is not None and time.monotonic() - kayit[0] < ONBELLEK_SN:
         return kayit[1]
-    sonuc = _top10_hesapla(db, yil, bas, son, idler)
+    sonuc = _top10_hesapla(db, yil, bas, son)
     with _onbellek_kilidi:
         if len(_onbellek) > 64:
             _onbellek.clear()
@@ -160,9 +151,9 @@ def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[da
     return sonuc
 
 
-def _top10_hesapla(db: Session, yil: int, bas: datetime, son: datetime, idler: set[int] | None) -> dict:
+def _top10_hesapla(db: Session, yil: int, bas: datetime, son: datetime) -> dict:
     acilis = func.coalesce(OnedeskRecord.opened_at, OnedeskRecord.closed_at)
-    kosul = _kosullar(idler, acilis >= bas, acilis < son)
+    kosul = _kosullar(acilis >= bas, acilis < son)
     ad = _musteri_adi()
     sayim: dict[str, dict] = {}
     for musteri, tur, adet in db.execute(
@@ -205,7 +196,6 @@ def _kapananlar(db: Session, user: Principal, yil: int) -> list[dict]:
     bas, son = _aralik(yil)
     ad = _musteri_adi()
     kosul = _kosullar(
-        gorunen_musteriler(db, user),
         # Kismi indeksin (models.RCA_INDEKS_KOSULU) kullanilmasi icin kosul ayni LITERAL ile yazilir (bagli parametreyle kullanilmaz).
         OnedeskRecord.status == literal_column("'closed'"),
         OnedeskRecord.root_cause != literal_column("''"),
