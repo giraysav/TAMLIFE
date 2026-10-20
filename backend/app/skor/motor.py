@@ -213,13 +213,15 @@ MANUEL_KAYNAK = 'Manuel seçim (kriter dökümü)'
 
 
 def secenekler(kriter):
-    """Manuel secim listesi: [{puan, etiket}] - barem hucresindeki kural metni (bossa varsayilan kural) etiket olur; 0 = hicbir barem."""
+    """Manuel secim listesi: [{puan, etiket}] - Kriterler tablosundaki barem hucresinin kural metni (bossa varsayilan kural) etiket olur.
+    0 puan secenegi yok (2026-10-20 kullanici). Kurali olan barem varsa yalniz onlar listelenir (orn. Segment'te bos 30 hucresi
+    secilemez); hicbir baremde kural yoksa dort puan da secilebilir."""
     varsayilan = VARSAYILAN_KURALLAR.get(tur_coz(kriter), {})
-    liste = [{'puan': 0, 'etiket': ''}]
+    liste = []
     for alan, puan in BAREM_ALANLARI:
         metin = str((kriter or {}).get(alan) or '').strip()
         liste.append({'puan': puan, 'etiket': metin if metin and normal(metin) != 'x' else varsayilan.get(alan, '')})
-    return liste
+    return [s for s in liste if s['etiket']] or liste
 
 
 def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
@@ -244,7 +246,7 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
     if not otomatik:
         sonuc['secenekler'] = secenekler(kriter)
         secim = (manuel or {}).get(normal(baslik))
-        if secim is not None and int(secim) in (0,) + PUANLAR:
+        if secim is not None and int(secim) in {s['puan'] for s in sonuc['secenekler']}:
             sonuc.update(puan=int(secim), durum='manuel', kaynak=MANUEL_KAYNAK)
         sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
         return sonuc

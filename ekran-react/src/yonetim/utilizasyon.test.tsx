@@ -190,7 +190,7 @@ describe("TAM Utilizasyon", () => {
 
   it("manuel puanlama: kriter dokumunde her kriter secilir, kaydet secimleri sunucuya gonderir (X sabit satir secilmez)", async () => {
     const u = uym("tr").util
-    const secenekler = [{ puan: 0, etiket: "" }, { puan: 30, etiket: "" }, { puan: 50, etiket: "SMB" }, { puan: 70, etiket: "MA" }, { puan: 100, etiket: "SA" }]
+    const secenekler = [{ puan: 50, etiket: "SMB" }, { puan: 70, etiket: "MA" }, { puan: 100, etiket: "SA" }]
     const kriter = (baslik: string, ek: object) => ({ baslik, tur: "auto_segment", agirlik: 50, puan: 0, katki: 0, durum: "eksik" as const, kaynak: null, deger: null, varsayilan_kural: false, ...ek })
     const onizleme: SkorOnizleme = {
       manuel: true,

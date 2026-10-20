@@ -347,8 +347,8 @@ def toplu_uygula(db: Session, istenen: object, actor: str, actor_id: int | None)
 
 
 def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: int | None) -> dict:
-    """Kriter dokumunde secilen puanlar (baslik -> 0/30/50/70/100) ile cati musterinin final skoru sunucuda hesaplanip yazilir
-    (kaynak 'toplu'). Her kriter secilmis olmali (X sabit puanli satir haric); secimler dokumle saklanir."""
+    """Kriter dokumunde secilen puanlar (baslik -> kriterin secenegindeki 30/50/70/100) ile cati musterinin final skoru sunucuda
+    hesaplanip yazilir (kaynak 'toplu'). Her kriter secilmis olmali (X sabit puanli satir haric); secimler dokumle saklanir."""
     if OTOMATIK_PUANLAMA:
         raise SkorHata(400, "Otomatik puanlama acikken manuel atama yapilmaz.")
     musteri = db.get(Customer, musteri_id)
@@ -358,10 +358,15 @@ def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: 
         raise SkorHata(400, "Kriter secimleri gecersiz.")
     secimler: dict[str, int] = {}
     for baslik, puan in ham.items():
-        if not isinstance(puan, int) or isinstance(puan, bool) or puan not in (0, *skor.PUANLAR):
-            raise SkorHata(400, f'"{baslik}" icin puan 0, 30, 50, 70 ya da 100 olmali.')
+        if not isinstance(puan, int) or isinstance(puan, bool) or puan not in skor.PUANLAR:
+            raise SkorHata(400, f'"{baslik}" icin puan 30, 50, 70 ya da 100 olmali.')
         secimler[skor.normal(str(baslik))] = puan
-    h = skor.musteri_skoru(cati_kriterleri(db), {}, secimler, otomatik=False)
+    kriterler = cati_kriterleri(db)
+    for k in kriterler:
+        secim = secimler.get(skor.normal(k.get("title")))
+        if secim is not None and skor.sabit_puan(k) is None and secim not in {s["puan"] for s in skor.secenekler(k)}:
+            raise SkorHata(400, f'"{k.get("title")}" icin {secim} puanin kriter tablosunda kurali yok.')
+    h = skor.musteri_skoru(kriterler, {}, secimler, otomatik=False)
     if not h["tamam"]:
         raise SkorHata(400, "Her kriter icin puan secin: " + ", ".join(h["eksik"] or ["kriter yok"]))
     eski = round(musteri.score, 1) if musteri.score is not None else None

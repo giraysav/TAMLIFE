@@ -103,11 +103,13 @@ def test_manuel_puanlama_kriter_dokumunden(veri):
     m1 = next(m for m in on["musteriler"] if m["id"] == 1)
     segment, rapor = m1["kriterler"]
     assert segment["durum"] == "eksik" and segment["deger"] is None and m1["eksik"] == ["Musteri segmenti"]
-    assert [(s["puan"], s["etiket"]) for s in segment["secenekler"]] == [(0, ""), (30, ""), (50, "SMB"), (70, "MA"), (100, "SA, PA, WHOLESALE")]
+    assert [(s["puan"], s["etiket"]) for s in segment["secenekler"]] == [(50, "SMB"), (70, "MA"), (100, "SA, PA, WHOLESALE")]  # 0 yok, bos 30 hucresi yok
     assert rapor["durum"] == "otomatik" and rapor["puan"] == 50  # X sabit puani tablo kuralidir, secim gerekmez
     yaz = lambda mid, s: veri.put(f"/api/v1/skor/toplu/manuel/{mid}", json={"secimler": s}, headers=hdr)
     assert yaz(1, {}).status_code == 400  # her kriter secilmeli
     assert yaz(1, {"Musteri segmenti": 55}).status_code == 400
+    assert yaz(1, {"Musteri segmenti": 0}).status_code == 400  # 0 puan kriteri yok
+    assert yaz(1, {"Musteri segmenti": 30}).status_code == 400  # 30 hucresinde kural yok
     assert yaz(4, {"Musteri segmenti": 100}).status_code == 404  # istirak
     r = yaz(1, {"Musteri segmenti": 100})
     assert r.status_code == 200 and r.json()["data"] == {"id": 1, "ad": "Cati MA", "eski": None, "yeni": 75.0}

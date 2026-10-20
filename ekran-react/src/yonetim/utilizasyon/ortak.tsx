@@ -116,10 +116,10 @@ export function KriterDokumu({ kriterler, t, duzenle }: { kriterler: KriterSonuc
             <tr key={`${k.baslik}-${i}`}>
               <td className="px-3 py-1.5 font-black text-tl-navy">{k.baslik || k.tur}</td>
               <td className="px-3 py-1.5 text-right font-mono font-bold">{k.agirlik}</td>
-              <td className="px-3 py-1.5 text-right font-mono font-black text-tl-navy">
+              <td className={`px-3 py-1.5 font-mono font-black text-tl-navy ${duzenle && k.secenekler ? "text-left" : "text-right"}`}>
                 {duzenle && k.secenekler ? (
                   <select
-                    className={`${GIRDI} !w-auto !py-1 text-right`}
+                    className={`${GIRDI} !w-auto !py-1 text-left`}
                     aria-label={u.puanSecEtiket(k.baslik || k.tur)}
                     disabled={duzenle.kilitli}
                     value={duzenle.secim[k.baslik] ?? ""}
