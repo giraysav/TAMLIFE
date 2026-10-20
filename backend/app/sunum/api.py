@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -57,6 +57,28 @@ def donem(yil: int | None = Query(default=None, ge=2000, le=2100), ceyrek: int |
     sonuc = servis.donem(db, yil or vy, ceyrek or vc, e.user.username)
     db.commit()  # ilk goruntulemede dondurulenler
     return ok({**sonuc, "yonetebilir": e.yetkili_mi(SUNUM_YETKISI)})
+
+
+@router.get("/disa-aktar")
+def disa_aktar(yil: int = Query(ge=2000, le=2100), ceyrek: int = Query(ge=1, le=4), e: Erisim = Depends(sunum_erisim), db: Session = Depends(get_db)):
+    """Ceyregin tum alanlari disa aktarma biciminde (PDF arayuzde bundan yazdirilir)."""
+    from app.sunum import disa_aktar as da
+
+    sonuc = da.bolumler(db, yil, ceyrek, e.user.username)
+    db.commit()
+    return ok(sonuc)
+
+
+@router.get("/excel")
+def excel(yil: int = Query(ge=2000, le=2100), ceyrek: int = Query(ge=1, le=4), e: Erisim = Depends(sunum_erisim), db: Session = Depends(get_db)) -> Response:
+    """Ceyregin tum alanlari Excel'de: Ozet sayfasi + alan basina bir sayfa (ekrandaki veriyle ayni)."""
+    from app.sunum import disa_aktar as da
+
+    icerik = da.excel(da.bolumler(db, yil, ceyrek, e.user.username))
+    db.commit()
+    audit_log.remember(actor=e.user.username, action="sunum.excel", outcome="allow", module_key="sunum", detail=f"donem={yil}-Q{ceyrek}")
+    return Response(icerik, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="TAMLIFE_Ceyrek_Sunum_{yil}_Q{ceyrek}.xlsx"'})  # fmt: skip
 
 
 @router.get("/kaynaklar")

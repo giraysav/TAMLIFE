@@ -195,6 +195,12 @@ export function TakvimOzet({ veri, t }: { veri: TakvimVeri; t: TakvimMetin }) {
     <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
       <Halka dilimler={seriler.map((s) => ({ ...s, deger: sayilar[s.anahtar as keyof typeof sayilar] }))} baslik={sayi(toplam)} alt={t.toplamToplanti} boyut={136} kalinlik={18} />
       <Lejant seriler={seriler} sayilar={sayilar} />
+      {veri.yil_toplami ? (
+        // TAM Takvim varsayilan donemi tum yil; sunum ceyregi gosterir: iki rakam karismasin (2026-10-20)
+        <p className="basis-full text-center text-[0.6875rem] font-bold text-slate-500">
+          {t.sunumYilToplami(sayi(veri.yil_toplami.online), sayi(veri.yil_toplami.yuzyuze))}
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -347,6 +347,8 @@ def sunum_ozeti(db: Session, yil: int, ceyrek: int) -> dict:
         "ceyrek": ceyrek,
         "durumlar": anlik["durumlar"],
         "genel": anlik["genel"],
+        # 2026-10-20: TAM Takvim varsayilan donemi tum yil; sunum ceyregi gosterir. Iki rakam karismasin diye yilin toplantilari da gider.
+        "yil_toplami": {k: v for k, v in ekip(db, yil, 0)["genel"].items() if k in ("online", "yuzyuze", "toplanti")},
         "uyeler": [
             {k: u[k] for k in ("ad", "durumlar", "online", "yuzyuze", "izin_gun", "toplanti", "kayitli_gun")} for u in anlik["uyeler"]
         ],

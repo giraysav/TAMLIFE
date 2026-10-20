@@ -8,7 +8,7 @@ export type KpiVeri = { ad: string; ad_en: string; deger: number | null; birim: 
 export type Onizleme = { adet?: number; sira?: number; etiket?: number; deger?: number; tavan?: number }
 export type TabloVeri = { sutunlar: { ad: string; ad_en: string; birim: string }[]; satirlar: Hucre[][]; onizleme?: Onizleme }
 export type GenelVeri = { stil?: "sayilar"; kpi: KpiVeri[]; tablo?: TabloVeri }
-export type TakvimVeri = { genel: Ozet; uyeler: ({ ad: string } & Ozet)[] }
+export type TakvimVeri = { genel: Ozet; uyeler: ({ ad: string } & Ozet)[]; yil_toplami?: { online: number; yuzyuze: number; toplanti: number } }
 export type KodDili = { dil: string; satir: number; dosya: number; pay: number; rol: string; rol_en: string }
 export type TanitimVeri = {
   stil: "tanitim"

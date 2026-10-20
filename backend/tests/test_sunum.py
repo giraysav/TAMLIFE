@@ -476,3 +476,24 @@ def test_izin_kaynagi_metin_gondermez(veri, monkeypatch):
     assert ayse[1] == 1 and ayse[2] == 1
     assert oge["veri"]["tablo"]["satirlar"] == [["Ayse Test", 1, 1, 0, 0, 1, 1]]
     assert "Gizli" not in str(oge)
+
+
+def test_disa_aktar_excel_ve_pdf_verisi_ekranla_ayni(veri, monkeypatch):
+    """2026-10-20 kullanici: ceyregin her verisi Excel / PDF olarak disa aktarilir (ekrandaki ogelerle ayni)."""
+    import io as _io
+
+    from openpyxl import load_workbook
+
+    hdr = login_ok(veri)
+    _kaynak_sec(veri, hdr, ["portfoy", "takvim"])
+    d = veri.get("/api/v1/sunum/disa-aktar", params={"yil": YIL, "ceyrek": CEYREK}).json()["data"]
+    assert [b["kaynak"] for b in d["bolumler"]] == ["portfoy", "takvim"]
+    portfoy = d["bolumler"][0]["tablolar"]
+    assert portfoy[0]["baslik"] == "Göstergeler" and portfoy[0]["satirlar"][0][0] == "Çatı müşteri"
+    takvim = {t["baslik"].split(" (")[0]: t for t in d["bolumler"][1]["tablolar"]}
+    assert {"Ekip", "Yıl toplamı", "Kişi bazında"} <= set(takvim)  # TAM Takvim tum yil / ceyrek karismasin
+    r = veri.get("/api/v1/sunum/excel", params={"yil": YIL, "ceyrek": CEYREK})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/vnd.openxmlformats")
+    wb = load_workbook(_io.BytesIO(r.content))
+    assert wb.sheetnames[0] == "Özet" and len(wb.sheetnames) == 3
+    assert veri.get("/api/v1/sunum/excel", params={"yil": YIL, "ceyrek": 5}).status_code == 422

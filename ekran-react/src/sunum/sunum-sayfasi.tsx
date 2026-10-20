@@ -11,6 +11,7 @@ import { yerel } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 import { SayilarSeridi } from "@/sunum/sayilar-seridi"
 import { AyrintiTablosu, BantRozeti, GenelOzet, SunumKarti, TakvimAyrinti, TakvimOzet, ayrintiSayisi } from "@/sunum/sunum-kartlari"
+import { SunumDisaAktar } from "@/sunum/sunum-disa-aktar"
 import { SunumKaynaklari, useDuzenKaydet, useKaynaklar } from "@/sunum/sunum-kaynaklari"
 import { SunumSenkron } from "@/sunum/sunum-senkron"
 import { SunumSlayt } from "@/sunum/sunum-slayt"
@@ -339,6 +340,7 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
                 <Maximize2 aria-hidden className="size-4" />
                 {t.tamEkran}
               </button>
+              <SunumDisaAktar dil={dil} yil={yil} ceyrek={ceyrek} bos={ogeler.length === 0} />
             </div>
           </div>
           {bilgi ? <Bildirim ton="kirmizi">{bilgi}</Bildirim> : null}
