@@ -64,21 +64,72 @@ function sonDoluSatir(ctx: CanvasRenderingContext2D, genislik: number, yukseklik
   return yukseklik
 }
 
-/** Sayfa kesiminin icinden gecmemesi gereken bloklar (canvas pikseli). */
-function bolunmezBloklar(el: HTMLElement, canvas: HTMLCanvasElement): [number, number][] {
-  const kokUst = el.getBoundingClientRect().top
-  const olcek = canvas.height / el.offsetHeight
-  return [...el.querySelectorAll<HTMLElement>("figure, [data-pdf-blok]")]
+/** Sayfa kesiminin icinden gecmemesi gereken bloklar (CSS pikseli, koke gore; [ust, alt]). KOPYADA olculur: html2canvas'in cizdigi
+ *  kopyada gizlenen ogeler (dugmeler) ve kaldirilan stiller duzeni kaydirir; orijinalden olcmek kesimi yanlis yere koyuyordu. */
+function bolunmezBloklar(kok: HTMLElement): { bloklar: [number, number][]; yukseklik: number } {
+  const kokUst = kok.getBoundingClientRect().top
+  const bloklar = [...kok.querySelectorAll<HTMLElement>("figure, [data-pdf-blok]")]
     .filter((b) => b.offsetHeight > 0)
     .map((b) => {
       const k = b.getBoundingClientRect()
-      return [Math.floor((k.top - kokUst) * olcek), Math.ceil((k.bottom - kokUst) * olcek)] as [number, number]
+      return [k.top - kokUst, k.bottom - kokUst] as [number, number]
     })
     .sort((a, b) => a[0] - b[0])
+  return { bloklar, yukseklik: kok.offsetHeight }
+}
+
+export type PdfSecenek = {
+  /** "l": A4 yatay (Ceyrek Sunum). Varsayilan dikey (aylik rapor). */
+  yon?: "p" | "l"
+  /** Ekrandaki Tailwind gorunumunu korur: stil dosyalari kopyada KALIR, html2canvas'in okuyamadigi renk islevleri (oklch, oklab,
+   *  color-mix...) hesaplanmis degerden sRGB'ye cevrilip satir ici yazilir. Kapaliyken (aylik rapor) stil dosyalari kaldirilir. */
+  ekranGorunumu?: boolean
+  /** Kopyadan cikarilacak ogeler (dugmeler, surukleme tutamaclari). */
+  gizle?: string
+}
+
+const RENK_ISLEVI = /(?:oklch|oklab|lab|lch|color-mix|color)\((?:[^()]|\([^()]*\))*\)/g
+const RENK_OZELLIKLERI = ["color", "background-color", "background-image", "border-top-color", "border-right-color", "border-bottom-color",
+  "border-left-color", "outline-color", "box-shadow", "text-decoration-color", "fill", "stroke", "caret-color"] as const
+
+/** Kopyadaki her ogenin hesaplanmis renk ozelliklerini sRGB'ye cevirip satir ici yazar (tarayici canvas'i cevirir). */
+function renkleriSatirIciYaz(kopya: Document) {
+  const tuval = document.createElement("canvas")
+  tuval.width = tuval.height = 1
+  const ctx = tuval.getContext("2d", { willReadFrequently: true })
+  if (!ctx) return
+  const onbellek = new Map<string, string>()
+  // Chrome fillStyle'i geri okurken oklab/oklch bicimini korur; bu yuzden renk 1x1 piksele boyanip sRGB piksel degeri okunur.
+  const cevir = (renk: string) => {
+    let s = onbellek.get(renk)
+    if (s === undefined) {
+      ctx.clearRect(0, 0, 1, 1)
+      ctx.fillStyle = renk
+      ctx.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+      s = `rgba(${r}, ${g}, ${b}, ${Math.round((a / 255) * 1000) / 1000})`
+      onbellek.set(renk, s)
+    }
+    return s
+  }
+  const pencere = kopya.defaultView
+  if (!pencere) return
+  // Once TUM degerler okunur, sonra yazilir: okuma-yazma ic ice olursa her yazma sonraki okumada tum belgenin stilini yeniden
+  // hesaplatir (binlerce ogede sayfa donuyordu).
+  const yazilacak: [HTMLElement | SVGElement, string, string][] = []
+  for (const el of [kopya.documentElement, ...Array.from(kopya.querySelectorAll<HTMLElement | SVGElement>("body, body *"))]) {
+    const stil = pencere.getComputedStyle(el)
+    for (const ozellik of RENK_OZELLIKLERI) {
+      const deger = stil.getPropertyValue(ozellik)
+      RENK_ISLEVI.lastIndex = 0
+      if (deger && RENK_ISLEVI.test(deger)) yazilacak.push([el, ozellik, deger])
+    }
+  }
+  for (const [el, ozellik, deger] of yazilacak) el.style.setProperty(ozellik, deger.replace(RENK_ISLEVI, cevir))
 }
 
 /** Sablon elemanindan cok sayfali A4 PDF. */
-export async function raporPdfOlustur(el: HTMLElement, olcek = 2, kalite = 0.95): Promise<Blob> {
+export async function raporPdfOlustur(el: HTMLElement, olcek = 2, kalite = 0.95, secenek: PdfSecenek = {}): Promise<Blob> {
   for (const ad of BETIKLER) await betikYukle(ad)
   const w = window as Pencere
   if (!w.html2canvas || !w.jspdf) throw new Error("pdf")
@@ -89,27 +140,47 @@ export async function raporPdfOlustur(el: HTMLElement, olcek = 2, kalite = 0.95)
   const [eskiX, eskiY] = [window.scrollX, window.scrollY]
   window.scrollTo(0, 0) // kaydirilmis sayfada html2canvas sablonun ustunu kirpabiliyor
   let canvas: HTMLCanvasElement
+  let olcum: ReturnType<typeof bolunmezBloklar> | null = null
+  el.setAttribute("data-pdf-kok", "")
+  // html2canvas yazi taban cizgisini ASIL belgede sinifsiz bir <img> ile olcer; Tailwind temel stili (img display:block) olcumu bozup
+  // metni asagi kaydiriyordu (kesik etiketler, rozetler). Yakalama suresince duzeltilir; uygulamanin resimleri sinifli, etkilenmez.
+  const tabanStili = document.createElement("style")
+  tabanStili.textContent = "img:not([class]){display:inline !important;vertical-align:baseline !important}"
+  if (secenek.ekranGorunumu) document.head.appendChild(tabanStili)
   try {
     canvas = await w.html2canvas(el, {
       scale: olcek,
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
-      // Kopyada stil dosyalari kaldirilir: html2canvas Tailwind v4'un oklch renklerini okuyamaz. Sablon yalniz satir ici
-      // (hex) stil kullanir, bu yuzden gorunum degismez.
-      onclone: (kopya: Document) => kopya.querySelectorAll('style, link[rel="stylesheet"]').forEach((e) => e.remove()),
+      // Aylik rapor: kopyada stil dosyalari kaldirilir (html2canvas Tailwind v4'un oklch renklerini okuyamaz; sablon yalniz satir ici
+      // hex stil kullanir). Ekran gorunumu (Ceyrek Sunum): stiller kalir, renkler sRGB'ye cevrilir.
+      onclone: (kopya: Document) => {
+        if (secenek.gizle) kopya.querySelectorAll(secenek.gizle).forEach((e) => e.remove())
+        if (secenek.ekranGorunumu) {
+          kopya.querySelectorAll<HTMLElement>("[data-pdf-yalniz]").forEach((e) => e.style.setProperty("display", "block")) // yalniz PDF'te gorunen (donem basligi)
+          renkleriSatirIciYaz(kopya)
+        }
+        else kopya.querySelectorAll('style, link[rel="stylesheet"]').forEach((e) => e.remove())
+        const kok = kopya.querySelector<HTMLElement>("[data-pdf-kok]")
+        if (kok) olcum = bolunmezBloklar(kok)
+      },
     })
   } finally {
+    tabanStili.remove()
+    el.removeAttribute("data-pdf-kok")
     window.scrollTo(eskiX, eskiY)
   }
-  const pdf = new w.jspdf.jsPDF("p", "mm", "a4")
+  const pdf = new w.jspdf.jsPDF(secenek.yon ?? "p", "mm", "a4")
   const sayfaG = pdf.internal.pageSize.getWidth()
   const sayfaY = pdf.internal.pageSize.getHeight()
   const mmPiksel = canvas.width / sayfaG
   const ctx = canvas.getContext("2d")
   if (!ctx) throw new Error("pdf")
   const bitis = Math.min(canvas.height, sonDoluSatir(ctx, canvas.width, canvas.height) + Math.round(5 * mmPiksel))
-  const bloklar = bolunmezBloklar(el, canvas)
+  const kopyaOlcum = olcum as ReturnType<typeof bolunmezBloklar> | null
+  const pikselOrani = canvas.height / (kopyaOlcum?.yukseklik || el.offsetHeight)
+  const bloklar = (kopyaOlcum?.bloklar ?? []).map(([u, a]) => [Math.floor(u * pikselOrani), Math.ceil(a * pikselOrani)] as [number, number])
   let ust = 0
   for (let sayfa = 0; ust < bitis; sayfa++) {
     const ustMm = sayfa === 0 ? 0 : UST_KENAR_MM
@@ -117,7 +188,8 @@ export async function raporPdfOlustur(el: HTMLElement, olcek = 2, kalite = 0.95)
     const kalanSigar = bitis - ust <= Math.floor((sayfaY - ustMm + 4) * mmPiksel)
     let alt = kalanSigar ? bitis : Math.min(ust + sigan, bitis)
     if (alt < bitis) {
-      const bolunen = bloklar.find(([bUst, bAlt]) => bUst > ust + 2 && bUst < alt && bAlt > alt)
+      // sayfadan uzun blok (tanitim) zaten bolunur: bastan sonraki sayfaya itmek bos sayfa birakiyordu
+      const bolunen = bloklar.find(([bUst, bAlt]) => bUst > ust + 2 && bUst < alt && bAlt > alt && bAlt - bUst <= sigan)
       alt = bolunen ? bolunen[0] - 2 : bosSatiraCek(ctx, canvas.width, ust + Math.floor(sigan * 0.6), alt)
     }
     const parca = document.createElement("canvas")

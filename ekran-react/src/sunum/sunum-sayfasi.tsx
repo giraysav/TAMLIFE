@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react"
+import { Fragment, useRef, useState } from "react"
 import type { DragEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { BadgeCheck, ChevronsDownUp, ChevronsUpDown, Info, LayoutList, LockOpen, Maximize2, Pin, Presentation, RefreshCw, Trash2 } from "lucide-react"
@@ -59,6 +59,7 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
   const tt = takvimMetin(dil)
   const qc = useQueryClient()
   const simdi = new Date()
+  const pdfKok = useRef<HTMLDivElement>(null) // PDF ekrandaki sunumun aynisi: bu kok resme cevrilir (sunum-disa-aktar)
   const [yil, setYil] = useState(varsayilanYil(simdi))
   const [ceyrek, setCeyrek] = useState(Math.floor(simdi.getMonth() / 3) + 1)
   const [bilgi, setBilgi] = useState("")
@@ -259,9 +260,10 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <div ref={pdfKok} className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={Presentation} baslik={t.baslik} aciklama={t.aciklama}>
-        <div className="flex flex-wrap items-center gap-2">
+        <p data-pdf-yalniz className="hidden text-sm font-black text-tl-yellow">{t.ceyrekKisa(ceyrek)} {yil}</p>
+        <div data-pdf-gizle className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
             {t.yil}
             <select className={`${GIRDI} !w-auto !py-2`} value={yil} onChange={(e) => setYil(Number(e.target.value))}>
@@ -306,7 +308,7 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
                 {v.zaman === "guncel" ? t.durumGuncel : v.zaman === "gecmis" ? t.durumGecmis : t.durumGelecek}
               </p>
             )}
-            <div className="flex flex-wrap items-center gap-2">
+            <div data-pdf-gizle className="flex flex-wrap items-center gap-2">
               {ayrintili.length > 0 ? (
                 <button type="button" className={DUGME} onClick={hepsiniDegistir}>
                   {hepsiAcik ? <ChevronsDownUp aria-hidden className="size-4" /> : <ChevronsUpDown aria-hidden className="size-4" />}
@@ -340,7 +342,7 @@ export function SunumSayfasi({ dil }: { dil: Dil }) {
                 <Maximize2 aria-hidden className="size-4" />
                 {t.tamEkran}
               </button>
-              <SunumDisaAktar dil={dil} yil={yil} ceyrek={ceyrek} bos={ogeler.length === 0} />
+              <SunumDisaAktar dil={dil} yil={yil} ceyrek={ceyrek} bos={ogeler.length === 0} hedef={() => pdfKok.current} />
             </div>
           </div>
           {bilgi ? <Bildirim ton="kirmizi">{bilgi}</Bildirim> : null}

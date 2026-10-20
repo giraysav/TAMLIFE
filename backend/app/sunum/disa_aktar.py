@@ -1,8 +1,8 @@
 """Ceyrek Sunum disa aktarma (2026-10-20 kullanici: "ceyrek sunumdaki her veriyi export edebilecegim bir buton: Excel / PDF").
 
 Ceyregin gorunur alanlari (servis.donem: ekrandaki ile ayni ogeler, onayli ceyrekte onay kaydi) tek bicime cevrilir:
-bolum = {baslik, durum, tablolar: [{baslik, sutunlar, satirlar}]}. Excel sunucuda (openpyxl: "Ozet" + alan basina bir sayfa),
-PDF tarayicida ayni JSON'dan yazdirma penceresiyle uretilir (yeni bagimlilik yok). Metin cevirisi yapilmaz; Turkce basliklar.
+bolum = {baslik, durum, tablolar: [{baslik, sutunlar, satirlar}]} -> Excel (openpyxl: "Ozet" + alan basina bir sayfa). PDF ekrandaki
+sunumun aynisidir ve tarayicida uretilir (src/sunum/sunum-disa-aktar.tsx, html2canvas + jsPDF). Turkce basliklar.
 """
 
 from __future__ import annotations

@@ -54,13 +54,14 @@ type KartProps = {
 export function SunumKarti({ baslik, rozet, zaman, zamanAciklama, eylem, ayrinti, acik = false, onAc, genis = false, bantsiz = false, surukle, children }: KartProps) {
   const kimlik = useId()
   const tutamak = surukle ? (
-    <span title={surukle.etiket} aria-label={surukle.etiket} className={`cursor-grab rounded-md p-0.5 active:cursor-grabbing ${bantsiz ? "absolute right-2 top-2 z-10 bg-white/90 text-slate-500 shadow" : "text-white/70 hover:bg-white/10"}`}>
+    <span data-pdf-gizle title={surukle.etiket} aria-label={surukle.etiket} className={`cursor-grab rounded-md p-0.5 active:cursor-grabbing ${bantsiz ? "absolute right-2 top-2 z-10 bg-white/90 text-slate-500 shadow" : "text-white/70 hover:bg-white/10"}`}>
       <GripVertical aria-hidden className="size-4" />
     </span>
   ) : null
   return (
     <section
       aria-label={baslik}
+      data-pdf-blok
       draggable={surukle ? true : undefined}
       onDragStart={surukle?.bas}
       onDragOver={surukle?.uzerinden}
@@ -106,7 +107,7 @@ export function SunumKarti({ baslik, rozet, zaman, zamanAciklama, eylem, ayrinti
             </span>
           ) : null}
         </div>
-        {eylem ? <div className="ml-auto flex flex-wrap items-center gap-2">{eylem}</div> : null}
+        {eylem ? <div data-pdf-gizle className="ml-auto flex flex-wrap items-center gap-2">{eylem}</div> : null}
       </footer>
     </section>
   )

@@ -478,7 +478,7 @@ def test_izin_kaynagi_metin_gondermez(veri, monkeypatch):
     assert "Gizli" not in str(oge)
 
 
-def test_disa_aktar_excel_ve_pdf_verisi_ekranla_ayni(veri, monkeypatch):
+def test_disa_aktar_excel_ekranla_ayni(veri, monkeypatch):
     """2026-10-20 kullanici: ceyregin her verisi Excel / PDF olarak disa aktarilir (ekrandaki ogelerle ayni)."""
     import io as _io
 
@@ -486,7 +486,10 @@ def test_disa_aktar_excel_ve_pdf_verisi_ekranla_ayni(veri, monkeypatch):
 
     hdr = login_ok(veri)
     _kaynak_sec(veri, hdr, ["portfoy", "takvim"])
-    d = veri.get("/api/v1/sunum/disa-aktar", params={"yil": YIL, "ceyrek": CEYREK}).json()["data"]
+    from app.sunum import disa_aktar
+
+    with Session(engine()) as db:
+        d = disa_aktar.bolumler(db, YIL, CEYREK, "admin")
     assert [b["kaynak"] for b in d["bolumler"]] == ["portfoy", "takvim"]
     portfoy = d["bolumler"][0]["tablolar"]
     assert portfoy[0]["baslik"] == "Göstergeler" and portfoy[0]["satirlar"][0][0] == "Çatı müşteri"

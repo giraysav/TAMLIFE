@@ -220,6 +220,7 @@ def main() -> int:
     kaynak.add_argument("--bos", action="store_true", help="bos sema ile ac")
     p.add_argument("--port", type=int, default=8199)
     p.add_argument("--dizin", type=Path, help="kopya klasoru (varsayilan gecici; kapanista silinir)")
+    p.add_argument("--arayuz", action="store_true", help="derlenmis arayuzu de sun (ekran-react/dist; gorsel / Playwright denemeleri)")
     a = p.parse_args()
     if a.port in (8117, 443):
         print("8117/443 canli paneldir; baska port verin.")
@@ -229,7 +230,8 @@ def main() -> int:
         db_kopyala(a.kaynak.resolve(), dizin)
     else:
         bos_db_kur(dizin)
-    o = Ornek(a.port, dizin).baslat()
+    ek = {"TAMLIFE_STATIC_DIR": str(BACKEND.parent / "ekran-react" / "dist")} if a.arayuz else None
+    o = Ornek(a.port, dizin).baslat(ek)
     print(f"ornek: http://127.0.0.1:{a.port}  kullanici={o.kullanici}  parola={o.parola}  kopya={dizin}")
     print(f"  ..\\.venv\\Scripts\\python.exe -m araclar.yuk.yuk_testi http://127.0.0.1:{a.port} --kullanici {o.kullanici} --parola {o.parola} kirilma")
     try:

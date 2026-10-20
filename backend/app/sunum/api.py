@@ -59,16 +59,6 @@ def donem(yil: int | None = Query(default=None, ge=2000, le=2100), ceyrek: int |
     return ok({**sonuc, "yonetebilir": e.yetkili_mi(SUNUM_YETKISI)})
 
 
-@router.get("/disa-aktar")
-def disa_aktar(yil: int = Query(ge=2000, le=2100), ceyrek: int = Query(ge=1, le=4), e: Erisim = Depends(sunum_erisim), db: Session = Depends(get_db)):
-    """Ceyregin tum alanlari disa aktarma biciminde (PDF arayuzde bundan yazdirilir)."""
-    from app.sunum import disa_aktar as da
-
-    sonuc = da.bolumler(db, yil, ceyrek, e.user.username)
-    db.commit()
-    return ok(sonuc)
-
-
 @router.get("/excel")
 def excel(yil: int = Query(ge=2000, le=2100), ceyrek: int = Query(ge=1, le=4), e: Erisim = Depends(sunum_erisim), db: Session = Depends(get_db)) -> Response:
     """Ceyregin tum alanlari Excel'de: Ozet sayfasi + alan basina bir sayfa (ekrandaki veriyle ayni)."""
