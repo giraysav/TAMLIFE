@@ -1,5 +1,5 @@
 import { sayi } from "@/lib/bicim"
-import { Lejant, Sutunlar } from "@/components/grafik"
+import { Halka, Lejant } from "@/components/grafik"
 import type { Seri } from "@/components/grafik"
 import { DURUM_RENK, DURUM_SIRASI } from "@/takvim/takvim-metin"
 import type { TakvimMetin } from "@/takvim/takvim-metin"
@@ -26,16 +26,25 @@ export function takvimKalemleri(t: TakvimMetin, o: Ozet): (Seri & { deger: numbe
   ]
 }
 
-/** Donem grafigi: tum personelin toplami, veri turu basina bir sutun ve sayili lejant (kisi listesi yok). Sunum modulu de ayni bilesenle cizer. */
+/** Donem grafigi (2026-10-20 kullanici: "bar degil pasta"): iki pasta, cunku toplanti ADEDI (yuzlerce) ile gun sayisi (izin, tatil)
+ *  ayni dilimde olcek tutmaz. Toplantilar: online / yuz yuze kisi toplami; gunler: donemin takvimi (kisi sayisiyla carpilmaz). Sunum da kullanir. */
 export function TakvimGrafigi({ genel, t }: { genel: Ozet; t: TakvimMetin }) {
   const kalemler = takvimKalemleri(t, genel)
+  const toplanti = kalemler.filter((k) => k.anahtar === "online" || k.anahtar === "yuzyuze")
+  const gunler = kalemler.filter((k) => !toplanti.includes(k))
+  const pasta = (dilimler: typeof kalemler, baslik: string, deger: number) => (
+    <figure className="grid justify-items-center gap-2">
+      <figcaption className="text-xs font-bold text-slate-500">
+        {baslik}: <span className="font-mono font-black text-tl-navy">{sayi(deger)}</span>
+      </figcaption>
+      <Halka dilimler={dilimler} baslik={null} boyut={152} kalinlik={76} />
+      <Lejant seriler={dilimler} sayilar={Object.fromEntries(dilimler.map((k) => [k.anahtar, k.deger]))} />
+    </figure>
+  )
   return (
-    <div className="grid max-w-3xl gap-3">
-      <p className="text-xs font-bold text-slate-500">
-        {t.toplamToplanti}: <span className="font-mono font-black text-tl-navy">{sayi(genel.toplanti)}</span> · {t.izinGunu}: <span className="font-mono font-black text-tl-navy">{sayi(genel.izin_gun)}</span>
-      </p>
-      <Sutunlar sutunlar={kalemler.map((k) => ({ etiket: k.ad, degerler: { [k.anahtar]: k.deger } }))} seriler={kalemler} yukseklik={128} />
-      <Lejant seriler={kalemler} sayilar={Object.fromEntries(kalemler.map((k) => [k.anahtar, k.deger]))} />
+    <div className="grid max-w-3xl gap-6 sm:grid-cols-2">
+      {pasta(toplanti, t.toplamToplanti, genel.toplanti)}
+      {pasta(gunler, t.izinGunu, genel.izin_gun)}
     </div>
   )
 }
