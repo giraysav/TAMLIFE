@@ -26,8 +26,8 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.tampon.models import SourceCatalog, SourceCatalogObject
 from app.ortak import UygulamaHatasi, iso, simdi
+from app.tampon.models import SourceCatalog, SourceCatalogObject
 from app.tampon.oracle import deger, maskele
 
 _log = logging.getLogger(__name__)

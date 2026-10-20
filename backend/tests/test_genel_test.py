@@ -6,7 +6,8 @@ import sys
 
 import pytest
 
-from araclar.genel_test import Report, configured_db, junit, sqlite_check, test_environment as isolated_env
+from araclar.genel_test import Report, configured_db, junit, sqlite_check
+from araclar.genel_test import test_environment as isolated_env
 from araclar.yuk.ornek import rss_mb
 
 
@@ -94,6 +95,7 @@ def test_process_rss_is_measured_in_real_megabytes():
 def test_windows_load_instance_measures_and_stops_its_child_tree(tmp_path):
     import subprocess
     import time
+
     from araclar.yuk.ornek import Ornek
 
     ready = tmp_path / "ready"

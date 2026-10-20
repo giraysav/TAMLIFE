@@ -17,11 +17,12 @@ from app import catalog, kullanicilar
 from app.db import engine
 from app.gelir_uretim import excel, ice_al, servis
 from app.gelir_uretim.models import RevenueBenefit, RevenueBenefitPerson
-from app.models import TABLE_OWNER, AppUser, AuditEvent, RoleView
+from app.models import TABLE_OWNER, AppUser, AuditEvent
 from app.session import Principal
 from app.takvim.servis import TakvimHata
 from app.yonetim.kalici_yazici import yazici
 from tests.conftest import login_ok
+from tests.test_musteri import _cikis
 
 URL = "/api/v1/gelir-uretim"
 SIMDI = datetime(2026, 10, 13, 9, 0, tzinfo=UTC)

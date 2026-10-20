@@ -24,6 +24,7 @@ from fastapi.routing import APIRoute
 
 from app.yonetim.kalici_yazici import yazici
 from tests.conftest import login_ok
+from tests.test_guvenlik_sinir import _topoloji_musterisi
 
 ESIK_MS = 100
 GOVDE = b"Lokasyon;Devre;Altyapi\n" + b"".join(b"L%d;D%d;FIBER\n" % (i, i) for i in range(4000))  # ~80 KB gecerli CSV
@@ -142,6 +143,9 @@ def test_async_uclar_olay_dongusunu_bloklamaz(client, monkeypatch):
     for _ in range(3):
         istekler += [_istek(r, yol, mid) for r, yol in uclar]
         istekler += [("GET", "/api/v1/musteri", None), ("GET", "/api/v1/session/me", None), ("GET", "/api/v1/ekip/ozet", None)]
+    # Isinma turu (olculmez): ilk istekler tembel ice aktarmalari (openpyxl, PIL, rapor modulleri) yapar; bu tek seferlik maliyet
+    # GIL'i tutup donguyu ~100 ms geciktirebiliyordu (2026-10-20: yalniz ilk turda 1-2 yavas geri cagri, sonraki turlarda 0).
+    asyncio.run(_surus(client.app, dict(client.cookies), hdr, istekler))
     gecikme, yavas, yanitlar = asyncio.run(_surus(client.app, dict(client.cookies), hdr, istekler))
     yazici.bosalt(zorla=True)  # dev kipinde kuyruga giren denetim olaylari test DB'si hala gecerliyken yazilsin
     print(f"\n{len(uclar)} async uc x3 + senkron trafik: azami dongu gecikmesi {gecikme:.0f} ms, yavas geri cagri {len(yavas)}")
@@ -192,7 +196,8 @@ def test_govde_oku_tepe_bellegi_govdenin_uc_katini_asmaz(client):
             yield govde[i : i + 65536]
 
     tracemalloc.start()
-    r = client.put("/api/v1/topoloji/analiz?dosya=y.csv", content=parcali(), headers=hdr)
+    _topoloji_musterisi()
+    r = client.put("/api/v1/topoloji/analiz?musteri=1&dosya=y.csv", content=parcali(), headers=hdr)
     _, tepe = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     print(f"\n{len(govde) / 1048576:.1f} MB parcali govde: durum {r.status_code}, tepe {tepe / 1048576:.1f} MB")
@@ -202,9 +207,10 @@ def test_govde_oku_tepe_bellegi_govdenin_uc_katini_asmaz(client):
 
 @pytest.mark.parametrize(
     "yol",
-    ["/api/v1/topoloji/analiz?dosya=b.csv", "/api/v1/tampon/yukle?kaynak=onedesk&dosya=b.csv", "/api/v1/tampon/musteri-ham/yukle?dosya=b.csv"],
+    ["/api/v1/topoloji/analiz?musteri=1&dosya=b.csv", "/api/v1/tampon/yukle?kaynak=onedesk&dosya=b.csv", "/api/v1/tampon/musteri-ham/yukle?dosya=b.csv"],
 )
 def test_bozuk_csv_500_degil_400(client, yol):
     hdr = login_ok(client)
+    _topoloji_musterisi()
     r = client.put(yol, content=BOZUK_CSV, headers=hdr)
     assert r.status_code == 400, (r.status_code, r.text[:200])

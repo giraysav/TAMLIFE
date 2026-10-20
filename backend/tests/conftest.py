@@ -26,6 +26,19 @@ from app.session import reset_for_tests
 from app.yonetim.kalici_yazici import yazici
 
 
+@pytest.fixture(autouse=True)
+def _canli_yollardan_izole(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """2026-10-20: hicbir test canli klasore yazmasin (rapor PDF / SLA, gunluk, yedek, ham katalog). Eskiden yalniz client fixture'i
+    gunluk/yedek yolunu degistiriyordu; SLA/PDF testleri canli backend/data/reports'a artik birakti. Testin kendi setenv'i bunu ezer."""
+    kok = tmp_path_factory.mktemp("izole")
+    monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(kok / "raporlar"))
+    monkeypatch.setenv("TAMLIFE_LOG_DIR", str(kok / "log"))
+    monkeypatch.setenv("TAMLIFE_BACKUP_DIR", str(kok / "yedek"))
+    from app.tampon import katalog
+
+    monkeypatch.setattr(katalog, "HAM_DIZIN", kok / "ham")
+
+
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("TAMLIFE_DATABASE_URL", f"sqlite:///{(tmp_path / 'test.db').as_posix()}")

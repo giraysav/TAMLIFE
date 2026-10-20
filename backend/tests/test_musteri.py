@@ -2,7 +2,6 @@
 
 import base64
 import re
-from datetime import UTC, datetime
 from email import message_from_bytes
 from email.policy import default
 
@@ -306,12 +305,12 @@ def test_yetkisiz_ve_csrf(veri, monkeypatch):
     assert veri.get("/api/v1/musteri").status_code == 403  # modul verilmedi
     # modullere musteri eklenirse erisilebilir
     _cikis(veri, hdr)
-    admin_hdr = login_ok(veri)
+    admin_hdr = _giris(veri, monkeypatch, "admin")  # rol ortam degiskeni TeamMember'da kalmasin
     assert veri.put("/api/v1/roller/TeamMember", json={"modules": ["musteri"], "landing": "ozet"}, headers=admin_hdr).status_code == 200
     _cikis(veri, admin_hdr)
     hdr = _giris(veri, monkeypatch, "TeamMember")
     assert veri.get("/api/v1/musteri").status_code == 200  # okuma acik
-    assert veri.put("/api/v1/musteri/1/kimlik", json={"sector": "x"}, headers=hdr).status_code == 403  # yazma yalniz admin
+    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "x"}, headers=hdr).status_code == 403  # 2026-10-20: kendisine atanmamis kart
 
 
 def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):

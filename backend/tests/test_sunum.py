@@ -177,7 +177,7 @@ def test_gecmis_ceyrek_onaysizken_modullerle_senkron(veri, monkeypatch):
         db.add(Customer(id=4, external_key="t-c", name="Gama", segment="MA", owner_id=1))
         db.commit()
     tekrar = _donem(veri, *onceki)
-    cati = lambda d: next(k["deger"] for o in d["ogeler"] if o["kaynak"] == "portfoy" for k in o["veri"]["kpi"] if k["ad"] == "Çatı müşteri")  # noqa: E731
+    cati = lambda d: next(k["deger"] for o in d["ogeler"] if o["kaynak"] == "portfoy" for k in o["veri"]["kpi"] if k["ad"] == "Çatı müşteri")
     assert cati(tekrar) == cati(ilk) + 1 and _sunum_sayisi() == 2
 
     # anlik kaynak yalniz bir onceki ceyrek icin dondurulur; daha eski ceyrege bugunku durum yazilmaz

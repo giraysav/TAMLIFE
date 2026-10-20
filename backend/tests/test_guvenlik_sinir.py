@@ -211,20 +211,29 @@ def test_kimlik_sinir_disi_422_ya_da_404(client, kimlik):
     assert client.get(f"/api/v1/musteri/{kimlik}").status_code in {404, 422}
 
 
+def _topoloji_musterisi() -> str:
+    """Topoloji analiz ucu musteri ister (TopoMaker v2); govde siniri musteri dogrulandiktan sonra okunur."""
+    with Session(engine()) as db:
+        db.add(Customer(id=1, external_key="t-topo", name="Topo Test"))
+        db.commit()
+    return "/api/v1/topoloji/analiz?musteri=1"
+
+
 def test_chunked_govde_siniri_bildirilen_boyutsuz_da_413(client):
     hdr = login_ok(client)
+    yol = _topoloji_musterisi()
 
     def parcalar():
         for _ in range(12):
             yield b"x" * (1024 * 1024)
 
-    r = client.put("/api/v1/topoloji/analiz", content=parcalar(), headers=hdr)
+    r = client.put(yol, content=parcalar(), headers=hdr)
     assert r.status_code == 413
 
 
 def test_yalan_content_length_govdeyi_kesmez(client):
     hdr = login_ok(client)
-    r = client.put("/api/v1/topoloji/analiz", content=b"x" * (11 * 1024 * 1024), headers={**hdr, "Content-Length": "10"})
+    r = client.put(_topoloji_musterisi(), content=b"x" * (11 * 1024 * 1024), headers={**hdr, "Content-Length": "10"})
     assert r.status_code in {400, 413}
 
 

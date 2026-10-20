@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -16,7 +17,6 @@ from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, build_opener
-import re
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"

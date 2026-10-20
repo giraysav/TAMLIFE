@@ -221,7 +221,7 @@ def test_onedesk_modul_yetkisi_ve_kaynak_yalniz_admin(veri, monkeypatch):
     assert veri.get("/api/v1/onedesk/durum").status_code == 403
     # onedesk verilince acilir:
     _cikis(veri, {"X-CSRF-Token": veri.cookies.get("tamlife_csrf")})
-    admin_hdr = login_ok(veri)
+    admin_hdr = _giris(veri, monkeypatch, "admin")  # rol ortam degiskeni TeamMember'da kalmasin
     _rol_ver(veri, admin_hdr, moduller=["musteri", "onedesk"])
     _cikis(veri, admin_hdr)
     _giris(veri, monkeypatch, "TeamMember")
