@@ -48,7 +48,9 @@ def test_herkesin_girdigi_takvim_admine_aninda_gorunur(client, monkeypatch):
         kendi = client.get("/api/v1/takvim/ben", params={"yil": YIL, "ay": 10}).json()["data"]["yil_ozet"]["gorunen"]
         assert u["durumlar"] == kendi
         _giris(client, monkeypatch, "yonetici", "admin")
-    assert ekip["genel"]["online"] == sum(range(1, KISI + 1)) and ekip["genel"]["durumlar"]["yillik_izin"] == KISI
+    # 2026-10-20: ekip satiri yalniz toplantilari toplar; gun kirilimlari takvimden (kisiye ozel izin kisi satirlarinda)
+    assert ekip["genel"]["online"] == sum(range(1, KISI + 1)) and ekip["genel"]["durumlar"]["yillik_izin"] == 0
+    assert sum(u["durumlar"]["yillik_izin"] for u in ekip["uyeler"]) == KISI
 
     # admin kisinin gunlerini metinleriyle gorur
     u1 = uyeler[kisiler[0]]

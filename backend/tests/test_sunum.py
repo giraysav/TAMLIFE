@@ -470,6 +470,9 @@ def test_izin_kaynagi_metin_gondermez(veri, monkeypatch):
     _kaynak_sec(veri, hdr, ["izin"])
     (oge,) = _donem(veri, YIL, CEYREK)["ogeler"]
     kpi = {k["ad_en"]: k["deger"] for k in oge["veri"]["kpi"]}
-    assert kpi["Leave days"] == 1 and kpi["Annual leave"] == 1 and kpi["Days with work notes"] == 1 and kpi["Days with meeting notes"] == 1
+    # 2026-10-20: izin kirilimlari kisi basina toplanmaz (ekip satiri donemin takvimi; burada kurum gunu yok -> 0); kisi satirinda 1
+    assert kpi["Leave days"] == 0 and kpi["Annual leave"] == 0 and kpi["Days with work notes"] == 1 and kpi["Days with meeting notes"] == 1
+    ayse = next(s for s in oge["veri"]["tablo"]["satirlar"] if s[0] == "Ayse Test")
+    assert ayse[1] == 1 and ayse[2] == 1
     assert oge["veri"]["tablo"]["satirlar"] == [["Ayse Test", 1, 1, 0, 0, 1, 1]]
     assert "Gizli" not in str(oge)

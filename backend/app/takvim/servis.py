@@ -131,12 +131,18 @@ def _gunler(kullanici: str, bas: date, son: date) -> list[CalendarDay]:
         satirlar = list(k.scalars(select(CalendarDay).where(CalendarDay.day >= bas, CalendarDay.day <= son)))
         k.expunge_all()
     kayitli = {r.day for r in satirlar}
-    for gun, durum, _, durum2 in kurum_araligi(bas, son):
-        if gun not in kayitli:
-            sanal = CalendarDay(day=gun, status=durum, status2=durum2, online_count=0, face_count=0)
-            sanal.kurum_sanal = True  # type: ignore[attr-defined]
-            satirlar.append(sanal)
+    satirlar += [g for g in _kurum_gunleri(bas, son) if g.day not in kayitli]
     return sorted(satirlar, key=lambda r: r.day)
+
+
+def _kurum_gunleri(bas: date, son: date) -> list[CalendarDay]:
+    """Kurum takviminin (Turkcell'li Takvimi) donemdeki gunleri: kisinin dosyasina yazilmamis sanal satirlar."""
+    gunler = []
+    for gun, durum, _, durum2 in kurum_araligi(bas, son):
+        sanal = CalendarDay(day=gun, status=durum, status2=durum2, online_count=0, face_count=0)
+        sanal.kurum_sanal = True  # type: ignore[attr-defined]
+        gunler.append(sanal)
+    return gunler
 
 
 def ay_oku(kullanici: str, yil: int, ay: int) -> dict:
@@ -297,16 +303,18 @@ def ekip(db: Session, yil: int, ceyrek: int) -> dict:
     """Etkin TAM personelinin tamami (TeamMember; hic giris yapmamis olsa da, bos takvimiyle); her kisi icin izin/gun durumu ve toplanti toplamlari (TAM Takvim)."""
     bas, son = donem_araligi(yil, ceyrek)
     liste = [_uye(u, _uye_ozeti(u.username, bas, son)) for u in personel(db)]
+    # 2026-10-20 kullanici: "yalniz online ve yuzyuze adetleri toplanir; sirket izni 14,5 gun ise personel sayisiyla carpilmaz, kac gun
+    # ise o yazilir". Ekip satirinin gun kirilimlari (durumlar, izin gunu) donemin takviminden (kurum gunleri; kisiye ozel izin yok);
+    # kisi satirlari degismez. Kayit sayilari (girilen gun, is / ozet girilen gun) kisi toplamidir.
+    takvim = _ozet_olustur(kurum := _kurum_gunleri(bas, son))
     genel = _bos_ozet()
+    genel["durumlar"], genel["izin_gun"] = _gorunen(kurum, bas, son), takvim["izin_gun"]
     for u in liste:
         genel["kayitli_gun"] += u["kayitli_gun"]
         genel["online"] += u["online"]
         genel["yuzyuze"] += u["yuzyuze"]
         genel["is_gunu"] += u["is_gunu"]
         genel["ozet_gunu"] += u["ozet_gunu"]
-        genel["izin_gun"] += u["izin_gun"]
-        for k, v in u["durumlar"].items():
-            genel["durumlar"][k] = genel["durumlar"].get(k, 0) + v
     gonderilen = db.scalar(select(Presentation).where(Presentation.source == SUNUM_KAYNAK, Presentation.period == donem_adi(yil, ceyrek)))
     return {
         "yil": yil,

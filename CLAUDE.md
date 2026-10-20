@@ -51,7 +51,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 | TAM Utilizasyon | `skor/` | `src/yonetim/utilizasyon/` | `motor.py` golden testli |
 | ICT SMS / APN | `gelir/` | `src/gelir/` | kayıt TAM'ın dosyasında; sahip TAM seçer |
 | Gelir Faydası | `gelir_uretim/` | `src/gelir-uretim/` | onay akışı; herkes girer, sahip/admin onaylar |
-| Takvim / TAM Takvim | `takvim/` | `src/takvim/` | kurum günleri `kurum_takvimi.py`; toplantı adedi sınırsız |
+| Takvim / TAM Takvim | `takvim/` | `src/takvim/` | kurum günleri `kurum_takvimi.py`; toplantı adedi sınırsız; ekip satırı yalnız online/yüz yüze adetlerini toplar, gün kırılımları (şirket izni, resmi tatil, yarım gün) dönemin takviminden, kişi sayısıyla çarpılmaz (`takvim.servis.ekip`) |
 | Projeler | `proje/` | `src/proje/` | özet müşteri işaretlerini de sayar |
 | Çeyrek Sunum | `sunum/` | `src/sunum/` | onaysız çeyrek modüllerden senkron, dondurma yalnız onay; her modülün `KAYNAKLAR`da alanı olmalı; her teslimde `sunum/test_sayilari.json` gerçek test sayılarıyla |
 | Ekip Özeti | `ekip/` | `src/ekip/` | Genel Bakış karoları, `OZETTE_YOK` |

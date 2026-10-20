@@ -589,7 +589,7 @@ def test_sunuma_gonderilen_ogeler_ceyrek_basina_tek_kayit(veri):
     assert sunum["donem"] == f"{YIL}-Q3" and len(ogeler) == 1 and ogeler[0]["kaynak"] == "takvim" and ogeler[0]["durum"] == "kayitli"
     assert ogeler[0]["gonderen"] == "Admin Kisi"
     ayse = next(u for u in ogeler[0]["veri"]["uyeler"] if u["ad"] == "Ayse Test")
-    assert ayse["durumlar"]["raporlu"] == 1 and ogeler[0]["veri"]["genel"]["durumlar"]["raporlu"] == 1
+    assert ayse["durumlar"]["raporlu"] == 1 and ogeler[0]["veri"]["genel"]["durumlar"]["raporlu"] == 0  # ekip satiri takvimden
     veri.put("/api/v1/sunum/kaynaklar", json={"kaynaklar": []}, headers=hdr)
     assert veri.get("/api/v1/sunum/donem", params={"yil": YIL - 5, "ceyrek": 3}).json()["data"]["ogeler"] == []  # sunumda gorunur alan yok
     veri.post("/api/v1/takvim/sunuma-gonder", json={"yil": YIL, "ceyrek": 3, "gonder": False}, headers=hdr)
