@@ -1,4 +1,4 @@
-"""Ceyrek Bazli Sunum HTTP katmani. Gorme: 'sunum' modulu (rol gorunumu). Yonetme: admin ya da rolgorunum.SUNUM_YETKISI.
+"""Ceyrek Sunum HTTP katmani. Gorme: 'sunum' modulu (rol gorunumu). Yonetme: admin ya da rolgorunum.SUNUM_YETKISI.
 
   GET  /sunum/donem       -> secilen ceyregin ogeleri (gecmis ceyrekte ilk goruntulemede dondurulur)
   GET  /sunum/kaynaklar   -> sunumun alanlari (her modul), sirasi ve gorunurlugu (Sunum sayfasindaki 'Sunum icerigi' penceresi)
@@ -25,7 +25,7 @@ from app.sunum.servis import SunumHata
 
 router = APIRouter(prefix="/api/v1/sunum", tags=["sunum"])
 sunum_erisim = modul_erisim("sunum")
-YETKISIZ = "Çeyrek bazlı sunumu yönetme yetkiniz yok; yönetici Rol Yönetimi › Çeyrek Bazlı Sunum'dan verir."
+YETKISIZ = "Çeyrek sunumu yönetme yetkiniz yok; yönetici Rol Yönetimi › Çeyrek Sunum'dan verir."
 
 
 class KaynakGovde(BaseModel):

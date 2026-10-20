@@ -32,7 +32,7 @@ DURUMLAR: dict[str, str] = {
 }
 IZIN_DURUMLARI = ("yillik_izin", "sirket_izni", "raporlu")
 EN_COK_TOPLU_GUN = 62
-EN_COK_TOPLANTI = 50
+EN_COK_TOPLANTI = 2_147_483_647  # 2026-10-20 kullanici: online / yuzyuze adet siniri kalkti (yalniz veritabani tamsayi tavani)
 EN_COK_OZET = 4000  # toplanti ozeti ve yapilan isler karakter siniri
 SUNUM_KAYNAK = "takvim"
 
@@ -76,8 +76,10 @@ def _sayi(deger: object, etiket: str) -> int:
         n = int(deger or 0)
     except (TypeError, ValueError):
         raise TakvimHata(400, f"{etiket} tam sayı olmalı.") from None
-    if not 0 <= n <= EN_COK_TOPLANTI:
-        raise TakvimHata(400, f"{etiket} 0-{EN_COK_TOPLANTI} arasında olmalı.")
+    if n < 0:
+        raise TakvimHata(400, f"{etiket} negatif olamaz.")
+    if n > EN_COK_TOPLANTI:
+        raise TakvimHata(400, f"{etiket} çok büyük.")
     return n
 
 
@@ -328,9 +330,9 @@ def uye_gunleri(db: Session, yil: int, ceyrek: int, uye_id: int, metinli: bool =
     return {"uye": uye.display_name or uye.username, "gunler": [_gun(g, metinli) for g in gunler]}
 
 
-# --- ceyrek bazli sunum (app.sunum kaynagi) --------------------------------------------------------------
+# --- ceyrek sunum (app.sunum kaynagi) --------------------------------------------------------------
 def sunum_ozeti(db: Session, yil: int, ceyrek: int) -> dict:
-    """Donemin TAM Takvim goruntusu (Ceyrek Bazli Sunum 'takvim' kaynagi; grafik bu yukle cizilir)."""
+    """Donemin TAM Takvim goruntusu (Ceyrek Sunum 'takvim' kaynagi; grafik bu yukle cizilir)."""
     anlik = ekip(db, yil, ceyrek)
     return {
         "yil": yil,

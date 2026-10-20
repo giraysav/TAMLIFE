@@ -6,8 +6,8 @@ Uc bolum:
   - Proje Detay Takibi (Jira/ITIL tarzi): proje basina durum, oncelik, hedef tarih ve kronolojik aksiyon gecmisi.
     Acilis ve durum/oncelik degisimi aksiyon olarak yazilir; 'kapandi' olunca kapanis tarihi bir kez yazilir.
   - Musteri Bazli Calismalar: musteri + kategori basina "yapildi" isareti ve detay; Excel rapor.
-Kapsam (uretim aktif_kapsam): admin ve TeamMngr hepsini; TeamMember yalniz sorumlusu oldugu projeleri ve kendi musterilerini
-(cati + istirakleri) gorur/degistirir. Member proje acarken sorumlu her zaman kendisidir (TAM adini degistiremez).
+Kapsam (2026-10-20 kullanici karari): herkes tum projeleri ve musteri isaretlerini gorur; admin ve TeamMngr hepsini, TeamMember
+yalniz sorumlusu oldugu projeleri ve kendi musterilerini (cati + istirakleri) degistirir. Member proje acarken sorumlu her zaman kendisidir (TAM adini degistiremez).
 """
 
 from __future__ import annotations
@@ -40,10 +40,17 @@ def _ad(kisi: AppUser | None) -> str:
 
 
 # --- proje detay takibi ----------------------------------------------------------------------------------------------
+def _duzenlenebilir(db: Session, user: Principal, kalem: ProjectItem) -> bool:
+    """2026-10-20 kullanici karari: herkes tum projeleri gorur; admin ve TeamMngr her kalemi, personel yalniz kendisine atanani degistirir."""
+    return yonetici_mi(user) or kalem.owner_id == kullanici_kaydi(db, user).id
+
+
 def _gorunur(db: Session, user: Principal, kalem: ProjectItem | None) -> ProjectItem:
-    """Gorunmeyen proje icin de 404 (varligi sizdirilmaz)."""
-    if kalem is None or not (yonetici_mi(user) or kalem.owner_id == kullanici_kaydi(db, user).id):
+    """Yazma icin kalem: yoksa 404, kullaniciya atanmamissa 403."""
+    if kalem is None:
         raise ProjeHata(404, "Proje bulunamadı.")
+    if not _duzenlenebilir(db, user, kalem):
+        raise ProjeHata(403, "Bu proje size atanmamış: içeriği görebilirsiniz, değiştiremezsiniz.")
     return kalem
 
 
@@ -134,19 +141,14 @@ def _musteri_isaretleri(db: Session, user: Principal) -> list[tuple[str, int | N
         .outerjoin(ust, Customer.parent_id == ust.id)
         .where(ProjectCustomerWork.done.is_(True), ProjectCustomerWork.category.in_(list(KATEGORILER)))
     )
-    if not yonetici_mi(user):
-        uid = kullanici_kaydi(db, user).id
-        sorgu = sorgu.where(or_(Customer.owner_id == uid, ust.owner_id == uid))
-    return [(k, s) for k, s in db.execute(sorgu).all()]
+    return [(k, s) for k, s in db.execute(sorgu).all()]  # 2026-10-20: herkes tum musterilerin isaretlerini gorur
 
 
 def ekran(db: Session, user: Principal) -> dict:
     """Ozet + proje listesi (en son guncellenen ustte) + sorumlu secenekleri."""
     yonetici = yonetici_mi(user)
     ben = kullanici_kaydi(db, user)
-    sorgu = select(ProjectItem).order_by(ProjectItem.updated_at.desc(), ProjectItem.id.desc())
-    if not yonetici:
-        sorgu = sorgu.where(ProjectItem.owner_id == ben.id)
+    sorgu = select(ProjectItem).order_by(ProjectItem.updated_at.desc(), ProjectItem.id.desc())  # 2026-10-20: herkes hepsini gorur
     kalemler = list(db.scalars(sorgu))
     kisiler = {k.id: k for k in db.scalars(select(AppUser).where(AppUser.id.in_({k.owner_id for k in kalemler} | {ben.id})))}
     aksiyonlar: dict[int, list[ProjectAction]] = {}
@@ -154,7 +156,7 @@ def ekran(db: Session, user: Principal) -> dict:
         for a in db.scalars(select(ProjectAction).where(ProjectAction.item_id.in_([k.id for k in kalemler])).order_by(ProjectAction.at.desc(), ProjectAction.id.desc())):
             aksiyonlar.setdefault(a.item_id, []).append(a)
 
-    personeller = personel(db) if yonetici else [ben]
+    personeller = personel(db)
     kimlikler = {p.id for p in personeller}
     ozet: dict[int | None, dict] = {}
     for p in personeller:  # projesi olmayan personel de satir olur (0); tum modullerle ayni kisi kumesi
@@ -175,7 +177,7 @@ def ekran(db: Session, user: Principal) -> dict:
         d["toplam"] = sum(d[c] for c in KATEGORILER)
     ozet_listesi = [d for _, d in sorted(ozet.items(), key=lambda kv: (kv[0] is None, -kv[1]["toplam"], eslestirme_anahtari(kv[1]["tam"])))]
 
-    secenek = personeller
+    secenek = personeller if yonetici else [ben]  # sorumlu secimi: personel yalniz kendi adina proje acar
     return {
         "yonetici": yonetici,
         "kendi_id": ben.id,
@@ -197,6 +199,7 @@ def ekran(db: Session, user: Principal) -> dict:
                 "hedef": k.target_date.isoformat() if k.target_date else None,
                 "kapanis": k.closed_date.isoformat() if k.closed_date else None,
                 "aksiyonlar": [{"id": a.id, "metin": a.text, "yapan": a.actor, "zaman": iso(a.at)} for a in aksiyonlar.get(k.id, [])],
+                "duzenlenebilir": yonetici or k.owner_id == ben.id,
             }
             for k in kalemler
         ],
@@ -207,10 +210,9 @@ def ekran(db: Session, user: Principal) -> dict:
 def musteriler(db: Session, user: Principal, tam_id: int | None = None) -> list[dict]:
     """Gorunen musteriler (cati, altinda istirakleri), cati TAM'i ve adina gore. tam_id: o TAM'in cati musterileri ve istirakleri."""
     ust = aliased(Customer)
-    sorgu = select(Customer, ust).outerjoin(ust, Customer.parent_id == ust.id)
-    if not yonetici_mi(user):
-        uid = kullanici_kaydi(db, user).id
-        sorgu = sorgu.where(or_(Customer.owner_id == uid, ust.owner_id == uid))
+    sorgu = select(Customer, ust).outerjoin(ust, Customer.parent_id == ust.id)  # 2026-10-20: herkes tum musterileri gorur
+    yonetici = yonetici_mi(user)
+    uid = kullanici_kaydi(db, user).id
     if tam_id:
         sorgu = sorgu.where(or_(Customer.owner_id == tam_id, ust.owner_id == tam_id))
     satirlar = db.execute(sorgu).all()
@@ -223,7 +225,8 @@ def musteriler(db: Session, user: Principal, tam_id: int | None = None) -> list[
         return (eslestirme_anahtari(sahipler.get(cati.owner_id, "")), eslestirme_anahtari(cati.name or ""), cati.id, u is not None, eslestirme_anahtari(c.name or ""))
 
     return [
-        {"id": c.id, "ad": c.name or "", "tam": sahipler.get(c.owner_id, ""), "tam_id": c.owner_id, "istirak": u is not None}
+        {"id": c.id, "ad": c.name or "", "tam": sahipler.get(c.owner_id, ""), "tam_id": c.owner_id, "istirak": u is not None,
+         "duzenlenebilir": yonetici or c.owner_id == uid or bool(u and u.owner_id == uid)}
         for c, u in sorted(satirlar, key=anahtar)
     ]
 
@@ -242,11 +245,14 @@ def calisma_ekrani(db: Session, user: Principal, tam_id: int | None = None) -> d
 
 
 def calisma_kaydet(db: Session, user: Principal, musteri_id: int, kategori: str, yapildi: bool, detay: str) -> str | None:
-    """Isaret ve detay bossa kayit silinir. Yalniz gorulebilen musteri (Member: kendi cati musterisi ve istirakleri)."""
+    """Isaret ve detay bossa kayit silinir. Yalniz kullaniciya atanan musteri (Member: kendi cati musterisi ve istirakleri; 403)."""
     if kategori not in KATEGORILER:
         raise ProjeHata(400, "Bilinmeyen çalışma türü.")
-    if musteri_id not in {m["id"] for m in musteriler(db, user)}:
+    m = next((x for x in musteriler(db, user) if x["id"] == musteri_id), None)
+    if m is None:
         raise ProjeHata(404, "Müşteri bulunamadı.")
+    if not m["duzenlenebilir"]:
+        raise ProjeHata(403, "Bu müşteri size atanmamış: işaretleri görebilirsiniz, değiştiremezsiniz.")
     detay = (detay or "").strip()[:AZAMI_DETAY]
     kayit = db.get(ProjectCustomerWork, (musteri_id, kategori))
     if not yapildi and not detay:

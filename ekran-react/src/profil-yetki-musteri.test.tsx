@@ -94,13 +94,13 @@ describe("Profil: kisi kendi bilgilerini duzenler", () => {
 describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli sunum yetkisi", () => {
   const ROLLER = {
     catalog: [
-      { id: "sunum", label: "Çeyrek Bazlı Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] },
+      { id: "sunum", label: "Çeyrek Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] },
       { id: "takvim", label: "TAM Takvim", label_en: "TAM Calendar", admin_only: false, children: [] },
     ],
     permission_catalog: [
       {
         id: "sunum.gonder",
-        label: "Çeyrek bazlı sunumu yönet",
+        label: "Çeyrek sunumu yönet",
         label_en: "Manage the quarterly presentation",
         description: "Sunuma öğe gönderebilir",
         description_en: "Can send items",
@@ -159,7 +159,7 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
     expect(screen.getByText("Bu rolde henüz personel yok. AD ile ilk girişte kişi Member olarak eklenir.")).toBeInTheDocument()
   })
 
-  it("Ceyrek Bazli Sunum yanindaki acilir listede personel onay kutulariyla secilir ve kisiye ozel yetki kaydedilir", async () => {
+  it("Ceyrek Sunum yanindaki acilir listede personel onay kutulariyla secilir ve kisiye ozel yetki kaydedilir", async () => {
     const cagrilar = sahteSunucu({
       "/api/v1/roller/kisiler/3": { id: 3, permissions: ["sunum.gonder"] },
       "/api/v1/roller": ROLLER,

@@ -3,8 +3,8 @@
   /takvim/ben, /takvim/gun, /takvim/toplu  -> Izin&Takvim Yonetimi (takvim): giris yapan kisi yalniz kendi takvimini gorur ve yazar
                                             (gun durumu, toplanti, toplanti ozeti, yapilan isler; 2026-10-14)
   /takvim/ekip...                           -> TAM Takvim (takvim_ozet): panele giris yapmis herkesin ozeti
-  /takvim/sunuma-gonder                     -> yalniz 'sunum.gonder' yetkisi olan rol (admin her zaman); yetkiyi admin Rol Yonetimi › Ceyrek Bazli Sunum'dan verir
-Ceyrek Bazli Sunum sayfasinin uclari app.sunum.api'dedir.
+  /takvim/sunuma-gonder                     -> yalniz 'sunum.gonder' yetkisi olan rol (admin her zaman); yetkiyi admin Rol Yonetimi › Ceyrek Sunum'dan verir
+Ceyrek Sunum sayfasinin uclari app.sunum.api'dedir.
 """
 
 from __future__ import annotations

@@ -59,12 +59,14 @@ export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolea
   const veri = portfoy.data
   const tamSecenekleri = adaGoreSirala(secenek.data?.tam ?? [], (k) => k.ad)
   const filtreVar = Boolean(q || segment || tam)
+  // Toptan / Baglantili Araclar'da yalniz modul sahibi ve admin ekler (sunucu: secenekler.ekleyebilir)
+  const ekleyebilir = yazabilir && secenek.data?.ekleyebilir !== false
   const ozet = veri?.ozet
 
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={Briefcase} baslik={t.baslik} aciklama={t.aciklama}>
-        {yazabilir ? (
+        {ekleyebilir ? (
           <button type="button" className={DUGME_SARI} onClick={() => setFormAcik(true)} disabled={!secenek.data}>
             <Plus aria-hidden className="size-4" />
             {t.musteriEkle}
@@ -88,7 +90,7 @@ export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolea
             <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <input type="search" value={arama} onChange={(e) => setArama(e.target.value)} placeholder={t.ara} maxLength={100} className={`${GIRDI} !py-2.5 pl-9`} />
           </label>
-          {secenek.data?.yonetici && tamSecenekleri.length > 1 ? (
+          {tamSecenekleri.length > 1 ? (  // 2026-10-20: herkes tum kartlari gorur, TAM suzgeci herkese
             <label className="grid gap-0.5">
               <span className="sr-only">{t.tam}</span>
               <select value={tam} onChange={(e) => setTam(e.target.value)} className={`${GIRDI} !w-auto min-w-44 !py-2.5`}>
@@ -166,7 +168,7 @@ export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolea
         </nav>
       ) : null}
 
-      {yazabilir ? (
+      {ekleyebilir ? (
         <Cekmece acik={formAcik} onKapat={() => setFormAcik(false)} baslik={t.formBaslik} aciklama={t.formAciklama} kapatEtiketi={t.kapat}>
           {secenek.data ? <MusteriEkleFormu dil={dil} secenek={secenek.data} onBitti={() => setFormAcik(false)} /> : null}
         </Cekmece>

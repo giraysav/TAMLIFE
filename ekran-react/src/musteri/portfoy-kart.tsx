@@ -20,7 +20,7 @@ export type PortfoyKart = {
   talep_kapanan?: number
   istirakler: { id: number; name: string }[]
 }
-export type Secenekler = { segmentler: string[]; yonetici: boolean; kendi_id: number | null; tam: { id: number; ad: string }[]; catilar: { id: number; ad: string }[] }
+export type Secenekler = { segmentler: string[]; yonetici: boolean; ekleyebilir?: boolean; kendi_id: number | null; tam: { id: number; ad: string }[]; catilar: { id: number; ad: string }[] }
 
 const SEGMENT_RENK: Record<string, string> = {
   SMB: "bg-slate-100 text-slate-600",

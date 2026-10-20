@@ -1,4 +1,8 @@
-"""TAMLIFE tanitim sayfasinin verisi (Ceyrek Bazli Sunum 'tanitim' kaynagi).
+"""TAMLIFE tanitim sayfasinin verisi (Ceyrek Sunum 'tanitim' kaynagi).
+
+2026-10-20 kullanici: "daha profesyonel, ust yonetime sunulacak hale getir; ozet bilgi ve amac kapsam daha derli toplu olsun".
+Sayfa yonetici diliyle: tek cumlelik ozet, 3 maddelik amac, is alanlarina gore gruplanmis kapsam (ALANLAR), fayda ve canli rakamlar;
+teknik olcumler (satir, dil, API, test) yalniz alt bilgi.
 
 Sayilar OLCULUR, elle yazilmaz: satir ve dil dagilimi depo agacindan, modul / API ucu / tablo / revizyon kod yapisindan,
 canli sayilar veritabanindan. Metinler (amac, fayda, dil gorevi) burada sabittir ve yalniz panelin gercekte yaptigini soyler.
@@ -40,17 +44,43 @@ DIL_GOREVI = {
     "CSS": ("Görünüm: Turkcell renk ve yazı teması", "Look: Turkcell colour and type theme"),
 }
 
-AMAC = (
-    "Müşteri, rapor, alarm, proje, gelir ve takvim verisini tek ekranda toplamak; dağınık Excel ve e-posta takibini bırakıp ekibi ve yönetimi aynı güncel veriyle buluşturmak.",
-    "Bring customer, report, alarm, project, revenue and calendar data into one screen, replace scattered Excel and e-mail tracking, and give the team and management the same up-to-date data.",
+SLOGAN = ("Müşteri, operasyon ve gelir tek panelde", "Customers, operations and revenue in one panel")
+OZET = (
+    (
+        "TAMLIFE, Teknik Müşteri Yönetimi (TAM) ekibinin müşteri, operasyon, gelir ve ekip verisini tek panelde toplayan kurum içi yönetim "
+        "platformudur. Ekip günlük işini burada yürütür; yönetim aynı güncel veriyi çeyrek sunumunda görür."
+    ),
+    (
+        "TAMLIFE is the in-house management platform that brings the Technical Account Management (TAM) team's customer, operations, revenue "
+        "and team data into one panel. The team runs its daily work here; management sees the same up-to-date data in the quarterly presentation."
+    ),
 )
-
+AMAC = (
+    "Dağınık Excel, e-posta ve sistem ekranlarını tek doğru kaynakta birleştirmek; müşteri riskini, ekip kapasitesini ve gelir katkısını güncel veriyle izlemek.",
+    "Merge scattered Excel files, e-mails and system screens into a single source of truth, and track customer risk, team capacity and revenue contribution with current data.",
+)
 # (baslik TR, baslik EN, aciklama TR, aciklama EN)
+AMAC_MADDELERI = (
+    ("Tek doğru kaynak", "Single source of truth", "Müşteri, alarm, rapor, gelir ve takvim verisi tek panelde; ekip ve yönetim aynı rakama bakar.",
+     "Customer, alarm, report, revenue and calendar data in one panel; the team and management look at the same figures."),
+    ("Anlık görünürlük", "Real-time visibility", "Müşteri bazında alarm ve kayıt yükü, ekip kapasitesi ve iş ilerlemesi güncel izlenir.",
+     "Alarm and ticket load per customer, team capacity and work progress are tracked as they happen."),
+    ("Yönetime hazır çıktı", "Management-ready output", "Çeyrek sunumu ve aylık müşteri raporları elle derlenmez, doğrudan veriden üretilir.",
+     "The quarterly presentation and monthly customer reports are produced straight from the data, not compiled by hand."),
+)  # fmt: skip
 FAYDA = (
-    ("Tek kaynak", "One source", "Ekip ve yönetim aynı veriye aynı ekrandan bakar.", "The team and management look at the same data on the same screen."),
-    ("Hazır sunum", "Ready presentation", "Çeyrek özeti veriden çıkar; çeyrek bitince dondurulur.", "The quarterly summary comes from the data; it is frozen when the quarter ends."),
-    ("İzlenebilirlik", "Traceability", "Rol bazlı erişim ve denetim kaydı: kim neyi değiştirdi bellidir.", "Role-based access and an audit log: who changed what is on record."),
-    ("Kurum içi", "In-house", "Kurum sunucusunda çalışır; Active Directory ile girilir.", "Runs on the company server; sign-in is with Active Directory."),
+    ("Zaman kazancı", "Time saved", "Rapor ve sunum hazırlığı otomatik; ekip zamanını müşteriye ayırır.", "Report and presentation preparation is automatic; the team spends its time on customers."),
+    ("Veriye dayalı karar", "Data-driven decisions", "Risk, alarm, gelir ve kapasite aynı ekranda; kararlar güncel veriye dayanır.", "Risk, alarms, revenue and capacity on one screen; decisions rest on current data."),
+    ("Hesap verebilirlik", "Accountability", "Rol bazlı yetki ve denetim kaydı: kim neyi ne zaman değiştirdi bellidir.", "Role-based permissions and an audit log: who changed what and when is on record."),
+    ("Kurumsal uyum", "Corporate compliance", "Kurum sunucusunda çalışır, Active Directory ile girilir; kaynak sistemlere yalnız okuma ile bağlanır.",
+     "Runs on the company server, signs in with Active Directory and connects to source systems read-only."),
+)  # fmt: skip
+# Kapsam: is alanlari -> katalog modulleri (listede olmayan hazir modul son alana eklenir; yeni modul kendiliginden gorunur)
+ALANLAR = (
+    ("Müşteri ve portföy", "Customers and portfolio", ("musteri", "radar", "toptan", "baglantili", "topoloji")),
+    ("Operasyon ve kalite", "Operations and quality", ("onedesk", "rapor", "proje")),
+    ("Gelir ve verimlilik", "Revenue and efficiency", ("gelir_uretim", "tamsms", "tamapn", "utilizasyon")),
+    ("Ekip ve yönetişim", "Team and governance", ("takvim", "takvim_ozet", "sunum", "talep", "roller")),
 )
 
 YIGIN = ("Python", "FastAPI", "SQLAlchemy", "Alembic", "SQLite", "TypeScript", "React", "Vite", "Tailwind CSS")
@@ -122,6 +152,18 @@ def moduller() -> list[dict]:
     return [{"ad": m.title, "ad_en": m.title_en or m.title} for m in MODULES if m.ready]
 
 
+def alanlar() -> list[dict]:
+    """Kapsam, is alanlarina gore: [{ad, ad_en, moduller: [{ad, ad_en}]}]. Bos alan yazilmaz."""
+    hazir = {m.key: {"ad": m.title, "ad_en": m.title_en or m.title} for m in MODULES if m.ready}
+    sonuc, kullanilan = [], set()
+    for ad, ad_en, anahtarlar in ALANLAR:
+        liste = [hazir[k] for k in anahtarlar if k in hazir]
+        kullanilan.update(anahtarlar)
+        sonuc.append({"ad": ad, "ad_en": ad_en, "moduller": liste})
+    sonuc[-1]["moduller"] += [v for k, v in hazir.items() if k not in kullanilan]
+    return [a for a in sonuc if a["moduller"]]
+
+
 _kilit = threading.Lock()
 _onbellek: dict = {}
 
@@ -145,11 +187,11 @@ def _canli(db: Session) -> list[dict]:
         {"ad": "Çatı müşteri", "ad_en": "Parent customers", "deger": cati},
         {"ad": "İştirak", "ad_en": "Affiliates", "deger": istirak},
         {"ad": "TAM", "ad_en": "TAMs", "deger": len(personel(db))},
-        {"ad": "Aylık rapor kaydı", "ad_en": "Monthly report records", "deger": say(select(func.count()).select_from(Report))},
-        {"ad": "Onedesk kaydı", "ad_en": "Onedesk records", "deger": say(select(func.count()).select_from(OnedeskRecord))},
+        {"ad": "Aylık rapor", "ad_en": "Monthly reports", "deger": say(select(func.count()).select_from(Report))},
+        {"ad": "Alarm ve kayıt", "ad_en": "Alarms and tickets", "deger": say(select(func.count()).select_from(OnedeskRecord))},
         {"ad": "Proje kalemi", "ad_en": "Project items", "deger": say(select(func.count()).select_from(ProjectItem))},
     ]
-    return liste if any(x["deger"] for x in liste) else []  # bos panelde tum sifirlari gostermek anlamsiz
+    return [x for x in liste if x["deger"]]  # sifir olan rakam yonetim sayfasinda yer almaz
 
 
 def ozet(db: Session) -> dict:
@@ -168,7 +210,11 @@ def ozet(db: Session) -> dict:
     sayilar.append({"kod": "goc", "ad": "Şema göçü", "ad_en": "Schema migrations", "deger": d["revizyon"]})
     return {
         "olcum": d["olcum"],
+        "slogan": {"tr": SLOGAN[0], "en": SLOGAN[1]},
+        "ozet": {"tr": OZET[0], "en": OZET[1]},
         "amac": {"tr": AMAC[0], "en": AMAC[1]},
+        "amac_maddeleri": [{"ad": a, "ad_en": ae, "aciklama": b, "aciklama_en": be} for a, ae, b, be in AMAC_MADDELERI],
+        "alanlar": alanlar(),
         "kapsam": liste,
         "fayda": [{"ad": a, "ad_en": ae, "aciklama": b, "aciklama_en": be} for a, ae, b, be in FAYDA],
         "kod": d["kod"],

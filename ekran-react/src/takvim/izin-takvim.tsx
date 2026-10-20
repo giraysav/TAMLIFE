@@ -139,10 +139,10 @@ function GunFormu({ tarih, gun, dil, onBitti }: { tarih: string; gun: Gun | unde
       />
       <div className="grid grid-cols-2 gap-3">
         <Alan etiket={t.online}>
-          <input type="number" min={0} max={50} className={`${GIRDI} !py-2.5 font-mono`} value={online} onChange={(e) => setOnline(e.target.value)} />
+          <input type="number" min={0} className={`${GIRDI} !py-2.5 font-mono`} value={online} onChange={(e) => setOnline(e.target.value)} />
         </Alan>
         <Alan etiket={t.yuzyuze}>
-          <input type="number" min={0} max={50} className={`${GIRDI} !py-2.5 font-mono`} value={yuzyuze} onChange={(e) => setYuzyuze(e.target.value)} />
+          <input type="number" min={0} className={`${GIRDI} !py-2.5 font-mono`} value={yuzyuze} onChange={(e) => setYuzyuze(e.target.value)} />
         </Alan>
       </div>
       {kaydet.isError ? <Bildirim ton="kirmizi">{hataMesaji(kaydet.error, t.kaydedilemedi)}</Bildirim> : null}

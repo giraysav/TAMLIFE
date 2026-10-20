@@ -6,14 +6,14 @@ catisi kendisinde olan istirakler) gorur; musteriyle eslesmemis kayitlar yalniz 
 
 from __future__ import annotations
 
+import threading
+import time
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, extract, func, literal, or_, select
+from sqlalchemy import and_, extract, func, literal, literal_column, or_, select
 from sqlalchemy.orm import Session
 
-from app.authz import yonetici_mi
-from app.kullanicilar import kullanici_kaydi
 from app.models import Customer, OnedeskRecord
 from app.onedesk import rca, yz
 from app.ortak import UygulamaHatasi, iso, simdi
@@ -39,12 +39,8 @@ def _aralik(yil: int) -> tuple[datetime, datetime]:
 
 
 def gorunen_musteriler(db: Session, user: Principal) -> set[int] | None:
-    """None = kisit yok (yonetici). Member: kendi musterileri + catisi kendisinde olan istirakler."""
-    if yonetici_mi(user):
-        return None
-    uid = kullanici_kaydi(db, user).id
-    benim = select(Customer.id).where(Customer.owner_id == uid)
-    return set(db.scalars(select(Customer.id).where(or_(Customer.owner_id == uid, Customer.parent_id.in_(benim)))))
+    """None = kisit yok. 2026-10-20 kullanici karari: herkes tum verileri gorur (Onedesk analizi dahil; yazma kurali ayri)."""
+    return None
 
 
 RADAR_KAYNAGI = "temip"  # karti olmayan TEMIP kaydi TAM Radar'indir (radar.servis); Onedesk sayilarina girmez
@@ -138,12 +134,33 @@ def _aylik(db: Session, kosul) -> list[dict]:
     return [{"ay": m, **v} for m, v in aylar.items()]
 
 
+# 2026-10-20 performans: top10 353 bin kaydi gruplar (~1 sn, indeksle de); veri 6 dk'da bir degisir. Ayni (yil, aralik, kapsam, son
+# kayit no) icin sonuc ONBELLEK_SN boyunca bellekten verilir; yeni kayit gelince (en buyuk id degisir) hemen yeniden hesaplanir.
+ONBELLEK_SN = 120
+_onbellek: dict[tuple, tuple[float, dict]] = {}
+_onbellek_kilidi = threading.Lock()
+
+
 def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[datetime, datetime] | None = None) -> dict:
     """Yil boyunca (aralik verilirse o aralikta, ornek ceyrek) en cok alarm/talep/sikayet olusan 10 musteri ve en cok kayit olusan lokasyonlari.
     toplam: araliktaki tum kayitlarin tur toplamlari."""
     yil = _yil(yil)
     bas, son = aralik or _aralik(yil)
     idler = gorunen_musteriler(db, user)
+    anahtar = (yil, bas, son, frozenset(idler) if idler is not None else None, db.scalar(select(func.max(OnedeskRecord.id))))
+    with _onbellek_kilidi:
+        kayit = _onbellek.get(anahtar)
+    if kayit is not None and time.monotonic() - kayit[0] < ONBELLEK_SN:
+        return kayit[1]
+    sonuc = _top10_hesapla(db, yil, bas, son, idler)
+    with _onbellek_kilidi:
+        if len(_onbellek) > 64:
+            _onbellek.clear()
+        _onbellek[anahtar] = (time.monotonic(), sonuc)
+    return sonuc
+
+
+def _top10_hesapla(db: Session, yil: int, bas: datetime, son: datetime, idler: set[int] | None) -> dict:
     acilis = func.coalesce(OnedeskRecord.opened_at, OnedeskRecord.closed_at)
     kosul = _kosullar(idler, acilis >= bas, acilis < son)
     ad = _musteri_adi()
@@ -189,10 +206,11 @@ def _kapananlar(db: Session, user: Principal, yil: int) -> list[dict]:
     ad = _musteri_adi()
     kosul = _kosullar(
         gorunen_musteriler(db, user),
-        OnedeskRecord.status == "closed",
+        # Kismi indeksin (models.RCA_INDEKS_KOSULU) kullanilmasi icin kosul ayni LITERAL ile yazilir (bagli parametreyle kullanilmaz).
+        OnedeskRecord.status == literal_column("'closed'"),
+        OnedeskRecord.root_cause != literal_column("''"),
         OnedeskRecord.closed_at >= bas,
         OnedeskRecord.closed_at < son,
-        func.nullif(OnedeskRecord.root_cause, "").is_not(None),
     )
     satirlar = db.execute(
         select(OnedeskRecord.root_cause, ad, OnedeskRecord.location, OnedeskRecord.kind, OnedeskRecord.category)

@@ -126,7 +126,7 @@ const TR = {
   rolYetkiNerede: "Nerede",
   rolYetkiVar: "Verildi",
   rolYetkiYok: "Verilmedi",
-  rolYetkiBolumde: "Aşağıdaki «Çeyrek Bazlı Sunum» bölümünden değiştirilir.",
+  rolYetkiBolumde: "Aşağıdaki «Çeyrek Sunum» bölümünden değiştirilir.",
 }
 
 const EN: typeof TR = {

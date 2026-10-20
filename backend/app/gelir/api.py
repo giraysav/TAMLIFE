@@ -5,14 +5,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.audit import audit_log
 from app.db import get_db
+from app.dil import m
 from app.erisim import Erisim, modul_erisim
 from app.gelir import servis as gs
+from app.kullanicilar import modul_yoneticisi_mi
 from app.ortak import KimlikTipi, ok
 from app.session import Principal
 
@@ -31,6 +33,11 @@ class Serbest(BaseModel):
 
 
 def _yaz(db: Session, user: Principal, islem: Callable[[], Any], eylem: str, modul: str):
+    """2026-10-20 kullanici karari: ICT SMS ve APN yonetimli modul; ekleme / degistirme / silme yalniz admin ve modulun sahibi
+    (app_user.module_owner). Digerleri icerigi gorur."""
+    if not modul_yoneticisi_mi(db, user, modul):
+        raise HTTPException(status_code=403, detail=m("Bu modülde değişikliği yalnız modül sorumlusu ve admin yapabilir; içeriği görebilirsiniz.",
+                                                    "Only the module owner and admins can change this module; you can view its content."))
     sonuc = islem()
     db.commit()
     audit_log.remember(actor=user.username, action=eylem, outcome="allow", module_key=modul, detail="")

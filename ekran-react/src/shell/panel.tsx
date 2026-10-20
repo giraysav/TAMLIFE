@@ -310,7 +310,7 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
           ) : ustId === "yonetim" && kullanici.is_admin ? (
             <YonetimSayfasi dil={dil} bolum={altId ?? ""} digerleri={digerYonetim} />
           ) : aktif === "musteri" || aktif === "baglantili" || aktif === "toptan" ? (
-            <MusteriSayfasi key={aktif} dil={dil} yazabilir /* 2026-10-19: herkes kendi verisinde yazar; liste ve sahiplik sunucuda */ yol={aktif} />
+            <MusteriSayfasi key={aktif} dil={dil} yazabilir /* 2026-10-20: herkes gorur; yazma karta / alana gore sunucuda (erisim, duzenlenebilir, ekleyebilir) */ yol={aktif} />
           ) : aktif === "onedesk" ? (
             <OnedeskSayfasi dil={dil} admin={kullanici.is_admin} />
           ) : aktif === "takvim" ? (
@@ -326,9 +326,9 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
           ) : aktif === "proje" ? (
             <ProjeSayfasi dil={dil} yazabilir />
           ) : aktif === "tamsms" ? (
-            <SmsSayfasi dil={dil} yazabilir />
+            <SmsSayfasi dil={dil} yazabilir={kullanici.is_admin || kullanici.module_owner === "tamsms"} />
           ) : aktif === "tamapn" ? (
-            <ApnSayfasi dil={dil} yazabilir />
+            <ApnSayfasi dil={dil} yazabilir={kullanici.is_admin || kullanici.module_owner === "tamapn"} />
           ) : aktif === "gelir_uretim" ? (
             <GelirUretimSayfasi dil={dil} yazabilir={kullanici.is_admin} />
           ) : aktif === "rapor" ? (

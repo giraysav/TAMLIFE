@@ -27,7 +27,7 @@ DUZENLENEBILIR = ("TeamMngr", "TeamMember")
 @dataclass(frozen=True)
 class Yetki:
     """Modul gorunumunun disindaki eylem yetkisi. Admin verir, admin her zaman hepsine sahiptir; diger roller icin varsayilan kapali.
-    alan: Rol Yonetimi'nde yetkinin duzenlendigi ayri bolum ("sunum" = Ceyrek Bazli Sunum); bos ise rol kartindaki Ek yetkiler."""
+    alan: Rol Yonetimi'nde yetkinin duzenlendigi ayri bolum ("sunum" = Ceyrek Sunum); bos ise rol kartindaki Ek yetkiler."""
 
     etiket: str
     etiket_en: str
@@ -42,11 +42,11 @@ SUNUM_YETKISI = "sunum.gonder"
 TALEP_YETKISI = "talep.yonet"
 YETKILER: dict[str, Yetki] = {
     SUNUM_YETKISI: Yetki(
-        "Çeyrek bazlı sunumu yönet",
+        "Çeyrek sunumu yönet",
         "Manage the quarterly presentation",
         "Çeyrek sunumuna öğe gönderebilir, sabitleyebilir ya da kaldırabilir; sunuma kendiliğinden akacak modül ve raporları seçebilir.",
         "Can send, pin or remove presentation items and choose which modules and reports flow into the presentation automatically.",
-        "TAM Takvim › grafik › “Çeyrek bazlı sunuma gönder”; Çeyrek Bazlı Sunum sayfası; Rol Yönetimi › Çeyrek Bazlı Sunum",
+        "TAM Takvim › grafik › “Çeyrek sunuma gönder”; Çeyrek Sunum sayfası; Rol Yönetimi › Çeyrek Sunum",
         "TAM Calendar › chart › “Send to quarterly presentation”; Quarterly Presentation page; Role Management › Quarterly Presentation",
         alan="sunum",
     ),
@@ -158,7 +158,7 @@ def gorunumler(db: Session) -> list[dict]:
 
 def kisiler(db: Session) -> list[dict]:
     """Rol ekraninin personel listesi: panelde kaydi olan etkin kisiler (AD ile giren ya da yoneticinin actigi) ve kisiye ozel yetkileri.
-    Her satir kendi rolunun altinda gosterilir; Ceyrek Bazli Sunum yetkisi kisi bazinda buradan verilir."""
+    Her satir kendi rolunun altinda gosterilir; Ceyrek Sunum yetkisi kisi bazinda buradan verilir."""
     satirlar = db.scalars(select(AppUser).where(AppUser.active.is_(True)).order_by(AppUser.display_name, AppUser.username))
     return [
         {

@@ -39,6 +39,8 @@ export type Kullanici = {
   profile: Profil
   role: string
   is_admin: boolean
+  /** Sahibi oldugu yonetimli modul (tamsms | tamapn | toptan | baglantili; yoksa bos): o modulde yazma yetkisi (2026-10-20). */
+  module_owner?: string
   idle_timeout_minutes: number
   landing: string
   navigation: MenuOgesi[]

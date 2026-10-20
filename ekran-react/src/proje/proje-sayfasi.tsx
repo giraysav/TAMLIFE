@@ -24,9 +24,11 @@ type Kalem = {
   hedef: string | null
   kapanis: string | null
   aksiyonlar: Aksiyon[]
+  /** Kullaniciya atanmis mi (2026-10-20: herkes gorur, yalniz atanan ve yonetici degistirir). */
+  duzenlenebilir?: boolean
 }
 type Ekran = { yonetici: boolean; kendi_id: number; varsayilan_sorumlu?: number; ozet: Ozet[]; genel_toplam: number; tamlar: { id: number; ad: string }[]; kalemler: Kalem[] }
-type Musteri = { id: number; ad: string; tam: string; tam_id: number | null; istirak: boolean }
+type Musteri = { id: number; ad: string; tam: string; tam_id: number | null; istirak: boolean; duzenlenebilir?: boolean }
 type Isaret = { yapildi: boolean; detay: string; guncelleyen: string; zaman: string | null }
 type Calisma = { musteriler: Musteri[]; isaretler: Record<string, Partial<Record<Kategori, Isaret>>> }
 
@@ -400,7 +402,8 @@ function MusteriCalismalari({ dil }: { dil: Dil }) {
                         <input
                           type="checkbox"
                           aria-label={`${m.ad}: ${t.kategori_[k]}`}
-                          className="size-4 cursor-pointer accent-tl-blue"
+                          className="size-4 cursor-pointer accent-tl-blue disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={m.duzenlenebilir === false}
                           checked={Boolean(isaret(m.id, k)?.yapildi)}
                           onChange={(e) => kaydet.mutate({ id: m.id, kategori: k, yapildi: e.target.checked, detay: isaret(m.id, k)?.detay ?? "" })}
                         />
@@ -424,6 +427,7 @@ function MusteriCalismalari({ dil }: { dil: Dil }) {
                                 rows={2}
                                 maxLength={2000}
                                 className={`${GIRDI} font-normal`}
+                                readOnly={m.duzenlenebilir === false}
                                 defaultValue={isaret(m.id, k)?.detay ?? ""}
                                 onBlur={(e) => {
                                   if (e.target.value !== (isaret(m.id, k)?.detay ?? "")) kaydet.mutate({ id: m.id, kategori: k, yapildi: Boolean(isaret(m.id, k)?.yapildi), detay: e.target.value })
@@ -479,7 +483,7 @@ export function ProjeSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: boolean 
             <div className="grid gap-2">
               {v.kalemler.length === 0 ? <p className="p-2 text-xs font-bold text-slate-400">{t.kayitYok}</p> : null}
               {v.kalemler.map((k) => (
-                <ProjeKalemi key={k.id} k={k} dil={dil} yazabilir={yazabilir} />
+                <ProjeKalemi key={k.id} k={k} dil={dil} yazabilir={yazabilir && k.duzenlenebilir !== false} />
               ))}
             </div>
           </Bolum>

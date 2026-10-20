@@ -132,7 +132,7 @@ MODULES: tuple[Module, ...] = (
         table="revenue_benefit",
     ),
     Module(
-        "sunum", "Çeyrek Bazlı Sunum", "kart", title_en="Quarterly Presentation",
+        "sunum", "Çeyrek Sunum", "kart", title_en="Quarterly Presentation",
         i18n="card.sunum.title", card_id="dash-card-sunum",
         box_id="card_sunum", permission_group="dashboard_cards",
         registry_status="aktif", modal_id="sunumModal",

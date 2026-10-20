@@ -1,4 +1,4 @@
-"""Ceyrek Bazli Sunum servisi. Kaynaklar tek kayitta (KAYNAKLAR: anahtar -> ad TR/EN -> ceyrek goruntusunu ureten fonksiyon).
+"""Ceyrek Sunum servisi. Kaynaklar tek kayitta (KAYNAKLAR: anahtar -> ad TR/EN -> ceyrek goruntusunu ureten fonksiyon).
 
 Her panel modulu sunumda kendi alanina sahiptir (KAYNAKLAR'da modul basina en az bir kaynak; veri olmasa da alan cizilir).
 Duzen (app_setting 'sunum.duzen' = {"sira": [...], "gizli": [...]}): alanlarin sirasi ve sunumdan cikarilanlar; Sunum sayfasindaki
@@ -6,13 +6,14 @@ Duzen (app_setting 'sunum.duzen' = {"sira": [...], "gizli": [...]}): alanlarin s
 Onay (app_setting 'sunum.onay.<donem>'): yetkili ceyregin sunumunu onaylayinca o anki ogeler ve sira kaydin icine yazilir; ceyrek bundan sonra
 yalniz bu kayittan gosterilir, gonder/sabitle/kaldir reddedilir (409). Onayi kaldirmak sunumu yeniden duzenlenebilir yapar.
 
-Gosterim kurali (donem, onaysiz):
-  1. Kaynagin o ceyrege ait kaydi (presentation) varsa o gosterilir: elle gonderilmis/sabitlenmis ya da daha once dondurulmus.
-  2. Kayit yoksa ve kaynak gorunurse:
-     - icinde bulunulan ceyrek: her acilista CANLI hesaplanir, saklanmaz;
-     - gecmis ceyrek: ilk goruntulemede hesaplanip DONDURULUR (sonra degismez; yetkili 'Guncelle' ile yeniler);
-     - 'anlik' kaynak (donem filtresi yok, o anki durumu verir) yalniz bir onceki ceyrek icin dondurulur; daha eski ceyrege bugunku durum yazilmaz;
-     - gelecek ceyrek hesaplanmaz (alan 'yok' durumuyla bos cizilir).
+Gosterim kurali (2026-10-20 kullanici: "ceyrek sunuma akan veriler dogru degil; tum modullerdeki veriler sunuma senkron aksin"):
+  ONAYSIZ her ceyrek modullerden kendiliginden SENKRONDUR: her acilista kaynak canli hesaplanir; gecmis ceyregin kaydi (presentation)
+  canli veriden farkliysa yenilenir (gonderen korunur). Eskiden gecmis ceyrek ilk goruntulemede donduruluyordu ve sonradan girilen /
+  duzeltilen veri sunuma hic akmiyordu (2026-Q3 12-14 Ekim'de donmus, 12 alanin 10'u eskiydi). Dondurma YALNIZ onayladir.
+  - 'anlik' kaynak (donem filtresi yok, o anki durumu verir) yalniz icinde bulunulan ve bir onceki ceyrek icin hesaplanir; daha eski
+    ceyrege bugunku durum yazilmaz (varsa eski kaydi gosterilir);
+  - gelecek ceyrek hesaplanmaz (alan 'yok' durumuyla bos cizilir);
+  - kaynak hesaplanamazsa varsa son kaydi, yoksa 'hata' gosterilir.
 Goruntu ekip geneli kapsamla (yonetici gorunumu) tek kez hesaplanir, 'sunum' modulunu goren herkese aynidir.
 Yonetim (gonder/sabitle/kaldir, duzen, onay) admin ya da rolgorunum.SUNUM_YETKISI ister; kontrol api katmanindadir.
 Senkron (2026-10-15 kullanici bildirimi: "ceyrek sunuma akan veriler hatali"): karsilastir() her gorunur kaynagin kayitli (dondurulmus /
@@ -36,12 +37,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import ariza
+from app import ariza, musteri_alani
 from app.catalog import get as modul
 from app.gelir.servis import PARA_BIRIMLERI, tum_gelirler
 from app.gelir_uretim.servis import sunum_ozeti as gelir_uretim_ozeti
 from app.kullanicilar import kullanici_kaydi, personel
-from app.models import ApnRevenue, AppSetting, Customer, Demand, Presentation, ProjectItem, SmsRevenue
+from app.models import ApnRevenue, AppSetting, AppUser, Customer, Demand, Presentation, ProjectItem, SmsRevenue
 from app.musteri.servis import portfoy
 from app.navigation import PRESENTATION as MENU
 from app.onedesk.servis import top10
@@ -356,10 +357,36 @@ def _izin(db: Session, yil: int, ceyrek: int) -> dict:
     }  # fmt: skip
 
 
-def _bos_alan(db: Session, yil: int, ceyrek: int) -> dict:
-    """Baglantili Araclar / Toptan: modul simdilik Musteri Yonetimi ekranini gosterir; kendi sunum
-    ozeti modulun tasarimiyla gelecek. O zamana kadar alan bos durur (portfoy ozeti zaten kendi alaninda; uydurma veri yok)."""
-    return {"kpi": [], "tablo": {"sutunlar": [], "satirlar": []}}
+def _alan_ozeti(alan: str) -> Callable[[Session, int, int], dict]:
+    """Toptan / Baglantili Araclar (2026-10-19'dan beri kendi kartlari, app.musteri_alani): alanin kart ozeti, TAM bazinda."""
+
+    def uret(db: Session, yil: int, ceyrek: int) -> dict:
+        jeton = musteri_alani.ayarla(alan)
+        try:
+            o = portfoy(db, EKIP, adet=1)["ozet"]
+            adlar = {u.id: (u.display_name or u.username) for u in db.scalars(select(AppUser))}
+            tamlar: dict[str, list] = {}
+            for c in db.scalars(select(Customer)):
+                satir = tamlar.setdefault(adlar.get(c.owner_id, "—"), [adlar.get(c.owner_id, "—"), 0, 0, 0])
+                satir[1 if c.parent_id is None else 2] += 1
+                satir[3] += c.alarm_count or 0
+        finally:
+            musteri_alani.geri_al(jeton)
+        return {
+            "kpi": [
+                _kpi("Çatı müşteri", "Parent customers", o["cati"]),
+                _kpi("İştirak", "Affiliates", o["istirak"]),
+                _kpi("Açık alarm", "Open alarms", o["alarm"]),
+                _kpi("Açık talep / şikayet", "Open requests / complaints", o["talep"] + o["sikayet"]),
+            ],
+            "tablo": {
+                "sutunlar": [_sutun("TAM", "TAM"), _sutun("Çatı müşteri", "Parent customers"), _sutun("İştirak", "Affiliates"), _sutun("Açık alarm", "Open alarms")],
+                "satirlar": sorted(tamlar.values(), key=lambda s: (-s[1], tr_kucuk(s[0]))),
+                "onizleme": _onizleme(3, etiket=0, deger=1),
+            },
+        }
+
+    return uret
 
 
 def _gelir_uretim(db: Session, yil: int, ceyrek: int) -> dict:
@@ -464,13 +491,13 @@ KAYNAKLAR: dict[str, Kaynak] = {
     ),
     "baglantili": Kaynak(
         "Bağlantılı araçlar", "Connected tools",
-        "Kurum içi bağlantılı araçlar (modül şimdilik Müşteri Yönetimi içeriğini gösterir; sunum özeti tasarımla gelecek).", "Internal connected tools (the module currently shows Customer Management; its summary comes with its design).",
-        "baglantili", _bos_alan, anlik=True,
+        "Bağlantılı Araçlar modülünün kendi müşteri kartları: çatı / iştirak sayısı, açık kayıtlar; TAM bazında (o anki durum).", "The Connected Tools module's own customer cards: parent / affiliate counts and open records, per TAM (current state).",
+        "baglantili", _alan_ozeti("baglantili"), anlik=True,
     ),
     "toptan": Kaynak(
         "Toptan", "Wholesale",
-        "Toptan müşteriler (modül şimdilik Müşteri Yönetimi içeriğini gösterir; sunum özeti geliştirmeyle gelecek).", "Wholesale customers (the module currently shows Customer Management; its summary comes later).",
-        "toptan", _bos_alan, anlik=True,
+        "Toptan modülünün kendi müşteri kartları: çatı / iştirak sayısı, açık kayıtlar; TAM bazında (o anki durum).", "The Wholesale module's own customer cards: parent / affiliate counts and open records, per TAM (current state).",
+        "toptan", _alan_ozeti("toptan"), anlik=True,
     ),
 }  # fmt: skip
 
@@ -604,7 +631,8 @@ def _sakla(db: Session, anahtar: str, donem: str, veri: dict, gonderen: str) -> 
 
 
 def donem(db: Session, yil: int, ceyrek: int, kullanici: str) -> dict:
-    """Ceyregin sunum ogeleri (kaynak sirasiyla). Gecmis ceyrekte ilk goruntulemede donduruleni yazar; commit cagiranda."""
+    """Ceyregin sunum ogeleri (kaynak sirasiyla). Onaysiz ceyrek canli veriyle senkrondur: gecmis ceyregin kaydi farkliysa yenilenir
+    (kayit gecmise ait iz olarak kalir; gonderen korunur). Commit cagiranda."""
     _ceyrek_dogrula(yil, ceyrek)
     ad, zamani = donem_adi(yil, ceyrek), _zamani(yil, ceyrek)
     onay = _onay_kaydi(db, ad)
@@ -616,26 +644,29 @@ def donem(db: Session, yil: int, ceyrek: int, kullanici: str) -> dict:
     dondurulen = False
     for anahtar in [*acik, *(k for k in kayitlar if k not in KAYNAKLAR)]:
         p = kayitlar.get(anahtar)
-        if p is not None:
-            ogeler.append(_oge(anahtar, "kayitli", p.payload, p.sent_by, iso(p.sent_at)))
-            continue
-        if zamani == "gelecek":
-            ogeler.append(_oge(anahtar, "yok"))  # her modulun alani cizilir; veri ceyrek baslayinca gelir
+        kaydi = (lambda p=p, a=anahtar: _oge(a, "kayitli", p.payload, p.sent_by, iso(p.sent_at)) if p is not None else _oge(a, "yok"))
+        if anahtar not in KAYNAKLAR or zamani == "gelecek":
+            ogeler.append(kaydi())  # kaldirilmis kaynagin eski kaydi / gelecek ceyrek: alan bos cizilir
             continue
         if zamani == "gecmis" and KAYNAKLAR[anahtar].anlik and (yil, ceyrek) != _onceki_ceyrek():
-            ogeler.append(_oge(anahtar, "yok"))
+            ogeler.append(kaydi())  # bugunku durum eski ceyrege yazilmaz
             continue
         try:
             veri = KAYNAKLAR[anahtar].uret(db, yil, ceyrek)
         except Exception as exc:  # noqa: BLE001 - tek kaynagin hatasi sunumun geri kalanini dusurmez; ariza kaydi duser
-            ogeler.append(_oge(anahtar, "hata", kayit_no=ariza.kaydet("TL-SRV-01", exc=exc, kaynak=f"sunum.{anahtar}", kullanici=kullanici)))
+            no = ariza.kaydet("TL-SRV-01", exc=exc, kaynak=f"sunum.{anahtar}", kullanici=kullanici)
+            ogeler.append(kaydi() if p is not None else _oge(anahtar, "hata", kayit_no=no))
             continue
-        if zamani == "guncel":
+        if p is not None and _iz(p.payload) != _iz(veri):  # senkron: modulde degisen veri kayda da akar
+            p = _sakla(db, anahtar, ad, veri, p.sent_by)
+            dondurulen = True
+        if zamani == "guncel" and p is None:
             ogeler.append(_oge(anahtar, "canli", veri, zaman=iso(simdi())))
         else:
-            kayit = _sakla(db, anahtar, ad, veri, "")
-            dondurulen = True
-            ogeler.append(_oge(anahtar, "kayitli", veri, "", iso(kayit.sent_at)))
+            if p is None:
+                p = _sakla(db, anahtar, ad, veri, "")
+                dondurulen = True
+            ogeler.append(_oge(anahtar, "kayitli", veri, p.sent_by, iso(p.sent_at)))
     if dondurulen:
         try:
             db.flush()

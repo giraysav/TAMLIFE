@@ -164,7 +164,7 @@ def test_bu_ceyrek_canli_hesaplanir_ve_saklanmaz(veri):
     assert ogeler["takvim"]["veri"]["ceyrek"] == CEYREK and any(u["ad"] == "Ayse Test" for u in ogeler["takvim"]["veri"]["uyeler"])
 
 
-def test_gecmis_ceyrek_ilk_goruntulemede_dondurulur(veri, monkeypatch):
+def test_gecmis_ceyrek_onaysizken_modullerle_senkron(veri, monkeypatch):
     hdr = login_ok(veri)
     _kaynak_sec(veri, hdr, ["takvim", "portfoy"])
     onceki, eski, gelecek = _geri(YIL, CEYREK, 1), _geri(YIL, CEYREK, 2), (YIL + 1, CEYREK)
@@ -172,12 +172,13 @@ def test_gecmis_ceyrek_ilk_goruntulemede_dondurulur(veri, monkeypatch):
     ilk = _donem(veri, *onceki)
     assert ilk["zaman"] == "gecmis" and [(o["kaynak"], o["durum"], o["gonderen"]) for o in ilk["ogeler"]] == [("portfoy", "kayitli", ""), ("takvim", "kayitli", "")]
     assert _sunum_sayisi() == 2
-    # sonradan degisen veri dondurulmus goruntuyu degistirmez
+    # 2026-10-20: onaysiz ceyrekte sonradan degisen veri sunuma da akar (kayit yenilenir, yeni kayit acilmaz)
     with Session(engine()) as db:
         db.add(Customer(id=4, external_key="t-c", name="Gama", segment="MA", owner_id=1))
         db.commit()
     tekrar = _donem(veri, *onceki)
-    assert tekrar["ogeler"] == ilk["ogeler"] and _sunum_sayisi() == 2
+    cati = lambda d: next(k["deger"] for o in d["ogeler"] if o["kaynak"] == "portfoy" for k in o["veri"]["kpi"] if k["ad"] == "Çatı müşteri")  # noqa: E731
+    assert cati(tekrar) == cati(ilk) + 1 and _sunum_sayisi() == 2
 
     # anlik kaynak yalniz bir onceki ceyrek icin dondurulur; daha eski ceyrege bugunku durum yazilmaz
     d = _donem(veri, *eski)
@@ -303,8 +304,12 @@ def test_tanitim_olculmus_sayilar_verir(veri):
     assert sayi["modul"] == len(v["kapsam"]) == sum(1 for m in catalog.MODULES if m.ready)
     assert sayi["uc"] > 50 and sayi["tablo"] > 20 and sayi["goc"] >= 8 and sayi["test"] > 100 and sayi["dosya"] == kod["dosya"]
     canli = {x["ad_en"]: x["deger"] for x in v["canli"]}
-    assert canli["Parent customers"] == 2 and canli["Affiliates"] == 1 and canli["TAMs"] == 1 and canli["Monthly report records"] == 1 and canli["Onedesk records"] == 2
+    assert canli["Parent customers"] == 2 and canli["Affiliates"] == 1 and canli["TAMs"] == 1 and canli["Monthly reports"] == 1 and canli["Alarms and tickets"] == 2
     assert v["amac"]["tr"] and v["amac"]["en"] and len(v["fayda"]) == 4 and all(f["aciklama"] and f["aciklama_en"] for f in v["fayda"])
+    # ust yonetim duzeni (2026-10-20): ozet, 3 maddelik amac, is alanlarina gore kapsam (her hazir modul tam bir alanda)
+    assert v["slogan"]["tr"] and v["ozet"]["tr"] and v["ozet"]["en"] and len(v["amac_maddeleri"]) == 3
+    alan_modulleri = [m["ad"] for a in v["alanlar"] for m in a["moduller"]]
+    assert len(v["alanlar"]) == 4 and sorted(alan_modulleri) == sorted(m["ad"] for m in v["kapsam"])
     assert [k["kod"] for k in v["kpi"]] == ["satir", "modul", "uc", "test"]  # eski arayuzun de cizebilecegi genel KPI listesi
 
 
@@ -433,7 +438,7 @@ def test_onay_sunumu_sabitler_ve_kaldirilabilir(veri, monkeypatch):
     assert r.status_code == 200 and r.json()["data"]["onay"]["onaylayan"] == "Admin Kisi"
     d = _donem(veri, YIL, CEYREK)
     assert d["onay"]["onaylayan"] == "Admin Kisi" and [(o["kaynak"], o["durum"], o["gonderen"]) for o in d["ogeler"]] == [("portfoy", "kayitli", "Admin Kisi"), ("baglantili", "kayitli", "Admin Kisi")]
-    assert d["ogeler"][1]["veri"] == {"kpi": [], "tablo": {"sutunlar": [], "satirlar": []}}  # icerigi olmayan modulun alani da durur
+    assert [k["deger"] for k in d["ogeler"][1]["veri"]["kpi"]] == [0, 0, 0, 0]  # karti olmayan Baglantili Araclar alani da durur
     # onayli sunum degismez: yeni veri, duzen degisikligi ve sabitleme onu etkilemez
     with Session(engine()) as db:
         db.add(Customer(id=4, external_key="t-c", name="Gama", segment="MA", owner_id=1))

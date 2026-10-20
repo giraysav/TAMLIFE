@@ -48,7 +48,7 @@ export function sunumSayfalari(ogeler: Oge[]): Oge[][] {
 }
 
 /**
- * Ceyrek Bazli Sunum: ust yonetim icin KISA ozet. Panelin her modulunun kendi alani (kart) vardir; o ceyrekte verisi olmasa da alan durur.
+ * Ceyrek Sunum: ust yonetim icin KISA ozet. Panelin her modulunun kendi alani (kart) vardir; o ceyrekte verisi olmasa da alan durur.
  * Hangi alanlarin hangi sirayla yer alacagi "Sunum icerigi" penceresinden secilir; yetkili kartlari surukleyerek de tasiyabilir.
  * "Sunumu onayla" ceyregin o anki halini sabitler (veri degisse de onayli sunum degismez; tasima/sabitleme kapanir). "Tam ekran sunum"
  * alanlari tek tek slayt olarak gosterir. Yetkiyi sunucu zorlar.

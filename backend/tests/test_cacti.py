@@ -148,9 +148,11 @@ def test_api_csrf_musteri_ve_sirlar(client, monkeypatch):
         db.add(Customer(id=2, external_key="cacti-other", name="Other", owner_id=2))
         db.add(Customer(id=3, external_key="cacti-ist", name="Ist", owner_id=2, parent_id=1))  # catisi bende, sorumlusu baskasi
         db.commit()
-    assert client.get("/api/v1/musteri/2/rapor/cacti").status_code == 404
-    assert client.get("/api/v1/musteri/2/rapor/cacti/grafikler").status_code == 404
-    assert client.put("/api/v1/musteri/2/rapor/cacti", headers=hdr, json={"baglantilar": ["9"]}).status_code == 404  # baskasinin musterisi
+    # 2026-10-20: baskasinin karti okunur (salt okunur), grafik alimi ve degistirme 403
+    o = client.get("/api/v1/musteri/2/rapor/cacti")
+    assert o.status_code == 200 and o.json()["data"]["duzenleyebilir"] is False
+    assert client.get("/api/v1/musteri/2/rapor/cacti/grafikler").status_code == 403
+    assert client.put("/api/v1/musteri/2/rapor/cacti", headers=hdr, json={"baglantilar": ["9"]}).status_code == 403  # baskasinin musterisi
     assert client.put("/api/v1/musteri/3/rapor/cacti", headers=hdr, json={"baglantilar": ["9"]}).status_code == 200  # catinin sorumlusu
 
 

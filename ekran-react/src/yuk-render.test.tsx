@@ -122,9 +122,9 @@ describe("MusteriKarti: polling altinda form state izolasyonu ve render butcesi"
 })
 
 const ROLLER = {
-  catalog: [{ id: "sunum", label: "Çeyrek Bazlı Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] }],
+  catalog: [{ id: "sunum", label: "Çeyrek Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] }],
   permission_catalog: [
-    { id: "sunum.gonder", label: "Çeyrek bazlı sunumu yönet", label_en: "Manage", description: "", description_en: "", where: "", where_en: "", area: "sunum" },
+    { id: "sunum.gonder", label: "Çeyrek sunumu yönet", label_en: "Manage", description: "", description_en: "", where: "", where_en: "", area: "sunum" },
   ],
   roles: [
     { role: "admin", label: "Admin", editable: false, modules: ["sunum"], landing: "ozet", permissions: ["sunum.gonder"], saved: false },

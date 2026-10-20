@@ -20,7 +20,7 @@ PRESENTATION: dict[str, tuple[str, str, str, str]] = {
     "tamsms": ("work", "message", "ICT SMS gelir ve üretim kayıtları", "ICT SMS revenue and production records"),
     "tamapn": ("work", "network", "APN gelir ve kurulum kayıtları", "APN revenue and installation records"),
     "gelir_uretim": ("insights", "chart", "Gelir, tasarruf ve verimlilik faydası sağlayan işler", "Work that delivered revenue, savings or efficiency benefit"),
-    "sunum": ("insights", "presentation", "Çeyrek bazlı sunumları hazırlayın", "Prepare quarterly presentations"),
+    "sunum": ("insights", "presentation", "Çeyrek sunumunu hazırlayın", "Prepare quarterly presentations"),
     "radar": ("insights", "radar", "Müşteri fırsatları ve takip kayıtları", "Customer opportunities and follow-ups"),
     "baglantili": ("work", "link", "Kurum içi bağlantılı araçlar", "Internal connected tools"),
     "toptan": ("work", "store", "Toptan müşteriler", "Wholesale customers"),

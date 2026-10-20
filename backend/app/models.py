@@ -304,6 +304,9 @@ class ProjectCustomerWork(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+RCA_INDEKS_KOSULU = "status = 'closed' AND root_cause <> ''"
+
+
 class OnedeskRecord(Base):
     """Onedesk alarm / talep / sikayet kaydi. Kaynak: admin Veri Girisi hatti (canli Onedesk DB baglantisi ileride). kind: alarm|talep|sikayet; status: open|closed."""
 
@@ -317,6 +320,10 @@ class OnedeskRecord(Base):
         Index("ix_onedesk_source_mno", "source", "customer_no"),  # TAM Radar: kartsiz kayitlar Musteri No'ya gore
         Index("ix_onedesk_durum_musteri", "status", "customer_id"),  # Musteri Yonetimi: portfoyun acik kayitlari
         Index("ix_onedesk_musteri_durum_kapanis", "customer_id", "status", "closed_at"),  # kart: yil boyu kapananlar
+        # 2026-10-20 performans (353 bin TEMIP kaydi): Veri Girisi akislari (kaynak + durum sayimi, ortu indeks) ve RCA / oneriler
+        # (yalniz kok sebebi dolu kapananlar: kucuk kismi indeks; sorgu kosulu ayni literal ile yazilir, onedesk.servis._kapananlar)
+        Index("ix_onedesk_kaynak_durum_musteri", "source", "status", "customer_id"),
+        Index("ix_onedesk_rca", "closed_at", sqlite_where=text(RCA_INDEKS_KOSULU), postgresql_where=text(RCA_INDEKS_KOSULU)),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     kind: Mapped[str] = mapped_column(String(40), default="")
@@ -503,7 +510,7 @@ class ApnWork(KullaniciBase):
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class Presentation(Base):
-    """Ceyrek bazli sunum ogesi: kaynagin (app.sunum.servis.KAYNAKLAR, ornek 'takvim') o ceyrekteki donmus goruntusu (period '2026-Q4').
+    """Ceyrek sunum ogesi: kaynagin (app.sunum.servis.KAYNAKLAR, ornek 'takvim') o ceyrekteki donmus goruntusu (period '2026-Q4').
     Ceyrek+kaynak basina tek kayit. Elle gonderimde sent_by kisinin adi; ceyrek bitince kendiliginden dondurulende bos."""
 
     __tablename__ = "presentation"
@@ -533,7 +540,7 @@ class RoleView(Base):
 
 
 class AppSetting(Base):
-    """Panel geneli ayar (anahtar -> JSON). Ornek 'sunum.kaynaklar': ceyrek bazli sunuma kendiliginden akan kaynaklar."""
+    """Panel geneli ayar (anahtar -> JSON). Ornek 'sunum.kaynaklar': ceyrek sunuma kendiliginden akan kaynaklar."""
 
     __tablename__ = "app_setting"
     key: Mapped[str] = mapped_column(String(80), primary_key=True)

@@ -66,7 +66,7 @@ const DONEM = {
   ],
 }
 
-describe("Ceyrek Bazli Sunum sayfasi", () => {
+describe("Ceyrek Sunum sayfasi", () => {
   it("kaynak basina kart: canli/donmus rozet, genel KPI + tablo, hata ve kaydi olmayan anlik kaynak", async () => {
     const cagrilar = sahteSunucu({ "/api/v1/sunum/donem": DONEM, "/api/v1/sunum/gonder": { sunumda: null }, "/api/v1/sunum/kaynaklar": KAYNAKLAR })
     sarmala(<SunumSayfasi dil="tr" />)
@@ -152,6 +152,16 @@ const TANITIM = oge(
     kpi: [kpi("Satır kod", "Lines of code", 39502, { kod: "satir" })],
     olcum: "2026-10-13T17:13:50Z",
     amac: { tr: "Tek ekranda toplamak.", en: "Bring it into one screen." },
+    slogan: { tr: "Müşteri ve gelir tek panelde", en: "Customers and revenue in one panel" },
+    ozet: { tr: "TAMLIFE ekibin yönetim platformudur.", en: "TAMLIFE is the team's management platform." },
+    amac_maddeleri: [
+      { ad: "Tek doğru kaynak", ad_en: "Single source of truth", aciklama: "Herkes aynı rakama bakar.", aciklama_en: "Everyone sees the same figures." },
+      { ad: "Anlık görünürlük", ad_en: "Real-time visibility", aciklama: "Yük güncel izlenir.", aciklama_en: "Load is tracked live." },
+    ],
+    alanlar: [
+      { ad: "Müşteri ve portföy", ad_en: "Customers and portfolio", moduller: [{ ad: "Müşteri Yönetimi", ad_en: "Customer Management" }] },
+      { ad: "Operasyon ve kalite", ad_en: "Operations and quality", moduller: [{ ad: "Onedesk", ad_en: "Onedesk" }] },
+    ],
     kapsam: [
       { ad: "Müşteri Yönetimi", ad_en: "Customer Management" },
       { ad: "Onedesk", ad_en: "Onedesk" },
@@ -170,14 +180,17 @@ const TANITIM = oge(
       { kod: "modul", ad: "Modül", ad_en: "Modules", deger: 14 },
       { kod: "uc", ad: "API ucu", ad_en: "API endpoints", deger: 144 },
     ],
-    canli: [{ ad: "Çatı müşteri", ad_en: "Parent customers", deger: 464 }],
+    canli: [
+      { ad: "Çatı müşteri", ad_en: "Parent customers", deger: 464 },
+      { ad: "TAM", ad_en: "TAMs", deger: 18 },
+    ],
     yigin: ["FastAPI", "React"],
   },
   { anlik: true },
 )
 const BOS_PROJE = oge("proje", "Takip edilen projeler özeti", "Tracked projects summary", { kpi: [kpi("Süren proje", "Ongoing projects", 0), kpi("Beklemede", "On hold", 0)], tablo: { sutunlar: [sutun("TAM")], satirlar: [] } })
 
-describe("Ceyrek Bazli Sunum: kisa ozet duzeni", () => {
+describe("Ceyrek Sunum: kisa ozet duzeni", () => {
   it("kisa kartta KPI ve ilk satirlar gorunur; tablonun tamami Ayrinti ve 'Tum ayrintilari ac' ile acilir", async () => {
     sahteSunucu({ "/api/v1/sunum/donem": donem([ONEDESK]) })
     sarmala(<SunumSayfasi dil="tr" />)
@@ -221,27 +234,34 @@ describe("Ceyrek Bazli Sunum: kisa ozet duzeni", () => {
     expect(screen.queryByText("Proje")).not.toBeInTheDocument()
   })
 
-  it("TAM Life tanitimi: amac, kapsam, fayda, kac satir kod, hangi dil, kod ne yapiyor", async () => {
+  it("TAMLIFE tanitimi (ust yonetim): ozet ve ana rakamlar, amac maddeleri, deger, is alanlarina gore kapsam, teknik alt bilgi", async () => {
     sahteSunucu({ "/api/v1/sunum/donem": donem([TANITIM]) })
     sarmala(<SunumSayfasi dil="tr" />)
-    expect(await screen.findByRole("heading", { name: "TAM ekibinin tek ekran paneli" })).toBeInTheDocument()
-    expect(screen.getByAltText("TAM Life")).toBeInTheDocument()
-    expect(screen.getByText("39.502")).toBeInTheDocument()
-    expect(screen.getByText("260 dosya · 2 dil")).toBeInTheDocument()
-    expect(screen.getByText("21.254 · %53,8")).toBeInTheDocument()
-    expect(screen.getByText("Sunucu: API ve iş kuralları")).toBeInTheDocument()
-    expect(screen.getByText("Arayüz: sayfalar ve grafikler")).toBeInTheDocument()
-    expect(screen.getByText("Kodun %19'i (7.561 satır) otomatik test kodudur.")).toBeInTheDocument()
-    for (const baslik of ["Amaç", "Kapsam", "Fayda", "Kod ne yapıyor?", "Rakamlarla", "Panelde şu an"]) expect(screen.getByRole("heading", { name: baslik })).toBeInTheDocument()
-    expect(screen.getByLabelText("Altyapı")).toBeInTheDocument()
-    expect(screen.getByText("Tek ekranda toplamak.")).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Müşteri ve gelir tek panelde" })).toBeInTheDocument()
+    expect(screen.getByAltText("TAMLIFE")).toBeInTheDocument()
+    expect(screen.getByText("TAMLIFE ekibin yönetim platformudur.")).toBeInTheDocument()
+    expect(screen.getAllByText("464").length).toBeGreaterThan(0) // ana rakam: musteri
+    expect(screen.getByText("14")).toBeInTheDocument() // modul
+    for (const baslik of ["Amaç", "Sağladığı değer", "Kapsam · 14 modül, 4 iş alanı", "Rakamlarla TAMLIFE (canlı)"]) expect(screen.getByRole("heading", { name: baslik })).toBeInTheDocument()
+    expect(screen.getByText("Tek doğru kaynak")).toBeInTheDocument()
+    expect(screen.getByText("Herkes aynı rakama bakar.")).toBeInTheDocument()
+    expect(screen.getByText("Müşteri ve portföy")).toBeInTheDocument()
     expect(screen.getByText("Müşteri Yönetimi")).toBeInTheDocument()
-    expect(screen.getByText("2 modül")).toBeInTheDocument()
-    expect(screen.getByText(/Aynı veri, aynı ekran\./)).toBeInTheDocument()
-    expect(screen.getByText("464")).toBeInTheDocument()
-    expect(screen.getByText("FastAPI")).toBeInTheDocument()
-    expect(screen.getByText(/Ölçüm: .*Yalnız dolu satırlar sayılır/)).toBeInTheDocument()
+    expect(screen.getByText("Aynı veri, aynı ekran.")).toBeInTheDocument()
+    expect(screen.getByText(/39\.502 satır kod · 144 API ucu · Python, TypeScript · FastAPI · React/)).toBeInTheDocument()
+    expect(screen.queryByText("Kod ne yapıyor?")).toBeNull() // dil gorevleri yonetim sayfasinda yok
     expect(screen.getByText("Canlı")).toBeInTheDocument() // rozet baslik bandinin icinde
+  })
+
+  it("eski (2026-10-20 oncesi) kayitli tanitim yuku de cizilir", async () => {
+    const eski = structuredClone(TANITIM)
+    const v = eski.veri as unknown as Record<string, unknown>
+    for (const alan of ["slogan", "ozet", "amac_maddeleri", "alanlar"]) delete v[alan]
+    sahteSunucu({ "/api/v1/sunum/donem": donem([eski]) })
+    sarmala(<SunumSayfasi dil="tr" />)
+    expect(await screen.findByRole("heading", { name: "Müşteri, operasyon ve gelir tek panelde" })).toBeInTheDocument()
+    expect(screen.getAllByText("Tek ekranda toplamak.").length).toBeGreaterThan(0)
+    expect(screen.getByText("Onedesk")).toBeInTheDocument()
   })
 
   it("English iken kisa kart, tanitim ve sayilar EN metinlerle cizilir", async () => {
@@ -249,23 +269,23 @@ describe("Ceyrek Bazli Sunum: kisa ozet duzeni", () => {
     sarmala(<SunumSayfasi dil="en" />)
     expect(await screen.findByRole("heading", { name: "TAM Team in Numbers" })).toBeInTheDocument()
     expect(screen.getByText("31 parent · 17 affiliates")).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "The single-screen panel of the TAM team" })).toBeInTheDocument()
-    expect(screen.getByText("Bring it into one screen.")).toBeInTheDocument()
-    expect(screen.getByText("Server: API and business rules")).toBeInTheDocument()
-    expect(screen.getByText("2 modules")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Customers and revenue in one panel" })).toBeInTheDocument()
+    expect(screen.getByText("TAMLIFE is the team's management platform.")).toBeInTheDocument()
+    expect(screen.getByText("Single source of truth")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Scope · 14 modules, 4 business areas" })).toBeInTheDocument()
     expect(screen.getByText("Current quarter · computed live")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Open all details" })).toBeInTheDocument()
     expect(screen.getByText("Monthly revenue benefit (TRY)")).toBeInTheDocument()
   })
 })
 
-describe("Rol Yonetimi: ek yetkiler ve Ceyrek Bazli Sunum bolumu", () => {
+describe("Rol Yonetimi: ek yetkiler ve Ceyrek Sunum bolumu", () => {
   const ROLLER = {
-    catalog: [{ id: "sunum", label: "Çeyrek Bazlı Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] }],
+    catalog: [{ id: "sunum", label: "Çeyrek Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] }],
     permission_catalog: [
       {
         id: "sunum.gonder",
-        label: "Çeyrek bazlı sunumu yönet",
+        label: "Çeyrek sunumu yönet",
         label_en: "Manage the quarterly presentation",
         description: "Sunuma öğe gönderebilir",
         description_en: "Can send items",
@@ -306,7 +326,7 @@ describe("Rol Yonetimi: ek yetkiler ve Ceyrek Bazli Sunum bolumu", () => {
   })
 })
 
-describe("Ceyrek Bazli Sunum: icerik penceresi, surukle-birak, onay ve tam ekran", () => {
+describe("Ceyrek Sunum: icerik penceresi, surukle-birak, onay ve tam ekran", () => {
   const TUMU = { ...KAYNAKLAR, kaynaklar: KAYNAKLAR.kaynaklar.map((k) => ({ ...k, acik: true })) }
   const IKI = donem([oge("takvim", "TAM Takvim özeti", "TAM Calendar summary", { genel: OZET, uyeler: [] }), ONEDESK], { yonetebilir: true })
 

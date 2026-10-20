@@ -16,7 +16,7 @@ export const ANA_SAYFA_KARTLARI: readonly HomeCard[] = [
   },
   {
     "key": "sunum",
-    "title": "Çeyrek Bazlı Sunum",
+    "title": "Çeyrek Sunum",
     "i18n": "card.sunum.title",
     "cardId": "dash-card-sunum",
     "empty": false

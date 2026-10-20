@@ -18,9 +18,9 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.authz import yonetici_mi
+from app.authz import is_admin
 from app.db import dis_kimlik, kimlik_coz, kullanici_dosyasi, kullanici_oturumu, mevcut_oturumlar
-from app.kullanicilar import kullanici_kaydi, personel, personel_mi
+from app.kullanicilar import kullanici_kaydi, modul_sahibi, personel, personel_mi
 from app.models import ApnRevenue, ApnWork, AppUser, Customer, SmsRevenue
 from app.ortak import UygulamaHatasi, eslestirme_anahtari, simdi
 from app.session import Principal
@@ -94,9 +94,18 @@ def _tamsayi(govde: dict, alan: str, etiket: str, en_az: int, en_cok: int, varsa
 
 
 # --- gorunurluk ve dosya secimi ------------------------------------------------------------------------
+GELIR_MODULLERI = ("tamsms", "tamapn")
+
+
+def _yonetici(db: Session, user: Principal) -> bool:
+    """2026-10-20 kullanici karari: ICT SMS ve APN yonetimli modul. Yazma (API'de modul_yoneticisi_mi kapisi) yalniz admin ve modulun
+    sahibinde; yazan TAM secer, kaydi baskasinin dosyasina yazar. Okuma herkese acik (tum dosyalar)."""
+    return is_admin(user) or modul_sahibi(db, user) in GELIR_MODULLERI
+
+
 def _sahip(db: Session, user: Principal, tam_adi: str = "") -> AppUser:
     """Kaydin yazilacagi dosyanin sahibi: yonetici bir TAM sectiyse (ya da musteriden turediyse) o kisi, degilse kaydi giren."""
-    if tam_adi and yonetici_mi(user):
+    if tam_adi and _yonetici(db, user):
         kisi = db.scalar(select(AppUser).where(or_(AppUser.display_name == tam_adi, AppUser.username == tam_adi)).limit(1))
         if kisi is not None:
             return kisi
@@ -104,8 +113,8 @@ def _sahip(db: Session, user: Principal, tam_adi: str = "") -> AppUser:
 
 
 def tam_adlari(db: Session, user: Principal) -> list[str]:
-    """Secilebilir TAM'lar: yalniz ortak personel kumesi (etkin TeamMember; yonetici ve admin TAM degildir). Member yalniz kendisini gorur."""
-    kisiler = personel(db) if yonetici_mi(user) else [k for k in personel(db) if k.username == user.username]
+    """Secilebilir TAM'lar: ortak personel kumesi (etkin TeamMember; yonetici ve admin TAM degildir)."""
+    kisiler = personel(db)
     return [k.display_name or k.username for k in kisiler]
 
 
@@ -129,8 +138,8 @@ def _ad(db: Session, user: Principal) -> str:
 
 
 def _topla(db: Session, user: Principal, model: Any) -> list[tuple[int, Any]]:
-    """Gorulebilen dosyalardaki kayitlar: (sahip id, satir). Member yalniz kendi dosyasi; yonetici herkesinki."""
-    kisiler = {u.username: u.id for u in (db.scalars(select(AppUser)) if yonetici_mi(user) else [kullanici_kaydi(db, user)])}
+    """Tum dosyalardaki kayitlar: (sahip id, satir). 2026-10-20: herkes hepsini gorur."""
+    kisiler = {u.username: u.id for u in db.scalars(select(AppUser))}
     cikti: list[tuple[int, Any]] = []
     for ad, k in mevcut_oturumlar(kisiler):
         cikti += [(kisiler[ad], r) for r in k.scalars(select(model).limit(EN_COK_KAYIT))]
@@ -142,7 +151,7 @@ def _topla(db: Session, user: Principal, model: Any) -> list[tuple[int, Any]]:
 def _kayit(db: Session, user: Principal, model: Any, kimlik: int) -> Iterator[tuple[AppUser, Session, Any]]:
     uid, yerel = kimlik_coz(kimlik)
     sahip = db.get(AppUser, uid)
-    if sahip is None or not (yonetici_mi(user) or sahip.username == user.username) or not kullanici_dosyasi(sahip.username).is_file():
+    if sahip is None or not kullanici_dosyasi(sahip.username).is_file():
         raise GelirHata(404, "Kayıt bulunamadı.")  # varligi sizdirilmaz
     with kullanici_oturumu(sahip.username) as k:
         kayit = k.get(model, yerel)
@@ -165,8 +174,8 @@ def _guncelle(db: Session, user: Principal, model: Any, kimlik: int, uret: Calla
     with _kayit(db, user, model, kimlik) as (sahip, k, kayit):
         onceki = getattr(kayit, "tam_name", None)
         alanlar = uret(onceki)
-        if not yonetici_mi(user):
-            alanlar.pop("tam_name", None)  # Member TAM adini degistiremez
+        if not _yonetici(db, user):
+            alanlar.pop("tam_name", None)
         for alan, deger in alanlar.items():
             setattr(kayit, alan, deger)
         yeni = _sahip(db, user, alanlar.get("tam_name", ""))
@@ -191,12 +200,8 @@ def _sil(db: Session, user: Principal, model: Any, kimlik: int) -> dict:
 
 
 def musteri_adlari(db: Session, user: Principal) -> list[str]:
-    """Form onerileri: kullanicinin gorebildigi musteri unvanlari."""
+    """Form onerileri: musteri unvanlari (herkes hepsini gorur)."""
     sorgu = select(Customer.name)
-    if not yonetici_mi(user):
-        uid = kullanici_kaydi(db, user).id
-        benim = select(Customer.id).where(Customer.owner_id == uid)
-        sorgu = sorgu.where(or_(Customer.owner_id == uid, Customer.parent_id.in_(benim)))
     return sorted({n for n in db.scalars(sorgu.order_by(Customer.name).limit(1000)) if n})
 
 
@@ -210,7 +215,7 @@ def _toplamlar(ciftler) -> dict[str, float]:
 def _tam(db: Session, user: Principal, govde: dict, musteri: str, onceki: str | None = None) -> str:
     """Kaydin TAM'i. Member yalniz kendisi. Yonetici: secilen kisi personel olmali (onceki kayitla ayniysa degismemis sayilir); secilmediyse
     duzenlemede mevcut TAM korunur, yeni kayitta musterinin sorumlu TAM'i, o da yoksa bos ('—')."""
-    if not yonetici_mi(user):
+    if not _yonetici(db, user):
         return _ad(db, user)[:100]
     secilen = _metin(govde, "tam", "TAM", 100)
     if secilen:

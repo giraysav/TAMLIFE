@@ -55,11 +55,12 @@ def test_kapsam_yonetici_hepsini_member_kendininkini_gorur(veri, monkeypatch):
     assert d["total"] == 3 and [i["name"] for i in d["items"]] == ["Alfa Istirak", "Alfa Test A.S.", "Beta Test Ltd"]
     assert next(i for i in d["items"] if i["id"] == 1)["score"] == 71.3 and next(i for i in d["items"] if i["id"] == 2)["score"] is None  # istirakin skoru yok
     _cikis(veri, hdr)
-    _giris(veri, monkeypatch, "TeamMember")  # kullanici 'admin' satirina bagli: yalniz kendi musterileri
+    _giris(veri, monkeypatch, "TeamMember")  # 2026-10-20: herkes tum kartlari gorur; yazma yalniz kendisine atanan kartta
     d = veri.get("/api/v1/musteri").json()["data"]
-    assert {i["id"] for i in d["items"]} == {1, 2}
-    assert veri.get("/api/v1/musteri/3").status_code == 404  # baskasinin musterisinin varligi sizdirilmaz
-    assert veri.get("/api/v1/musteri/1").status_code == 200
+    assert {i["id"] for i in d["items"]} == {1, 2, 3}
+    baskasi = veri.get("/api/v1/musteri/3").json()["data"]
+    assert baskasi["erisim"]["kimlik_duzenle"] is False and baskasi["erisim"]["sil"] is False and baskasi["erisim"]["aylik_rapor"] is False
+    assert veri.get("/api/v1/musteri/1").json()["data"]["erisim"]["kimlik_duzenle"] is True
 
 
 def test_arama_joker_karakterleri_literaldir(veri):
@@ -153,8 +154,10 @@ def test_ekle_tam_degistir_sil_kurallari(veri, monkeypatch):
     assert veri.put("/api/v1/musteri/2/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 200
     assert veri.put("/api/v1/musteri/2/kimlik", json={"parent_id": 3}, headers=hdr2).status_code == 404  # baskasinin catisina baglayamaz
     assert veri.put("/api/v1/musteri/2/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 200
-    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 404  # baskasinin karti
-    assert veri.delete("/api/v1/musteri/3", headers=hdr2).status_code == 404
+    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 403  # baskasinin karti: salt okunur
+    assert veri.put("/api/v1/musteri/3/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 403
+    assert veri.put("/api/v1/musteri/3/rapor/taslak", json={"alanlar": {}}, headers=hdr2).status_code == 403  # aylik rapor da
+    assert veri.delete("/api/v1/musteri/3", headers=hdr2).status_code == 403
     kart = veri.get("/api/v1/musteri/2").json()["data"]
     assert all(kart["erisim"][k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "ayri_rapor_sec"))
     assert kart["erisim"]["tam_degistir"] is False and "tam_secenekleri" not in kart
@@ -329,14 +332,13 @@ def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):
         assert r.user_id == kisi.id and g.sender_id == kisi.id
 
 
-def test_modul_sahibi_musteri_personel_listesinde_yer_almaz(veri):
-    """Modul sahibi (ICT SMS, APN, Toptan, Baglantili Araclar) TAM secenegi olmaz, musteri sorumlusu yapilamaz (2026-10-17)."""
+def test_modul_sahibi_musteri_personel_listesinde_yer_alir(veri):
+    """2026-10-20 kullanici: modul sahipleri (ICT SMS, APN, Toptan, Baglantili Araclar) listelere geri eklendi, sorumlu yapilabilir."""
     with Session(engine()) as db:
         db.add(AppUser(id=3, username="modulcu", display_name="Modul Sahibi", role="TeamMember", module_owner="tamapn"))
         db.commit()
     hdr = login_ok(veri)
     tam = {k["id"] for k in veri.get("/api/v1/musteri/secenekler").json()["data"]["tam"]}
-    assert 2 in tam and 3 not in tam
-    assert 3 not in {k["id"] for k in veri.get("/api/v1/musteri/1").json()["data"]["tam_secenekleri"]}
-    assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 3}, headers=hdr).status_code == 404
-    assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 2}, headers=hdr).status_code == 200
+    assert {2, 3} <= tam
+    assert 3 in {k["id"] for k in veri.get("/api/v1/musteri/1").json()["data"]["tam_secenekleri"]}
+    assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 3}, headers=hdr).status_code == 200

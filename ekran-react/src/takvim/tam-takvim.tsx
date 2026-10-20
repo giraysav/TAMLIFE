@@ -146,7 +146,7 @@ function GunListesi({ yil, ceyrek, uyeId, dil }: { yil: number; ceyrek: number; 
 
 /**
  * TAM Takvim: panele giris yapmis herkesin izin ve takvim ozeti (yalniz isimler ve Izin&Takvim Yonetimi'ne girilen veriler).
- * "Grafik olustur" istendiginde donem grafigi cizilir; yetkili rol grafigin yaninda "ceyrek bazli sunuma gonder" kutusunu gorur.
+ * "Grafik olustur" istendiginde donem grafigi cizilir; yetkili rol grafigin yaninda "ceyrek sunuma gonder" kutusunu gorur.
  */
 export function TamTakvim({ dil }: { dil: Dil }) {
   const t = takvimMetin(dil)

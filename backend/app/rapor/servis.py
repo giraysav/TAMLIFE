@@ -30,7 +30,7 @@ from app.authz import yonetici_mi
 from app.dil import m, secili
 from app.kullanicilar import kullanici_kaydi, personel
 from app.models import Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
-from app.musteri.servis import MusteriHata, kullanici_id, musteri_getir, rapor_birimi_mi
+from app.musteri.servis import MusteriHata, kullanici_id, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
 from app.rapor import ceviri, eposta, sla, sla_analiz
@@ -91,7 +91,7 @@ def alicilar_getir(db: Session, musteri_id: int) -> dict:
 
 
 def alicilar_kaydet(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     try:
         kime = alicilari_ayikla(govde.get("kime"))
         bilgi = alicilari_ayikla(govde.get("bilgi"))
@@ -106,7 +106,7 @@ def alicilar_kaydet(db: Session, user: Principal, musteri_id: int, govde: dict) 
 
 # --- rapor birimi ----------------------------------------------------------------------------------
 def ayri_rapor_ayarla(db: Session, user: Principal, musteri_id: int, deger: object) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     if musteri.parent_id is None:
         raise RaporHata(400, m("Bu seçim yalnız iştirakler içindir.", "This option is only for subsidiaries."))
     if not isinstance(deger, bool):
@@ -227,7 +227,7 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
 
 
 def taslak_kaydet(db: Session, user: Principal, musteri_id: int, alanlar: object) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     onceki = aktif_gonderim(db, musteri.id, yil, ay)
     if onceki:
@@ -266,7 +266,7 @@ def _pdf_yaz(musteri_id: int, yil: int, ay: int, veri: bytes) -> tuple[str, int,
 
 def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
     """ONAYLI aylik rapor gonderimi: ayda TEK rapor. Onay zorunlu, bu ay gonderilmisse 409."""
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     if govde.get("onay") is not True:
         raise RaporHata(400, m("Rapor gönderimi için onay gerekli.", "Confirmation is required to send the report."))
     yil, ay = donem()
@@ -416,7 +416,7 @@ def sla_getir(db: Session, user: Principal, musteri_id: int) -> dict:
 
 
 def sla_yukle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_adi: str) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     _sla_kilidi(db, musteri.id, yil, ay)
     if not veri:
@@ -426,7 +426,7 @@ def sla_yukle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_
 
 
 def sla_sil(db: Session, user: Principal, musteri_id: int) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.excel_sil(musteri.id, yil, ay)
@@ -434,7 +434,7 @@ def sla_sil(db: Session, user: Principal, musteri_id: int) -> dict:
 
 
 def gorsel_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, baslik: str) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.gorsel_ekle(musteri.id, yil, ay, veri, baslik, user.username)
@@ -442,7 +442,7 @@ def gorsel_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, basl
 
 
 def gorsel_sil(db: Session, user: Principal, musteri_id: int, numara: int) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.gorsel_sil(musteri.id, yil, ay, numara)
@@ -450,7 +450,7 @@ def gorsel_sil(db: Session, user: Principal, musteri_id: int, numara: int) -> di
 
 
 def dosya_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_adi: str) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.dosya_ekle(musteri.id, yil, ay, veri, dosya_adi, user.username)
@@ -458,7 +458,7 @@ def dosya_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya
 
 
 def dosya_sil(db: Session, user: Principal, musteri_id: int, numara: int) -> dict:
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.dosya_sil(musteri.id, yil, ay, numara)
@@ -467,7 +467,7 @@ def dosya_sil(db: Session, user: Principal, musteri_id: int, numara: int) -> dic
 
 def sla_analizi(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
     """SLA Excel'inin tum verisinin analizi: yerlesik ozet (her zaman) + istenirse YZ yorumu. Rapor diline gore metin."""
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     dosya = sla.excel_dosyasi(musteri.id, yil, ay)
     if dosya is None:
@@ -491,7 +491,7 @@ def sla_analizi(db: Session, user: Principal, musteri_id: int, govde: dict) -> d
 
 def metin_cevir(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
     """Personelin yazdigi rapor alanlarini Ingilizceye cevirir (makine cevirisi; gondermeden once gozden gecirilir)."""
-    musteri_getir(db, user, musteri_id)
+    musteri_yaz_getir(db, user, musteri_id)
     alanlar = govde.get("alanlar")
     if not isinstance(alanlar, dict):
         raise RaporHata(400, m("Çevrilecek alan yok.", "No fields to translate."))
@@ -591,7 +591,7 @@ def cacti_ayar(db: Session, user: Principal, musteri_id: int) -> dict:
 def cacti_kaydet(db: Session, user: Principal, musteri_id: int, baglantilar: list[str]) -> dict:
     from app.rapor import cacti
 
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     if not _cacti_duzenleyebilir(db, user, musteri):
         raise RaporHata(403, "Grafik bağlantılarını müşterinin sorumlu personeli ya da admin değiştirebilir.")
     yil, ay = donem()
@@ -606,7 +606,7 @@ def cacti_grafikleri(db: Session, user: Principal, musteri_id: int, parola: obje
     alim o kisinin hesabiyla yapilir (panel kullanici adi), parola saklanmaz."""
     from app.rapor import cacti
 
-    musteri = musteri_getir(db, user, musteri_id)
+    musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     ids = cacti.baglantilar(musteri.cacti_urls or [])
     kimlik = cacti.kisi_kimligi(user.username, parola) if parola is not None else None

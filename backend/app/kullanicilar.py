@@ -157,13 +157,33 @@ def personel(db: Session) -> list[AppUser]:
 
 
 def musteri_personeli_mi(kisi: AppUser | None) -> bool:
-    """Musteri sorumlusu (TAM) olabilir mi: personel ve bir modulun sahibi degil (modul sahibi musteri listesinde yer almaz)."""
-    return personel_mi(kisi) and not (kisi.module_owner or "").strip()  # type: ignore[union-attr]
+    """Musteri sorumlusu (TAM) olabilir mi. 2026-10-20 kullanici: modul sahipleri (KAAN USTUN, UGUR KULEKCI, OKAN COLAK, AHMET SOZMEN)
+    listelere geri eklendi; 2026-10-17'deki 'modul sahibi musteri listesinde yer almaz' kurali kalkti. Kume = personel kumesi."""
+    return personel_mi(kisi)
 
 
 def musteri_personeli(db: Session) -> list[AppUser]:
-    """Musteri Yonetimi personel listesi: personel kumesi eksi modul sahipleri (kullanici karari 2026-10-17)."""
-    return [k for k in personel(db) if musteri_personeli_mi(k)]
+    """Musteri Yonetimi personel listesi = personel kumesi (modul sahipleri dahil, 2026-10-20)."""
+    return personel(db)
+
+
+# --- Modul yonetimi (2026-10-20 kullanici karari) ---------------------------------------------------------------------
+# Yonetimli moduller: icerigi herkes gorur, degistirme yalniz admin ve o modulun sahibi (app_user.module_owner). Sahipler:
+# tamsms OKAN COLAK, tamapn AHMET SOZMEN, toptan KAAN USTUN, baglantili UGUR KULEKCI (isimler kodda degil, kullanici kaydinda).
+YONETIMLI_MODULLER = ("tamsms", "tamapn", "toptan", "baglantili")
+
+
+def modul_sahibi(db: Session, user: Principal) -> str:
+    """Kullanicinin sahibi oldugu modul anahtari (yoksa bos)."""
+    kisi = bul(db, user.username)
+    return (kisi.module_owner or "").strip() if kisi is not None and kisi.active is not False else ""
+
+
+def modul_yoneticisi_mi(db: Session, user: Principal, modul: str) -> bool:
+    """Yonetimli modulde yazma: admin ya da modulun sahibi."""
+    from app.authz import is_admin
+
+    return is_admin(user) or (modul in YONETIMLI_MODULLER and modul_sahibi(db, user) == modul)
 
 
 def silme_yetkilisi_ad() -> str:

@@ -15,6 +15,11 @@ export type TanitimVeri = {
   kpi: KpiVeri[]
   olcum: string
   amac: { tr: string; en: string }
+  /** 2026-10-20 ust yonetim duzeni; eski kayitli yukte yok olabilir. */
+  slogan?: { tr: string; en: string }
+  ozet?: { tr: string; en: string }
+  amac_maddeleri?: { ad: string; ad_en: string; aciklama: string; aciklama_en: string }[]
+  alanlar?: { ad: string; ad_en: string; moduller: { ad: string; ad_en: string }[] }[]
   kapsam: { ad: string; ad_en: string }[]
   fayda: { ad: string; ad_en: string; aciklama: string; aciklama_en: string }[]
   kod: { satir: number; dosya: number; test_satir: number; diller: KodDili[] } | null

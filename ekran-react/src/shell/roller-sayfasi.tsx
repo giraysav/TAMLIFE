@@ -155,7 +155,7 @@ function RolKutusu({
   )
 }
 
-/** Ceyrek Bazli Sunum baslinginin yanindaki asagi acilan liste: personel adlarinin yaninda onay kutusu; admin sunumu kimlerin yonetecegini kisi bazinda secer. */
+/** Ceyrek Sunum baslinginin yanindaki asagi acilan liste: personel adlarinin yaninda onay kutusu; admin sunumu kimlerin yonetecegini kisi bazinda secer. */
 function SunumKisiSecici({
   kisiler,
   roller,
@@ -295,7 +295,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
 
   const kisiler = veri.users ?? []
 
-  /** Bolumdeki (ornek Ceyrek Bazli Sunum) rol yetkisi aninda kaydedilir. Giris sayfasi secimi 2026-10-14'te kalkti: herkes Genel Bakis'la acar. */
+  /** Bolumdeki (ornek Ceyrek Sunum) rol yetkisi aninda kaydedilir. Giris sayfasi secimi 2026-10-14'te kalkti: herkes Genel Bakis'la acar. */
   async function alanYetkisiKaydet(r: Rol, yetki: string, secili: boolean) {
     const kume = new Set(r.permissions)
     if (secili) kume.add(yetki)

@@ -84,16 +84,15 @@ def test_uye_yalniz_kendi_projesini_gorur_ve_yazar(client, monkeypatch):
     mehmet_kalemi = client.post("/api/v1/proje/kalem", json={"owner_id": kisiler["mehmet"], "category": "calisma", "title": "Mehmet işi"}, headers=hdr_admin).json()["data"]["id"]
     assert client.post("/api/v1/proje/kalem", json={"owner_id": kisiler["ayse"], "category": "proje", "title": "Ayşe işi"}, headers=hdr_admin).status_code == 200
     hdr = _giris(client, monkeypatch, "ayse", "TeamMember")
-    veri = _ekran(client)  # Member yalniz kendi kalemlerini gorur
-    assert [k["baslik"] for k in veri["kalemler"]] == ["Ayşe işi"] and veri["kalemler"][0]["tam_id"] == kisiler["ayse"]
-    assert veri["yonetici"] is False and veri["tamlar"] == [{"id": kisiler["ayse"], "ad": "ayse"}]
-    # 2026-10-19 kullanici karari: Member KENDI kalemini ekler / gunceller / siler; baskasininki gorunmez (404)
+    veri = _ekran(client)  # 2026-10-20: herkes tum kalemleri gorur, yalniz kendisine atanani degistirir
+    assert {(k["baslik"], k["duzenlenebilir"]) for k in veri["kalemler"]} == {("Ayşe işi", True), ("Mehmet işi", False)}
+    assert veri["yonetici"] is False and veri["tamlar"] == [{"id": kisiler["ayse"], "ad": "ayse"}]  # sorumlu secimi yalniz kendisi
     for istek in (
         client.patch(f"/api/v1/proje/kalem/{mehmet_kalemi}", json={"status": "devam"}, headers=hdr),
         client.post(f"/api/v1/proje/kalem/{mehmet_kalemi}/aksiyon", json={"metin": "x"}, headers=hdr),
         client.delete(f"/api/v1/proje/kalem/{mehmet_kalemi}", headers=hdr),
     ):
-        assert istek.status_code == 404
+        assert istek.status_code == 403
     yeni = client.post("/api/v1/proje/kalem", json={"category": "proje", "title": "Yeni"}, headers=hdr)
     assert yeni.status_code == 200
     kimlik = yeni.json()["data"]["id"]
@@ -120,11 +119,12 @@ def test_musteri_bazli_calismalar_kapsam_ve_rapor(client, monkeypatch):
     assert [m["ad"] for m in client.get("/api/v1/proje/musteri", params={"tam_id": k["mudur"]}).json()["data"]["musteriler"]] == ["Beta Ltd"]
 
     hdr = _giris(client, monkeypatch, "ayse", "TeamMember")
-    assert [m["id"] for m in client.get("/api/v1/proje/musteri").json()["data"]["musteriler"]] == [1, 2]
+    liste = client.get("/api/v1/proje/musteri").json()["data"]["musteriler"]  # 2026-10-20: herkes hepsini gorur
+    assert [(m["id"], m["duzenlenebilir"]) for m in liste] == [(1, True), (2, True), (3, False)]
     r = client.put("/api/v1/proje/musteri/2/ddos", json={"yapildi": True, "detay": "Eşik 2 Gbps"}, headers=hdr)
     assert r.status_code == 200 and r.json()["data"]["zaman"]
     client.put("/api/v1/proje/musteri/1/topoloji", json={"yapildi": False, "detay": "Planlanıyor"}, headers=hdr)
-    assert client.put("/api/v1/proje/musteri/3/ddos", json={"yapildi": True}, headers=hdr).status_code == 404  # baskasinin musterisi
+    assert client.put("/api/v1/proje/musteri/3/ddos", json={"yapildi": True}, headers=hdr).status_code == 403  # baskasinin musterisi
     assert client.put("/api/v1/proje/musteri/1/yok", json={"yapildi": True}, headers=hdr).status_code == 422
     isaret = client.get("/api/v1/proje/musteri").json()["data"]["isaretler"]
     assert isaret["2"]["ddos"]["yapildi"] is True and isaret["2"]["ddos"]["guncelleyen"] == "ayse"
@@ -139,7 +139,7 @@ def test_musteri_bazli_calismalar_kapsam_ve_rapor(client, monkeypatch):
     satirlar = [[h.value for h in s] for s in ws.iter_rows(min_row=3)]
     assert satirlar[0][:3] == ["Müşteri", "TAM", "Proje"]
     assert satirlar[2][0] == "   ↳ Alfa İştirak" and satirlar[2][4] == "✓" and satirlar[2][-1] == "Ddos Optimizasyonu: Eşik 2 Gbps"
-    assert len(satirlar) == 3  # baslik + Ayse'nin iki musterisi
+    assert len(satirlar) == 4  # baslik + tum musteriler (2026-10-20: herkes hepsini gorur)
 
     # isaret ve detay bosalinca kayit silinir; musteri silinince isaretleri de gider
     client.put("/api/v1/proje/musteri/1/topoloji", json={"yapildi": False, "detay": ""}, headers=hdr)

@@ -138,6 +138,7 @@ def whoami(user: Principal = Depends(require_user), db: Session = Depends(get_db
             "profile": profil,
             "role": user.role,
             "is_admin": user.is_admin,
+            "module_owner": (satir.module_owner or "").strip() if satir is not None else "",  # yonetimli modulun sahibi (2026-10-20)
             "idle_timeout_minutes": get_settings().session_idle_minutes,
             "navigation": nav,
             "landing": gorunum.landing,
