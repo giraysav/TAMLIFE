@@ -48,7 +48,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 | Onedesk | `onedesk/` | `src/onedesk/` | kartsız TEMIP kaydı sayılmaz (Radar'ın); LLM varsayılan kapalı |
 | Veri Girişi | `tampon/` | `src/yonetim/tampon/` | ReportDB ham kataloğu (`var/ham`, son 1 tarama), PG kataloğu, TEMIP eşleşme + elle atama (`temip_atama.py`) |
 | Radar | `radar/` | `src/radar/` | kartsız müşteriler; admin "Personele ata" |
-| TAM Utilizasyon | `skor/` | `src/yonetim/utilizasyon/` | `motor.py` golden testli |
+| TAM Utilizasyon | `skor/` | `src/yonetim/utilizasyon/` | `motor.py` golden testli; 2026-10-20'den beri puanlama MANUEL (`servis.OTOMATIK_PUANLAMA=False`): kaynaklar okunmaz, her kriter Toplu atama > Kriter dökümünde seçilir (`PUT /skor/toplu/manuel/{id}`); otomatik kod + testleri (`otomatik` fixture) korunur |
 | ICT SMS / APN | `gelir/` | `src/gelir/` | kayıt TAM'ın dosyasında; sahip TAM seçer |
 | Gelir Faydası | `gelir_uretim/` | `src/gelir-uretim/` | onay akışı; herkes girer, sahip/admin onaylar |
 | Takvim / TAM Takvim | `takvim/` | `src/takvim/` | kurum günleri `kurum_takvimi.py`; toplantı adedi sınırsız; ekip satırı yalnız online/yüz yüze adetlerini toplar, gün kırılımları (şirket izni, resmi tatil, yarım gün) dönemin takviminden, kişi sayısıyla çarpılmaz (`takvim.servis.ekip`) |

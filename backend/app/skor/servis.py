@@ -37,6 +37,10 @@ KAYNAKLAR = ("sayfa", "toplu", "kriter_degisikligi")
 IZINLI_ALANLAR = ("title", "type", "metric", "weight", "b30", "b50", "b70", "b100", "servis_puanlari", "servis_dahil", "kaynak_secimi")
 EN_FAZLA_KRITER = 50
 EN_FAZLA_TOPLU = 5000
+# 2026-10-20 kullanici karari: "db kaynaklarindan otomatik veri ile puanlama simdilik manuele cevrilecek; manuel kisim yalniz toplu
+# atama kriter dokumunde". False iken kaynaklar (OneDesk, Urun-Tutar, segment, rapor) okunmaz; her cati musterinin her kriteri dokumde
+# secilir (manuel_ata); kayitli secimler (ScoreDetail dokumu) toplu uygulamada ve kriter degisikliginde yeniden kullanilir.
+OTOMATIK_PUANLAMA = False
 DEGISIM_ESIGI = 0.05  # kriter degisikliginde bundan kucuk fark "degismeyen" sayilir (uretim toplu_atama.uygula)
 ACIL_HESAP = "ladinadmin"  # siralamada gosterilmez (uretim _build_util_ranking)
 
@@ -205,13 +209,13 @@ def hesapla(db: Session, liste: list[Customer], kriterler: list[dict] | None = N
     if kriterler is None:
         kriterler = cati_kriterleri(db)
     kimlikler = [c.id for c in liste]
-    metrikler, uyarilar = kaynaklar.birlesik_metrikler(db, liste, kriterler)
+    metrikler, uyarilar = kaynaklar.birlesik_metrikler(db, liste, kriterler) if OTOMATIK_PUANLAMA else ({}, [])
     detaylar = {d.customer_id: d.detail for d in db.scalars(select(ScoreDetail).where(ScoreDetail.customer_id.in_(kimlikler)))} if liste else {}
     atamalar = _son_atamalar(db, kimlikler)
     tamlar = _adlar(db, {c.owner_id for c in liste})
     sonuc = []
     for c in liste:
-        h = skor.musteri_skoru(kriterler, metrikler.get(c.id, {}), skor.manuel_secimler(detaylar.get(c.id)))
+        h = skor.musteri_skoru(kriterler, metrikler.get(c.id, {}), skor.manuel_secimler(detaylar.get(c.id)), OTOMATIK_PUANLAMA)
         mevcut = round(c.score, 1) if c.score is not None else None
         sonuc.append(
             {
@@ -239,7 +243,8 @@ def onizleme(db: Session, tam_id: int | None) -> dict:
     """Toplu atama onizlemesi (uretim skor_toplu_onizleme): yeni skor HESAPLANIR, hicbir sey yazilmaz."""
     kriterler, sonuc, uyarilar = hesapla(db, cati_musteriler(db, tam_id))
     return {
-        "kaynaklar": kaynaklar.kaynak_durumlari(db, kriterler),
+        "manuel": not OTOMATIK_PUANLAMA,
+        "kaynaklar": kaynaklar.kaynak_durumlari(db, kriterler) if OTOMATIK_PUANLAMA else [],
         "uyarilar": uyarilar,
         "kriterler": kriter_ozeti(kriterler),
         "musteriler": sonuc,
@@ -339,6 +344,29 @@ def toplu_uygula(db: Session, istenen: object, actor: str, actor_id: int | None)
     bulunamayan = kimlikler - {c.id for c in liste}
     sonuc["atlanan"] += [{"id": i, "ad": "", "neden": "bulunamadi ya da cati musteri degil"} for i in sorted(bulunamayan)]
     return sonuc
+
+
+def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: int | None) -> dict:
+    """Kriter dokumunde secilen puanlar (baslik -> 0/30/50/70/100) ile cati musterinin final skoru sunucuda hesaplanip yazilir
+    (kaynak 'toplu'). Her kriter secilmis olmali (X sabit puanli satir haric); secimler dokumle saklanir."""
+    if OTOMATIK_PUANLAMA:
+        raise SkorHata(400, "Otomatik puanlama acikken manuel atama yapilmaz.")
+    musteri = db.get(Customer, musteri_id)
+    if musteri is None or musteri.parent_id is not None:
+        raise SkorHata(404, "Cati musteri bulunamadi.")
+    if not isinstance(ham, dict) or len(ham) > EN_FAZLA_KRITER:
+        raise SkorHata(400, "Kriter secimleri gecersiz.")
+    secimler: dict[str, int] = {}
+    for baslik, puan in ham.items():
+        if not isinstance(puan, int) or isinstance(puan, bool) or puan not in (0, *skor.PUANLAR):
+            raise SkorHata(400, f'"{baslik}" icin puan 0, 30, 50, 70 ya da 100 olmali.')
+        secimler[skor.normal(str(baslik))] = puan
+    h = skor.musteri_skoru(cati_kriterleri(db), {}, secimler, otomatik=False)
+    if not h["tamam"]:
+        raise SkorHata(400, "Her kriter icin puan secin: " + ", ".join(h["eksik"] or ["kriter yok"]))
+    eski = round(musteri.score, 1) if musteri.score is not None else None
+    skoru_yaz(db, musteri, h["skor"], dokum(h["kriterler"]), "toplu", actor, actor_id)
+    return {"id": musteri.id, "ad": musteri.name, "eski": eski, "yeni": h["skor"]}
 
 
 def musteri_skoru_ata(db: Session, musteri_id: int, tam_id: int, deger: object, detay: object, actor: str, actor_id: int | None) -> None:
@@ -495,7 +523,8 @@ def agac(db: Session) -> dict:
     )
     cati_idler = {c.id for c in catilar}
     return {
-        "kaynaklar": kaynaklar.kaynak_durumlari(db, kriterler),
+        "manuel": not OTOMATIK_PUANLAMA,
+        "kaynaklar": kaynaklar.kaynak_durumlari(db, kriterler) if OTOMATIK_PUANLAMA else [],
         "kriterler": kriter_ozeti(kriterler),
         "uyarilar": uyarilar,
         "personel": personel,

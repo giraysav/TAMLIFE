@@ -90,8 +90,11 @@ export function KaynakListesi({ kaynaklar, uyarilar, t }: { kaynaklar: KaynakDur
   )
 }
 
-/** Tek musterinin kriter dokumu: puan, katki, deger, kaynak, durum. */
-export function KriterDokumu({ kriterler, t }: { kriterler: KriterSonucu[]; t: UYM }) {
+/** Manuel puanlamada dokumun duzenlenebilir hali: baslik -> secilen puan. */
+export type DokumSecimi = { secim: Record<string, number>; onSecim: (baslik: string, puan: number) => void; kilitli?: boolean }
+
+/** Tek musterinin kriter dokumu: puan, katki, deger, kaynak, durum. `duzenle` verilirse (manuel puanlama) secenekli satirda puan secilir. */
+export function KriterDokumu({ kriterler, t, duzenle }: { kriterler: KriterSonucu[]; t: UYM; duzenle?: DokumSecimi }) {
   const u = t.util
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -113,7 +116,28 @@ export function KriterDokumu({ kriterler, t }: { kriterler: KriterSonucu[]; t: U
             <tr key={`${k.baslik}-${i}`}>
               <td className="px-3 py-1.5 font-black text-tl-navy">{k.baslik || k.tur}</td>
               <td className="px-3 py-1.5 text-right font-mono font-bold">{k.agirlik}</td>
-              <td className="px-3 py-1.5 text-right font-mono font-black text-tl-navy">{k.puan}</td>
+              <td className="px-3 py-1.5 text-right font-mono font-black text-tl-navy">
+                {duzenle && k.secenekler ? (
+                  <select
+                    className={`${GIRDI} !w-auto !py-1 text-right`}
+                    aria-label={u.puanSecEtiket(k.baslik || k.tur)}
+                    disabled={duzenle.kilitli}
+                    value={duzenle.secim[k.baslik] ?? ""}
+                    onChange={(e) => duzenle.onSecim(k.baslik, Number(e.target.value))}
+                  >
+                    <option value="" disabled>
+                      {u.puanSec}
+                    </option>
+                    {k.secenekler.map((s) => (
+                      <option key={s.puan} value={s.puan}>
+                        {s.etiket ? `${s.puan} · ${s.etiket}` : s.puan}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  k.puan
+                )}
+              </td>
               <td className="px-3 py-1.5 text-right font-mono font-bold text-slate-500">{k.katki}</td>
               <td className="max-w-56 truncate px-3 py-1.5 font-bold text-slate-600" title={degerYaz(k.deger)}>
                 {degerYaz(k.deger)}

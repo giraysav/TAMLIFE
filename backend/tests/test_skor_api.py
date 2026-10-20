@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db import engine
 from app.models import AppUser, Customer, ScoreApprovalRequest, ScoreHistory
+from app.skor import servis
 from tests.conftest import login_ok
 
 KRITER = [{"title": "Musteri segmenti", "weight": 100, "b50": "SMB", "b70": "MA", "b100": "SA, PA, WHOLESALE"}]
@@ -50,7 +51,13 @@ def test_yetki_matrisi(veri, monkeypatch, rol):
     assert veri.post("/api/v1/skor/talepler", json={"customer_id": 1}, headers=hdr).status_code == 200  # TAM tarafi acik
 
 
-def test_kriter_surumleri_onizleme_ve_toplu_uygulama(veri):
+@pytest.fixture
+def otomatik(monkeypatch):
+    """Otomatik (veri kaynakli) puanlama: 2026-10-20'den beri kapali (servis.OTOMATIK_PUANLAMA); kod ve testleri korunur."""
+    monkeypatch.setattr(servis, "OTOMATIK_PUANLAMA", True)
+
+
+def test_kriter_surumleri_onizleme_ve_toplu_uygulama(veri, otomatik):
     hdr = login_ok(veri)
     bos = veri.get("/api/v1/skor/kriterler/parent").json()["data"]
     assert bos["version"] == 0 and bos["varsayilan"] is True and len(bos["criteria"]) == 7  # uretim varsayilan 7 kriter
@@ -83,6 +90,38 @@ def test_kriter_surumleri_onizleme_ve_toplu_uygulama(veri):
         assert db.query(ScoreHistory).filter_by(customer_id=1, source="kriter_degisikligi").count() == 1
         h = db.query(ScoreHistory).filter_by(customer_id=1, source="toplu").one()
         assert h.old_score == 70.0 and h.detail[0]["kaynak"].startswith("Panel") and h.detail[0]["deger"] == "MA"  # dokum kaynak/deger tutar
+
+
+def test_manuel_puanlama_kriter_dokumunden(veri):
+    """2026-10-20: otomatik puanlama kapali; her kriter Toplu atama > Kriter dokumunde secilir, skor sunucuda hesaplanir."""
+    hdr = login_ok(veri)
+    kriterler = [KRITER[0] | {"weight": 50}, {"title": "Raporlama", "type": "auto_rapor", "weight": 50, "b50": "X"}]
+    uyg = veri.put("/api/v1/skor/kriterler/parent", json={"criteria": kriterler}, headers=hdr).json()["data"]["uygulama"]
+    assert uyg["uygulanan"] == [] and {a["id"] for a in uyg["atlanan"]} == {1, 2, 3}  # kaynak okunmaz: segment kartta olsa da secilmedi
+    on = veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]
+    assert on["manuel"] is True and on["kaynaklar"] == [] and on["ozet"]["hazir"] == 0
+    m1 = next(m for m in on["musteriler"] if m["id"] == 1)
+    segment, rapor = m1["kriterler"]
+    assert segment["durum"] == "eksik" and segment["deger"] is None and m1["eksik"] == ["Musteri segmenti"]
+    assert [(s["puan"], s["etiket"]) for s in segment["secenekler"]] == [(0, ""), (30, ""), (50, "SMB"), (70, "MA"), (100, "SA, PA, WHOLESALE")]
+    assert rapor["durum"] == "otomatik" and rapor["puan"] == 50  # X sabit puani tablo kuralidir, secim gerekmez
+    yaz = lambda mid, s: veri.put(f"/api/v1/skor/toplu/manuel/{mid}", json={"secimler": s}, headers=hdr)
+    assert yaz(1, {}).status_code == 400  # her kriter secilmeli
+    assert yaz(1, {"Musteri segmenti": 55}).status_code == 400
+    assert yaz(4, {"Musteri segmenti": 100}).status_code == 404  # istirak
+    r = yaz(1, {"Musteri segmenti": 100})
+    assert r.status_code == 200 and r.json()["data"] == {"id": 1, "ad": "Cati MA", "eski": None, "yeni": 75.0}
+    m1 = next(m for m in veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]["musteriler"] if m["id"] == 1)
+    assert m1["tamam"] and (m1["mevcut"], m1["yeni"]) == (75.0, 75.0) and m1["kriterler"][0]["durum"] == "manuel" and m1["kriterler"][0]["puan"] == 100
+    sonuc = veri.post("/api/v1/skor/toplu/uygula", json={"customer_ids": [1, 2]}, headers=hdr).json()["data"]
+    assert [u["id"] for u in sonuc["uygulanan"]] == [1] and [a["id"] for a in sonuc["atlanan"]] == [2]
+    # agirlik degisince kayitli secimlerle yeniden hesaplanir
+    kriterler[0]["weight"] = 150
+    uyg = veri.put("/api/v1/skor/kriterler/parent", json={"criteria": kriterler}, headers=hdr).json()["data"]["uygulama"]
+    assert uyg["uygulanan"] == [{"id": 1, "ad": "Cati MA", "eski": 75.0, "yeni": 87.5}]
+    with Session(engine()) as db:
+        h = db.query(ScoreHistory).filter_by(customer_id=1, source="toplu").order_by(ScoreHistory.id).first()
+        assert h.detail[0]["kaynak"].startswith("Manuel") and h.detail[0]["puan"] == 100
 
 
 def test_tek_musteri_skoru_kurallari(veri):

@@ -4,13 +4,19 @@ import { Check, RefreshCw } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Alan, Bildirim, Bolum, DUGME, DUGME_ANA, GIRDI, HataKutu, Panel, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
-import type { AtamaSonucu, SkorAgaci, SkorMusterisi, SkorOnizleme } from "@/yonetim/api"
+import type { AtamaSonucu, KriterSonucu, SkorAgaci, SkorMusterisi, SkorOnizleme } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { adaGoreSirala, zaman } from "@/lib/bicim"
 import { AGAC_YOLU, KaynakListesi, KriterDokumu, TamamRozeti, skorYaz } from "@/yonetim/utilizasyon/ortak"
 import { uym } from "@/yonetim/utilizasyon/metin"
 
-/** Toplu atama (uretim skor_toplu onizleme / uygula): sunucu yeniden hesaplar, onizleme yazmaz; uygula yalniz TAMAM olanlara yazar. */
+/** Kayitli manuel secimler (dokumden): baslik -> puan. */
+function kayitliSecim(kriterler: KriterSonucu[]): Record<string, number> {
+  return Object.fromEntries(kriterler.filter((k) => k.secenekler && k.durum === "manuel").map((k) => [k.baslik, k.puan]))
+}
+
+/** Toplu atama (uretim skor_toplu onizleme / uygula): sunucu yeniden hesaplar, onizleme yazmaz; uygula yalniz TAMAM olanlara yazar.
+ *  2026-10-20: puanlama manuel (sunucu `manuel`): her kriter Kriter dokumunde secilir, "Puanlari kaydet" o musterinin skorunu yazar. */
 export function TopluAtama({ dil }: { dil: Dil }) {
   const t = uym(dil)
   const u = t.util
@@ -18,6 +24,7 @@ export function TopluAtama({ dil }: { dil: Dil }) {
   const [tamId, setTamId] = useState("")
   const [secili, setSecili] = useState<Set<number>>(new Set())
   const [dokum, setDokum] = useState<number | null>(null)
+  const [secim, setSecim] = useState<Record<string, number>>({})
   const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
   const agac = useQuery({ queryKey: ANAHTAR.skorAgac, queryFn: () => oku<SkorAgaci>(AGAC_YOLU) })
   const on = useQuery({
@@ -34,11 +41,22 @@ export function TopluAtama({ dil }: { dil: Dil }) {
     },
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
   })
+  const manuelKaydet = useMutation({
+    mutationFn: (g: { id: number; secimler: Record<string, number> }) =>
+      yaz<{ id: number; ad: string; eski: number | null; yeni: number }>("PUT", `/api/v1/skor/toplu/manuel/${g.id}`, { secimler: g.secimler }),
+    onSuccess: (s) => {
+      setBilgi({ ton: "yesil", metin: u.manuelKaydedildi(s.ad, skorYaz(s.yeni)) })
+      for (const anahtar of [["skor", "onizleme"], ANAHTAR.skorAgac, ANAHTAR.skorSiralama, ANAHTAR.skorTalepler]) void qc.invalidateQueries({ queryKey: anahtar })
+    },
+    onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
+  })
 
   const personel = adaGoreSirala(agac.data?.tum_personel ?? [], (p) => p.ad)
   const veri = on.data
   const tamamlar = (veri?.musteriler ?? []).filter((m) => m.tamam).map((m) => m.id)
   const acik = veri?.musteriler.find((m) => m.id === dokum) ?? null
+  const manuel = veri?.manuel === true
+  const secimsiz = acik ? acik.kriterler.filter((k) => k.secenekler && secim[k.baslik] === undefined).length : 0
   const sec = (id: number, evet: boolean) =>
     setSecili((once) => {
       const yeni = new Set(once)
@@ -94,6 +112,7 @@ export function TopluAtama({ dil }: { dil: Dil }) {
               {u.seciliUygula(secili.size)}
             </button>
           </div>
+          {manuel ? <Bildirim ton="amber">{u.manuelBilgi}</Bildirim> : null}
           {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
 
           {on.isPending ? (
@@ -126,7 +145,15 @@ export function TopluAtama({ dil }: { dil: Dil }) {
                 {
                   baslik: u.musteri,
                   hucre: (m) => (
-                    <button type="button" className="text-left font-black text-tl-navy underline-offset-2 hover:underline" aria-expanded={dokum === m.id} onClick={() => setDokum(dokum === m.id ? null : m.id)}>
+                    <button
+                      type="button"
+                      className="text-left font-black text-tl-navy underline-offset-2 hover:underline"
+                      aria-expanded={dokum === m.id}
+                      onClick={() => {
+                        setDokum(dokum === m.id ? null : m.id)
+                        setSecim(kayitliSecim(m.kriterler))
+                      }}
+                    >
                       {m.ad}
                     </button>
                   ),
@@ -160,11 +187,31 @@ export function TopluAtama({ dil }: { dil: Dil }) {
 
       {acik ? (
         <Panel baslik={u.dokum(acik.ad)}>
-          <KriterDokumu kriterler={acik.kriterler} t={t} />
+          <div className="grid gap-3">
+            <KriterDokumu
+              kriterler={acik.kriterler}
+              t={t}
+              duzenle={manuel ? { secim, onSecim: (baslik, puan) => setSecim((once) => ({ ...once, [baslik]: puan })), kilitli: manuelKaydet.isPending } : undefined}
+            />
+            {manuel ? (
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {secimsiz > 0 ? <span className="text-xs font-bold text-amber-700">{u.manuelEksik(secimsiz)}</span> : null}
+                <button
+                  type="button"
+                  className={DUGME_ANA}
+                  disabled={secimsiz > 0 || manuelKaydet.isPending}
+                  onClick={() => manuelKaydet.mutate({ id: acik.id, secimler: secim })}
+                >
+                  <Check aria-hidden className="size-3.5" />
+                  {u.manuelKaydet}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </Panel>
       ) : null}
 
-      {veri ? (
+      {veri && !manuel ? (
         <Bolum anahtar="yonetim-util-atama-kaynak" baslik={u.kaynaklar} varsayilanAcik={veri.uyarilar.length > 0}>
           <KaynakListesi kaynaklar={veri.kaynaklar} uyarilar={veri.uyarilar} t={t} />
         </Bolum>

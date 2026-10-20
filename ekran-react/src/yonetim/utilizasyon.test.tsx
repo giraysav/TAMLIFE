@@ -187,5 +187,43 @@ describe("TAM Utilizasyon", () => {
     expect(await screen.findByText(/ORNEK B: eksik kriter/)).toBeInTheDocument()
     expect(cagrilar.find((c) => c.yol.includes("/toplu/uygula"))?.govde).toEqual({ customer_ids: [1, 2] })
   })
+
+  it("manuel puanlama: kriter dokumunde her kriter secilir, kaydet secimleri sunucuya gonderir (X sabit satir secilmez)", async () => {
+    const u = uym("tr").util
+    const secenekler = [{ puan: 0, etiket: "" }, { puan: 30, etiket: "" }, { puan: 50, etiket: "SMB" }, { puan: 70, etiket: "MA" }, { puan: 100, etiket: "SA" }]
+    const kriter = (baslik: string, ek: object) => ({ baslik, tur: "auto_segment", agirlik: 50, puan: 0, katki: 0, durum: "eksik" as const, kaynak: null, deger: null, varsayilan_kural: false, ...ek })
+    const onizleme: SkorOnizleme = {
+      manuel: true,
+      kaynaklar: [],
+      uyarilar: [],
+      kriterler: [],
+      musteriler: [
+        {
+          id: 1, ad: "ORNEK A", tam: "ORNEK TAM", tam_id: 2, mevcut: null, yeni: 25, fark: null, tamam: false, eksik: ["5. Segment"], son_atama: null,
+          kriterler: [kriter("5. Segment", { secenekler }), kriter("7. Raporlama", { tur: "auto_rapor", puan: 50, durum: "otomatik", kaynak: "Sabit puan (X işareti)" })],
+        },
+      ],
+      ozet: { toplam: 1, hazir: 0 },
+    } // fmt: skip
+    const cagrilar = sahteSunucu({
+      "/api/v1/skor/toplu/onizleme": onizleme,
+      "/api/v1/skor/toplu/manuel/1": { id: 1, ad: "ORNEK A", eski: null, yeni: 85 },
+      "/api/v1/skor/agac": { tum_personel: [] },
+    })
+    sarmala(<TopluAtama dil="tr" />)
+    expect(await screen.findByText(u.manuelBilgi)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "ORNEK A" }))
+    const kaydet = screen.getByRole("button", { name: u.manuelKaydet })
+    expect(kaydet).toBeDisabled()
+    expect(screen.getByText(u.manuelEksik(1))).toBeInTheDocument()
+    expect(screen.queryByLabelText(u.puanSecEtiket("7. Raporlama"))).toBeNull()
+    fireEvent.change(screen.getByLabelText(u.puanSecEtiket("5. Segment")), { target: { value: "70" } })
+    expect(kaydet).not.toBeDisabled()
+    fireEvent.click(kaydet)
+    expect(await screen.findByText(u.manuelKaydedildi("ORNEK A", "%85.0"))).toBeInTheDocument()
+    const put = cagrilar.find((c) => c.yontem === "PUT")
+    expect(put?.yol).toContain("/api/v1/skor/toplu/manuel/1")
+    expect(put?.govde).toEqual({ secimler: { "5. Segment": 70 } })
+  })
 })
 

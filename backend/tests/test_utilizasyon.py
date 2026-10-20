@@ -226,7 +226,13 @@ def test_kaynak_secimi_dogrulama():
     assert t["islem"] == "topla" and set(t) == {"kaynak", "eslesme", "islem", "sutun", "filtreler", "esleme"}
 
 
-def test_agac_personel_agirligi_ve_siralama(veri):
+@pytest.fixture
+def otomatik(monkeypatch):
+    """Otomatik (veri kaynakli) puanlama: 2026-10-20'den beri kapali (servis.OTOMATIK_PUANLAMA); kod ve testleri korunur."""
+    monkeypatch.setattr(servis, "OTOMATIK_PUANLAMA", True)
+
+
+def test_agac_personel_agirligi_ve_siralama(veri, otomatik):
     hdr = login_ok(veri)
     veri.put("/api/v1/skor/istirak/5/final-dahil", json={"dahil": True}, headers=hdr)
     a = veri.get("/api/v1/skor/agac").json()["data"]
@@ -265,7 +271,7 @@ def test_dagilim_ve_ozet_formulleri():
     assert next(s for s in d["satirlar"] if s["id"] == 1)["istirakli_musteri"] == 1
 
 
-def test_x_kurali_ve_tam_tablo_ile_toplu_atama(veri):
+def test_x_kurali_ve_tam_tablo_ile_toplu_atama(veri, otomatik):
     """Urun-Tutar + panel + X sabit puan: varsayilan 7 kriterde musteri TAMAM olur ve toplu atama yazar."""
     hdr = login_ok(veri)
     assert veri.put("/api/v1/skor/urun-tutar/1", content=_excel(), headers=hdr).status_code == 200

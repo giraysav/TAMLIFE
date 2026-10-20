@@ -209,9 +209,25 @@ def kural_puani(kriter, deger):
     return 0, deger
 
 
-def kriter_degerlendir(kriter, metrikler, manuel=None):
+MANUEL_KAYNAK = 'Manuel seçim (kriter dökümü)'
+
+
+def secenekler(kriter):
+    """Manuel secim listesi: [{puan, etiket}] - barem hucresindeki kural metni (bossa varsayilan kural) etiket olur; 0 = hicbir barem."""
+    varsayilan = VARSAYILAN_KURALLAR.get(tur_coz(kriter), {})
+    liste = [{'puan': 0, 'etiket': ''}]
+    for alan, puan in BAREM_ALANLARI:
+        metin = str((kriter or {}).get(alan) or '').strip()
+        liste.append({'puan': puan, 'etiket': metin if metin and normal(metin) != 'x' else varsayilan.get(alan, '')})
+    return liste
+
+
+def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
     """Tek kriter -> {baslik, tur, agirlik, puan, katki, durum, kaynak, deger, varsayilan_kural}.
-    durum: 'otomatik' | 'manuel' (yalniz Servis Cesitliligi sayfa secimi) | 'eksik'."""
+    durum: 'otomatik' | 'manuel' (yalniz Servis Cesitliligi sayfa secimi) | 'eksik'.
+    otomatik=False (2026-10-20 kullanici: "db kaynaklarindan otomatik puanlama simdilik manuel"): veri kaynagi okunmaz; her kriterin
+    puani Toplu atama > Kriter dokumunde yapilan secimdir (manuel: {normal(baslik): puan}), secilmemis kriter 'eksik'. X sabit puani
+    veri degil tablo kuralidir, gecerli kalir. Sonuca 'secenekler' eklenir (dokumdeki secim listesi)."""
     tur = tur_coz(kriter)
     baslik = str(kriter.get('title') or '').strip()
     try:
@@ -224,6 +240,13 @@ def kriter_degerlendir(kriter, metrikler, manuel=None):
     if sabit is not None:       # X isareti: veri gerekmez, her musteri ayni puani alir
         sonuc.update(puan=sabit, durum='otomatik', kaynak='Sabit puan (X işareti)', deger='X')
         sonuc['katki'] = round(agirlik * (sabit / 100), 4)
+        return sonuc
+    if not otomatik:
+        sonuc['secenekler'] = secenekler(kriter)
+        secim = (manuel or {}).get(normal(baslik))
+        if secim is not None and int(secim) in (0,) + PUANLAR:
+            sonuc.update(puan=int(secim), durum='manuel', kaynak=MANUEL_KAYNAK)
+        sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
         return sonuc
     anahtar = SAYISAL.get(tur) or KATEGORIK.get(tur)
     metrik = (metrikler or {}).get(anahtar) if anahtar else None
@@ -241,9 +264,9 @@ def kriter_degerlendir(kriter, metrikler, manuel=None):
     return sonuc
 
 
-def musteri_skoru(kriterler, metrikler, manuel=None):
+def musteri_skoru(kriterler, metrikler, manuel=None, otomatik=True):
     """Tum kriterler -> {'skor', 'kriterler', 'eksik', 'tamam'} (sayfayla ayni normalizasyon)."""
-    satirlar = [kriter_degerlendir(k, metrikler, manuel) for k in (kriterler or [])]
+    satirlar = [kriter_degerlendir(k, metrikler, manuel, otomatik) for k in (kriterler or [])]
     agirlik = sum(s['agirlik'] for s in satirlar)
     toplam = sum(s['katki'] for s in satirlar)
     skor = min(100.0, toplam / agirlik * 100) if agirlik > 0 else 0.0

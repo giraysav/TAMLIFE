@@ -385,6 +385,8 @@ export type KriterSonucu = {
   kaynak: string | null
   deger: unknown
   varsayilan_kural: boolean
+  /** Manuel puanlamada (2026-10-20) dokumdeki secim listesi: barem puani + kural metni. X sabit puanli satirda yok. */
+  secenekler?: { puan: number; etiket: string }[]
 }
 export type SonAtama = { kaynak: string; atayan: string; zaman: string | null } | null
 export type SkorMusterisi = {
@@ -402,6 +404,8 @@ export type SkorMusterisi = {
 }
 export type KaynakDurumu = { ad: string; metrikler: string[]; hazir: boolean; neden: string }
 export type SkorOnizleme = {
+  /** true: veri kaynakli otomatik puanlama kapali, kriterler dokumde elle secilir. */
+  manuel?: boolean
   kaynaklar: KaynakDurumu[]
   uyarilar: string[]
   kriterler: { baslik: string; tur: string; agirlik: number }[]
