@@ -34,7 +34,7 @@ from app.skor import kaynak_secimi, urun_tutar
 from app.tampon import oracle
 
 # musteri.servis.SEGMENTLER ile ayni (paket yonu: skor musteriyi import etmez; esitlik testte kilitli).
-SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE")
+SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE", "CONNCAR")
 
 
 class KaynakHazirDegil(RuntimeError):

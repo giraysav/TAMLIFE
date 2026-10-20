@@ -34,11 +34,11 @@ from app.models import (
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
 
-SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE")  # tum segmentler (ham yukleme, skor); ekranda alana gore: alan_segmentleri
+SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE", "CONNCAR")  # tum segmentler (ham yukleme, skor); ekranda alana gore: alan_segmentleri
 
 
 def alan_segmentleri(alan: str | None = None) -> tuple[str, ...]:
-    """2026-10-20 kullanici: "Toptan'da yalniz WHOLESALE, Musteri Yonetimi'nde WHOLESALE yok". Kart acma / duzenleme bu listeyle
+    """2026-10-20 kullanici: "Toptan'da yalniz WHOLESALE, Musteri Yonetimi'nde WHOLESALE yok"; ayni gun "Baglantili Araclar'da yalniz CONNCAR". Kart acma / duzenleme bu listeyle
     dogrulanir; ham musteri yuklemesindeki WHOLESALE satir yine Toptan'a gider (musteri_alani._segment_alani)."""
     alan = alan or musteri_alani.secili()
     toptan = tuple(s for s, a in musteri_alani.SEGMENT_ALANI.items() if a == alan)

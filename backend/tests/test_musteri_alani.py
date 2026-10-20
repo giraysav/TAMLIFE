@@ -127,3 +127,19 @@ def test_temip_eslesmesi_toptandaki_karti_bulur(veri):  # noqa: F811
         assert temip_kayit.yeniden_bagla(db, temip_kayit.harita(db), etkilenen) == 1 and etkilenen == {1}  # Toptan'daki kart
         db.commit()
         assert db.scalar(select(OnedeskRecord.customer_id).where(OnedeskRecord.external_key == "t1")) == 1
+
+
+def test_baglantili_yalniz_conncar_ve_conncar_karti_baglantiliya_gider(veri):  # noqa: F811
+    """2026-10-20 kullanici: Baglantili Araclar'da segment yalniz CONNCAR; CONNCAR baska modulde secilemez."""
+    hdr = login_ok(veri)
+    BAG = {"X-Musteri-Alani": "baglantili"}
+    assert veri.get("/api/v1/musteri/secenekler", headers=BAG).json()["data"]["segmentler"] == ["CONNCAR"]
+    assert "CONNCAR" not in veri.get("/api/v1/musteri/secenekler").json()["data"]["segmentler"]
+    assert veri.put("/api/v1/musteri/1/kimlik", json={"segment": "CONNCAR"}, headers=hdr).status_code == 400
+    yeni = veri.post("/api/v1/musteri", json={"name": "Arac A.S.", "owner_id": 2}, headers={**hdr, **BAG}).json()["data"]
+    assert yeni["modul"] == "baglantili" and veri.get(f"/api/v1/musteri/{yeni['id']}", headers=BAG).json()["data"]["kimlik"]["segment"] == "CONNCAR"
+    assert veri.put(f"/api/v1/musteri/{yeni['id']}/kimlik", json={"segment": "WHOLESALE"}, headers={**hdr, **BAG}).status_code == 400
+    with Session(engine()) as db:  # ham yukleme gibi model yazimi: CONNCAR cati Baglantili'ya gecer
+        db.get(Customer, 3).segment = "CONNCAR"
+        db.commit()
+    assert _adlar(veri, BAG) == ["Arac A.S.", "Beta Test Ltd"]

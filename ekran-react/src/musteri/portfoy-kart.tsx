@@ -28,6 +28,7 @@ const SEGMENT_RENK: Record<string, string> = {
   MA: "bg-indigo-100 text-indigo-700",
   PA: "bg-violet-100 text-violet-700",
   WHOLESALE: "bg-amber-100 text-amber-800",
+  CONNCAR: "bg-teal-100 text-teal-800",
 }
 
 function SkorCubugu({ skor, etiket, yok }: { skor: number | null; etiket: string; yok: string }) {

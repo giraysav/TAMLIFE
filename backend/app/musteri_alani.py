@@ -22,7 +22,7 @@ TUMU = "*"  # suzgecsiz: TEMIP / Onedesk / Radar eslesmesi kartin hangi modulde 
 # 2026-10-20 kullanici: "segmenti WHOLESALE olan musteri kartlarinin hedef modulu Toptan". Cati kartin segmenti WHOLESALE ise kart
 # (istirakleriyle) toptan alanina gecer, WHOLESALE'den cikarsa Musteri Yonetimi'ne doner; istirak her zaman catisinin alanindadir.
 # Her yazim yolunda (kart acma, duzenleme, ham musteri yuklemesi) flush kancasi uygular (_segment_alani).
-SEGMENT_ALANI = {"WHOLESALE": "toptan"}
+SEGMENT_ALANI = {"WHOLESALE": "toptan", "CONNCAR": "baglantili"}  # 2026-10-20: CONNCAR yalniz Baglantili Araclar'da (ayni kural)
 BASLIK = b"x-musteri-alani"
 _alan: ContextVar[str] = ContextVar("tamlife_musteri_alani", default=VARSAYILAN)
 

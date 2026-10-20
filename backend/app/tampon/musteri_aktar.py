@@ -58,6 +58,7 @@ _SEGMENT_ADLARI = {
     "smallmediumbusiness": "SMB",
     "smallmediumbussiness": "SMB",
     "wholesale": "WHOLESALE",
+    "connectedcar": "CONNCAR",
 }
 
 
