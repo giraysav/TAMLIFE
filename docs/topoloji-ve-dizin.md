@@ -124,9 +124,9 @@ main.tsx → App.tsx ──useOturum()──► durum: yukleniyor | yok | var
                              eski #/admin, #/veri, #/integrations, #/roller → admin için yeni bölümlere yönlenir
                              diğer modüller → shell/modul-sayfasi.tsx (yer tutucu)
 
-components/  kart-ui.tsx (eski kart dili) · sayfa-ui.tsx (SayfaKabi, Sekmeler, Kpi, Panel, Alan) · grafik.tsx (Halka, YatayCubuklar, Sutunlar: SVG) · cekmece.tsx · duzenlenebilir-tablo.tsx
-             ui/ (button, card, badge, input, label, sheet, sidebar, skeleton, ozet-orbit, modul-yayi: 3B eğimli genel bakış yayı)
-lib/         http.ts (taban yol, CSRF başlığı, 401) · oturum.ts (oturum, boşta süre) · api-yaz.ts (gonder/iste/apiYukle) · sorgu.ts (oku/yaz/yukle) · bicim.ts
+components/  sayfa-ui.tsx (SayfaKabi, Sekmeler, Kpi, Panel, Alan) · grafik.tsx (Halka, YatayCubuklar, Sutunlar: SVG) · cekmece.tsx · duzenlenebilir-tablo.tsx
+             ui/ (button, card, input, label, sheet, sidebar, skeleton, ozet-orbit, modul-yayi: 3B eğimli genel bakış yayı)
+lib/         http.ts (taban yol, CSRF başlığı, 401) · oturum.ts (oturum, boşta süre) · sorgu.ts (oku/yaz/yukle) · bicim.ts
              kanca.ts · utils.ts
 ```
 
