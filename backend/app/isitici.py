@@ -1,6 +1,6 @@
 """Onbellek isiticisi (2026-10-20 kullanici: "panelde asiri yavaslik var").
 
-Agir ozetlerin ilk hesabi (Onedesk top10 ~1,5 sn, TEMIP eslesme gruplari ~5 sn, tanitimin depo olcumu ~4 sn) ilk ziyaretciyi bekletiyordu.
+Agir ozetlerin ilk hesabi (Onedesk top10 ~1,5 sn, RCA ~0,7 sn, Radar ~2 sn, TEMIP eslesme gruplari ~5 sn, tanitimin depo olcumu ~4 sn) ilk ziyaretciyi bekletiyordu.
 Panel acilinca ve ARALIK_SN'de bir arka planda cagrilir; her biri kendi onbellegini kullanir (veri degismediyse hesap yapmaz, ucuz).
 Test ortaminda calismaz. Hata isiticiyi durdurmaz (gunluge yazilir).
 """
@@ -17,13 +17,17 @@ _dur = threading.Event()
 
 def tur() -> None:
     from app.db import oturum
-    from app.onedesk.servis import top10
+    from app.onedesk.servis import rca_ozeti, top10
+    from app.radar import servis as radar
     from app.session import Principal
     from app.sunum import tanitim
     from app.tampon import temip_kayit
 
     with oturum() as db:
-        top10(db, Principal("isitici", "TeamMngr", False))
+        isitici = Principal("isitici", "TeamMngr", False)
+        top10(db, isitici)
+        rca_ozeti(db, isitici)
+        radar.adaylar(db)  # Ekip Ozeti radar karosu: 210 bin kartsiz TEMIP kaydi gruplanir (~2 sn)
         temip_kayit._gruplar(db)
         tanitim.depo_olcumu()
         db.rollback()

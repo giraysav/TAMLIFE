@@ -134,24 +134,29 @@ _onbellek: dict[tuple, tuple[float, dict]] = {}
 _onbellek_kilidi = threading.Lock()
 
 
-def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[datetime, datetime] | None = None) -> dict:
-    """Yil boyunca (aralik verilirse o aralikta, ornek ceyrek) en cok alarm/talep/sikayet olusan 10 musteri ve en cok kayit olusan lokasyonlari.
-    toplam: araliktaki tum kayitlarin tur toplamlari."""
-    yil = _yil(yil)
-    bas, son = aralik or _aralik(yil)
+def _onbellekli(db: Session, ad: str, parametre: tuple, hesapla) -> dict:
+    """Agir ozetin sonucu (ad, parametre, son kayit no, TEMIP yazim surumu) icin bellekte; en fazla ONBELLEK_SN."""
     from app.tampon.temip_kayit import surum  # gec import: tampon zinciri yalniz gerekince
 
-    anahtar = (yil, bas, son, db.scalar(select(func.max(OnedeskRecord.id))), surum(db))
+    anahtar = (str(db.get_bind().url), ad, *parametre, db.scalar(select(func.max(OnedeskRecord.id))), surum(db))
     with _onbellek_kilidi:
         kayit = _onbellek.get(anahtar)
     if kayit is not None and time.monotonic() - kayit[0] < ONBELLEK_SN:
         return kayit[1]
-    sonuc = _top10_hesapla(db, yil, bas, son)
+    sonuc = hesapla()
     with _onbellek_kilidi:
         if len(_onbellek) > 64:
             _onbellek.clear()
         _onbellek[anahtar] = (time.monotonic(), sonuc)
     return sonuc
+
+
+def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[datetime, datetime] | None = None) -> dict:
+    """Yil boyunca (aralik verilirse o aralikta, ornek ceyrek) en cok alarm/talep/sikayet olusan 10 musteri ve en cok kayit olusan lokasyonlari.
+    toplam: araliktaki tum kayitlarin tur toplamlari."""
+    yil = _yil(yil)
+    bas, son = aralik or _aralik(yil)
+    return _onbellekli(db, "top10", (yil, bas, son), lambda: _top10_hesapla(db, yil, bas, son))
 
 
 def _top10_hesapla(db: Session, yil: int, bas: datetime, son: datetime) -> dict:
@@ -217,8 +222,13 @@ def _kapananlar(db: Session, user: Principal, yil: int) -> list[dict]:
 
 
 def rca_ozeti(db: Session, user: Principal, yil: int | None = None) -> dict:
-    """Kok neden ortak noktalari: gruplar, anahtar kelimeler, tekrar eden lokasyonlar."""
+    """Kok neden ortak noktalari: gruplar, anahtar kelimeler, tekrar eden lokasyonlar. 2026-10-20 performans: 20 bin kaydin Python'da
+    gruplanmasi ~0,7 sn suruyordu ve Onedesk sayfasi /rca + /oneriler ile iki kez cagiriyordu; sonuc top10 gibi onbellekte."""
     yil = _yil(yil)
+    return _onbellekli(db, "rca", (yil,), lambda: _rca_hesapla(db, user, yil))
+
+
+def _rca_hesapla(db: Session, user: Principal, yil: int) -> dict:
     kayitlar = _kapananlar(db, user, yil)
     return {
         "yil": yil,
