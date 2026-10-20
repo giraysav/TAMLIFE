@@ -16,6 +16,8 @@ import { sorguAyarla } from "@/shell/rota"
 type Sayilar = { envanter: number; alarm: number; sikayet: number; talep: number; alarm_kapanan: number; sikayet_kapanan: number; talep_kapanan: number }
 type Matris = { basliklar: string[]; satirlar: string[][] }
 export type Kart = {
+  /** Kartin modulunde secilebilir segmentler (Toptan: yalniz WHOLESALE; digerleri WHOLESALE'siz). */
+  segmentler?: string[]
   kimlik: {
     id: number
     unvan: string
@@ -39,7 +41,6 @@ export type Kart = {
   cati_secenekleri?: { id: number; ad: string }[]
 }
 
-const SEGMENTLER = ["SMB", "SA", "MA", "PA", "WHOLESALE"]
 const ILETISIM_GRUPLARI = [
   { baslik: "satisEkibi", alanlar: [["sales_manager", "satis", 100], ["presales_manager", "presales", 100]] },
   { baslik: "tac", alanlar: [["tac_name", "adSoyad", 100], ["tac_gsm", "gsm", 50], ["tac_email", "eposta", 100]] },
@@ -400,7 +401,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                     <Alan etiket={t.segment} sinif="min-w-0">
                       <select id="k-segment" value={kim.segment ?? ""} onChange={(ev) => setKim({ ...kim, segment: ev.target.value })} className={GIRDI}>
                         <option value="">{t.seciniz}</option>
-                        {[...new Set([...SEGMENTLER, kim.segment ?? ""])]
+                        {[...new Set([...(kart.segmentler ?? []), kim.segment ?? ""])]
                           .filter(Boolean)
                           .map((s) => (
                             <option key={s} value={s}>

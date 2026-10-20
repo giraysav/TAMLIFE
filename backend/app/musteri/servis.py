@@ -34,7 +34,15 @@ from app.models import (
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
 
-SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE")
+SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE")  # tum segmentler (ham yukleme, skor); ekranda alana gore: alan_segmentleri
+
+
+def alan_segmentleri(alan: str | None = None) -> tuple[str, ...]:
+    """2026-10-20 kullanici: "Toptan'da yalniz WHOLESALE, Musteri Yonetimi'nde WHOLESALE yok". Kart acma / duzenleme bu listeyle
+    dogrulanir; ham musteri yuklemesindeki WHOLESALE satir yine Toptan'a gider (musteri_alani._segment_alani)."""
+    alan = alan or musteri_alani.secili()
+    toptan = tuple(s for s, a in musteri_alani.SEGMENT_ALANI.items() if a == alan)
+    return toptan or tuple(s for s in SEGMENTLER if s not in musteri_alani.SEGMENT_ALANI)
 VARSAYILAN_TUTAR = "0,00 ₺"
 MATRIS_ANAHTARLARI = ("destech", "ci", "raci")
 RAPOR_ADEDI = 6
@@ -192,7 +200,7 @@ def secenekler(db: Session, user: Principal) -> dict:
         kendi = uid and musteri_alani.secili() == musteri_alani.VARSAYILAN
         catilar = catilar.where(Customer.owner_id == uid) if kendi else catilar.where(Customer.id == -1)
     return {
-        "segmentler": list(SEGMENTLER),
+        "segmentler": list(alan_segmentleri()),
         "yonetici": yonetici,
         "ekleyebilir": yonetici or musteri_alani.secili() == musteri_alani.VARSAYILAN,
         "kendi_id": uid,
@@ -409,6 +417,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
     # 2026-10-20 kullanici karari: herkes gorur; yazma kullaniciya atanmis kartta (duzenleyebilir_mi), yonetimli modulde sahibinde
     yazma = duzenleyebilir_mi(db, user, musteri)
     yonetici = alan_yoneticisi_mi(db, user, musteri.modul)
+    kart["segmentler"] = list(alan_segmentleri(musteri.modul))  # kart duzenleme secenekleri (alana gore)
     kart["erisim"] = {
         "rapor": rapor_izni,
         "gelir": sms_izni or apn_izni,
@@ -485,12 +494,13 @@ def segment_oku(govde: dict, mevcut: str | None = None) -> str | None:
     deger = (_metin(govde, "segment", "Segment", 100) or "").strip()
     if not deger:
         return None
-    for s in SEGMENTLER:
+    gecerli = alan_segmentleri()
+    for s in gecerli:
         if deger.upper() == s:
             return s
     if mevcut and deger == str(mevcut).strip():
         return mevcut  # eski deger yalniz musterinin mevcut degeriyse korunur
-    raise MusteriHata(400, "Segment şunlardan biri olmalı: " + ", ".join(SEGMENTLER) + ".")
+    raise MusteriHata(400, "Segment bu modülde şunlardan biri olmalı: " + ", ".join(gecerli) + ".")
 
 
 # --- yazma ---------------------------------------------------------------------------------------
@@ -637,6 +647,8 @@ def musteri_ekle(db: Session, user: Principal, govde: dict) -> dict:
         raise MusteriHata(404, "Üst müşteri bulunamadı.")
     if segment is None and ust is not None and ust.segment in SEGMENTLER:
         segment = ust.segment  # istirak segment gondermezse catinin segmentini alir
+    if segment is None and len(alan_segmentleri()) == 1:
+        segment = alan_segmentleri()[0]  # Toptan: segment hep WHOLESALE
     ben = kullanici_kaydi(db, user)  # yazan kisinin app_user satiri yoksa olusturulur (yerel/dev oturumu)
     uid = ben.id
     if not alan_yoneticisi_mi(db, user):

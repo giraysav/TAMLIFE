@@ -119,7 +119,7 @@ export function MusteriListesi({ dil, yazabilir }: { dil: Dil; yazabilir: boolea
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t.segment}>
-          {["", ...(secenek.data?.segmentler ?? ["SMB", "SA", "MA", "PA", "WHOLESALE"])].map((s) => (
+          {["", ...(secenek.data?.segmentler ?? [])].map((s) => (
             <button
               key={s || "tumu"}
               type="button"

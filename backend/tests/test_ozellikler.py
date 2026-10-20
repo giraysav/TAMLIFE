@@ -614,7 +614,7 @@ def test_portfoy_cati_kartlari_istirak_ve_filtreler(veri, monkeypatch):
     assert veri.get("/api/v1/musteri/portfoy", params={"segment": "SMB"}).json()["data"]["items"][0]["name"] == "Beta Test Ltd"
     assert veri.get("/api/v1/musteri/portfoy", params={"q": "%"}).json()["data"]["total"] == 0
     sec = veri.get("/api/v1/musteri/secenekler").json()["data"]
-    assert sec["yonetici"] is True and sec["segmentler"] == ["SMB", "SA", "MA", "PA", "WHOLESALE"]
+    assert sec["yonetici"] is True and sec["segmentler"] == ["SMB", "SA", "MA", "PA"]  # WHOLESALE yalniz Toptan'da
     assert {t["ad"] for t in sec["tam"]} == {"Ayse Test"} and {c["ad"] for c in sec["catilar"]} == {"Alfa Test A.S.", "Beta Test Ltd"}
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")  # 'admin' kullanicisi member olarak: 2026-10-20 herkes tum kartlari gorur
