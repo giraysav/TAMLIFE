@@ -57,7 +57,7 @@ ARALIK_SURESI_MS = 1_800_000  # ay dilimi sorgusu (bolum budamali tam tarama) en
 # Yoklamada gorulmese de arama metnini tasiyabilen CI sutunlari (2026-10-18 taramasi): aralik taramasinda hep aranir
 BILINEN_CI_SUTUNLARI = ("MANAGEDOBJECT", "NODE", "NODE1", "ADDITIONALTEXT", "REMOTE_CI", "USERTEXT", "TARGETENTITIES", "CINAME")
 HAM_DIZIN = Path(__file__).resolve().parents[2] / "var" / "ham"
-HAM_SAKLANAN = 2  # ham satir dosyasi yalniz son N katalog icin tutulur (buyuk)
+HAM_SAKLANAN = 1  # ham satir dosyasi yalniz son hazir katalog icin tutulur (tarama basina ~5 GB; 2026-10-20 kullanici onayi)
 HAM_DEGER_UZUNLUK = 1000
 DEGER_SAYACI_SINIRI = 200_000
 # Sik suzulen / siralanan sutunlar: ham dosyada indekslenir (aday CI sutunlarina ek)
