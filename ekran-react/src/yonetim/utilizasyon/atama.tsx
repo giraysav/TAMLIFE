@@ -10,9 +10,20 @@ import { adaGoreSirala, zaman } from "@/lib/bicim"
 import { AGAC_YOLU, KaynakListesi, KriterDokumu, TamamRozeti, skorYaz } from "@/yonetim/utilizasyon/ortak"
 import { uym } from "@/yonetim/utilizasyon/metin"
 
-/** Kayitli manuel secimler (dokumden): baslik -> puan. */
-function kayitliSecim(kriterler: KriterSonucu[]): Record<string, number> {
-  return Object.fromEntries(kriterler.filter((k) => k.secenekler && k.durum === "manuel").map((k) => [k.baslik, k.puan]))
+/** Kayitli manuel secimler (dokumden): baslik -> puan; Servis Cesitliligi: alinan servis adlari. */
+function kayitliSecim(kriterler: KriterSonucu[]): Record<string, number | string[]> {
+  const sonuc: Record<string, number | string[]> = {}
+  for (const k of kriterler) {
+    if (k.durum !== "manuel") continue
+    if (k.servisler && Array.isArray(k.deger)) sonuc[k.baslik] = k.deger.map(String)
+    else if (k.secenekler) sonuc[k.baslik] = k.puan
+  }
+  return sonuc
+}
+
+/** Dokumdeki servis puanlari: ad -> puan (kriter tablosundaki degerler). */
+function servisPuanlari(kriterler: KriterSonucu[]): Record<string, number> {
+  return Object.fromEntries(kriterler.flatMap((k) => k.servisler ?? []).map((s) => [s.ad, s.puan]))
 }
 
 /** Toplu atama (uretim skor_toplu onizleme / uygula): sunucu yeniden hesaplar, onizleme yazmaz; uygula yalniz TAMAM olanlara yazar.
@@ -24,7 +35,8 @@ export function TopluAtama({ dil }: { dil: Dil }) {
   const [tamId, setTamId] = useState("")
   const [secili, setSecili] = useState<Set<number>>(new Set())
   const [dokum, setDokum] = useState<number | null>(null)
-  const [secim, setSecim] = useState<Record<string, number>>({})
+  const [secim, setSecim] = useState<Record<string, number | string[]>>({})
+  const [servisPuan, setServisPuan] = useState<Record<string, number>>({})
   const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
   const agac = useQuery({ queryKey: ANAHTAR.skorAgac, queryFn: () => oku<SkorAgaci>(AGAC_YOLU) })
   const on = useQuery({
@@ -42,10 +54,15 @@ export function TopluAtama({ dil }: { dil: Dil }) {
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
   })
   const manuelKaydet = useMutation({
-    mutationFn: (g: { id: number; secimler: Record<string, number> }) =>
-      yaz<{ id: number; ad: string; eski: number | null; yeni: number }>("PUT", `/api/v1/skor/toplu/manuel/${g.id}`, { secimler: g.secimler }),
+    mutationFn: (g: { id: number; secimler: Record<string, number | string[]>; servis_puanlari?: Record<string, number> }) =>
+      yaz<{ id: number; ad: string; eski: number | null; yeni: number; kriter_surumu: number | null }>("PUT", `/api/v1/skor/toplu/manuel/${g.id}`, {
+        secimler: g.secimler,
+        servis_puanlari: g.servis_puanlari,
+      }),
     onSuccess: (s) => {
-      setBilgi({ ton: "yesil", metin: u.manuelKaydedildi(s.ad, skorYaz(s.yeni)) })
+      const metin = u.manuelKaydedildi(s.ad, skorYaz(s.yeni))
+      setBilgi({ ton: "yesil", metin: s.kriter_surumu ? `${metin} ${u.servisPuanGuncellendi(s.kriter_surumu)}` : metin })
+      if (s.kriter_surumu) void qc.invalidateQueries({ queryKey: ["skor", "kriterler"] })
       for (const anahtar of [["skor", "onizleme"], ANAHTAR.skorAgac, ANAHTAR.skorSiralama, ANAHTAR.skorTalepler]) void qc.invalidateQueries({ queryKey: anahtar })
     },
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
@@ -56,7 +73,9 @@ export function TopluAtama({ dil }: { dil: Dil }) {
   const tamamlar = (veri?.musteriler ?? []).filter((m) => m.tamam).map((m) => m.id)
   const acik = veri?.musteriler.find((m) => m.id === dokum) ?? null
   const manuel = veri?.manuel === true
-  const secimsiz = acik ? acik.kriterler.filter((k) => k.secenekler && secim[k.baslik] === undefined).length : 0
+  const secimsiz = acik ? acik.kriterler.filter((k) => (k.secenekler || k.servisler) && secim[k.baslik] === undefined).length : 0
+  const ilkPuanlar = acik ? servisPuanlari(acik.kriterler) : {}
+  const puanDegisti = Object.keys(ilkPuanlar).some((ad) => servisPuan[ad] !== undefined && servisPuan[ad] !== ilkPuanlar[ad])
   const sec = (id: number, evet: boolean) =>
     setSecili((once) => {
       const yeni = new Set(once)
@@ -152,6 +171,7 @@ export function TopluAtama({ dil }: { dil: Dil }) {
                       onClick={() => {
                         setDokum(dokum === m.id ? null : m.id)
                         setSecim(kayitliSecim(m.kriterler))
+                        setServisPuan(servisPuanlari(m.kriterler))
                       }}
                     >
                       {m.ad}
@@ -191,7 +211,17 @@ export function TopluAtama({ dil }: { dil: Dil }) {
             <KriterDokumu
               kriterler={acik.kriterler}
               t={t}
-              duzenle={manuel ? { secim, onSecim: (baslik, puan) => setSecim((once) => ({ ...once, [baslik]: puan })), kilitli: manuelKaydet.isPending } : undefined}
+              duzenle={
+                manuel
+                  ? {
+                      secim,
+                      onSecim: (baslik, deger) => setSecim((once) => ({ ...once, [baslik]: deger })),
+                      servisPuan,
+                      onServisPuan: (ad, puan) => setServisPuan((once) => ({ ...once, [ad]: puan })),
+                      kilitli: manuelKaydet.isPending,
+                    }
+                  : undefined
+              }
             />
             {manuel ? (
               <div className="flex flex-wrap items-center justify-end gap-3">
@@ -200,7 +230,7 @@ export function TopluAtama({ dil }: { dil: Dil }) {
                   type="button"
                   className={DUGME_ANA}
                   disabled={secimsiz > 0 || manuelKaydet.isPending}
-                  onClick={() => manuelKaydet.mutate({ id: acik.id, secimler: secim })}
+                  onClick={() => manuelKaydet.mutate({ id: acik.id, secimler: secim, servis_puanlari: puanDegisti ? servisPuan : undefined })}
                 >
                   <Check aria-hidden className="size-3.5" />
                   {u.manuelKaydet}

@@ -387,6 +387,8 @@ export type KriterSonucu = {
   varsayilan_kural: boolean
   /** Manuel puanlamada (2026-10-20) dokumdeki secim listesi: barem puani + kural metni. X sabit puanli satirda yok. */
   secenekler?: { puan: number; etiket: string }[]
+  /** Manuel Servis Cesitliligi: alt kriter servisleri ve puanlari (kriter puani = alinan / toplam). */
+  servisler?: { ad: string; puan: number }[]
 }
 export type SonAtama = { kaynak: string; atayan: string; zaman: string | null } | null
 export type SkorMusterisi = {

@@ -225,5 +225,40 @@ describe("TAM Utilizasyon", () => {
     expect(put?.yol).toContain("/api/v1/skor/toplu/manuel/1")
     expect(put?.govde).toEqual({ secimler: { "5. Segment": 70 } })
   })
+
+  it("servis cesitliligi: satir acilir, alinan servisler isaretlenir, puan agirliga orantili; servis puani duzenlenip gonderilir", async () => {
+    const u = uym("tr").util
+    const onizleme: SkorOnizleme = {
+      manuel: true,
+      kaynaklar: [],
+      uyarilar: [],
+      kriterler: [],
+      musteriler: [
+        {
+          id: 1, ad: "ORNEK A", tam: "ORNEK TAM", tam_id: 2, mevcut: null, yeni: 0, fark: null, tamam: false, eksik: ["2. Servis Çeşitliliği"], son_atama: null,
+          kriterler: [{ baslik: "2. Servis Çeşitliliği", tur: "servis_cesitliligi", agirlik: 20, puan: 0, katki: 0, durum: "eksik", kaynak: null, deger: null, varsayilan_kural: false, servisler: [{ ad: "Cloud", puan: 10 }, { ad: "Data", puan: 30 }] }],
+        },
+      ],
+      ozet: { toplam: 1, hazir: 0 },
+    } // fmt: skip
+    const cagrilar = sahteSunucu({
+      "/api/v1/skor/toplu/onizleme": onizleme,
+      "/api/v1/skor/toplu/manuel/1": { id: 1, ad: "ORNEK A", eski: null, yeni: 50, kriter_surumu: 4 },
+      "/api/v1/skor/agac": { tum_personel: [] },
+    })
+    sarmala(<TopluAtama dil="tr" />)
+    fireEvent.click(await screen.findByRole("button", { name: "ORNEK A" }))
+    expect(screen.queryByLabelText(u.servisAlinir("Data"))).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "2. Servis Çeşitliliği" }))
+    expect(screen.getByText(u.servisOzet("0", "40", "0"))).toBeInTheDocument() // acmak = secim basladi (hic servis yok)
+    fireEvent.click(screen.getByLabelText(u.servisAlinir("Data")))
+    expect(screen.getByText(u.servisOzet("30", "40", "75"))).toBeInTheDocument()
+    expect(screen.getByText("15")).toBeInTheDocument() // katki: 20 x %75
+    fireEvent.change(screen.getByLabelText(u.servisPuanEtiket("Cloud")), { target: { value: "30" } })
+    expect(screen.getByText(u.servisOzet("30", "60", "50"))).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: u.manuelKaydet }))
+    expect(await screen.findByText(`${u.manuelKaydedildi("ORNEK A", "%50.0")} ${u.servisPuanGuncellendi(4)}`)).toBeInTheDocument()
+    expect(cagrilar.find((c) => c.yontem === "PUT")?.govde).toEqual({ secimler: { "2. Servis Çeşitliliği": ["Data"] }, servis_puanlari: { Cloud: 30, Data: 30 } })
+  })
 })
 

@@ -179,6 +179,33 @@ def servis_puani(kriter, servisler):
     return toplam
 
 
+def servis_listesi(kriter):
+    """Satirin puanlanan servisleri [{ad, puan}] (servis_puanlari ya da varsayilan; 'servis_dahil' varsa yalniz onlar)."""
+    tablo = kriter.get('servis_puanlari') if isinstance(kriter.get('servis_puanlari'), dict) else SERVIS_PUANLARI
+    dahil = kriter.get('servis_dahil')
+    dahil = {normal(x) for x in dahil} if isinstance(dahil, list) else None
+    liste = []
+    for ad, puan in tablo.items():
+        if dahil is not None and normal(ad) not in dahil:
+            continue
+        try:
+            liste.append({'ad': ad, 'puan': float(puan)})
+        except (TypeError, ValueError):
+            continue
+    return liste
+
+
+def servis_orani(kriter, secilen):
+    """Manuel Servis Cesitliligi (2026-10-20 kullanici): kriter puani = alinan servislerin puani / listedeki tum servislerin puani
+    x 100 (barem yok); kriterin agirligi (orn. %20) servislere puanlariyla orantili dagilir. Donus: (puan 0-100, alinan adlar)."""
+    liste = servis_listesi(kriter)
+    secili = {normal(x) for x in secilen}
+    alinan = [s for s in liste if normal(s['ad']) in secili]
+    toplam = sum(s['puan'] for s in liste)
+    puan = round(sum(s['puan'] for s in alinan) / toplam * 100, 2) if toplam > 0 else 0.0
+    return puan, [s['ad'] for s in alinan]
+
+
 def sabit_puan(kriter):
     """Sozlesme / Raporlama satirinda tam bir barem hucresinde 'X' varsa o hucrenin puani (30/50/70/100), yoksa None.
     Birden fazla X belirsizdir (arayuz buna izin vermez): kural gecerli sayilmaz, satir normal kuralla hesaplanir."""
@@ -243,9 +270,20 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
         sonuc.update(puan=sabit, durum='otomatik', kaynak='Sabit puan (X işareti)', deger='X')
         sonuc['katki'] = round(agirlik * (sabit / 100), 4)
         return sonuc
+    if not otomatik and tur == 'servis_cesitliligi':
+        # Alt kriter: dokumde alinan servisler isaretlenir (bos liste = hic servis yok, 0 puan); secim yoksa 'eksik'.
+        sonuc['servisler'] = servis_listesi(kriter)
+        secim = (manuel or {}).get(normal(baslik))
+        if isinstance(secim, (list, tuple)):
+            puan, adlar = servis_orani(kriter, secim)
+            sonuc.update(puan=puan, durum='manuel', kaynak=MANUEL_KAYNAK, deger=adlar)
+        sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
+        return sonuc
     if not otomatik:
         sonuc['secenekler'] = secenekler(kriter)
         secim = (manuel or {}).get(normal(baslik))
+        if isinstance(secim, (list, tuple)):
+            secim = None
         if secim is not None and int(secim) in {s['puan'] for s in sonuc['secenekler']}:
             sonuc.update(puan=int(secim), durum='manuel', kaynak=MANUEL_KAYNAK)
         sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
@@ -260,7 +298,7 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
         # Servis Cesitliligi: Urun-Tutar gelene kadar servisler sayfada secilir; musteriye
         # sayfadan son atanan puan yedektir. Diger kriterlerde veri yoksa 'eksik'.
         secim = (manuel or {}).get(normal(baslik))
-        if secim is not None and int(secim) in (0,) + PUANLAR:
+        if isinstance(secim, (int, float)) and int(secim) in (0,) + PUANLAR:
             sonuc.update(puan=int(secim), durum='manuel', kaynak='sayfa (son atama)')
     sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
     return sonuc
@@ -279,10 +317,14 @@ def musteri_skoru(kriterler, metrikler, manuel=None, otomatik=True):
 
 def manuel_secimler(detay):
     """Kaydedilmis skor dokumu -> {normal(baslik): puan}. Tum satirlar: otomatik kriterde
-    kaynak hazirsa metrik oncelikli, degilse bu secim yedek olarak kullanilir."""
+    kaynak hazirsa metrik oncelikli, degilse bu secim yedek olarak kullanilir. Manuel Servis Cesitliligi satirinda deger
+    alinan servis listesidir ({baslik: [servis, ...]})."""
     sonuc = {}
     for satir in (detay or []):
         if not isinstance(satir, dict):
+            continue
+        if satir.get('tur') == 'servis_cesitliligi' and satir.get('kaynak') == MANUEL_KAYNAK and isinstance(satir.get('deger'), list):
+            sonuc[normal(satir.get('baslik'))] = [str(x) for x in satir['deger']]
             continue
         try:
             sonuc[normal(satir.get('baslik'))] = int(float(satir.get('puan') or 0))
