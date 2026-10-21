@@ -4,7 +4,7 @@ Canli DB'nin (backend\\var\\dev.db) tutarli kopyasi SQLite backup API ile alinir
 yuzunden tutarsiz kopya verir); ornek ayri portta, ayri gunluk/yedek klasoruyle, AD ve Oracle kapali, gercek .env OKUNMADAN
 (TAMLIFE_ENV_DOSYASI bos dosyaya isaret eder) acilir. Giris: tek kullanimlik yerel yuk hesabi (admin rolu, yalniz bu ornekte).
 
-  cd E:\\TAMLIFE_Dev\\TAMLIFE_v3.5\\backend
+  cd E:\\TAMLIFE\\TAMLIFE_v3.5\\backend
   ..\\.venv\\Scripts\\python.exe -m araclar.yuk.ornek --kaynak var\\dev.db --port 8199     (Ctrl+C ile kapanir, kopya silinir)
   ..\\.venv\\Scripts\\python.exe -m araclar.yuk.ornek --bos --port 8199                    (bos sema: alembic upgrade head)
 """

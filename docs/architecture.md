@@ -2,7 +2,7 @@
 
 TAMLIFE, Turkcell TAM ekipleri için iç kullanım paneldir. v3.5, eski Flask panelinin (`E:\TAMLIFE`, silindi; arşiv: `TAMLIFE.zip`) FastAPI + React ile yeniden yazımıdır ve 2026-10-12'den beri `https://tamlife/` adresinde canlıdır (≤20 eşzamanlı kullanıcı). Bu belge kodun bugünkü halini anlatır; ayrıntılı tasarım notları `docs/` altındaki diğer dosyalardadır.
 
-## 1. Çalışma düzeni (sunucu LADIN01, `E:\TAMLIFE_Dev\TAMLIFE_v3.5`)
+## 1. Çalışma düzeni (sunucu LADIN01, `E:\TAMLIFE\TAMLIFE_v3.5`)
 
 ```
 Tarayıcı ──HTTPS 443──► Windows http.sys (TLS'i sonlandırır; özel anahtar kilitli olduğu için sertifika mağazada kalır)

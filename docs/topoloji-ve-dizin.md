@@ -12,7 +12,7 @@ Durum işaretleri: **[canlı]** çalışan ve testli · **[iskelet]** tablo/kata
 ## 1. Çalışma topolojisi (yalnız lokal)
 
 ```
-                         E:\TAMLIFE_Dev   (tek makine, tek kullanıcı: TURKCELL\tamlifeadlog)
+                         E:\TAMLIFE       (tek makine, tek kullanıcı: TURKCELL\tamlifeadlog)
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                             │
 │  Tarayıcı ──┬── http://127.0.0.1:5173 ── Vite dev sunucusu ──┐ /api/* vekil                 │
@@ -135,7 +135,7 @@ Gerçek arayüz kodu `src/shell` (13 dosya), `src/musteri`, `src/yonetim`, `src/
 ## 5. Dizin yapısı
 
 ```
-E:\TAMLIFE_Dev\   (lokal geliştirme: D:\TAMLIFE_Dev)
+E:\TAMLIFE\       (lokal geliştirme: D:\TAMLIFE_Dev)
 ├─ wheels\                         offline kurulum paketleri (cp312 win_amd64; requirements + pytest/httpx/ruff)
 └─ TAMLIFE_v3.5\                   ◄── bu depo (git: main, uzak yok)
    ├─ CLAUDE.md · .gitignore · requirements.txt (yalnız çalışma zamanı)

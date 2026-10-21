@@ -12,6 +12,8 @@ $checkScript = Join-Path $PSScriptRoot 'kimlik_kontrol.ps1'
 $checkTask = 'TAMLIFE_IdentityCheck'
 $mainTasks = @('TAMLIFE_v35_Panel', 'TAMLIFE_v35_TLS_Vekil')
 $taskNames = @('TAMLIFE_v35_Panel', 'TAMLIFE_v35_TLS_Vekil', 'TAM_Life_v35_ReportDB_6dk')
+# Gorev surecleri betik yolundan taninir; yol klasorun bulundugu yerden uretilir (2026-10-21 E:\TAMLIFE_Dev -> E:\TAMLIFE).
+$gorevBetigi = '(?i)-File\s+"?' + [regex]::Escape($root) + '\\kurulum\\(?:canli_gorev_kur|canli_baslat|tls_vekili)\.ps1(?:["\s]|$)'
 
 function Durum-Yaz($message) {
     $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $message
@@ -79,7 +81,7 @@ try {
 
     $stage = 'restart'
     $oldProcesses = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object {
-        $_.CommandLine -match '(?i)-File\s+"?E:\\TAMLIFE_Dev\\TAMLIFE_v3\.5\\kurulum\\(?:canli_gorev_kur|canli_baslat|tls_vekili)\.ps1(?:["\s]|$)'
+        $_.CommandLine -match $gorevBetigi
     })
     foreach ($name in $mainTasks) { Stop-ScheduledTask -TaskName $name }
     foreach ($old in $oldProcesses) {
@@ -99,7 +101,7 @@ try {
     $stage = 'verify'
     $processes = @(Get-CimInstance Win32_Process | Where-Object {
         ($_.Name -eq 'python.exe' -and $_.CommandLine -match 'uvicorn app.main:app --host 127.0.0.1 --port 8117') -or
-        ($_.Name -eq 'powershell.exe' -and $_.CommandLine -match '(?i)-File\s+"?E:\\TAMLIFE_Dev\\TAMLIFE_v3\.5\\kurulum\\(?:canli_gorev_kur|canli_baslat|tls_vekili)\.ps1(?:["\s]|$)')
+        ($_.Name -eq 'powershell.exe' -and $_.CommandLine -match $gorevBetigi)
     })
     foreach ($p in $processes) {
         $owner = Invoke-CimMethod -InputObject $p -MethodName GetOwner

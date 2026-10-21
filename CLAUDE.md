@@ -12,7 +12,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 
 ## Ortam, kimlik, canlı
 
-- **Bu depo CANLIDIR:** `E:\TAMLIFE_Dev\TAMLIFE_v3.5` → `https://tamlife/` (≤20 eşzamanlı). Panel DB'si `backend\var\dev.db` (adı yanıltıcı; SQLite WAL). Eski Flask panel (`E:\TAMLIFE`) silindi; tek kopyası `TAMLIFE.zip`, yalnız OKUMA referansı.
+- **Bu depo CANLIDIR:** `E:\TAMLIFE\TAMLIFE_v3.5` → `https://tamlife/` (≤20 eşzamanlı). Panel DB'si `backend\var\dev.db` (adı yanıltıcı; SQLite WAL). Eski Flask panel (o zamanki `E:\TAMLIFE`) silindi; kök klasör 2026-10-21'de `E:\TAMLIFE_Dev` → `E:\TAMLIFE` oldu; tek kopyası `TAMLIFE.zip`, yalnız OKUMA referansı.
 - Windows çalışma kimliği **`TURKCELL\TAMLIFEADLOG`**: panel, TLS vekili, işçi bu kimlikle çalışır. Görevler: `TAMLIFE_v35_Panel` (Password kipi), `TAMLIFE_v35_TLS_Vekil`, `TAM_Life_v35_ReportDB_6dk` (Interactive kipi: S4U bu sunucuda açılmaz, hata 1787; oturum kapanırsa durur; `pythonw.exe` ile koşar, `python.exe` her turda konsol penceresi açıyordu). EPERM'de kimlik atlatma; komutu kullanıcıya ver.
 - **Sır yok:** `.env` değeri, parola, anahtar okumam/yazmam/göstermem. Windows parolasını isteme. `.env` anahtar ADLARI verilebilir, değerleri kullanıcı yazar.
 - **Canlıya alma:** arayüz `cd ekran-react; npm run build` (dist her istekte okunur). Backend değişince 8117'yi dinleyen uvicorn sürecini durdur; görev döngüsü ~15 sn'de `alembic upgrade head` + yeniden başlatır; `GET /api/v1/health` 200'ü bekle. Migration öncesi DB yedeği: SQLite backup API → `backend/var/yedek/` (en yeni 5 tutulur).
