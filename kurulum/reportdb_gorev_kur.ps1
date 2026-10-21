@@ -21,6 +21,9 @@ if ($Kullanici -ine $TamlifeCalismaHesabi) { throw "Gorev hesabi $TamlifeCalisma
 $Kok = Split-Path -Parent $PSScriptRoot
 $Backend = Join-Path $Kok 'backend'
 $Py = Join-Path $Kok '.venv\Scripts\python.exe'
+# Gorev pythonw.exe ile kosar: python.exe oturum acik kullanicida her calismada konsol penceresi aciyordu (2026-10-21).
+# Cikti zaten isci.log'a yazilir; denetim / kuru deneme python.exe ile kalir.
+$Pyw = Join-Path $Kok '.venv\Scripts\pythonw.exe'
 
 function Adim($m) { Write-Host "[*] $m" -ForegroundColor Cyan }
 function Uyari($m) { Write-Host "[!] $m" -ForegroundColor Yellow }
@@ -35,6 +38,7 @@ if ($Kaldir) {
 }
 
 if (-not (Test-Path $Py)) { Dur "Python yok: $Py" }
+if (-not (Test-Path $Pyw)) { Dur "Python (penceresiz) yok: $Pyw" }
 if (-not (Test-Path (Join-Path $Backend 'app\isci.py'))) { Dur "Isci modulu yok: $Backend\app\isci.py" }
 if (-not (Test-Path (Join-Path $Istemci 'oci.dll'))) { Dur "Oracle Instant Client bulunamadi: $Istemci (-Istemci ile verin)" }
 & $Py -c "import oracledb" 2>$null
@@ -60,7 +64,7 @@ if (-not ([Security.Principal.WindowsPrincipal]$kimlik).IsInRole([Security.Princ
 if ($Dakika -lt 2 -or $Dakika -gt 60) { Dur "Dakika 2 ile 60 arasinda olmali" }
 
 $gorevBilgi = Tamlife-GorevKimlikBilgisi
-$eylem = New-ScheduledTaskAction -Execute $Py -Argument ('-m app.isci reportdb --client "{0}"' -f $Istemci) -WorkingDirectory $Backend
+$eylem = New-ScheduledTaskAction -Execute $Pyw -Argument ('-m app.isci reportdb --client "{0}"' -f $Istemci) -WorkingDirectory $Backend
 $tetik = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(3) -RepetitionInterval (New-TimeSpan -Minutes $Dakika)
 $ayar = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 try {
