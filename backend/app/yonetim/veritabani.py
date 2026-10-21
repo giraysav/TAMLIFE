@@ -1,11 +1,14 @@
-"""DB yonetimi: motor/surum/boyut, tablo sayilari, butunluk, yedek (SQLite cevrimici yedek).
+"""DB yonetimi: motor/surum/boyut, tablo sayilari, butunluk, TAM yedek (SQLite cevrimici yedek + dosyalar + SHA-256 manifest).
 
-Geri yukleme bu surumde YOK: yikici bir islemdir (uretimde denetim izi, AD kullanicilari, oturumlar icin ozel kurallari vardi);
-ayri, onayli bir adim olarak tasarlanacak (docs/yonetim-ve-tampon-tasarimi.md, Faz E). Yedek dogrulama (salt okuma) vardir.
+Geri yukleme panelden YAPILMAZ: yikici bir islemdir ve panelin kendisini durdurmayi gerektirir. Ayri, SIFRELI ve onayli bir adim olarak
+yedek klasorundeki ROLLBACK\\GERI_DON.bat ile yapilir (kurulum\\yedek_geri_don.ps1; 2026-10-21). Yedek dogrulama (salt okuma) panelde vardir.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import re
 import shutil
 import sqlite3
@@ -18,11 +21,14 @@ from sqlalchemy.engine import Connection, Engine, make_url
 
 from app import ariza
 from app.config import get_settings
-from app.db import kullanici_dosyalari
+from app.db import kullanici_dizini, kullanici_dosyalari
 from app.models import TABLE_OWNER, Base, KullaniciBase
 from app.ortak import UygulamaHatasi, iso, simdi
 
 YEDEK_AD = re.compile(r"^tamlife_\d{8}_\d{6}\.db$")
+GERI_DON_KLASORU = "ROLLBACK"
+SIFRE_DOSYASI = "sifre.hash"  # PBKDF2 ozeti (parola DEGIL); kurulum\yedek_kur.ps1 koyar, panel yazmaz
+GERI_DON_DOSYALARI = {"yedek_geri_don.ps1": "geri_don.ps1", "yedek_geri_don.bat": "GERI_DON.bat"}  # kurulum\ -> ROLLBACK\
 
 
 def sqlite_yolu(url: str | None = None) -> Path | None:
@@ -120,6 +126,7 @@ def _kopyala(kaynak: Path, hedef: Path) -> str:
     dst = sqlite3.connect(str(hedef))
     try:
         src.backup(dst)
+        dst.execute("PRAGMA journal_mode=DELETE")  # yedek WAL kipini miras alir: -wal/-shm artigi kalir, ilk acista dosya (ve SHA-256) degisir
     finally:
         dst.close()
         src.close()
@@ -134,8 +141,79 @@ def _sqlite_kontrol(yol: Path) -> str:
         baglanti.close()
 
 
+def _rapor_dizini() -> Path:
+    from app.rapor.servis import rapor_klasoru  # tembel: rapor paketi yonetim'in acilisina girmesin
+
+    return rapor_klasoru()
+
+
+def _foto_dizini() -> Path:
+    return kullanici_dizini().parent / "profil_foto"
+
+
+def _sha256(yol: Path) -> str:
+    ozet = hashlib.sha256()
+    with yol.open("rb") as f:
+        for parca in iter(lambda: f.read(1 << 20), b""):
+            ozet.update(parca)
+    return ozet.hexdigest()
+
+
+def _dizin_kopyala(kaynak: Path, hedef: Path) -> None:
+    if kaynak.is_dir():
+        shutil.copytree(kaynak, hedef, dirs_exist_ok=True)
+
+
+def _manifest_yaz(yer: Path, ad: str, kullanici: str, kaynak: Path) -> None:
+    """Yedegin tum dosyalarinin SHA-256'si ve geri donus hedefleri. Geri donus betigi (ROLLBACK) buna bakar: hash tutmayan yedekten donmez."""
+    kok = yer / ad
+    parcalar = [kok.with_suffix(".db"), _kisi_dizini(kok.with_suffix(".db")), _dosya_dizini(kok.with_suffix(".db"))]
+    dosyalar = []
+    for parca in parcalar:
+        for p in [parca] if parca.is_file() else sorted(parca.rglob("*")) if parca.is_dir() else []:
+            if p.is_file():
+                dosyalar.append({"yol": p.relative_to(yer).as_posix(), "bayt": p.stat().st_size, "sha256": _sha256(p)})
+    baglanti = sqlite3.connect(f"{kok.with_suffix('.db').as_uri()}?mode=ro", uri=True)
+    try:
+        alembic = baglanti.execute("SELECT version_num FROM alembic_version").fetchone()
+    except sqlite3.Error:
+        alembic = None
+    finally:
+        baglanti.close()
+    icerik = {
+        "bicim": 1,
+        "ad": ad,
+        "zaman": iso(simdi()),
+        "alan": kullanici,
+        "alembic": alembic[0] if alembic else None,
+        "hedefler": {
+            "db": str(kaynak),
+            "kullanici_dizini": str(kullanici_dizini()),
+            "rapor_dizini": str(_rapor_dizini().resolve()),
+            "foto_dizini": str(_foto_dizini().resolve()),
+        },
+        "dosyalar": dosyalar,
+    }
+    _manifest_yolu(kok.with_suffix(".db")).write_text(json.dumps(icerik, ensure_ascii=True, indent=1), encoding="ascii")
+
+
+def _geri_don_yaz(yer: Path) -> bool:
+    """ROLLBACK klasorune geri donus betiklerini (kurulum\\yedek_geri_don.*) her yedekte tazeler. Sifre ozeti (sifre.hash) buraya
+    YAZILMAZ: kurulumda bir kez konur (kurulum\\yedek_kur.ps1). Yazilamazsa yedek basarisiz sayilmaz."""
+    sablon = Path(__file__).resolve().parents[3] / "kurulum"
+    try:
+        (yer / GERI_DON_KLASORU).mkdir(parents=True, exist_ok=True)
+        for kaynak, hedef in GERI_DON_DOSYALARI.items():
+            shutil.copyfile(sablon / kaynak, yer / GERI_DON_KLASORU / hedef)
+    except OSError:
+        return False
+    return True
+
+
 def yedek_al(kullanici: str) -> dict[str, Any]:
-    """Panel DB'si ve kullanici dosyalari: <ad>.db + <ad>_kullanicilar/ klasoru; butunluk dogrulanir, eskiler budanir."""
+    """TAM yedek (<ad> = tamlife_<tarih>_<saat>): <ad>.db (panel DB) + <ad>_kullanicilar/ (kisi basina SQLite) + <ad>_dosyalar/ (aylik
+    rapor arsivi, profil fotograflari) + <ad>.manifest.json (SHA-256 + geri donus hedefleri). Butunluk dogrulanir, eskiler budanir.
+    Haric: .env/sirlar, ham katalog (var/ham, yeniden taranir), gunlukler. Geri donus panelden DEGIL, ROLLBACK\\geri_don.ps1 ile (sifreli)."""
     kaynak = sqlite_yolu()
     if kaynak is None:
         raise UygulamaHatasi(501, "Yedek yalnız dosya tabanlı SQLite için; PostgreSQL'de pg_dump kullanılır.")
@@ -155,6 +233,9 @@ def yedek_al(kullanici: str) -> dict[str, Any]:
         if sonuc != "ok":
             _yedek_sil(hedef)
             raise UygulamaHatasi(500, "Yedek bütünlük kontrolünden geçemedi; dosya silindi.")
+        _dizin_kopyala(_rapor_dizini(), _dosya_dizini(hedef) / "raporlar")
+        _dizin_kopyala(_foto_dizini(), _dosya_dizini(hedef) / "profil_foto")
+        _manifest_yaz(yer, hedef.stem, kullanici, kaynak)
     except UygulamaHatasi:
         raise
     except (OSError, sqlite3.Error) as hata:
@@ -163,20 +244,55 @@ def yedek_al(kullanici: str) -> dict[str, Any]:
         raise UygulamaHatasi(500, ariza.mesaj("TL-YDK-01", kayit)) from hata
     for eski in yedekler()[get_settings().backup_keep :]:
         _yedek_sil(yer / eski["ad"])
-    return {"ad": ad, "boyut_bayt": hedef.stat().st_size, "butunluk": sonuc, "kullanici_dosyasi": len(kullanici_dosyalari())}
+    return {
+        "ad": ad,
+        "boyut_bayt": hedef.stat().st_size,
+        "butunluk": sonuc,
+        "kullanici_dosyasi": len(kullanici_dosyalari()),
+        "geri_don_betigi": _geri_don_yaz(yer),
+    }
 
 
 def _kisi_dizini(yedek: Path) -> Path:
     return yedek.with_name(f"{yedek.stem}_kullanicilar")
 
 
+def _dosya_dizini(yedek: Path) -> Path:
+    return yedek.with_name(f"{yedek.stem}_dosyalar")
+
+
+def _manifest_yolu(yedek: Path) -> Path:
+    return yedek.with_name(f"{yedek.stem}.manifest.json")
+
+
 def _yedek_sil(yedek: Path) -> None:
     yedek.unlink(missing_ok=True)
+    _manifest_yolu(yedek).unlink(missing_ok=True)
     shutil.rmtree(_kisi_dizini(yedek), ignore_errors=True)
+    shutil.rmtree(_dosya_dizini(yedek), ignore_errors=True)
+
+
+def manifest_sorunlari(yedek: Path) -> list[str] | None:
+    """Manifestteki her dosyanin varligi ve SHA-256'si. Manifest yoksa None (eski bicim yedek); bos liste = sorunsuz."""
+    yol = _manifest_yolu(yedek)
+    if not yol.is_file():
+        return None
+    try:
+        dosyalar = json.loads(yol.read_text(encoding="ascii"))["dosyalar"]
+    except (OSError, ValueError, KeyError):
+        return ["manifest okunamadı"]
+    sorun = []
+    for d in dosyalar:
+        p = yedek.parent / d["yol"]
+        if not p.is_file():
+            sorun.append(f"eksik: {d['yol']}")
+        elif _sha256(p) != d["sha256"]:
+            sorun.append(f"özet uyuşmuyor: {d['yol']}")
+    return sorun
 
 
 def yedek_dogrula(ad: str) -> dict[str, Any]:
-    """Yedek dosyasini salt okuma ile dogrular (geri yuklemez)."""
+    """Yedegi salt okuma ile dogrular (geri yuklemez): SQLite butunlugu + manifestteki tum dosyalarin SHA-256'si."""
     if not YEDEK_AD.match(ad):
         raise UygulamaHatasi(400, "Geçersiz yedek adı.")
     yol = yedek_dizini() / ad
@@ -184,9 +300,26 @@ def yedek_dogrula(ad: str) -> dict[str, Any]:
         raise UygulamaHatasi(404, "Yedek bulunamadı.")
     try:
         sonuc = _sqlite_kontrol(yol)
-    except sqlite3.Error as hata:
+        sorunlar = manifest_sorunlari(yol)
+    except (sqlite3.Error, OSError) as hata:
         return {"ad": ad, "butunluk": f"okunamadı ({type(hata).__name__})", "tamam": False}
-    return {"ad": ad, "butunluk": sonuc, "tamam": sonuc == "ok"}
+    if sorunlar:
+        return {"ad": ad, "butunluk": "; ".join(sorunlar[:3]), "tamam": False}
+    return {"ad": ad, "butunluk": sonuc, "tamam": sonuc == "ok", "manifest": sorunlar is not None}
+
+
+def _ayni_disk(a: Path, b: Path) -> bool:
+    """Iki yol ayni birimde mi (yedek veriyle ayni diskte durmasin uyarisi). Henuz olusmamis klasorde en yakin var olan ust klasore bakilir."""
+
+    def birim(p: Path) -> int:
+        while not p.exists() and p != p.parent:
+            p = p.parent
+        return os.stat(p).st_dev
+
+    try:
+        return birim(a.resolve()) == birim(b.resolve())
+    except OSError:
+        return False
 
 
 def bilgi(motor: Engine) -> dict[str, Any]:
@@ -217,5 +350,11 @@ def bilgi(motor: Engine) -> dict[str, Any]:
             "saklanan": get_settings().backup_keep,
             "adet": len(liste),
             "liste": liste[:20],
+            "ayni_disk": yol is not None and _ayni_disk(yedek_dizini(), yol.parent),
+            "geri_donus": {
+                "klasor": str(yedek_dizini() / GERI_DON_KLASORU),
+                "betik": (yedek_dizini() / GERI_DON_KLASORU / "GERI_DON.bat").is_file(),
+                "sifre": (yedek_dizini() / GERI_DON_KLASORU / SIFRE_DOSYASI).is_file(),
+            },
         },
     }

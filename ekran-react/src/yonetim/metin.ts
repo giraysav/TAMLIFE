@@ -151,8 +151,10 @@ const TR = {
   yedekYok: "Henüz yedek yok.",
   yedekKlasoru: "Yedek klasörü",
   yedekSaklanan: (n: number) => `Son ${n} yedek saklanır.`,
-  yedekAyriDisk: "Veri ile aynı diskte durmasın: TAMLIFE_BACKUP_DIR ile ayrı bir yola yönlendirin.",
-  geriYuklemeNotu: "Yedekten geri yükleme bu sürümde yok: yıkıcı bir işlem olduğu için ayrı, onaylı bir adım olarak tasarlanacak.",
+  yedekAyriDisk: "Yedek klasörü verinin bulunduğu diskte: disk kaybında ikisi birlikte gider. Yedek klasörünü (TAMLIFE_BACKUP_DIR) ayrı bir diske ya da ağ yoluna yönlendirin veya yedekleri oraya da kopyalayın.",
+  yedekIcerik: "Tam yedek: panel veritabanı, kişi dosyaları, aylık rapor arşivi ve profil fotoğrafları (SHA-256 manifestiyle). Hariç: .env sırları, ham katalog, günlükler.",
+  geriDonusNotu: (klasor: string) => `Geri dönüş panelden yapılmaz (yıkıcı bir işlemdir, panelin kendisini durdurur). Yönetici olarak ${klasor}\\GERI_DON.bat çalıştırılır; şifre sorar, yedeği doğrular, adını yazarak onay ister ve mevcut veriyi önce GERI_DONUSU_ONCESI klasörüne kopyalar.`,
+  geriDonusEksik: (klasor: string) => `Geri dönüş betiği veya şifre özeti eksik (${klasor}). Sunucuda kurulum\\yedek_kur.ps1 çalıştırın; sonraki "Yedek al" betiği tazeler.`,
   yedekDesteklenmiyor: "Bu motorda panelden yedek alınamaz (PostgreSQL için pg_dump kullanılır).",
 
   // Arızalar
@@ -444,8 +446,10 @@ const EN: typeof TR = {
   yedekYok: "No backups yet.",
   yedekKlasoru: "Backup folder",
   yedekSaklanan: (n) => `The latest ${n} backups are kept.`,
-  yedekAyriDisk: "Keep it off the data disk: point TAMLIFE_BACKUP_DIR to a separate path.",
-  geriYuklemeNotu: "Restore from backup is not available in this version: it is destructive and will be designed as a separate, confirmed step.",
+  yedekAyriDisk: "The backup folder is on the same disk as the data: one disk failure loses both. Point the backup folder (TAMLIFE_BACKUP_DIR) to a separate disk or network path, or copy backups there too.",
+  yedekIcerik: "Full backup: panel database, per-user files, monthly report archive and profile photos (with a SHA-256 manifest). Excluded: .env secrets, raw catalog, logs.",
+  geriDonusNotu: (klasor) => `Restore is not done from the panel (it is destructive and stops the panel itself). Run ${klasor}\\GERI_DON.bat as administrator; it asks for the password, verifies the backup, asks you to type its name and first copies the current data to GERI_DONUSU_ONCESI.`,
+  geriDonusEksik: (klasor) => `The restore script or password hash is missing (${klasor}). Run kurulum\\yedek_kur.ps1 on the server; the next "Take backup" refreshes the script.`,
   yedekDesteklenmiyor: "Backups cannot be taken from the panel on this engine (use pg_dump for PostgreSQL).",
 
   arizaAra: "Search record no or message…",

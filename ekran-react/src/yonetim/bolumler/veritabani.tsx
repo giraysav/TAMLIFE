@@ -26,7 +26,7 @@ function DisVeritabanlari({ t }: { t: YM }) {
   )
 }
 
-/** Veritabani: motor, sema surumu, butunluk, tablolar, yedek (al / dogrula), dis veritabanlari. Geri yukleme bu surumde yok. */
+/** Veritabani: motor, sema surumu, butunluk, tablolar, tam yedek (al / dogrula), dis veritabanlari. Geri donus panelden degil, sifreli ROLLBACK\GERI_DON.bat ile (not gosterilir). */
 export default function Veritabani({ dil }: { dil: Dil }) {
   const t = ym(dil)
   const qc = useQueryClient()
@@ -125,8 +125,13 @@ export default function Veritabani({ dil }: { dil: Dil }) {
               </dd>
             </div>
           </dl>
-          <p className="text-[0.6875rem] font-bold text-slate-400">{t.yedekAyriDisk}</p>
-          <p className="text-[0.6875rem] font-bold text-slate-400">{t.geriYuklemeNotu}</p>
+          {d.yedek.ayni_disk ? <Bildirim ton="amber">{t.yedekAyriDisk}</Bildirim> : null}
+          <p className="text-[0.6875rem] font-bold text-slate-400">{t.yedekIcerik}</p>
+          {d.yedek.geri_donus.betik && d.yedek.geri_donus.sifre ? (
+            <p className="text-[0.6875rem] font-bold text-slate-400">{t.geriDonusNotu(d.yedek.geri_donus.klasor)}</p>
+          ) : (
+            <Bildirim ton="amber">{t.geriDonusEksik(d.yedek.geri_donus.klasor)}</Bildirim>
+          )}
         </div>
       </Bolum>
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { apiYolu, csrfBasliklari } from "@/lib/http"
+import { apiYolu, csrfBasliklari, hareketKaydet, sonHareketSn } from "@/lib/http"
 
 /** `*_en`: arayuz English iken gosterilen ad/aciklama (catalog.py); eski sunucuda yoksa TR kullanilir. */
 export type AltOge = {
@@ -49,28 +49,36 @@ export type Kullanici = {
 export type OturumDurumu = "yukleniyor" | "yok" | "var"
 
 const YENILE_ARALIK_MS = 2 * 60 * 1000
+const TAZELE_ESIK_MS = 60 * 1000
 const OLAYLAR = ["pointerdown", "keydown", "scroll"] as const
+
+class OturumYok extends Error {}
 
 export type GirisSonucu = "ok" | "red" | "kilit" | "ag"
 
 export function useOturum() {
   const [durum, setDurum] = useState<OturumDurumu>("yukleniyor")
   const [kullanici, setKullanici] = useState<Kullanici | null>(null)
-  const sonHareket = useRef(Date.now())
   const sonYenileme = useRef(Date.now())
 
   const yukle = useCallback(async (): Promise<boolean> => {
     try {
       const cevap = await fetch(apiYolu("/api/v1/session/me"), { credentials: "same-origin" })
+      if (cevap.status === 401) throw new OturumYok()
       if (!cevap.ok) throw new Error(String(cevap.status))
       const govde = (await cevap.json()) as { data: Kullanici }
       setKullanici(govde.data)
       setDurum("var")
       sonYenileme.current = Date.now()
       return true
-    } catch {
-      setKullanici(null)
-      setDurum("yok")
+    } catch (hata) {
+      // Yalniz sunucunun "oturum yok" demesi cikis sayilir. Ag kopmasi / panel yeniden baslatmasi (5xx) acik oturumu dusurmez.
+      if (hata instanceof OturumYok) {
+        setKullanici(null)
+        setDurum("yok")
+        return false
+      }
+      setDurum((onceki) => (onceki === "yukleniyor" ? "yok" : onceki))
       return false
     }
   }, [])
@@ -94,12 +102,14 @@ export function useOturum() {
     if (durum !== "var" || !kullanici) return
     const sinirMs = kullanici.idle_timeout_minutes * 60 * 1000
     const hareket = () => {
-      sonHareket.current = Date.now()
+      hareketKaydet()
+      // Sessizlikten sonraki ilk harekette sunucu oturumunu hemen tazele: sunucu bosta sureyi son istekten sayar.
+      if (Date.now() - sonYenileme.current > TAZELE_ESIK_MS) void yukle()
     }
     for (const olay of OLAYLAR) window.addEventListener(olay, hareket, { passive: true })
     const zamanlayici = window.setInterval(() => {
       const simdi = Date.now()
-      if (simdi - sonHareket.current > sinirMs) {
+      if (sonHareketSn() * 1000 > sinirMs) {
         void fetch(apiYolu("/api/v1/session/logout"), {
           method: "POST",
           credentials: "same-origin",
@@ -107,7 +117,7 @@ export function useOturum() {
         }).finally(() => window.dispatchEvent(new Event("tamlife:oturum-bitti")))
         return
       }
-      if (simdi - sonYenileme.current > YENILE_ARALIK_MS && simdi - sonHareket.current < YENILE_ARALIK_MS) {
+      if (simdi - sonYenileme.current > YENILE_ARALIK_MS && sonHareketSn() * 1000 < YENILE_ARALIK_MS) {
         void yukle()
       }
     }, 15 * 1000)
@@ -128,7 +138,7 @@ export function useOturum() {
         })
         if (cevap.status === 429) return "kilit"
         if (!cevap.ok) return "red"
-        sonHareket.current = Date.now()
+        hareketKaydet()
         return (await yukle()) ? "ok" : "red"
       } catch {
         return "ag"

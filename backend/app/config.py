@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     cookie_name: str = "tamlife_session"
     cookie_secure: bool | None = None  # bos: dev disinda otomatik true
     session_idle_minutes: int = 30
-    session_max_hours: int = 12
+    session_max_hours: int = 0  # 0 = mutlak omur siniri yok: oturum yalniz bosta sure (session_idle_minutes) dolunca kapanir
     login_max_attempts: int = 5
     login_window_seconds: int = 300
     login_lockout_seconds: int = 300

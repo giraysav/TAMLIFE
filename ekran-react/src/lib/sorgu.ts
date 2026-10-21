@@ -1,4 +1,4 @@
-import { apiYolu, csrfBasliklari, dilBasligi, musteriAlaniBasligi, oturumYok } from "@/lib/http"
+import { apiYolu, csrfBasliklari, dilBasligi, hareketBasligi, musteriAlaniBasligi, oturumYok } from "@/lib/http"
 
 /** Sunucu yaniti basarisizsa firlatilir; TanStack Query hata durumuna duser. durum 0 = ag. Mesaj yalniz sunucunun metnidir (yoksa bos; ekran kendi dilindeki yedegi yazar). */
 export class ApiHata extends Error {
@@ -13,7 +13,7 @@ export class ApiHata extends Error {
 async function gonder<T>(yontem: string, yol: string, basliklar?: Record<string, string>, govde?: BodyInit): Promise<T> {
   let cevap: Response
   try {
-    cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: { ...dilBasligi(), ...musteriAlaniBasligi(yol), ...basliklar }, body: govde })
+    cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: { ...dilBasligi(), ...hareketBasligi(), ...musteriAlaniBasligi(yol), ...basliklar }, body: govde })
   } catch {
     throw new ApiHata(0, "")
   }

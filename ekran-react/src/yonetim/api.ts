@@ -66,7 +66,17 @@ export type Veritabani = {
   tablolar: { ad: string; modul: string; var: boolean; satir: number | null }[]
   toplam_satir: number
   butunluk: string | null
-  yedek: { dizin: string; desteklenir: boolean; saklanan: number; adet: number; liste: Yedek[] }
+  yedek: {
+    dizin: string
+    desteklenir: boolean
+    saklanan: number
+    adet: number
+    liste: Yedek[]
+    /** Yedek klasoru verinin bulundugu diskte mi (tek disk ikisini birlikte kaybeder). */
+    ayni_disk: boolean
+    /** Sifreli geri donus: <yedek klasoru>\ROLLBACK (betik ve sifre ozeti yerinde mi). */
+    geri_donus: { klasor: string; betik: boolean; sifre: boolean }
+  }
 }
 
 export type Ariza = {

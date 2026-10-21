@@ -324,12 +324,27 @@ describe("Veritabani", () => {
       "/api/v1/yonetim/veritabani": {
         motor: "sqlite", dosya: "dev.db", boyut_bayt: 1024, disk_serbest_bayt: 2048, surum: "0002_ad_kimlik", hedef_surum: "0002_ad_kimlik",
         surum_uyumlu: true, eksik_tablolar: [], tablolar: [], toplam_satir: 0, butunluk: "ok",
-        yedek: { dizin: "yedek", desteklenir: true, saklanan: 30, adet: 0, liste: [] },
+        yedek: { dizin: "yedek", desteklenir: true, saklanan: 30, adet: 0, liste: [], ayni_disk: true, geri_donus: { klasor: "yedek\\ROLLBACK", betik: true, sifre: true } },
       },
     })
     sarmala(<Veritabani dil="tr" />)
     expect(await screen.findByRole("link", { name: t.kurumaGit })).toHaveAttribute("href", "#/yonetim/kurum")
     expect(cagrilar.some((c) => c.includes("/tampon/kaynaklar"))).toBe(false)
+  })
+
+  it("yedek: ayni diskte uyari, geri donus sifreli betikle (panelde geri yukleme yok)", async () => {
+    const t = ym("tr")
+    sahteSunucu({
+      "/api/v1/yonetim/veritabani": {
+        motor: "sqlite", dosya: "dev.db", boyut_bayt: 1024, disk_serbest_bayt: 2048, surum: "0002_ad_kimlik", hedef_surum: "0002_ad_kimlik",
+        surum_uyumlu: true, eksik_tablolar: [], tablolar: [], toplam_satir: 0, butunluk: "ok",
+        yedek: { dizin: "yedek", desteklenir: true, saklanan: 30, adet: 0, liste: [], ayni_disk: true, geri_donus: { klasor: "yedek\\ROLLBACK", betik: true, sifre: false } },
+      },
+    })
+    sarmala(<Veritabani dil="tr" />)
+    expect(await screen.findByText(t.yedekAyriDisk)).toBeTruthy()
+    expect(screen.getByText(t.geriDonusEksik("yedek\\ROLLBACK"))).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /geri y[uü]kle/i })).toBeNull()
   })
 })
 

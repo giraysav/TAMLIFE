@@ -189,6 +189,58 @@ def test_yedek_al_dogrula_ve_koruma(client, tmp_path, monkeypatch):
     assert olaylar == {"yonetim.yedek_al"}
 
 
+def test_tam_yedek_manifest_dosyalar_ve_geri_donus_betigi(client, tmp_path):
+    """Tam yedek: DB + kisi dosyalari + rapor arsivi + foto + SHA-256 manifest; ROLLBACK betikleri tazelenir; bozulan dosya dogrulamada yakalanir."""
+    import json
+    from datetime import date
+
+    from app.db import kullanici_oturumu
+    from app.models import CalendarDay
+    from app.rapor.servis import rapor_klasoru
+
+    hdr = login_ok(client)
+    with kullanici_oturumu("admin") as k:
+        k.add(CalendarDay(day=date(2026, 2, 2), status="raporlu"))
+        k.commit()
+
+    rapor = rapor_klasoru()
+    rapor.mkdir(parents=True, exist_ok=True)
+    (rapor / "ornek.pdf").write_bytes(b"%PDF-ornek")
+    foto = tmp_path / "profil_foto"
+    foto.mkdir(exist_ok=True)
+    (foto / "admin.jpg").write_bytes(b"jpg")
+    r = client.post("/api/v1/yonetim/veritabani/yedek", headers=hdr)
+    assert r.status_code == 200 and r.json()["data"]["geri_don_betigi"] is True
+    ad = r.json()["data"]["ad"]
+    yer, kok = tmp_path / "yedek", ad.removesuffix(".db")
+    manifest = json.loads((yer / f"{kok}.manifest.json").read_text())
+    yollar = {d["yol"] for d in manifest["dosyalar"]}
+    assert {ad, f"{kok}_dosyalar/raporlar/ornek.pdf", f"{kok}_dosyalar/profil_foto/admin.jpg"} <= yollar
+    assert any(y.startswith(f"{kok}_kullanicilar/") for y in yollar)
+    assert manifest["hedefler"]["db"].endswith("test.db") and manifest["hedefler"]["rapor_dizini"] == str(rapor.resolve())
+    assert (yer / "ROLLBACK" / "geri_don.ps1").is_file() and (yer / "ROLLBACK" / "GERI_DON.bat").is_file()
+    assert not (yer / "ROLLBACK" / "sifre.hash").exists()  # sifre ozetini panel YAZMAZ (kurulumda konur)
+    d = client.get("/api/v1/yonetim/veritabani").json()["data"]["yedek"]
+    assert d["ayni_disk"] is True and d["geri_donus"] == {"klasor": str(yer / "ROLLBACK"), "betik": True, "sifre": False}
+    assert [y["ad"] for y in d["liste"]] == [ad]  # ROLLBACK klasoru yedek listesine girmez
+    assert client.post(f"/api/v1/yonetim/veritabani/yedek/{ad}/dogrula", headers=hdr).json()["data"]["tamam"] is True
+    (yer / f"{kok}_dosyalar" / "raporlar" / "ornek.pdf").write_bytes(b"degisti")
+    bozuk = client.post(f"/api/v1/yonetim/veritabani/yedek/{ad}/dogrula", headers=hdr).json()["data"]
+    assert bozuk["tamam"] is False and "ornek.pdf" in bozuk["butunluk"]
+
+
+def test_yedek_butunlugu_sifre_ozeti_betikle_uyumlu():
+    """kurulum\\yedek_geri_don.ps1 ile ayni bicim: pbkdf2-sha256$tur$tuz$ozet (UTF-8 parola)."""
+    import base64
+    import hashlib
+
+    tuz, tur = bytes(range(16)), 1000
+    ozet = hashlib.pbkdf2_hmac("sha256", "Örnek!*_1".encode(), tuz, tur, 32)
+    satir = f"pbkdf2-sha256${tur}${base64.b64encode(tuz).decode()}${base64.b64encode(ozet).decode()}"
+    parca = satir.split("$")
+    assert len(parca) == 4 and base64.b64decode(parca[2]) == tuz and len(base64.b64decode(parca[3])) == 32
+
+
 def test_oturumlar_listelenir_ve_kapatilir(client):
     hdr = login_ok(client)
     d = client.get("/api/v1/yonetim/oturumlar").json()["data"]

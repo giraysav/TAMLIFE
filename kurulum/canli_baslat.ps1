@@ -8,6 +8,7 @@
 # TAMLIFE_STATIC_DIR=<ekran-react\dist>. TAMLIFE_ALLOWED_HOSTS .env'de yoksa: tamlife, FQDN, 127.0.0.1, localhost.
 param([switch]$Kontrol,
       [int]$Port = 8117,
+      [string]$YedekDizini = 'E:\TAMLIFE_YEDEK_KRITIK',
       [string]$Alanlar = 'tamlife,tamlife.turkcell.entp.tgc,127.0.0.1,localhost')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'calisma_kimligi.ps1')
@@ -49,6 +50,8 @@ $env:TAMLIFE_ENV = 'prod'
 $env:TAMLIFE_STATIC_DIR = $Dist
 $env:TAMLIFE_TRUSTED_PROXIES = '127.0.0.1'
 if (-not (Anahtar-Var 'TAMLIFE_ALLOWED_HOSTS')) { $env:TAMLIFE_ALLOWED_HOSTS = $Alanlar }
+# Panelden "Yedek al" tam yedegi buraya yazar (yedek_kur.ps1 klasoru kurar; geri donus <Dizin>\ROLLBACK\GERI_DON.bat). .env'de varsa o gecerli.
+if (-not (Anahtar-Var 'TAMLIFE_BACKUP_DIR')) { $env:TAMLIFE_BACKUP_DIR = $YedekDizini }
  
 Set-Location $Backend
 $ErrorActionPreference = 'Continue'   # alembic / uvicorn bilgi satirlarini stderr'e yazar; PS 5.1'de 'Stop' bunu hata sayabilir

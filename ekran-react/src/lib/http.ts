@@ -6,6 +6,15 @@ export const apiYolu = (yol: string) => TABAN + yol
 /** Oturum yok: sunucu 401 dondu. */
 export const oturumYok = (cevap: Response) => cevap.status === 401
 
+/** Kullanicinin son gercek hareketi (tus / tik / kaydirma). Her istege `X-Son-Hareket-Sn` olarak yazilir: sunucu bosta bir sekmenin
+ *  arka plan yoklamasiyla oturumu uzatmaz (backend app.session._kullanici_etkin). */
+let sonHareketMs = Date.now()
+export const hareketKaydet = () => {
+  sonHareketMs = Date.now()
+}
+export const sonHareketSn = () => Math.max(0, Math.floor((Date.now() - sonHareketMs) / 1000))
+export const hareketBasligi = (): Record<string, string> => ({ "X-Son-Hareket-Sn": String(sonHareketSn()) })
+
 /** Sunucu metinlerinin dili (X-Dil): arayuzun secili dili; okunamazsa Turkce. */
 export function dilBasligi(): Record<string, string> {
   try {

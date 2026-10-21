@@ -85,6 +85,35 @@ def test_idle_expiry(client, monkeypatch):
     assert client.get("/api/v1/session/me").status_code == 401
 
 
+def test_oturum_mutlak_omur_siniri_yok(client, monkeypatch):
+    """2026-10-21: etkin kullanici saat kac olursa olsun atilmaz; tek kapanma nedeni bosta sure."""
+    login_ok(client)
+    real = time.monotonic
+    ileri = [0.0]
+    monkeypatch.setattr(sess, "_now", lambda: real() + ileri[0])
+    for _ in range(30):  # 30 x 29 dk = ~14,5 saat; her adimda istek oturumu tazeler
+        ileri[0] += 29 * 60
+        assert client.get("/api/v1/session/me").status_code == 200
+
+
+def test_bosta_arka_plan_istegi_oturumu_uzatmaz(client, monkeypatch):
+    """Arayuz bosta (>= 120 sn hareketsiz) iken yoklama istegi oturumu tazelemez; etkin istek tazeler."""
+    login_ok(client)
+    real = time.monotonic
+    ileri = [0.0]
+    monkeypatch.setattr(sess, "_now", lambda: real() + ileri[0])
+    dk = 60.0
+    ileri[0] += 20 * dk
+    assert client.get("/api/v1/session/me", headers={"X-Son-Hareket-Sn": "1500"}).status_code == 200  # bosta yoklama: tazelemez
+    ileri[0] += 11 * dk  # girisin 31. dakikasi: son GERCEK hareketten bu yana > 30 dk
+    assert client.get("/api/v1/session/me").status_code == 401
+    login_ok(client)
+    ileri[0] += 20 * dk
+    assert client.get("/api/v1/session/me", headers={"X-Son-Hareket-Sn": "5"}).status_code == 200  # etkin istek: tazeler
+    ileri[0] += 20 * dk
+    assert client.get("/api/v1/session/me").status_code == 200
+
+
 def test_security_headers(client):
     r = client.get("/api/v1/health")
     assert r.headers["x-content-type-options"] == "nosniff"

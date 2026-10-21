@@ -18,6 +18,8 @@ from app.config import get_settings
 CSRF_COOKIE = "tamlife_csrf"
 CSRF_HEADER = "x-csrf-token"
 MAX_SESSIONS = 2000
+HAREKET_BASLIGI = "x-son-hareket-sn"
+HAREKET_ESIGI_SN = 120  # arayuz 2 dakikada bir canli tutma yapar; bundan eski hareketle gelen istek oturumu uzatmaz
 
 
 @dataclass(frozen=True)
@@ -44,11 +46,11 @@ def _now() -> float:
 
 
 def _expired(entry: _Entry, now: float) -> bool:
+    """Tek kapanma nedeni: bosta sure. session_max_hours > 0 verilirse mutlak omur siniri da uygulanir (varsayilan 0 = yok)."""
     settings = get_settings()
-    return (
-        now - entry.last_seen > settings.session_idle_minutes * 60
-        or now - entry.created > settings.session_max_hours * 3600
-    )
+    if now - entry.last_seen > settings.session_idle_minutes * 60:
+        return True
+    return settings.session_max_hours > 0 and now - entry.created > settings.session_max_hours * 3600
 
 
 def _purge(now: float) -> None:
@@ -93,8 +95,21 @@ def _entry(request: Request, touch: bool) -> _Entry | None:
         return entry
 
 
+def _kullanici_etkin(request: Request) -> bool:
+    """Istek kullanicinin gercek hareketinden mi geliyor? Arayuz her istege `X-Son-Hareket-Sn` (son tus/tik/kaydirmadan beri sn) yazar;
+    arka plan yoklamasi (otomatik yenilenen sorgular) bosta bir sekmeyi sunucuda sonsuza dek canli tutmasin diye bosta olan istek
+    oturumu uzatmaz. Baslik yoksa (betik, test, eski istemci) istek etkin sayilir."""
+    ham = request.headers.get(HAREKET_BASLIGI)
+    if ham is None:
+        return True
+    try:
+        return 0 <= int(ham) < HAREKET_ESIGI_SN
+    except ValueError:
+        return True
+
+
 def current_user(request: Request) -> Principal | None:
-    entry = _entry(request, touch=True)
+    entry = _entry(request, touch=_kullanici_etkin(request))
     return entry.principal if entry else None
 
 
