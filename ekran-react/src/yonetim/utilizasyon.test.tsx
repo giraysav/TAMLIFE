@@ -130,6 +130,20 @@ describe("TAM Utilizasyon", () => {
     expect(screen.getByText(/ornek uyari/)).toBeInTheDocument()
   })
 
+  it("alt sekme sirasi: Musteri Listesi Kriterler'den sonra, Iptal talepleri Urun-Tutar'dan sonra (2026-10-22)", async () => {
+    sahteSunucu({ "/skor/talepler": { count: 0, requests: [] } })
+    window.location.hash = "#/yonetim/utilizasyon?sekme=iptal"
+    const { default: Utilizasyon } = await import("@/yonetim/bolumler/utilizasyon")
+    sarmala(<Utilizasyon dil="tr" />)
+    const t = uym("tr").util
+    const sekmeler = screen.getAllByRole("tab").map((s) => s.textContent)
+    const s = t.sekme
+    expect(sekmeler).toEqual([s.ozet, s.kriterler, s.musteriler, s.atama, s.agac, s.talepler, s.veri, s.iptal])
+    expect(screen.getByRole("tab", { name: s.iptal })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByText(t.iptalAciklama)).toBeInTheDocument()
+    window.location.hash = ""
+  })
+
   it("Yonetim sekmeleri: TAM Utilizasyon, Genel Durum ile Veri Girisi arasinda", () => {
     sahteSunucu({})
     sarmala(<YonetimSayfasi dil="tr" bolum="durum" digerleri={[]} />)

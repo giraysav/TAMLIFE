@@ -4,7 +4,8 @@ import type { Dil } from "@/shell/metin"
 /** TAM Utilizasyon metinleri: yalniz bu bolumun JS parcasina girer. uym(dil) = genel yonetim metni + util. */
 const TR_UTIL = {
     sekmeNav: "TAM Utilizasyon bölümleri",
-    sekme: { ozet: "Özet", kriterler: "Kriterler", atama: "Toplu atama", agac: "Skor ağacı", talepler: "Onay talepleri", veri: "Ürün-Tutar", musteriler: "Müşteri Listesi" },
+    sekme: { ozet: "Özet", kriterler: "Kriterler", atama: "Toplu atama", agac: "Skor ağacı", talepler: "Onay talepleri", veri: "Ürün-Tutar", musteriler: "Müşteri Listesi", iptal: "İptal talepleri" },
+    iptalAciklama: "Bu bölümün içeriği hazırlanıyor.",
     musteriler: {
       baslik: "Müşteri Listesi",
       aciklama: "Panelde kayıtlı tüm müşteriler (çatı ve iştirak). Tek tek ya da toplu ekleyebilir, işaretlediklerinizi ya da hepsini silebilirsiniz.",
@@ -211,7 +212,8 @@ const TR_UTIL = {
 
 const EN_UTIL: typeof TR_UTIL = {
     sekmeNav: "TAM Utilization sections",
-    sekme: { ozet: "Summary", kriterler: "Criteria", atama: "Bulk assignment", agac: "Score tree", talepler: "Approval requests", veri: "Product-Amount", musteriler: "Customer list" },
+    sekme: { ozet: "Summary", kriterler: "Criteria", atama: "Bulk assignment", agac: "Score tree", talepler: "Approval requests", veri: "Product-Amount", musteriler: "Customer list", iptal: "Cancellation requests" },
+    iptalAciklama: "The content of this section is being prepared.",
     musteriler: {
       baslik: "Customer list",
       aciklama: "Every customer registered in the panel (parent and affiliate). Add them one by one or in bulk, and delete the ones you tick or all of them.",

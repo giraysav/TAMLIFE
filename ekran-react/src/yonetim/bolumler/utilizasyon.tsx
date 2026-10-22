@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { BellRing, Calculator, FileSpreadsheet, Gauge, ListChecks, Network, Users } from "lucide-react"
+import { BellRing, Calculator, FileSpreadsheet, FileX, Gauge, ListChecks, Network, Users } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Sekmeler } from "@/components/sayfa-ui"
 import type { SekmeSecenegi } from "@/components/sayfa-ui"
@@ -12,11 +12,12 @@ import { TopluAtama } from "@/yonetim/utilizasyon/atama"
 import { Kriterler } from "@/yonetim/utilizasyon/kriterler"
 import { MusteriListesi } from "@/yonetim/utilizasyon/musteri-listesi"
 import { UtilOzet } from "@/yonetim/utilizasyon/ozet"
+import { IptalTalepleri } from "@/yonetim/utilizasyon/iptal-talepleri"
 import { Talepler } from "@/yonetim/utilizasyon/talepler"
 import { UrunTutar } from "@/yonetim/utilizasyon/urun-tutar"
 import { uym } from "@/yonetim/utilizasyon/metin"
 
-const SEKMELER = ["ozet", "kriterler", "atama", "agac", "talepler", "veri", "musteriler"] as const
+const SEKMELER = ["ozet", "kriterler", "musteriler", "atama", "agac", "talepler", "veri", "iptal"] as const
 type Sekme = (typeof SEKMELER)[number]
 
 /** TAM Utilizasyon (uretim Final Skoru Atama + Veri Yonlendirici kriter/agac ekranlari). Secili alt sekme adreste: #/yonetim/utilizasyon?sekme=kriterler. */
@@ -31,11 +32,12 @@ export default function Utilizasyon({ dil }: { dil: Dil }) {
   const secenekler: SekmeSecenegi<Sekme>[] = [
     { id: "ozet", etiket: u.sekme.ozet, ikon: Gauge },
     { id: "kriterler", etiket: u.sekme.kriterler, ikon: ListChecks },
+    { id: "musteriler", etiket: u.sekme.musteriler, ikon: Users },
     { id: "atama", etiket: u.sekme.atama, ikon: Calculator },
     { id: "agac", etiket: u.sekme.agac, ikon: Network },
     { id: "talepler", etiket: u.sekme.talepler, ikon: BellRing, sayi: bekleyen > 0 ? bekleyen : undefined },
     { id: "veri", etiket: u.sekme.veri, ikon: FileSpreadsheet },
-    { id: "musteriler", etiket: u.sekme.musteriler, ikon: Users },
+    { id: "iptal", etiket: u.sekme.iptal, ikon: FileX },
   ]
 
   return (
@@ -53,6 +55,8 @@ export default function Utilizasyon({ dil }: { dil: Dil }) {
         <Talepler dil={dil} />
       ) : sekme === "musteriler" ? (
         <MusteriListesi dil={dil} />
+      ) : sekme === "iptal" ? (
+        <IptalTalepleri dil={dil} />
       ) : (
         <UrunTutar dil={dil} />
       )}
