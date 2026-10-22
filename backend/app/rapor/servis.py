@@ -4,6 +4,8 @@ Uretim karsiliklari: kutucuklar/rapor/aylik.py (taslak, gonderim, geri alma), ra
 durum ozeti), blueprints/customer_bp.py (rapor_alicilari, aylik_rapor_taslak, send_customer_report_email,
 aylik_rapor_geri_al). Iletiyi gonderen her zaman personeldir.
 Gonderim, Outlook taslagini (.eml, rapor/eposta.py) da uretir; panel iletiyi gondermez, Gonder'e personel basar.
+RAPOR_GONDERIM_KIPI=smtp ise (varsayilan kapali) ileti TAMLIFE@ kutusundan sunucudan gider (rapor/smtp_gonderim.py);
+teslim edilemezse gonderim kaydi olusmaz.
 Gonderim kaydi, kilit ve PDF arsivi vardir. Ay UTC'ye gore belirlenir.
 Donem: bir ayda gonderilen rapor ONCEKI ayin raporudur (Ekim'de Eylul); ayda tek rapor kurali o doneme uygulanir.
 Takip: gonderimde formdaki tum alanlar o donemin taslagina yazilir (rapor sonradan da okunur). Yeni donemde taslak yoksa
@@ -33,7 +35,7 @@ from app.models import Customer, Report, ReportDispatch, ReportDraft, ReportReci
 from app.musteri.servis import MusteriHata, kullanici_id, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
-from app.rapor import ceviri, eposta, sla, sla_analiz
+from app.rapor import ceviri, eposta, sla, sla_analiz, smtp_gonderim
 from app.rapor import metin as rapor_metin
 from app.session import Principal
 
@@ -223,6 +225,7 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
         "zaman": satir.updated_at.isoformat() if satir and satir.updated_at else None,
         "alicilar": alicilar_getir(db, musteri.id),
         "gonderim": gonderim_ozeti(gonderim) if gonderim else None,
+        "gonderim_kipi": smtp_gonderim.kip(),
     }
 
 
@@ -289,9 +292,13 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
     konu = " ".join(str(govde.get("subject") or rapor_metin.mail_konusu(musteri.name, ay, yil, dil)).split())[:200]
     pdf = _pdf_coz(govde.get("pdf_base64"))
     sla_ek = sla.excel_dosyasi(musteri.id, yil, ay)
+    smtp = smtp_gonderim.kip() == "smtp"
+    if smtp and not kime:
+        raise RaporHata(400, m("Alıcılar: en az bir 'Kime' adresi gerekli.", "Recipients: at least one 'To' address is required."))
     ileti, ileti_adi, ek_adlari = _ileti(
-        db, user, musteri, yil, ay, govde, konu, kime, bilgi, pdf, sla_ek, sla.ek_dosyalari(musteri.id, yil, ay)
+        db, user, musteri, yil, ay, govde, konu, kime, bilgi, pdf, sla_ek, sla.ek_dosyalari(musteri.id, yil, ay), taslak=not smtp
     )
+    teslim: dict = {}
     kisi = kullanici_kaydi(db, user)
     zaman = simdi()
     dosya: tuple[str, int, str] | None = None
@@ -332,18 +339,22 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
             )
             db.execute(update(Customer).where(Customer.id == musteri.id).values(report_count=func.coalesce(Customer.report_count, 0) + 1))
             db.flush()
+            # SMTP: kayit (ve ayda-tek kilidi) flush'ta dogrulandiktan SONRA teslim; hata islemi geri alir, kayit kalmaz.
+            if smtp:
+                try:
+                    teslim = smtp_gonderim.gonder(ileti, kime + bilgi)
+                except smtp_gonderim.EpostaHata:
+                    if dosya is not None:
+                        (rapor_klasoru() / dosya[0]).unlink(missing_ok=True)  # kayit geri alinir, arsiv PDF'i yetim kalmasin
+                    raise
     except IntegrityError as exc:  # esZamanli ikinci gonderim kismi benzersiz indekse takilir
         raise RaporHata(409, m("Bu dönemin raporu az önce gönderildi. Ayda yalnız bir rapor gönderilebilir.", "The report for this period was just sent. Only one report can be sent per month."), {"kilitli": True}) from exc
     gonderim = aktif_gonderim(db, musteri.id, yil, ay)
     assert gonderim is not None
-    return {
-        "gonderim": gonderim_ozeti(gonderim),
-        "kime": kime,
-        "bilgi": bilgi,
-        "eml_adi": ileti_adi,
-        "ekler": ek_adlari,
-        "eml_base64": base64.b64encode(ileti).decode("ascii"),
-    }
+    sonuc = {"gonderim": gonderim_ozeti(gonderim), "kime": kime, "bilgi": bilgi, "ekler": ek_adlari, "kip": "smtp" if smtp else "eml"}
+    if smtp:
+        return {**sonuc, "reddedilen": teslim.get("reddedilen", [])}
+    return {**sonuc, "eml_adi": ileti_adi, "eml_base64": base64.b64encode(ileti).decode("ascii")}
 
 
 def _ileti(
@@ -359,8 +370,10 @@ def _ileti(
     pdf: bytes | None,
     sla_ek: tuple[bytes, str] | None = None,
     ek_dosyalar: list[tuple[bytes, str, str]] | None = None,
+    taslak: bool = True,
 ) -> tuple[bytes, str, list[str]]:
-    """Outlook taslagi. Metin istekten; yoksa bu ayin kayitli taslagindan; o da yoksa hazir metin (taslak_getir ile ayni).
+    """Outlook taslagi (taslak=False: SMTP ile gidecek ileti, Reply-To personel). Metin istekten; yoksa bu ayin kayitli
+    taslagindan; o da yoksa hazir metin (taslak_getir ile ayni).
 
     Rapor dili yalniz SABIT metinleri etkiler; personelin yazdigi govde oldugu gibi gider (uretim kurali)."""
     satir = db.get(ReportDraft, (musteri.id, yil, ay))
@@ -387,6 +400,8 @@ def _ileti(
             bilgi=bilgi,
             gonderen_adres=eposta.gonderen(user.username),
             ekler=ekler,
+            taslak=taslak,
+            yanit=None if taslak else eposta.kisi_adresi(user.username),
         )
     except ValueError as exc:  # baslikta CR/LF vb.
         raise RaporHata(400, m("İleti başlığında geçersiz karakter.", "Invalid character in the message header.")) from exc

@@ -4,6 +4,7 @@ import base64
 import re
 from email import message_from_bytes
 from email.policy import default
+from typing import ClassVar
 
 import pytest
 from sqlalchemy.orm import Session
@@ -275,6 +276,105 @@ def test_gonderim_outlook_taslagi_eml(veri, monkeypatch, tmp_path):
     ekler = list(msg.iter_attachments())
     assert [e.get_filename() for e in ekler] == [d["eml_adi"][:-4] + ".pdf"] and ekler[0].get_content() == b"%PDF-1.4 test"
     assert msg.get_body(("plain",)).get_content().rstrip().endswith("Ad Soyad\nTAM")
+
+
+class _SahteSmtp:
+    """smtplib.SMTP yerine: gonderilenleri toplar; `hata` verilirse sendmail onu firlatir."""
+
+    gonderilen: ClassVar[list] = []
+    hata: ClassVar[Exception | None] = None
+
+    def __init__(self, sunucu, port, timeout):
+        self.adres, self.esmtp_features = (sunucu, port), {"size": str(50 * 1024 * 1024)}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def ehlo(self):
+        return 250, b"ok"
+
+    def sendmail(self, gonderen, alicilar, veri):
+        if _SahteSmtp.hata:
+            raise _SahteSmtp.hata
+        _SahteSmtp.gonderilen.append((self.adres, gonderen, alicilar, veri))
+        return {}
+
+
+@pytest.fixture
+def smtp_kipi(monkeypatch, tmp_path):
+    from app.rapor import smtp_gonderim
+
+    for ad, deger in {"RAPOR_GONDERIM_KIPI": "smtp", "SMTP_SERVER": "mail.test", "SMTP_USER": "TAMLIFE@turkcell.com.tr",
+                      "SMTP_ARSIV": "arsiv@turkcell.com.tr", "AD_DOMAIN": "turkcell.com.tr", "TAMLIFE_REPORT_DIR": str(tmp_path / "raporlar")}.items():  # fmt: skip
+        monkeypatch.setenv(ad, deger)
+    _SahteSmtp.gonderilen, _SahteSmtp.hata = [], None
+    monkeypatch.setattr(smtp_gonderim.smtplib, "SMTP", _SahteSmtp)
+    return tmp_path / "raporlar"
+
+
+def test_varsayilan_kip_eml(veri, monkeypatch):
+    monkeypatch.delenv("RAPOR_GONDERIM_KIPI", raising=False)
+    login_ok(veri)
+    assert veri.get("/api/v1/musteri/1/rapor/taslak").json()["data"]["gonderim_kipi"] == "eml"
+
+
+def test_smtp_kipi_tek_kutudan_gonderir(veri, smtp_kipi):
+    """2026-10-22: From TAMLIFE@, Reply-To personel, X-Unsent yok; arsiv yalniz zarfta (gizli); .eml donmez."""
+    hdr = login_ok(veri)
+    url = "/api/v1/musteri/1/rapor"
+    assert veri.get(f"{url}/taslak").json()["data"]["gonderim_kipi"] == "smtp"
+    pdf = base64.b64encode(b"%PDF-1.4 test").decode()
+    r = veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com", "cc": "giray.sav@turkcell.com.tr", "subject": "Konu", "pdf_base64": pdf}, headers=hdr)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["kip"] == "smtp" and "eml_base64" not in d and d["reddedilen"] == [] and d["gonderim"]["durum"] == "sent"
+    (adres, zarf_gonderen, zarf, ham), = _SahteSmtp.gonderilen
+    assert adres == ("mail.test", 25) and zarf_gonderen == "TAMLIFE@turkcell.com.tr"
+    assert zarf == ["musteri@example.com", "giray.sav@turkcell.com.tr", "arsiv@turkcell.com.tr"]
+    msg = message_from_bytes(ham, policy=default)
+    assert msg["X-Unsent"] is None and msg["From"] == "TAMLIFE@turkcell.com.tr" and msg["Reply-To"] == "ADMIN <admin@turkcell.com.tr>"
+    assert msg["Message-ID"].endswith("@turkcell.com.tr>") and msg["Date"] and "arsiv" not in str(msg["To"]) + str(msg["Cc"]) and msg["Bcc"] is None
+    assert [e.get_filename() for e in msg.iter_attachments()] == ["TAM_Aylik_Rapor_Alfa_Test_AS.pdf"]
+
+
+def test_smtp_teslim_edilemezse_kayit_ve_pdf_kalmaz(veri, smtp_kipi):
+    """Sunucu kapali: 503, gonderim kaydi yok, arsiv PDF'i silinir, ay kilitlenmez (personel tekrar dener)."""
+    hdr = login_ok(veri)
+    url = "/api/v1/musteri/1/rapor"
+    _SahteSmtp.hata = TimeoutError()
+    pdf = base64.b64encode(b"%PDF-1.4 test").decode()
+    r = veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com", "pdf_base64": pdf}, headers=hdr)
+    assert r.status_code == 503 and "mail.test:25" in r.text
+    with Session(engine()) as db:
+        assert db.query(ReportDispatch).count() == 0 and db.query(Report).count() == 0 and db.get(Customer, 1).report_count in (0, None)
+    assert not [p for p in smtp_kipi.rglob("*.pdf")]
+    assert veri.get(f"{url}/taslak").json()["data"]["gonderim"] is None
+    _SahteSmtp.hata = None
+    assert veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr).status_code == 200
+
+
+def test_smtp_kipinde_alici_ve_ayar_zorunlu(veri, smtp_kipi, monkeypatch):
+    hdr = login_ok(veri)
+    url = "/api/v1/musteri/1/rapor"
+    assert veri.post(f"{url}/gonder", json={"onay": True, "to": ""}, headers=hdr).status_code == 400
+    monkeypatch.delenv("SMTP_SERVER")
+    r = veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr)
+    assert r.status_code == 503 and "SMTP_SERVER" in r.text and not _SahteSmtp.gonderilen
+
+
+def test_eposta_erisim_testi_ileti_gondermez(veri, smtp_kipi, monkeypatch):
+    import socket
+
+    hdr = login_ok(veri)
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(None, None, None, None, ("10.0.0.1", 25))])
+    monkeypatch.setattr(socket, "create_connection", lambda *a, **k: type("B", (), {"close": lambda self: None})())
+    r = veri.post("/api/v1/yonetim/kurum/eposta-testi", headers=hdr)
+    d = r.json()["data"]
+    assert r.status_code == 200 and d["tamam"] and d["kip"] == "smtp" and [a["adim"] for a in d["adimlar"]] == ["ayar", "dns", "tcp", "ehlo"]
+    assert "50 MB" in d["adimlar"][-1]["ayrinti"] and not _SahteSmtp.gonderilen
 
 
 def test_ayri_rapor_ve_durum_ozeti(veri):

@@ -113,6 +113,10 @@ const TR = {
   alicilariKaydet: "Alıcıları kaydet",
   emlNot: "Gönderim, Outlook taslağını (.eml) indirir: rapor PDF'i, SLA Excel'i ve ek dosyalar ekindedir. Açıp kontrol edin, Gönder'e Outlook'ta siz basarsınız.",
   cactiBekliyor: "Gönder ve PDF, CACTI grafikleri alınana kadar kapalı. Sağdaki CACTI kartından grafikleri alın ya da tanımlı bağlantıyı kaldırın.",
+  smtpNot: "Rapor, TAMLIFE@turkcell.com.tr adresinden panel tarafından gönderilir; müşterinin yanıtı size gelir (Reply-To). PDF, SLA Excel'i ve ek dosyalar iletiye eklenir.",
+  smtpOnay: "İleti TAMLIFE@turkcell.com.tr adresinden hemen gönderilecek; geri çağrılamaz.",
+  epostaGitti: (reddedilen: string[]) =>
+    reddedilen.length ? `Rapor gönderildi; şu alıcılara iletilemedi: ${reddedilen.join(", ")}` : "Rapor e-posta ile gönderildi.",
   // SLA Excel'i ve ek grafikler
   sla: "SLA Raporu",
   slaAciklama: "OneDesk SLA Excel'i: kapanan alarm, şikayet ve talep adetleri ile süre ortalamaları rapora grafik olarak girer; dosya iletiye eklenir.",
@@ -285,6 +289,10 @@ const EN: typeof TR = {
   alicilariKaydet: "Save recipients",
   emlNot: "Sending downloads the Outlook draft (.eml) with the report PDF, the SLA Excel and the attachments. Open and review it, then press Send in Outlook.",
   cactiBekliyor: "Send and PDF stay disabled until the CACTI graphs are fetched. Fetch them in the CACTI card on the right or remove the configured link.",
+  smtpNot: "The panel sends the report from TAMLIFE@turkcell.com.tr; the customer's reply comes to you (Reply-To). The PDF, the SLA Excel and the attachments are included.",
+  smtpOnay: "The message will be sent immediately from TAMLIFE@turkcell.com.tr; it cannot be recalled.",
+  epostaGitti: (reddedilen: string[]) =>
+    reddedilen.length ? `Report sent; it could not be delivered to: ${reddedilen.join(", ")}` : "The report was sent by e-mail.",
   sla: "SLA Report",
   slaAciklama: "OneDesk SLA Excel: closed alarm, complaint and request counts and time averages go into the report as charts; the file is attached to the message.",
   slaYukle: "Upload SLA Excel",

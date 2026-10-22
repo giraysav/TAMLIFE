@@ -52,6 +52,17 @@ def ad_erisim_testi(admin: Principal = Depends(require_admin)) -> dict[str, Any]
     return ok({"tamam": tamam, "adimlar": adimlar})
 
 
+@router.post("/kurum/eposta-testi")
+def eposta_erisim_testi(admin: Principal = Depends(require_admin)) -> dict[str, Any]:
+    """Aylik rapor SMTP'si: ayar -> DNS -> TCP -> EHLO (rapor/smtp_gonderim.py). ILETI GONDERILMEZ; kip eml iken de calisir."""
+    from app.rapor import smtp_gonderim
+
+    adimlar = smtp_gonderim.erisim_adimlari()
+    tamam = all(x["durum"] == "ok" for x in adimlar) and adimlar[-1]["adim"] == "ehlo"
+    _denetim(admin, "yonetim.eposta_erisim_testi", "ok" if tamam else f"hata={adimlar[-1]['adim']}")
+    return ok({"tamam": tamam, "kip": smtp_gonderim.kip(), "adimlar": adimlar})
+
+
 @router.post("/kurum/{kaynak}/test")
 def oracle_erisim_testi(kaynak: str, admin: Principal = Depends(require_admin)) -> dict[str, Any]:
     """Oracle kaynagi (oracle_reportdb | oracle_onent | oracle_galapagos): ayar -> DNS -> TCP -> oturum (SELECT 1 FROM DUAL, ayri

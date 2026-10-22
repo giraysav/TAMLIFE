@@ -8,7 +8,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 - İş bitince (testler geçip canlıya alındıktan sonra) **sormadan commit at**. Push yalnız kullanıcı isterse.
 - Commit yalnız o işte **senin** değiştirdiğin dosya/satırları içerir. Başka oturumun commit edilmemiş değişikliği olan dosyayı katma; aynı dosyada karışıksa yalnız kendi parçanı index'e al (`git hash-object -w` + `git update-index --cacheinfo`) ve kullanıcıya hangi dosyanın neden dışarıda kaldığını yaz.
 - Asla: `backend/.env` ve sırlar, `backend/var/`, `backend/data/reports/` (canlı müşteri raporları), derleme çıktıları; `git add -f` yok.
-- Mesaj Türkçe `tür(alan): özet` + madde listesi + `Co-Authored-By`. `--no-verify` / amend yok. Kırmızı testle commit yok (şu an bilinen kırık test YOK: 888/888, arayüz 222/222).
+- Mesaj Türkçe `tür(alan): özet` + madde listesi + `Co-Authored-By`. `--no-verify` / amend yok. Kırmızı testle commit yok (şu an bilinen kırık test YOK: 893/893, arayüz 224/224).
 
 ## Ortam, kimlik, canlı
 
@@ -46,7 +46,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 
 | Modül | Backend | Arayüz | Not |
 |---|---|---|---|
-| Müşteri Yönetimi / Toptan / Bağlantılı | `musteri/`, `musteri_alani.py`, `rapor/` | `src/musteri/` | aylık rapor .eml taslağı (`rapor/eposta.py`), Cacti/Lookouteyes kişinin LDAP'iyle |
+| Müşteri Yönetimi / Toptan / Bağlantılı | `musteri/`, `musteri_alani.py`, `rapor/` | `src/musteri/` | aylık rapor .eml taslağı (`rapor/eposta.py`); SMTP tek kutu (TAMLIFE@) hazır ama kapalı: `RAPOR_GONDERIM_KIPI=smtp`, `rapor/smtp_gonderim.py`, isterler `docs/eposta-gonderimi.md`; Cacti/Lookouteyes kişinin LDAP'iyle |
 | Onedesk | `onedesk/` | `src/onedesk/` | kartsız TEMIP kaydı sayılmaz (Radar'ın); LLM varsayılan kapalı |
 | Veri Girişi | `tampon/` | `src/yonetim/tampon/` | ReportDB ham kataloğu (`var/ham`, son 1 tarama), PG kataloğu, TEMIP eşleşme + elle atama (`temip_atama.py`) |
 | Radar | `radar/` | `src/radar/` | kartsız müşteriler; admin "Personele ata" |

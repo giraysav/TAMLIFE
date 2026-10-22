@@ -29,6 +29,8 @@ type Taslak = {
   gonderim: Gonderim | null
   /** Bu donemin taslagi yokken onceki ayin gonderilmis raporundan tasinan takip alanlari. */
   devreden?: { donem: string; alanlar: string[] } | null
+  /** eml: Outlook taslagi iner (varsayilan); smtp: ileti sunucudan TAMLIFE@ kutusundan gider (rapor/smtp_gonderim.py). */
+  gonderim_kipi?: "eml" | "smtp"
 }
 
 /** Eski aylik rapor sayfasinin renkli etiketleri: olumlu (teal), devam (lacivert), kritik (kirmizi), bilgi (mavi), oneri (yesil). */
@@ -56,13 +58,13 @@ function Baslik({ baslik, alt }: { baslik: string; alt?: string }) {
   )
 }
 
-type GonderSonuc = { eml_adi: string; eml_base64: string }
+type GonderSonuc = { kip?: "eml" | "smtp"; eml_adi?: string; eml_base64?: string; reddedilen?: string[] }
 type RaporDili = "tr" | "en"
 
 /** Sunucunun urettigi Outlook taslagini indirir; tarayici ayarliysa Outlook dogrudan acar (X-Unsent: gonderilmemis ileti). */
-function emlIndir(s: GonderSonuc) {
-  const bayt = Uint8Array.from(atob(s.eml_base64), (c) => c.charCodeAt(0))
-  dosyaIndir(new Blob([bayt], { type: "message/rfc822" }), s.eml_adi)
+function emlIndir(eml_base64: string, eml_adi: string) {
+  const bayt = Uint8Array.from(atob(eml_base64), (c) => c.charCodeAt(0))
+  dosyaIndir(new Blob([bayt], { type: "message/rfc822" }), eml_adi)
 }
 
 /** Sunucudaki eposta.dosya_adi ile ayni kok: TAM_Aylik_Rapor_<unvan>. */
@@ -187,6 +189,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
     )
   }
   const ingilizce = raporDili === "en"
+  const smtpKipi = taslak.gonderim_kipi === "smtp"
   const varsayilanlar = taslak.varsayilanlar
   const donemAdi = (d: Dil) => `${musteriMetin(d).aylar[taslak.ay - 1]} ${taslak.yil}`
   const donemYaz = (donem: string, d: Dil) => `${musteriMetin(d).aylar[Number(donem.slice(5, 7)) - 1] ?? ""} ${donem.slice(0, 4)}`
@@ -220,7 +223,8 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
 
   /** Rapor PDF'i panelde uretilir ve SLA Excel'iyle birlikte iletiye eklenir (SLA ekini sunucu koyar). */
   async function gonder() {
-    if (!window.confirm(t.gonderOnay(donemAdi(dil), !!sla?.ozet?.dosya, sla?.dosyalar.length ?? 0))) return
+    const onay = t.gonderOnay(donemAdi(dil), !!sla?.ozet?.dosya, sla?.dosyalar.length ?? 0)
+    if (!window.confirm(smtpKipi ? `${onay}\n\n${t.smtpOnay}` : onay)) return
     setPdfMesgul(true)
     let pdfVeri: string
     try {
@@ -231,7 +235,12 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
       return
     }
     const govde = { onay: true, subject: alanlar.konu, body_text: alanlar.govde, signature: alanlar.imza, lang: raporDili, pdf_base64: pdfVeri, alanlar }
-    await dene("gonder", async () => emlIndir(await yaz<GonderSonuc>("POST", `${taban}/gonder`, govde)), t.emlIndi, true)
+    let sonuc: GonderSonuc = {}
+    const tamam = await dene("gonder", async () => {
+      sonuc = await yaz<GonderSonuc>("POST", `${taban}/gonder`, govde)
+      if (sonuc.eml_base64 && sonuc.eml_adi) emlIndir(sonuc.eml_base64, sonuc.eml_adi)
+    }, t.emlIndi, true)
+    if (tamam && sonuc.kip === "smtp") bildir("gonder", t.epostaGitti(sonuc.reddedilen ?? []))
     setPdfMesgul(false)
     await yukle()
   }
@@ -328,7 +337,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
               <span role="status" className="min-h-[14px] text-[0.625rem] font-bold text-slate-400">
                 {(pdfMesgul ? t.pdfHazirlaniyor : "") || mesaj.taslak || mesaj.gonder || (taslak.kayitli ? `${t.taslakBilgi}: ${(taslak.zaman ?? "").slice(0, 16).replace("T", " ")} · ${taslak.guncelleyen ?? ""}` : "")}
               </span>
-              <p className="text-[0.625rem] font-bold text-slate-400 sm:max-w-[60%] sm:text-right">{t.emlNot}</p>
+              <p className="text-[0.625rem] font-bold text-slate-400 sm:max-w-[60%] sm:text-right">{smtpKipi ? t.smtpNot : t.emlNot}</p>
             </div>
             {cacti.engel && !g && !cacti.ayar.isPending && !cacti.grafik.isFetching ? (
               <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">

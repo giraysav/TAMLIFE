@@ -1,8 +1,9 @@
 """Aylik rapor iletisi: HTML govde ve Outlook taslagi (.eml).
 
 Uretim karsiliklari: blueprints/customer_bp.py (_rapor_mail_html, _rapor_eml_olustur, _gorunen_adli, _mail_gorselleri)
-ve templates/mail/rapor_mail.html. Panel iletiyi GONDERMEZ: .eml kullanicinin bilgisayarina iner, X-Unsent sayesinde
-Outlook onu gonderilmemis yeni ileti olarak acar; Gonder'e personel basar.
+ve templates/mail/rapor_mail.html. Varsayilan (RAPOR_GONDERIM_KIPI=eml) panel iletiyi GONDERMEZ: .eml kullanicinin
+bilgisayarina iner, X-Unsent sayesinde Outlook onu gonderilmemis yeni ileti olarak acar; Gonder'e personel basar.
+smtp kipinde ayni ileti taslak=False ile uretilir ve rapor/smtp_gonderim.py sunucudan gonderir.
 
 Tasarim burada degil: rapor/sablon/rapor_mail.html (+ rapor_mail_imza.html). Personel metni burada kacislanir,
 sablona yalniz kacislanmis HTML gider (jinja2 yok; yeni bagimlilik eklenmedi).
@@ -18,6 +19,7 @@ from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 from functools import cache
 from pathlib import Path
 from string import Template
@@ -93,16 +95,18 @@ def gorunen_adli(adres: str) -> str:
     return f"{ad} <{adres}>" if ad else adres
 
 
-def gonderen(kullanici: str) -> str:
-    """Uretimle ayni sira: SMTP_USER > kullanici adi (alan yoksa @AD_DOMAIN eklenir) > varsayilan kutu."""
-    smtp = os.environ.get("SMTP_USER", "").strip()
-    if smtp:
-        return smtp
+def kisi_adresi(kullanici: str) -> str | None:
+    """Personelin kurum adresi: kullanici adi (alan yoksa @AD_DOMAIN eklenir); cikarilamazsa None."""
     kullanici = (kullanici or "").strip()
     alan = get_settings().ad_domain.strip().lstrip("@")
     if kullanici and "@" not in kullanici and alan:
         return f"{kullanici}@{alan}"
-    return kullanici if "@" in kullanici else VARSAYILAN_GONDEREN
+    return kullanici if "@" in kullanici else None
+
+
+def gonderen(kullanici: str) -> str:
+    """Uretimle ayni sira: SMTP_USER > kullanici adi (alan yoksa @AD_DOMAIN eklenir) > varsayilan kutu."""
+    return os.environ.get("SMTP_USER", "").strip() or kisi_adresi(kullanici) or VARSAYILAN_GONDEREN
 
 
 @cache
@@ -120,12 +124,21 @@ def eml(
     bilgi: list[str],
     gonderen_adres: str,
     ekler: list[tuple[bytes, str, str]] | None = None,
+    taslak: bool = True,
+    yanit: str | None = None,
 ) -> bytes:
     """RFC 822 baytlari. Basliklar email paketiyle kurulur (CR/LF enjeksiyonu istisna atar); alicilar zaten dogrulanmistir.
 
-    `ekler`: (bayt, dosya adi, MIME turu) - rapor PDF'i, SLA Excel'i ve personelin ekledigi dosyalar."""
+    `ekler`: (bayt, dosya adi, MIME turu) - rapor PDF'i, SLA Excel'i ve personelin ekledigi dosyalar.
+    `taslak=False` (SMTP kipi, rapor/smtp_gonderim.py): X-Unsent yok; Message-ID ve Date eklenir, `yanit` Reply-To olur."""
     msg = MIMEMultipart("mixed")
-    msg["X-Unsent"] = "1"
+    if taslak:
+        msg["X-Unsent"] = "1"
+    else:
+        msg["Message-ID"] = make_msgid(domain=gonderen_adres.rsplit("@", 1)[-1])
+        msg["Date"] = formatdate(localtime=True)
+        if yanit and yanit.lower() != gonderen_adres.lower():
+            msg["Reply-To"] = gorunen_adli(yanit)
     msg["From"] = gonderen_adres
     if kime:
         msg["To"] = ", ".join(gorunen_adli(a) for a in kime)
