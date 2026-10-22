@@ -618,7 +618,7 @@ def cacti_grafikleri(db: Session, user: Principal, musteri_id: int, parola: obje
     musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem()
     ids = cacti.baglantilar(musteri.cacti_urls or [])
-    kimlik = cacti.kisi_kimligi(user.username, parola) if parola is not None else None
+    hesap = cacti.kisi_kimligi(user.username, parola) if parola is not None else None
     grafikler = cacti.grafikler(ids, yil, ay, rapor_klasoru() / "cacti" / str(musteri.id),
-                               kilitli=bool(aktif_gonderim(db, musteri.id, yil, ay)), kimlik=kimlik)
+                               kilitli=bool(aktif_gonderim(db, musteri.id, yil, ay)), hesap=hesap)
     return {"yil": yil, "ay": ay, "grafikler": grafikler}
