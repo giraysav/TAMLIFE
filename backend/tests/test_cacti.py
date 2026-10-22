@@ -205,10 +205,42 @@ def test_tarayi_ci_hata_mesajini_sizdirmaz(monkeypatch):
             return '{"error":"synthetic-password"}', None
 
     monkeypatch.setattr(subprocess, "Popen", Process)
+    monkeypatch.setattr(cacti, "_erisilemeyen", lambda ids: None)
     with pytest.raises(cacti.CactiHata) as exc:
         cacti.indir(["7"], 2026, 9)
     assert exc.value.kod == 502
     assert "synthetic-password" not in str(exc.value)
+
+
+def test_ag_engeli_ldap_hatasi_gibi_gorunmez(monkeypatch):
+    """2026-10-22: lookouteyes / trafik.superonline.net TCP kapaliyken 'LDAP, MFA' 502'si yerine ulasilamayan adres (503)."""
+    import shutil
+    import socket
+    import subprocess
+
+    monkeypatch.setattr(shutil, "which", lambda _: "node")
+
+    class Process:
+        returncode = 1
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def communicate(self, *args, **kwargs):
+            return '{"error":"x"}', None
+
+    denenen = []
+
+    def baglan(adres, timeout):
+        denenen.append(adres)
+        raise TimeoutError
+
+    monkeypatch.setattr(subprocess, "Popen", Process)
+    monkeypatch.setattr(socket, "create_connection", baglan)
+    with pytest.raises(cacti.CactiHata) as exc:
+        cacti.indir([LOE, "7"], 2026, 9, ("ayse", "kisi-parolasi"))
+    assert exc.value.kod == 503 and "lookouteyes:80" in str(exc.value) and "kisi-parolasi" not in str(exc.value)
+    assert denenen == [("lookouteyes", 80)]  # ilk kapali adreste durur
 
 
 def test_bozuk_onbellek_yeniden_alinir(monkeypatch, tmp_path):
@@ -323,10 +355,10 @@ def test_lookouteyes_parolasiz_428_ve_parola_dogrulama(monkeypatch, tmp_path):
 
 
 def test_lookouteyes_kayitli_donem_parola_istemez(monkeypatch, tmp_path):
-    def indir(ids, yil, ay, kimlik=None):
-        assert kimlik == ("ayse", "p")
+    def indir(ids, yil, ay, hesap=None):
+        assert hesap == ("ayse", "p")
         return [{"anahtar": cacti.anahtar(LOE), "baslik": "BR", "gorsel": "data:image/png;base64," + base64.b64encode(png()).decode()}]
 
     monkeypatch.setattr(cacti, "indir", indir)
-    assert cacti.grafikler([LOE], 2026, 9, tmp_path, kimlik=("ayse", "p"))
+    assert cacti.grafikler([LOE], 2026, 9, tmp_path, hesap=("ayse", "p"))
     assert cacti.grafikler([LOE], 2026, 9, tmp_path)[0]["baslik"] == "BR"  # ayni ay ikinci acilis: dosyadan, parolasiz

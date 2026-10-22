@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ReactNode } from "react"
 import { CactiKarti, useCacti } from "@/musteri/cacti-paneli"
 import { RaporOnizleme } from "@/musteri/rapor-onizleme"
+import { AylikRapor } from "@/musteri/aylik-rapor"
 import { oku, yaz } from "@/lib/sorgu"
 
 vi.mock("@/lib/sorgu", () => ({ oku: vi.fn(), yaz: vi.fn(), hataMesaji: (_h: unknown, text: string) => text }))
@@ -16,6 +17,19 @@ const ayar = {baglantilar:["7"],hazir:true,duzenleyebilir:true,kilitli:false,yil
 const grafik = {anahtar:"cacti-7",baslik:"Test Cacti",gorsel:"data:image/png;base64,test"}
 
 describe("Cacti aylik rapor", () => {
+  it("grafik alinamayinca Gonder kapali ve nedeni dugmenin altinda yazar (2026-10-22 ATU)", async () => {
+    const taslak = {yil:2026,ay:9,birim:true,alanlar:{},varsayilanlar:{tr:{},en:{}},kayitli:false,guncelleyen:null,zaman:null,alicilar:{kime:"",bilgi:""},gonderim:null}
+    vi.mocked(oku).mockImplementation(async url => {
+      if (url.endsWith("/grafikler")) throw Object.assign(new Error("parola"), {durum:428})
+      if (url.endsWith("/cacti")) return ayar
+      if (url.endsWith("/taslak")) return taslak
+      if (url.endsWith("/gecmis")) return []
+      return {dosyalar:[],ekler:[]}
+    })
+    render(<AylikRapor musteriId={110} musteriAdi="Test" dil="tr" geriAlabilir={false} />,{wrapper:wrapper()})
+    await waitFor(() => expect(screen.getByText(/CACTI grafikleri alınana kadar kapalı/)).toBeInTheDocument())
+    expect(screen.getByRole("button",{name:"Raporu gönder"})).toBeDisabled()
+  })
   it("grafikleri otomatik getirir ve rapor onizlemesine ekler", async () => {
     vi.mocked(oku).mockImplementation(async url => url.endsWith("/grafikler") ? {yil:2026,ay:9,grafikler:[grafik]} : ayar)
     const {result} = renderHook(() => useCacti("/rapor"), {wrapper:wrapper()})

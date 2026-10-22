@@ -340,6 +340,22 @@ def _baslik(kimlik: str, ad: object) -> str:
     return f"Lookouteyes #{lookouteyes_alanlari(kimlik)['miid']}" if lookouteyes_mu(kimlik) else f"Cacti #{kimlik}"
 
 
+def _erisilemeyen(ids: list[str]) -> str | None:
+    """Alim basarisiz olunca: TCP ile ulasilamayan ilk grafik sunucusu (host:port). Ag engeli LDAP/MFA hatasi gibi gorunmesin."""
+    import socket
+
+    hedefler = set()
+    for k in ids:
+        u = urlsplit(loe_kok() if lookouteyes_mu(k) else ORIGIN)
+        hedefler.add((u.hostname or "", u.port or (443 if u.scheme == "https" else 80)))
+    for host, port in sorted(hedefler):
+        try:
+            socket.create_connection((host, port), timeout=5).close()
+        except OSError:
+            return f"{host}:{port}"
+    return None
+
+
 def _tarayici(ids: list[str], yil: int, ay: int, kimlik: tuple[str, str] | None = None) -> list[dict]:
     import shutil
     import subprocess
@@ -434,6 +450,8 @@ def _tarayici(ids: list[str], yil: int, ay: int, kimlik: tuple[str, str] | None 
             )
         return sonuc
     except (ValueError, TypeError, KeyError):
+        if hedef := _erisilemeyen(ids):
+            raise CactiHata(503, f"Grafik sunucusuna bu sunucudan ağ erişimi yok ({hedef}); güvenlik duvarı izni gerekir.") from None
         raise CactiHata(
             502, "Cacti kurumsal oturumu veya grafik alımı başarısız. LDAP, erişim izni, MFA ve grafik ID bilgilerini kontrol edin."
         ) from None

@@ -330,6 +330,11 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
               </span>
               <p className="text-[0.625rem] font-bold text-slate-400 sm:max-w-[60%] sm:text-right">{t.emlNot}</p>
             </div>
+            {cacti.engel && !g && !cacti.ayar.isPending && !cacti.grafik.isFetching ? (
+              <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                {t.cactiBekliyor}
+              </p>
+            ) : null}
           </div>
 
           <form onSubmit={taslagiKaydet} className="space-y-5 text-xs font-bold" aria-label={t.raporIcerigi}>

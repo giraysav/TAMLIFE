@@ -223,6 +223,32 @@ def test_cati_istirak_genis_bicimi_csv(ham):
         assert cati.customer_no == "66666666"
 
 
+def test_hataya_dusen_yeni_catinin_istiraki_de_hata(ham):
+    """2026-10-22 canli 500 (KeyError 'anadolu grup'): yeni cati TAM'siz hataya duserken istiraki 'yeni' kaliyor, uygulamada cati karti yoktu."""
+    client, hdr = ham
+    veri = _xlsx(
+        {
+            H.SAYFA: [
+                ["Müşteri Ünvanı", "Çatı Müşteri Ünvanı", "Sorumlu TAM"],
+                ["Anadolu Grup", None, None],
+                ["Anadolu Otel", "Anadolu Grup", "TC1001"],
+                ["Beta Enerji", None, "TC1001"],
+            ]
+        }
+    )
+    p = _yukle(client, hdr, veri)
+    o = _onizle(client, hdr, p["id"], yeni=True)
+    durum = {r["unvan"]: r for r in o["satirlar"]}
+    assert durum["Anadolu Grup"]["durum"] == "hata" and durum["Anadolu Otel"]["durum"] == "hata"
+    assert any("Anadolu Grup" in h for h in durum["Anadolu Otel"]["hatalar"])
+    assert o["ozet"]["uygulanacak"] == 1
+    r = client.post(f"{TABAN}/uygula", json={"parti_id": p["id"], "yeni_olustur": True, "plan_ozeti": o["plan_ozeti"], "onay": True}, headers=hdr)
+    assert r.status_code == 200, r.text
+    with Session(engine()) as db:
+        assert db.scalar(select(Customer).where(Customer.name.in_(["Anadolu Grup", "Anadolu Otel"]))) is None
+        assert db.get(AppUser, db.get(Customer, 2).owner_id).username == "TC1001"
+
+
 def test_yalniz_admin(client):
     hdr = login_ok(client)
     assert client.post("/api/v1/session/logout", headers=hdr).status_code == 200

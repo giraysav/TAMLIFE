@@ -56,7 +56,7 @@ main.py ──┬─ oturum_api · katalog_api · rol_api      çekirdek uçlar 
           ├─ gelir.api ──────► gelir.servis (SMS, APN kurulum, müşteri çalışmaları)
           ├─ takvim.api ─────► takvim.servis (kişinin günleri, TAM Takvim, sunuma gönder)
           └─ security ───────► session ─► config
-çekirdek: rolgorunum ─► catalog, authz, models · navigation ─► catalog, authz · deps ─► authz, gateway, session, config
+çekirdek: rolgorunum ─► catalog, authz, models · navigation ─► catalog, authz · deps ─► authz, db, session, config
           authz ─► catalog, session · baglantilar ─► ad, external, config · audit ─► models (tembel)
 bağımsızlık: yonetim ↔ tampon birbirini import etmez; müşteri alanı tek yönlü: skor ← musteri ← rapor
 ```
@@ -71,7 +71,7 @@ bağımsızlık: yonetim ↔ tampon birbirini import etmez; müşteri alanı tek
 | Gelir (paket) | `gelir/{api,servis}.py` | ICT SMS; APN kurulum ve müşteri çalışmaları; Member yalnız kendi kayıtları |
 | Takvim (paket) | `takvim/{api,servis}.py` | gün durumu, toplu atama, TAM Takvim özeti, sunuma gönder (+ `/sunum/ogeler`) |
 | Müşteri alanı | `musteri/{api,servis}.py`, `rapor/{servis,metin}.py`, `skor/{api,servis,motor}.py` | `skor/motor.py` üretimden birebir; golden test |
-| Veri | `models.py` (34 alan tablosu), `gateway.py`, `alembic/` | senkron `Session`, istek başına; PostgreSQL bağlantısı 3 sn zaman aşımlı |
+| Veri | `models.py` (34 alan tablosu), `db.py`, `alembic/` | senkron `Session`, istek başına; PostgreSQL bağlantısı 3 sn zaman aşımlı |
 | Yönetim (paket) | `yonetim/*` (11 dosya) | yalnız admin; tek `ozet` isteği, yedek, arıza durumu, denetim sorgusu |
 | Tampon (paket) | `tampon/*` (9 dosya) | kaynak → tampon → analiz → dağıtım; geri alınabilir |
 | Ortak | `ariza.py` (kod + kayıt no), `ortak.py` (`UygulamaHatasi`, `ok()`, zaman, sayfalama, TR metin) | paketlerin tek ortak noktası |

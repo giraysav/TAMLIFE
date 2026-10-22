@@ -112,6 +112,7 @@ const TR = {
   alicilarAyrac: "Adresleri ; ile ayırın (en fazla 20).",
   alicilariKaydet: "Alıcıları kaydet",
   emlNot: "Gönderim, Outlook taslağını (.eml) indirir: rapor PDF'i, SLA Excel'i ve ek dosyalar ekindedir. Açıp kontrol edin, Gönder'e Outlook'ta siz basarsınız.",
+  cactiBekliyor: "Gönder ve PDF, CACTI grafikleri alınana kadar kapalı. Sağdaki CACTI kartından grafikleri alın ya da tanımlı bağlantıyı kaldırın.",
   // SLA Excel'i ve ek grafikler
   sla: "SLA Raporu",
   slaAciklama: "OneDesk SLA Excel'i: kapanan alarm, şikayet ve talep adetleri ile süre ortalamaları rapora grafik olarak girer; dosya iletiye eklenir.",
@@ -283,6 +284,7 @@ const EN: typeof TR = {
   alicilarAyrac: "Separate addresses with ; (max 20).",
   alicilariKaydet: "Save recipients",
   emlNot: "Sending downloads the Outlook draft (.eml) with the report PDF, the SLA Excel and the attachments. Open and review it, then press Send in Outlook.",
+  cactiBekliyor: "Send and PDF stay disabled until the CACTI graphs are fetched. Fetch them in the CACTI card on the right or remove the configured link.",
   sla: "SLA Report",
   slaAciklama: "OneDesk SLA Excel: closed alarm, complaint and request counts and time averages go into the report as charts; the file is attached to the message.",
   slaYukle: "Upload SLA Excel",

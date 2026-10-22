@@ -557,6 +557,18 @@ def plan_olustur(db: Session, parti_id: int, yeni_olustur: bool = False) -> dict
             if r["durum"] == "guncelle" and not r["degisiklikler"]:
                 r["durum"] = "degisiklik_yok"
 
+    # Catisi yeni olup sonradan hataya dusen satirin istiraki de hata: uygulamada cati karti olusmaz (2026-10-22 KeyError, 500).
+    hatali_yeni = {r["anahtar"] for r in satirlar if r["durum"] == "hata" and r["anahtar"] in yeni_anahtarlar}
+    for r in satirlar:
+        if r["durum"] != "hata" and r["_uygula"].get("cati") in hatali_yeni:
+            r["hatalar"].append(
+                m(
+                    f'Çatı müşteri "{_kisalt(r["_cati_metin"], 40)}" hatalı olduğu için oluşturulamıyor',
+                    f'Parent customer "{_kisalt(r["_cati_metin"], 40)}" has errors and cannot be created',
+                )
+            )
+            r["durum"] = "hata"
+
     ozet: dict[str, Any] = {"toplam": len(satirlar), "guncelle": 0, "degisiklik_yok": 0, "yeni": 0, "hata": 0, "alan_degisikligi": 0}
     for r in satirlar:
         ozet[r["durum"]] += 1
