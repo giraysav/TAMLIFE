@@ -17,5 +17,15 @@ function Tamlife-GorevKimlikBilgisi {
     if ($null -eq $bilgi -or $bilgi.UserName -ine $TamlifeCalismaHesabi) {
         throw 'Kimlik bilgisi iptal edildi veya hesap farkli. Gorevler degistirilmedi.'
     }
+    # 2026-10-23: eskimis parola gorev kaydina yazilinca acilista 0x8007052E (oturum acilamadi) ile hicbir gorev baslamiyordu.
+    # Kayittan ONCE etki alaninda dogrulanir; yanlissa hicbir gorev degismez.
+    Add-Type -AssemblyName System.DirectoryServices.AccountManagement
+    $alan, $ad = $TamlifeCalismaHesabi.Split('\')
+    $baglam = New-Object System.DirectoryServices.AccountManagement.PrincipalContext('Domain', $alan)
+    try {
+        if (-not $baglam.ValidateCredentials($ad, $bilgi.GetNetworkCredential().Password)) {
+            throw 'Parola etki alaninda dogrulanamadi. Gorevler degistirilmedi.'
+        }
+    } finally { $baglam.Dispose() }
     return $bilgi
 }
