@@ -28,8 +28,9 @@ function ozetKolonlari<T extends UrunTutarOzeti & { ad: string }>(t: UYM) {
   ]
 }
 
-/** Urun-Tutar Excel yukleme (uretim Musteri Karti > Veri Al > Urun-Tutar): secilen musterinin ailesine eslenir, ozet skora kaynak olur. */
-export function UrunTutar({ dil }: { dil: Dil }) {
+/** Urun-Tutar Excel yukleme (uretim Musteri Karti > Veri Al > Urun-Tutar): secilen musterinin ailesine eslenir, ozet skora kaynak olur.
+ *  2026-10-24: yalniz Veri Girisi > Import'ta (panelin tek Excel giris noktasi); Utilizasyon sekmesi kayitli ozetleri listeler. */
+export function UrunTutarYukleme({ dil, baslik }: { dil: Dil; baslik?: string }) {
   const t = uym(dil)
   const u = t.util
   const qc = useQueryClient()
@@ -39,7 +40,6 @@ export function UrunTutar({ dil }: { dil: Dil }) {
   const [sonuc, setSonuc] = useState<UrunTutarYukleme | null>(null)
   const [hata, setHata] = useState("")
   const agac = useQuery({ queryKey: ANAHTAR.skorAgac, queryFn: () => oku<SkorAgaci>(AGAC_YOLU) })
-  const liste = useQuery({ queryKey: ANAHTAR.skorUrunTutar, queryFn: () => oku<UrunTutarKaydi[]>("/api/v1/skor/urun-tutar") })
   const gonder = useMutation({
     mutationFn: (v: { id: string; dosya: File }) => yukle<UrunTutarYukleme>(`/api/v1/skor/urun-tutar/${v.id}${sorguMetni({ dosya: v.dosya.name })}`, v.dosya, XLSX),
     onSuccess: (s) => {
@@ -57,8 +57,7 @@ export function UrunTutar({ dil }: { dil: Dil }) {
   const catilar = agac.data ? tumCatilar(agac.data) : []
 
   return (
-    <div className="grid gap-4">
-      <Panel baslik={u.sekme.veri} aciklama={u.urunTutarAciklama}>
+    <Panel baslik={baslik ?? u.sekme.veri} aciklama={u.urunTutarAciklama}>
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
@@ -109,8 +108,23 @@ export function UrunTutar({ dil }: { dil: Dil }) {
             <VeriTablosu baslik={u.yuklenenler} satirlar={sonuc.musteriler} anahtar={(o) => o.id} kolonlar={ozetKolonlari(t)} />
           </div>
         ) : null}
-      </Panel>
+    </Panel>
+  )
+}
 
+/** Utilizasyon > Urun-Tutar: kayitli ozetler. Yukleme Veri Girisi > Import'a tasindi (2026-10-24); buradan oraya baglanti. */
+export function UrunTutar({ dil }: { dil: Dil }) {
+  const t = uym(dil)
+  const u = t.util
+  const liste = useQuery({ queryKey: ANAHTAR.skorUrunTutar, queryFn: () => oku<UrunTutarKaydi[]>("/api/v1/skor/urun-tutar") })
+  return (
+    <div className="grid gap-4">
+      <Bildirim>
+        {u.yuklemeTasindi}{" "}
+        <a href="#/yonetim/tampon?sekme=import" className="font-black text-tl-blue underline-offset-2 hover:underline">
+          {u.importaGit}
+        </a>
+      </Bildirim>
       <Panel baslik={u.yuklenenler}>
         {liste.isPending ? (
           <Yukleniyor metin={t.yukleniyor} />

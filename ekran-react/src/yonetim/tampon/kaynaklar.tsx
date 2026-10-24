@@ -8,7 +8,6 @@ import { ANAHTAR } from "@/yonetim/api"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { BaglantiTesti, Kaynak } from "@/yonetim/api"
 import { zaman } from "@/lib/bicim"
-import { GenelCsvYukle } from "@/yonetim/tampon/csv-yukle"
 import { tm } from "@/yonetim/tampon/metin"
 import type { TM } from "@/yonetim/tampon/metin"
 
@@ -48,8 +47,32 @@ function OracleDurum({ k, t, test }: { k: Kaynak; t: TM; test: UseMutationResult
   )
 }
 
-/** Kaynak listesi (dosya, Oracle, CSV partileri) + genel CSV yukleme. Ham Musteri Verisi kendi blogundadir (HamMusteriBolumu). */
-export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (id: number) => void }) {
+/** Canli DB alt sekmesi: tek Oracle kaynaginin (oracle_reportdb | oracle_galapagos) durumu ve baglanti testi. Kaynak yoksa `yokMetni`. */
+export function OracleKaynakKarti({ dil, anahtar, baslik, yokMetni }: { dil: Dil; anahtar: string; baslik: string; yokMetni: string }) {
+  const t = tm(dil)
+  const [bilgi, setBilgi] = useState<Bilgi | null>(null)
+  const q = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
+  const test = useBaglantiTesti(t, setBilgi)
+  const k = q.data?.find((x) => x.anahtar === anahtar)
+  return (
+    <section aria-label={baslik} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <h3 className="text-sm font-black text-tl-navy">{baslik}</h3>
+      {bilgi ? <Bildirim ton={bilgi.ton}>{bilgi.metin}</Bildirim> : null}
+      {q.isPending ? (
+        <Yukleniyor metin={t.yukleniyor} />
+      ) : q.isError ? (
+        <HataKutu metin={t.yuklenemedi} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} />
+      ) : k ? (
+        <OracleDurum k={k} t={t} test={test} />
+      ) : (
+        <Bildirim>{yokMetni}</Bildirim>
+      )}
+    </section>
+  )
+}
+
+/** Kaynak listesi (dosya, Oracle, CSV partileri). Dosya yukleme (Ham Musteri Verisi, genel CSV) Import sekmesindedir (2026-10-24). */
+export function Kaynaklar({ dil }: { dil: Dil }) {
   const t = tm(dil)
   const [bilgi, setBilgi] = useState<Bilgi | null>(null)
   const q = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
@@ -103,7 +126,6 @@ export function Kaynaklar({ dil, onYeniParti }: { dil: Dil; onYeniParti: (id: nu
             ]}
           />
         )}
-        <GenelCsvYukle dil={dil} onYeniParti={onYeniParti} />
       </div>
     </Bolum>
   )

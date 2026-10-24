@@ -20,7 +20,7 @@ from app.dil import m
 from app.models import IngestBatch
 from app.ortak import KimlikTipi, UygulamaHatasi, govde_oku, iso, ok, sayfa_bilgisi
 from app.session import Principal
-from app.tampon import akislar, analiz, dagitim, depo, katalog, kaynak, musteri_aktar, musteri_ham, oracle, postgres, temip_atama
+from app.tampon import akislar, analiz, dagitim, depo, eslesme, katalog, kaynak, musteri_aktar, musteri_ham, oracle, postgres, temip_atama
 
 router = APIRouter(
     prefix="/api/v1/tampon", tags=["tampon"], dependencies=[Depends(require_admin)]
@@ -117,6 +117,12 @@ def hedefler(admin: Principal = Depends(require_admin)) -> dict[str, Any]:
 def veri_akislari(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     """Panele veri getiren tum yollar: son gelis, durum (taze / bayat / hata / yok), yonetildigi ekran."""
     return ok(akislar.akislar(db))
+
+
+@router.get("/eslesme")
+def musteri_eslesmesi(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Panele gelen verinin kart / TAM eslesmesi (kaynak bazinda) ve en cok kayit tasiyan kartsiz musteri numaralari."""
+    return ok(eslesme.ozet(db))
 
 
 # --- Ham katalog (ReportDB sema -> nesne -> alt nesne -> sutun agaci) -------------------------------------------------

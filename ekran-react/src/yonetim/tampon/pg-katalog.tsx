@@ -39,21 +39,23 @@ export function pgMetin(dil: Dil) {
 }
 type PM = ReturnType<typeof pgMetin>
 
-/** Veri Girisi: PostgreSQL kaynaklarinin (2026-10-19) durum + katalog agaci. Kapali kaynak yalniz acma talimatini gosterir. */
-export function PgKataloglari({ dil }: { dil: Dil }) {
+/** Veri Girisi > Canli DB: PostgreSQL kaynaklarinin (2026-10-19) durum + katalog agaci. `kaynak` verilirse yalniz o kaynak (pg_onent |
+ *  pg_onedesk; Canli DB alt sekmesi, acik gelir). Kapali kaynak yalniz acma talimatini gosterir. */
+export function PgKataloglari({ dil, kaynak }: { dil: Dil; kaynak?: string }) {
   const t = pgMetin(dil)
   const q = useQuery({
     queryKey: ANAHTAR.pg,
     queryFn: () => oku<PgKaynagi[]>("/api/v1/tampon/pg"),
     refetchInterval: (s) => (s.state.data?.some((k) => k.calisiyor) ? 3_000 : false),
   })
+  const liste = kaynak ? q.data?.filter((k) => k.id === kaynak) : q.data
   return (
-    <Bolum anahtar="yonetim-tampon-pg" baslik={t.baslik} varsayilanAcik={false} tembel>
+    <Bolum anahtar={`yonetim-tampon-pg${kaynak ? `-${kaynak}` : ""}`} baslik={kaynak ? (liste?.[0]?.label ?? kaynak) : t.baslik} varsayilanAcik={Boolean(kaynak)} tembel={!kaynak}>
       <div className="grid gap-4">
         <p className="max-w-4xl text-xs font-bold text-slate-500">{t.aciklama}</p>
         {q.isPending ? <Yukleniyor metin={t.yukleniyor} /> : null}
         {q.isError ? <HataKutu metin={hataMesaji(q.error, t.yuklenemedi)} tekrarEtiket={t.tekrar} tekrar={() => void q.refetch()} /> : null}
-        {q.data?.map((k) => <PgKaynakKarti key={k.id} k={k} t={t} />)}
+        {liste?.map((k) => <PgKaynakKarti key={k.id} k={k} t={t} />)}
       </div>
     </Bolum>
   )

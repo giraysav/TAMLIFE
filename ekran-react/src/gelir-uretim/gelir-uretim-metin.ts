@@ -110,6 +110,7 @@ const TR = {
   yeniKayit: "Yeni kayıt",
   excelAktar: "Excel'e aktar",
   excelIceAktar: "Excel'den içe aktar",
+  iceAktarTasindi: "Excel içe aktarma Veri Girişi › Import bölümünde.",
   // KPI
   kpiIs: "İş sayısı",
   kpiIsAlt: (devam: number, tamam: number) => `${devam} devam · ${tamam} tamamlandı`,
@@ -289,6 +290,7 @@ const EN: typeof TR = {
   yeniKayit: "New record",
   excelAktar: "Export to Excel",
   excelIceAktar: "Import from Excel",
+  iceAktarTasindi: "Excel import is under Data Entry › Import.",
   kpiIs: "Work items",
   kpiIsAlt: (devam, tamam) => `${devam} ongoing · ${tamam} completed`,
   kpiIsSuzulu: (toplam) => `of ${toplam} records`,

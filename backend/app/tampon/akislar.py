@@ -77,7 +77,7 @@ def akislar(db: Session) -> dict[str, Any]:
             "musteri_ham",
             "Ham Müşteri Verisi",
             "dosya",
-            "yonetim/tampon",
+            "yonetim/tampon?sekme=import",
             zaman,
             _durum(zaman, None),
             "Son aktarım geri alındı." if son_aktarim and son_aktarim.reverted_at else "",
@@ -101,7 +101,7 @@ def akislar(db: Session) -> dict[str, Any]:
             "oracle_reportdb",
             "ReportDB alarm özeti",
             "işçi (6 dk)",
-            "yonetim/tampon",
+            "yonetim/tampon?sekme=canli",
             rzaman,
             rdurum,
             raciklama,
@@ -133,7 +133,7 @@ def akislar(db: Session) -> dict[str, Any]:
         tdurum = _durum(tzaman, TEMIP_BAYAT_DK if a.ENABLED else None)
         taciklama = f"Son tur: {deger.get('kip', '')}, +{deger.get('eklenen', 0)} yeni, {deger.get('guncellenen', 0)} güncel."
     liste.append(
-        _akis("temip", "TEMIP alarm kayıtları", "işçi (6 dk) + CLI", "yonetim/tampon", tzaman, tdurum, taciklama, sema=sema, **sayilar)
+        _akis("temip", "TEMIP alarm kayıtları", "işçi (6 dk) + CLI", "yonetim/tampon?sekme=akis", tzaman, tdurum, taciklama, sema=sema, **sayilar)
     )
 
     # 4-6. Baska ekranlardan gelen dosyalar (denetim kaydi / yukleme zamani)
@@ -141,13 +141,13 @@ def akislar(db: Session) -> dict[str, Any]:
     liste.append(_akis("onedesk", "Onedesk kayıt aktarımı", "tampon partisi", "onedesk", denetim.get("onedesk.ice_al"),
                        _durum(denetim.get("onedesk.ice_al"), None)))  # fmt: skip
     ut = _utc(db.scalar(select(func.max(UrunTutarOzet.uploaded_at))))
-    liste.append(_akis("urun_tutar", "Ürün-Tutar Excel", "dosya", "yonetim/utilizasyon", ut, _durum(ut, None)))
-    liste.append(_akis("gelir_uretim", "Gelir Faydası Excel", "dosya", "gelir_uretim", denetim.get("gelir_uretim.ice_al"),
+    liste.append(_akis("urun_tutar", "Ürün-Tutar Excel", "dosya", "yonetim/tampon?sekme=import", ut, _durum(ut, None)))
+    liste.append(_akis("gelir_uretim", "Gelir Faydası Excel", "dosya", "yonetim/tampon?sekme=import", denetim.get("gelir_uretim.ice_al"),
                        _durum(denetim.get("gelir_uretim.ice_al"), None)))  # fmt: skip
 
     # 7. Genel CSV partileri (yalniz dagitim icin)
     csv_son = _utc(db.scalar(select(func.max(IngestBatch.received_at)).where(IngestBatch.source_key.startswith(kaynak.CSV_ON_EK))))
-    liste.append(_akis("csv", "Genel CSV partileri", "dosya", "yonetim/tampon", csv_son, _durum(csv_son, None)))
+    liste.append(_akis("csv", "Genel CSV partileri", "dosya", "yonetim/tampon?sekme=import", csv_son, _durum(csv_son, None)))
 
     kural = db.scalar(select(func.count()).select_from(DistributionRule)) or 0
     etkin = db.scalar(select(func.count()).select_from(DistributionRule).where(DistributionRule.enabled.is_(True))) or 0

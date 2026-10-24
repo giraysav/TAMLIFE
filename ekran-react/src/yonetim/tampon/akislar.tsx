@@ -55,7 +55,7 @@ export function VeriAkislariPaneli({ dil }: { dil: Dil }) {
                 {
                   baslik: "",
                   hucre: (x) =>
-                    x.yer && x.yer !== "yonetim/tampon" ? (
+                    x.yer ? (
                       <a href={`#/${x.yer}`} className="font-black text-tl-blue underline-offset-2 hover:underline">
                         {a.git}
                       </a>

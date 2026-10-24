@@ -6,6 +6,7 @@ import type { Dil } from "@/shell/metin"
 import { gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
 import type { Kayit, OnayBilgisi, Onizleme, OnizlemeSatiri, UygulaSonucu } from "@/gelir-uretim/gelir-uretim-metin"
 import { GelirUretimSayfasi } from "@/gelir-uretim/gelir-uretim-sayfasi"
+import { IceAktar } from "@/gelir-uretim/ice-aktar"
 import { kisilerMetni, saatMetni, tarihAraligi, tutarMetni } from "@/gelir-uretim/ortak"
 
 beforeEach(() => window.localStorage.clear())
@@ -164,7 +165,8 @@ type Ayar = {
   onizleme?: { durum: number; veri?: Onizleme; ayrinti?: string }
 }
 
-function kur({ yazabilir = true, dil = "tr", ...ayar }: Ayar & { yazabilir?: boolean; dil?: Dil } = {}) {
+/** `ice`: Excel ice aktarma cekmecesi de acik (2026-10-24'ten beri Veri Girisi > Import'tan acilir; sayfa listeyi yeniler). */
+function kur({ yazabilir = true, dil = "tr", ice = false, ...ayar }: Ayar & { yazabilir?: boolean; dil?: Dil; ice?: boolean } = {}) {
   const cagrilar: Cagri[] = []
   const yanit = (durum: number, veri: unknown, ayrinti?: string) =>
     new Response(JSON.stringify(durum < 400 ? { status: "success", data: veri } : { detail: ayrinti ?? "hata" }), { status: durum, headers: { "Content-Type": "application/json" } })
@@ -188,6 +190,7 @@ function kur({ yazabilir = true, dil = "tr", ...ayar }: Ayar & { yazabilir?: boo
   render(
     <QueryClientProvider client={istemci}>
       <GelirUretimSayfasi dil={dil} yazabilir={yazabilir} />
+      {ice ? <IceAktar dil={dil} onKapat={() => {}} /> : null}
     </QueryClientProvider>,
   )
   const getler = () => cagrilar.filter((c) => c.yontem === "GET")
@@ -218,7 +221,8 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     for (const metin of ["Başlamadı", "Tasarruf", "250.000,00 $ tek sefer", "Tarih yok", "Eski Personel"]) expect(gama).toHaveTextContent(metin)
 
     expect(screen.getByRole("button", { name: "Yeni kayıt" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Excel'den içe aktar" })).toBeInTheDocument()
+    // 2026-10-24: ice aktarma Veri Girisi > Import'ta; burada oraya baglanti
+    expect(screen.getByRole("link", { name: "Excel'den içe aktar" })).toHaveAttribute("href", "#/yonetim/tampon?sekme=import")
     const excel = screen.getByRole("link", { name: "Excel rapor" })
     expect(excel).toHaveAttribute("href", "/api/v1/gelir-uretim/excel")
     expect(excel).toHaveAttribute("download")
@@ -230,7 +234,7 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     kur({ yazabilir: false, onay: { sahip: { id: 7, ad: "Selin Sahip" } } })
     expect(await screen.findByText("Alfa Test İşi")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Yeni kayıt" })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Excel'den içe aktar" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Excel'den içe aktar" })).not.toBeInTheDocument()
     expect(screen.queryByLabelText("Modül sahibini seç")).not.toBeInTheDocument()
     expect(screen.getByText("Modül sahibi: Selin Sahip")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Excel rapor" })).toBeInTheDocument()
@@ -439,9 +443,8 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
   })
 
   it("Excel'den ice aktar: dosya secince onizleme (hicbir sey yazilmaz), sonuca gore suzme, ardindan yalniz yeni satirlar uygulanir", async () => {
-    const { cagrilar, getler } = kur()
+    const { cagrilar, getler } = kur({ ice: true })
     await screen.findByText("Alfa Test İşi")
-    fireEvent.click(screen.getByRole("button", { name: "Excel'den içe aktar" }))
     const ic = within(await screen.findByRole("dialog"))
     expect(ic.getByText(/En fazla 5 MB ve 500 satır/)).toBeInTheDocument()
     expect(ic.queryByRole("button", { name: /yeni kaydı ekle/ })).not.toBeInTheDocument()
@@ -486,9 +489,8 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
 
   it("ice aktar: eklenecek yeni satir yoksa Ekle dugmesi kapali ve aciklama gorunur", async () => {
     const hicYeni: Onizleme = { ...ONIZLEME, plan: { toplam: 1, yeni: 0, var: 1, tekrar: 0, hatali: 0 }, uyarilar: [], satirlar: [ONIZLEME.satirlar[2] as OnizlemeSatiri] }
-    kur({ onizleme: { durum: 200, veri: hicYeni } })
+    kur({ ice: true, onizleme: { durum: 200, veri: hicYeni } })
     await screen.findByText("Alfa Test İşi")
-    fireEvent.click(screen.getByRole("button", { name: "Excel'den içe aktar" }))
     const ic = within(await screen.findByRole("dialog"))
     fireEvent.change(ic.getByLabelText("Excel dosyası seç (.xlsx)"), { target: { files: [new File(["x"], "bos.xlsx")] } })
     expect(await ic.findByText("Eklenecek yeni satır yok.")).toBeInTheDocument()
@@ -496,9 +498,8 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
   })
 
   it("ice aktar: sunucu hatasi mesajiyla gosterilir; 5 MB'tan buyuk dosya hic gonderilmez", async () => {
-    const { cagrilar } = kur({ onizleme: { durum: 400, ayrinti: "Başlık sütunu bulunamadı." } })
+    const { cagrilar } = kur({ ice: true, onizleme: { durum: 400, ayrinti: "Başlık sütunu bulunamadı." } })
     await screen.findByText("Alfa Test İşi")
-    fireEvent.click(screen.getByRole("button", { name: "Excel'den içe aktar" }))
     const ic = within(await screen.findByRole("dialog"))
     fireEvent.change(ic.getByLabelText("Excel dosyası seç (.xlsx)"), { target: { files: [new File(["x"], "yanlis.xlsx")] } })
     expect(await ic.findByText("Başlık sütunu bulunamadı.")).toBeInTheDocument()
@@ -536,7 +537,7 @@ describe("Gelir Faydasi Saglanan Isler sayfasi", () => {
     expect(await screen.findByText("Alfa Test İşi")).toBeInTheDocument()
     expect(screen.getByText("Work items")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "New record" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Import from Excel" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Import from Excel" })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Excel report" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "PDF report" })).toBeInTheDocument()
     expect(kart("Alfa Test İşi")).toHaveTextContent("In progress")

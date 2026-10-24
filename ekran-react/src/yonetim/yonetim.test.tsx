@@ -276,7 +276,7 @@ describe("Veri Girisi kaynaklari", () => {
         { ...kaynak, anahtar: "oracle_onent", ad: "ONENTDB", tur: "oracle", hazir: false, yapilandirma: "kapalı" },
       ],
     })
-    sarmala(<Kaynaklar dil="tr" onYeniParti={() => {}} />)
+    sarmala(<Kaynaklar dil="tr" />)
     const dugmeler = await screen.findAllByRole("button", { name: t.baglantiTesti })
     expect(dugmeler).toHaveLength(1)
     expect(screen.getByText(t.kartlaraYaz(false) + " · " + t.sonVeriYasi(3.5, true))).toBeTruthy()
@@ -459,9 +459,9 @@ describe("Veri Girisi optimizasyonu", () => {
     sahteSunucu({
       "/api/v1/tampon/akislar": {
         akislar: [
-          { ...akis, anahtar: "oracle_reportdb", ad: "ReportDB alarm özeti", yontem: "işçi (6 dk)", son: "2026-10-06T15:25:16Z", durum: "bayat" },
+          { ...akis, anahtar: "oracle_reportdb", ad: "ReportDB alarm özeti", yontem: "işçi (6 dk)", yer: "yonetim/tampon?sekme=canli", son: "2026-10-06T15:25:16Z", durum: "bayat" },
           { ...akis, anahtar: "onedesk", ad: "Onedesk kayıt aktarımı", yer: "onedesk", son: "2026-10-14T16:07:46Z", durum: "bilgi" },
-          { ...akis, anahtar: "temip", ad: "TEMIP alarm kayıtları", durum: "taze", son: "2026-10-18T07:00:00Z", acik: 5, kapali: 2, radar: 3 },
+          { ...akis, anahtar: "temip", ad: "TEMIP alarm kayıtları", yer: "yonetim/tampon?sekme=akis", durum: "taze", son: "2026-10-18T07:00:00Z", acik: 5, kapali: 2, radar: 3 },
         ],
         dagitim: { kural: 0, etkin: 0, son_uygulama: null },
         uyarilar: ["ReportDB alarm özeti: veri bayat"],
@@ -473,7 +473,8 @@ describe("Veri Girisi optimizasyonu", () => {
     expect(screen.getByText(a.akislar.durumAdi.bayat)).toBeTruthy()
     expect(screen.getByText(/5 açık · 2 kapalı · 3 Radar'da/)).toBeTruthy()
     const baglantilar = screen.getAllByRole("link", { name: a.akislar.git })
-    expect(baglantilar.map((x) => x.getAttribute("href"))).toEqual(["#/onedesk"]) // ayni ekrandaki akisa baglanti yok
+    // 2026-10-24: Veri Girisi sekmeli; akis kendi sekmesine (Canli DB / Veri Akisi / Import) ya da baska ekrana gider
+    expect(baglantilar.map((x) => x.getAttribute("href"))).toEqual(["#/yonetim/tampon?sekme=canli", "#/onedesk", "#/yonetim/tampon?sekme=akis"])
   })
 
   it("dagitim ve TEMIP tembel: kapaliyken istek gitmez, kural onerisi dagitimi acar", async () => {
@@ -536,6 +537,66 @@ describe("Veri Girisi optimizasyonu", () => {
     expect(await screen.findByText(a.csv.yuklendi(9, 3))).toBeTruthy()
     expect(cagrilar).toContain("PUT /api/v1/tampon/yukle?kaynak=alarm&dosya=a.csv")
     expect(secilen).toEqual([9])
+  })
+})
+
+describe("Veri Girisi yeni duzen (2026-10-24)", () => {
+  const a = tm("tr")
+  const y = a.yapi
+  afterEach(() => {
+    window.location.hash = ""
+  })
+  async function ac(hash: string) {
+    window.location.hash = hash
+    const { default: Tampon } = await import("@/yonetim/bolumler/tampon")
+    sarmala(<Tampon dil="tr" />)
+    return screen.getAllByRole("tablist")
+  }
+
+  it("dort sekme; varsayilan Canli DB ve dort veritabani alt sekmesi", async () => {
+    sahteSunucu({})
+    const [ana, dbler] = await ac("#/yonetim/tampon")
+    expect(within(ana).getAllByRole("tab").map((s) => s.textContent)).toEqual([y.sekme.canli, y.sekme.akis, y.sekme.import, y.sekme.eslesme])
+    expect(within(ana).getByRole("tab", { name: y.sekme.canli })).toHaveAttribute("aria-selected", "true")
+    expect(within(dbler).getAllByRole("tab").map((s) => s.textContent)).toEqual(["ReportDB", "ONEDESKDB", "ONENTDB", "GALAPAGOSDB"])
+    expect(screen.queryByText(y.importAciklama)).toBeNull()
+  })
+
+  it("adreste parti varsa Veri Akisi acilir; hat adimlari sirayla", async () => {
+    sahteSunucu({})
+    const [ana] = await ac("#/yonetim/tampon?parti=5")
+    expect(within(ana).getByRole("tab", { name: y.sekme.akis })).toHaveAttribute("aria-selected", "true")
+    const hat = screen.getByRole("list", { name: y.sekme.akis })
+    expect(within(hat).getAllByRole("listitem").map((x) => x.textContent?.replace("→", "").trim())).toEqual(y.adimlar.map((s, i) => `${i + 1} · ${s}`))
+  })
+
+  it("Import: tek giris noktasi - ham musteri, genel CSV, Gelir Faydasi ve Urun-Tutar", async () => {
+    sahteSunucu({})
+    await ac("#/yonetim/tampon?sekme=import")
+    expect(screen.getByText(y.importAciklama)).toBeInTheDocument()
+    for (const b of [a.ham.baslik, a.csv.baslik, y.gelirFaydasi, y.urunTutar]) expect(screen.getAllByText(b).length).toBeGreaterThan(0)
+    expect(screen.getByRole("button", { name: "Excel'den içe aktar" })).toBeInTheDocument()
+  })
+
+  it("Musteri Eslesmesi: kaynak bazinda oran rozeti, kartsiz numaralar ve yonlendirme", async () => {
+    sahteSunucu({
+      "/api/v1/tampon/eslesme": {
+        kaynaklar: [
+          { anahtar: "onedesk:temip", ad: "TEMIP alarm kayıtları", toplam: 362478, karta_eslesen: 150005, tam_atanmis: 150005, kartsiz: 212473, oran: 41.4, yer: "yonetim/tampon?sekme=akis", not: "" },
+          { anahtar: "urun_tutar", ad: "Ürün-Tutar Excel", toplam: 44, karta_eslesen: 44, tam_atanmis: 44, kartsiz: 0, oran: 100, yer: "yonetim/tampon?sekme=import", not: "" },
+        ],
+        kartlar: { toplam: 339, tam_atanmis: 339, tam_siz: 0 },
+        kartsiz_ilk: [{ musteri_no: "23659267", ad: "ORNEK TOPTAN A.S.", adet: 54021 }],
+        zaman: "2026-10-24T08:00:00Z",
+      },
+    })
+    await ac("#/yonetim/tampon?sekme=eslesme")
+    expect(await screen.findByText("%41.4")).toBeInTheDocument()
+    expect(screen.getByText("%100")).toBeInTheDocument()
+    expect(screen.getByText(a.eslesme.kartlar(339, 339, 0))).toBeInTheDocument()
+    expect(screen.getByText("23659267")).toBeInTheDocument()
+    expect(screen.getAllByRole("link", { name: a.eslesme.git }).map((x) => x.getAttribute("href"))).toEqual(["#/yonetim/tampon?sekme=akis", "#/yonetim/tampon?sekme=import"])
+    expect(screen.getByRole("link", { name: a.eslesme.radar })).toHaveAttribute("href", "#/radar")
   })
 })
 

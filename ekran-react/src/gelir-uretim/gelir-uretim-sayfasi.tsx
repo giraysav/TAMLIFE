@@ -12,7 +12,6 @@ import type { Dil } from "@/shell/metin"
 import { Ayrinti } from "@/gelir-uretim/ayrinti"
 import { DURUMLAR, FAYDALAR, ONAYLAR, PARALAR, TURLER, gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
 import type { Kayit, Liste, Para } from "@/gelir-uretim/gelir-uretim-metin"
-import { IceAktar } from "@/gelir-uretim/ice-aktar"
 import { KayitFormu } from "@/gelir-uretim/kayit-formu"
 import { ANAHTAR, DURUM_TON, FaydaRozeti, ONAY_TON, TABAN, kisilerMetni, saatMetni, tarihAraligi, tutarMetni } from "@/gelir-uretim/ortak"
 import { RaporDugmeleri } from "@/gelir-uretim/rapor"
@@ -190,7 +189,6 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
   const [onay, setOnay] = useState("")
   const [secili, setSecili] = useState<Kayit | null>(null)
   const [form, setForm] = useState<Form | null>(null)
-  const [ice, setIce] = useState(false)
   const q = useGecikmeli(arama.trim())
 
   const sorgu = { q, tur, durum, fayda, tam, yil, onay }
@@ -235,10 +233,11 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
           {t.yeniKayit}
         </button>
         {admin ? (
-          <button type="button" className={DUGME} onClick={() => setIce(true)}>
+          // 2026-10-24: Excel ice aktarma yalniz Veri Girisi > Import'ta; buradan oraya yonlendirme.
+          <a href="#/yonetim/tampon?sekme=import" className={DUGME} title={t.iceAktarTasindi}>
             <Upload aria-hidden className="size-4" />
             {t.excelIceAktar}
-          </button>
+          </a>
         ) : null}
         <RaporDugmeleri dil={dil} suzgec={{ q, tur, durum, fayda, tam, yil }} filtreMetni={filtreMetni} kayitlar={veri?.items ?? []} ozet={veri?.ozet} />
       </SayfaKabi>
@@ -382,7 +381,6 @@ export function GelirUretimSayfasi({ dil, yazabilir }: { dil: Dil; yazabilir: bo
         />
       ) : null}
       {form ? <KayitFormu dil={dil} kayit={form.kayit} personel={veri?.secenekler.personel ?? []} yonetebilir={yonetebilir} onKapat={() => setForm(null)} /> : null}
-      {admin && ice ? <IceAktar dil={dil} onKapat={() => setIce(false)} /> : null}
     </div>
   )
 }

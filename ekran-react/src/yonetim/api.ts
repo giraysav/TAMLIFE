@@ -132,6 +132,14 @@ export type VeriAkisi = {
   sema?: boolean
 }
 export type VeriAkislari = { akislar: VeriAkisi[]; dagitim: { kural: number; etkin: number; son_uygulama: string | null }; uyarilar: string[]; zaman: string }
+/** Musteri eslesmesi (GET /tampon/eslesme): kaynak bazinda kart / TAM eslesmesi ve en cok kayit tasiyan kartsiz numaralar. */
+export type EslesmeKaynagi = { anahtar: string; ad: string; toplam: number; karta_eslesen: number; tam_atanmis: number; kartsiz: number; oran: number | null; yer: string; not: string }
+export type MusteriEslesmesi = {
+  kaynaklar: EslesmeKaynagi[]
+  kartlar: { toplam: number; tam_atanmis: number; tam_siz: number }
+  kartsiz_ilk: { musteri_no: string; ad: string; adet: number }[]
+  zaman: string
+}
 /** Ham katalog (GET /tampon/katalog): sema -> ana nesne -> alt nesne; sutunlar nesne acilinca (GET /tampon/katalog/nesne/{id}). */
 export type KatalogDugumu = {
   id: number
@@ -535,6 +543,7 @@ export const ANAHTAR = {
   uygulamalar: ["tampon", "uygulamalar"] as const,
   hamAktarimlar: ["tampon", "musteri-ham", "aktarimlar"] as const,
   akislar: ["tampon", "akislar"] as const,
+  eslesme: ["tampon", "eslesme"] as const,
   temipEslesme: ["tampon", "temip", "eslesme"] as const,
   temipAtamalar: ["tampon", "temip", "atamalar"] as const,
   katalog: ["tampon", "katalog"] as const,
