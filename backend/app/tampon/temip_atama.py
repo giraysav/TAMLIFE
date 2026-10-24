@@ -45,7 +45,7 @@ def _liste_yaz(db: Session, liste: list[dict[str, Any]], kullanici: str) -> None
         a.value, a.updated_by, a.updated_at = liste, kullanici, simdi()
 
 
-def _surum_tazele(db: Session) -> None:
+def surum_tazele(db: Session) -> None:
     """Eslesme / Radar onbellekleri TEMIP surumune bakar: kart baglantisi degisti."""
     a = db.get(AppSetting, temip_kayit.SURUM_AYARI)
     deger = dict(a.value) if a is not None and isinstance(a.value, dict) else {}
@@ -56,11 +56,11 @@ def _surum_tazele(db: Session) -> None:
         a.value, a.updated_at = deger, simdi()
 
 
-def _bagla(db: Session) -> dict[str, int]:
+def bagla(db: Session) -> dict[str, int]:
     etkilenen: set[int] = set()
     degisen = temip_kayit.yeniden_bagla(db, temip_kayit.harita(db), etkilenen)
     sayaclari_yenile(db, etkilenen)
-    _surum_tazele(db)
+    surum_tazele(db)
     return {"yeniden_baglanan": degisen, "etkilenen_kart": len(etkilenen)}
 
 
@@ -81,21 +81,29 @@ def _numara_sahipleri(db: Session, no: str) -> list[Customer]:
     return [c for c in db.scalars(select(Customer).where(Customer.customer_no.is_not(None))) if k in musteri_anahtarlari(c.customer_no)]
 
 
-def _kaydet(db: Session, no: str, unvan: str, kayit: int, kart: Customer, kullanici: str, yeni_kart: bool) -> dict[str, Any]:
-    liste = [a for a in _liste(db) if a.get("musteri_no") != no]
+def _girdi(db: Session, no: str, unvan: str, kayit: int, kart: Customer, kullanici: str, yeni_kart: bool) -> dict[str, Any]:
     tam = db.get(AppUser, kart.owner_id) if kart.owner_id else None
-    liste.insert(0, {"musteri_no": no, "temip_unvan": unvan, "kart_id": kart.id, "kart": kart.name, "personel": (tam.display_name or tam.username) if tam else "",
-                     "yeni_kart": yeni_kart, "kayit": kayit, "kim": kullanici, "zaman": iso(simdi())})  # fmt: skip
-    _liste_yaz(db, liste[:500], kullanici)
-    sonuc = _bagla(db)
+    return {"musteri_no": no, "temip_unvan": unvan, "kart_id": kart.id, "kart": kart.name, "personel": (tam.display_name or tam.username) if tam else "",
+            "yeni_kart": yeni_kart, "kayit": kayit, "kim": kullanici, "zaman": iso(simdi())}  # fmt: skip
+
+
+def listeye_ekle(db: Session, girdiler: list[dict[str, Any]], kullanici: str) -> None:
+    """Elle atama listesine (en yeni ustte, en cok 500) ekler; ayni numaranin eski girdisi duser."""
+    nolar = {g["musteri_no"] for g in girdiler}
+    _liste_yaz(db, ([*girdiler, *(a for a in _liste(db) if a.get("musteri_no") not in nolar)])[:500], kullanici)
+
+
+def _kaydet(db: Session, girdi: dict[str, Any], kart: Customer, kullanici: str) -> dict[str, Any]:
+    listeye_ekle(db, [girdi], kullanici)
+    sonuc = bagla(db)
     db.commit()
     return {
-        "musteri_no": no,
+        "musteri_no": girdi["musteri_no"],
         "kart_id": kart.id,
         "kart": kart.name,
         "kart_musteri_no": kart.customer_no,
-        "yeni_kart": yeni_kart,
-        "kayit": kayit,
+        "yeni_kart": girdi["yeni_kart"],
+        "kayit": girdi["kayit"],
         **sonuc,
     }
 
@@ -118,13 +126,13 @@ def ata(db: Session, musteri_no: str, kart_id: int, kullanici: str) -> dict[str,
         raise AtamaHata(409, "Kartın Müşteri No alanı dolu (200 karakter); önce gereksiz numaraları temizleyin.")
     kart.customer_no = yeni
     db.flush()
-    return _kaydet(db, no, unvan, kayit, kart, kullanici, yeni_kart=False)
+    return _kaydet(db, _girdi(db, no, unvan, kayit, kart, kullanici, yeni_kart=False), kart, kullanici)
 
 
-@musteri_alani.tum_alanlarda
-def personele_ata(db: Session, user: Principal, musteri_no: str, tam_id: int, unvan: str = "") -> dict[str, Any]:
+def yeni_kart_ac(db: Session, user: Principal, musteri_no: str, tam_id: int, unvan: str = "") -> dict[str, Any]:
     """Musteri hicbir kartta yoksa: secilen personel (TAM) adina YENI kart acar (unvan: verilen ya da TEMIP unvani; Musteri No ile).
-    Kart 'Musteri ekle' kurallariyla acilir (ayni unvanli kart varsa 409, personel gecerli olmali)."""
+    Kart 'Musteri ekle' kurallariyla acilir (ayni unvanli kart varsa 409, personel gecerli olmali). Hata yazmadan once dogar;
+    baglama ve commit cagiranda (tekil: personele_ata, toplu: fark.toplu_ata). Elle atama girdisini doner."""
     no, kayit, temip_unvan = _dogrula(db, musteri_no)
     if sahipler := _numara_sahipleri(db, no):
         raise AtamaHata(409, f"Bu numara zaten kartta yazılı: {', '.join(c.name for c in sahipler)}.")
@@ -137,7 +145,13 @@ def personele_ata(db: Session, user: Principal, musteri_no: str, tam_id: int, un
     kart = db.get(Customer, yeni["id"])
     kart.customer_no = no
     db.flush()
-    return _kaydet(db, no, temip_unvan, kayit, kart, user.username, yeni_kart=True)
+    return _girdi(db, no, temip_unvan, kayit, kart, user.username, yeni_kart=True)
+
+
+@musteri_alani.tum_alanlarda
+def personele_ata(db: Session, user: Principal, musteri_no: str, tam_id: int, unvan: str = "") -> dict[str, Any]:
+    girdi = yeni_kart_ac(db, user, musteri_no, tam_id, unvan)
+    return _kaydet(db, girdi, db.get(Customer, girdi["kart_id"]), user.username)
 
 
 def personeller(db: Session) -> list[dict[str, Any]]:
@@ -163,7 +177,7 @@ def kaldir(db: Session, musteri_no: str, kullanici: str) -> dict[str, Any]:
         kart.customer_no = ", ".join(parcalar) or None
     _liste_yaz(db, [a for a in liste if a.get("musteri_no") != no], kullanici)
     db.flush()
-    sonuc = _bagla(db)
+    sonuc = bagla(db)
     db.commit()
     return {"musteri_no": no, "kart_id": atama["kart_id"], **sonuc}
 

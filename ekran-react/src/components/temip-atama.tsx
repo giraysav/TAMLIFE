@@ -90,17 +90,19 @@ function tohum(unvan: string) {
   return unvan.split(/\s+/).filter((w) => w && !ekler.has(w.toUpperCase())).slice(0, 2).join(" ")
 }
 
-/** Atama sonrasi: Radar, TEMIP eslesmesi, veri akislari ve musteri kartlari tazelenir (iki ekran senkron). */
-function useYenile() {
+/** Atama sonrasi: Radar, TEMIP eslesmesi, Fark, Musteri eslesmesi, veri akislari ve musteri kartlari tazelenir (ekranlar senkron). */
+export function useAtamaYenile() {
   const qc = useQueryClient()
   return () => {
-    for (const k of [["tampon", "temip"], ["tampon", "akislar"], ["radar"], ["musteri"]]) void qc.invalidateQueries({ queryKey: k })
+    for (const k of [["tampon", "temip"], ["tampon", "fark"], ["tampon", "eslesme"], ["tampon", "akislar"], ["radar"], ["musteri"]]) {
+      void qc.invalidateQueries({ queryKey: k })
+    }
   }
 }
 
 export function AtamaPaneli({ dil, hedef, onKapat }: { dil: Dil; hedef: AtamaHedefi; onKapat: () => void }) {
   const a = atamaMetin(dil)
-  const yenile = useYenile()
+  const yenile = useAtamaYenile()
   const [tam, setTam] = useState("")
   const [yontem, setYontem] = useState<"mevcut" | "yeni">("mevcut")
   const [arama, setArama] = useState(() => tohum(hedef.temip_unvan))
@@ -216,7 +218,7 @@ export function AtamaPaneli({ dil, hedef, onKapat }: { dil: Dil; hedef: AtamaHed
 /** Elle yapilan atamalar ve geri alma (numara karttan silinir, kayitlar Radar'a doner). */
 export function ElleAtamalar({ dil }: { dil: Dil }) {
   const a = atamaMetin(dil)
-  const yenile = useYenile()
+  const yenile = useAtamaYenile()
   const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
   const q = useQuery({ queryKey: ["tampon", "temip", "atamalar"], queryFn: () => oku<ElleAtama[]>(`${TABAN}/atamalar`) })
   const kaldir = useMutation({

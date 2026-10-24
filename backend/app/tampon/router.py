@@ -20,7 +20,21 @@ from app.dil import m
 from app.models import IngestBatch
 from app.ortak import KimlikTipi, UygulamaHatasi, govde_oku, iso, ok, sayfa_bilgisi
 from app.session import Principal
-from app.tampon import akislar, analiz, dagitim, depo, eslesme, katalog, kaynak, musteri_aktar, musteri_ham, oracle, postgres, temip_atama
+from app.tampon import (
+    akislar,
+    analiz,
+    dagitim,
+    depo,
+    eslesme,
+    fark,
+    katalog,
+    kaynak,
+    musteri_aktar,
+    musteri_ham,
+    oracle,
+    postgres,
+    temip_atama,
+)
 
 router = APIRouter(
     prefix="/api/v1/tampon", tags=["tampon"], dependencies=[Depends(require_admin)]
@@ -123,6 +137,46 @@ def veri_akislari(admin: Principal = Depends(require_admin), db: Session = Depen
 def musteri_eslesmesi(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     """Panele gelen verinin kart / TAM eslesmesi (kaynak bazinda) ve en cok kayit tasiyan kartsiz musteri numaralari."""
     return ok(eslesme.ozet(db))
+
+
+class FarkTopluGovde(BaseModel):
+    musteri_nolar: list[str] = Field(min_length=1, max_length=fark.TOPLU_AZAMI)
+    tam_id: KimlikTipi
+
+
+class FarkSahipGovde(BaseModel):
+    kart_id: KimlikTipi
+    tam_id: KimlikTipi
+
+
+@router.get("/fark")
+def fark_listesi(
+    tur: str = Query(default="", max_length=20),
+    q: str = Query(default="", max_length=100),
+    sayfa: int = Query(default=1, ge=1, le=100_000),
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Canli DB kayitlarinin kartla / TAM ile eslesmeyen musteri numaralari (kartsiz, belirsiz, personelsiz kart)."""
+    if not akislar.temip_semasi_hazir(db):
+        return ok({"hazir": False, "neden": "0013_onedesk_temip uygulanmadı."})
+    return ok({"hazir": True, **fark.liste(db, tur, q, sayfa)})
+
+
+@router.post("/fark/toplu-ata")
+def fark_toplu_ata(govde: FarkTopluGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Secilen kartsiz numaralari personele ata: her numaraya TEMIP unvaniyla yeni kart, kayitlar tek seferde baglanir."""
+    sonuc = fark.toplu_ata(db, admin, [n[:20] for n in govde.musteri_nolar], govde.tam_id)
+    _denetim(admin, "tampon.fark_toplu_ata", f"tam={govde.tam_id} atanan={sonuc['atanan']} atlanan={len(sonuc['atlanan'])}")
+    return ok(sonuc)
+
+
+@router.post("/fark/kart-sahibi")
+def fark_kart_sahibi(govde: FarkSahipGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Personelsiz karta TAM sec (kayitlar karta bagli ama hicbir portfoyde degil)."""
+    sonuc = fark.kart_sahibi(db, admin, govde.kart_id, govde.tam_id)
+    _denetim(admin, "tampon.fark_kart_sahibi", f"kart={govde.kart_id} tam={govde.tam_id}")
+    return ok(sonuc)
 
 
 # --- Ham katalog (ReportDB sema -> nesne -> alt nesne -> sutun agaci) -------------------------------------------------

@@ -253,6 +253,21 @@ export type TemipEslesme =
       adet: number
       musteriler: TemipMusterisi[]
     }
+/** Fark (GET /tampon/fark): canli DB kayitlarinin kartla / TAM ile eslesmeyen numaralari. */
+export type FarkTuru = Exclude<TemipDurumu, "kart">
+export type FarkSatiri = TemipMusterisi & { durum: FarkTuru; kaynak: string }
+export type FarkListesi =
+  | { hazir: false; neden: string }
+  | {
+      hazir: true
+      ozet: Record<FarkTuru, { musteri: number; kayit: number; acik: number }>
+      toplam_kayit: number
+      toplam: number
+      sayfa: number
+      adet: number
+      satirlar: FarkSatiri[]
+    }
+export type TopluAtamaSonucu = { atanan: number; atlanan: { musteri_no: string; neden: string }[]; kartlar: string[]; yeniden_baglanan: number; etkilenen_kart: number }
 /** Ham Musteri Verisi: dosyanin katalogla karsilastirmasi. bicim: sablon | liste (takma adlar) | genis (cati/istirak). */
 export type HamUyum = {
   toplam: number
@@ -544,6 +559,7 @@ export const ANAHTAR = {
   hamAktarimlar: ["tampon", "musteri-ham", "aktarimlar"] as const,
   akislar: ["tampon", "akislar"] as const,
   eslesme: ["tampon", "eslesme"] as const,
+  fark: ["tampon", "fark"] as const,
   temipEslesme: ["tampon", "temip", "eslesme"] as const,
   temipAtamalar: ["tampon", "temip", "atamalar"] as const,
   katalog: ["tampon", "katalog"] as const,

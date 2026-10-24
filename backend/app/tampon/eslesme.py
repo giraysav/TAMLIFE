@@ -19,6 +19,7 @@ from app import musteri_alani
 from app.gelir_uretim.models import RevenueBenefit
 from app.models import Customer, OnedeskRecord, UrunTutarOzet
 from app.ortak import eslestirme_anahtari, iso, simdi
+from app.tampon import temip_kayit
 
 ONBELLEK_SN = 120
 KARTSIZ_ILK = 10
@@ -117,7 +118,9 @@ def _hesapla(db: Session) -> dict[str, Any]:
 
 
 def ozet(db: Session) -> dict[str, Any]:
-    anahtar = (str(db.get_bind().url), db.scalar(select(func.max(OnedeskRecord.id))), db.scalar(select(func.count()).select_from(Customer)))
+    # Surum: elle atama / TAM secimi (Fark) yazar; yeni kayit ve kart sayisi da onbellegi bozar
+    anahtar = (str(db.get_bind().url), db.scalar(select(func.max(OnedeskRecord.id))), db.scalar(select(func.count()).select_from(Customer)),
+               temip_kayit.surum(db))  # fmt: skip
     with _kilit:
         kayit = _onbellek.get(anahtar)
     if kayit is not None and time.monotonic() - kayit[0] < ONBELLEK_SN:

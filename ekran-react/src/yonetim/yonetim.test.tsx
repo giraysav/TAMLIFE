@@ -553,10 +553,10 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     return screen.getAllByRole("tablist")
   }
 
-  it("dort sekme; varsayilan Canli DB ve dort veritabani alt sekmesi", async () => {
+  it("bes sekme; varsayilan Canli DB ve dort veritabani alt sekmesi", async () => {
     sahteSunucu({})
     const [ana, dbler] = await ac("#/yonetim/tampon")
-    expect(within(ana).getAllByRole("tab").map((s) => s.textContent)).toEqual([y.sekme.canli, y.sekme.akis, y.sekme.import, y.sekme.eslesme])
+    expect(within(ana).getAllByRole("tab").map((s) => s.textContent)).toEqual([y.sekme.canli, y.sekme.akis, y.sekme.import, y.sekme.eslesme, y.sekme.fark])
     expect(within(ana).getByRole("tab", { name: y.sekme.canli })).toHaveAttribute("aria-selected", "true")
     expect(within(dbler).getAllByRole("tab").map((s) => s.textContent)).toEqual(["ReportDB", "ONEDESKDB", "ONENTDB", "GALAPAGOSDB"])
     expect(screen.queryByText(y.importAciklama)).toBeNull()
@@ -597,6 +597,64 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     expect(screen.getByText("23659267")).toBeInTheDocument()
     expect(screen.getAllByRole("link", { name: a.eslesme.git }).map((x) => x.getAttribute("href"))).toEqual(["#/yonetim/tampon?sekme=akis", "#/yonetim/tampon?sekme=import"])
     expect(screen.getByRole("link", { name: a.eslesme.radar })).toHaveAttribute("href", "#/radar")
+    expect(screen.getByRole("link", { name: a.eslesme.temipAta })).toHaveAttribute("href", "#/yonetim/tampon?sekme=fark")
+  })
+
+  it("Fark: eslesmeyenler listelenir; secilen kartsizlar toplu personele, TAM'siz kart personele atanir", async () => {
+    const f = a.fark
+    const satir = (musteri_no: string, durum: string, ek: Record<string, unknown> = {}) => ({
+      musteri_no, temip_unvan: `ORNEK ${musteri_no}`, durum, kart_id: "", panel_unvan: "", cati: "", personel: "", personel_kullanici: "",
+      acik: 1, acik_ticketli: 0, kapali: 2, toplam: 3, aday_kartlar: "", kaynak: "TEMIP", ...ek,
+    })
+    const liste = {
+      hazir: true,
+      ozet: { radar: { musteri: 2, kayit: 6, acik: 2 }, belirsiz: { musteri: 1, kayit: 3, acik: 1 }, kart_personelsiz: { musteri: 1, kayit: 3, acik: 1 } },
+      toplam_kayit: 20,
+      toplam: 4,
+      sayfa: 1,
+      adet: 50,
+      satirlar: [
+        satir("11111111", "radar"),
+        satir("22222222", "radar"),
+        satir("33333333", "belirsiz", { aday_kartlar: "ORNEK-B, ORNEK-C" }),
+        satir("44444444", "kart_personelsiz", { kart_id: 7, panel_unvan: "ORNEK-D" }),
+      ],
+    }
+    const govdeler: { yol: string; govde: unknown }[] = []
+    vi.stubGlobal("confirm", () => true)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (girdi: string, ayar?: RequestInit) => {
+        const yol = String(girdi)
+        if (ayar?.method === "POST") govdeler.push({ yol, govde: JSON.parse(String(ayar.body)) })
+        const veri = yol.includes("/fark/toplu-ata") ? { atanan: 1, atlanan: [{ musteri_no: "22222222", neden: "Bu ünvanla kayıtlı başka bir müşteri var." }], kartlar: ["ORNEK 11111111"], yeniden_baglanan: 3, etkilenen_kart: 1 }
+          : yol.includes("/fark/kart-sahibi") ? { kart_id: 7, kart: "ORNEK-D", personel: "Ornek Tam" }
+          : yol.includes("/tampon/fark") ? liste
+          : yol.includes("/temip/personel") ? [{ id: 5, ad: "Ornek Tam" }]
+          : yol.includes("/temip/atamalar") ? []
+          : null
+        return new Response(JSON.stringify(veri === null ? { detail: "yok" } : { status: "success", data: veri }), { status: veri === null ? 404 : 200, headers: { "Content-Type": "application/json" } })
+      }),
+    )
+    await ac("#/yonetim/tampon?sekme=fark")
+    expect(await screen.findByText(f.toplamKayit("12", "20"))).toBeInTheDocument()
+    expect(screen.getByText("ORNEK-B, ORNEK-C")).toBeInTheDocument()
+    expect(screen.queryByRole("checkbox", { name: f.sec("33333333") })).toBeNull()  // yalniz kartsiz secilir
+    const ata = screen.getByRole("button", { name: f.topluAta })
+    expect(ata).toBeDisabled()
+    fireEvent.click(screen.getByRole("button", { name: f.sayfayiSec }))
+    expect(screen.getByText(f.secili(2))).toBeInTheDocument()
+    await screen.findAllByRole("option", { name: "Ornek Tam" })
+    fireEvent.change(screen.getByRole("combobox", { name: f.topluPersonel }), { target: { value: "5" } })
+    fireEvent.click(ata)
+    expect(await screen.findByText(f.topluSonuc(1, "3", 1))).toBeInTheDocument()
+    expect(govdeler[0]).toEqual({ yol: "/api/v1/tampon/fark/toplu-ata", govde: { musteri_nolar: ["11111111", "22222222"], tam_id: 5 } })
+    expect(screen.getByText(f.secili(0))).toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole("combobox", { name: `${f.tamSec} · ORNEK-D` }), { target: { value: "5" } })
+    fireEvent.click(screen.getByRole("button", { name: f.tamSec }))
+    expect(await screen.findByText(f.tamAtandi("ORNEK-D", "Ornek Tam"))).toBeInTheDocument()
+    expect(govdeler[1]).toEqual({ yol: "/api/v1/tampon/fark/kart-sahibi", govde: { kart_id: 7, tam_id: 5 } })
   })
 })
 

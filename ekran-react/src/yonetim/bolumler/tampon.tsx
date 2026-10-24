@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Database, FileUp, Link2, Upload, Workflow } from "lucide-react"
+import { Database, Diff, FileUp, Link2, Upload, Workflow } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Bildirim, Bolum, DUGME, HataKutu, Panel, Sekmeler } from "@/components/sayfa-ui"
 import type { SekmeSecenegi } from "@/components/sayfa-ui"
@@ -16,6 +16,7 @@ import { GenelCsvYukle } from "@/yonetim/tampon/csv-yukle"
 import { Dagitim } from "@/yonetim/tampon/dagitim"
 import type { KuralOnerisi } from "@/yonetim/tampon/dagitim"
 import { MusteriEslesmesiPanosu } from "@/yonetim/tampon/eslesme"
+import { FarkAlani } from "@/yonetim/tampon/fark"
 import { VeriAkislariPaneli, useVeriAkislari } from "@/yonetim/tampon/akislar"
 import { ReportdbKatalogu } from "@/yonetim/tampon/katalog"
 import { Kaynaklar, OracleKaynakKarti } from "@/yonetim/tampon/kaynaklar"
@@ -27,15 +28,16 @@ import { TemipEslesmesi } from "@/yonetim/tampon/temip"
 import { tm } from "@/yonetim/tampon/metin"
 
 const YOL = "yonetim/tampon"
-const SEKMELER = ["canli", "akis", "import", "eslesme"] as const
+const SEKMELER = ["canli", "akis", "import", "eslesme", "fark"] as const
 const DBLER = ["reportdb", "onedesk", "onent", "galapagos"] as const
 type Sekme = (typeof SEKMELER)[number]
 type Db = (typeof DBLER)[number]
 
-/** Veri Girisi (2026-10-24 yeniden duzen, kullanici: "cok karisik ve yonetilmesi zor"). Dort sekme, secim adreste
+/** Veri Girisi (2026-10-24 yeniden duzen, kullanici: "cok karisik ve yonetilmesi zor"). Bes sekme, secim adreste
  *  (#/yonetim/tampon?sekme=akis&parti=12): Canli DB (ReportDB / ONEDESKDB / ONENTDB / GALAPAGOSDB: baglanti + katalog) ·
  *  Veri Akisi (tek hat: kaynaklar -> tampon partiler -> analiz -> TEMIP eslesmesi -> dagitim) · Import (panelin TEK Excel/CSV
- *  giris noktasi; aylik rapor SLA/grafik ekleri simdilik istisna) · Musteri Eslesmesi (her veri TAM'a atanmis karta baglanmali). */
+ *  giris noktasi; aylik rapor SLA/grafik ekleri simdilik istisna) · Musteri Eslesmesi (her veri TAM'a atanmis karta baglanmali) ·
+ *  Fark (eslesmeyen numaralar: tek tek / toplu personele atama). */
 export default function Tampon({ dil }: { dil: Dil }) {
   const t = tm(dil)
   const y = t.yapi
@@ -52,6 +54,7 @@ export default function Tampon({ dil }: { dil: Dil }) {
     { id: "akis", etiket: y.sekme.akis, ikon: Workflow },
     { id: "import", etiket: y.sekme.import, ikon: FileUp },
     { id: "eslesme", etiket: y.sekme.eslesme, ikon: Link2 },
+    { id: "fark", etiket: y.sekme.fark, ikon: Diff },
   ]
   return (
     <div className="grid gap-4">
@@ -62,8 +65,10 @@ export default function Tampon({ dil }: { dil: Dil }) {
         <VeriAkisi dil={dil} seciliId={seciliId} onSec={(id) => git("akis", { parti: id ? String(id) : null })} />
       ) : sekme === "import" ? (
         <Import dil={dil} onYeniParti={(id) => git("akis", { parti: String(id) })} />
-      ) : (
+      ) : sekme === "eslesme" ? (
         <MusteriEslesmesiPanosu dil={dil} />
+      ) : (
+        <FarkAlani dil={dil} />
       )}
     </div>
   )

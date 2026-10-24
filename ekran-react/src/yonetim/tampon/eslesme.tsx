@@ -66,7 +66,7 @@ export function MusteriEslesmesiPanosu({ dil }: { dil: Dil }) {
               baslik: "",
               hucre: () => (
                 <span className="flex gap-3 whitespace-nowrap">
-                  <a href="#/yonetim/tampon?sekme=akis" className={BAG}>
+                  <a href="#/yonetim/tampon?sekme=fark" className={BAG}>
                     {e.temipAta}
                   </a>
                   <a href="#/radar" className={BAG}>
