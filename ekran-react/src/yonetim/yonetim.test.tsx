@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ReactNode } from "react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { sorguMetni } from "@/lib/sorgu"
 import type { Katalog, KuralGovdesi, Ozet } from "@/yonetim/api"
 import Arizalar from "@/yonetim/bolumler/arizalar"
@@ -543,12 +543,16 @@ describe("Veri Girisi optimizasyonu", () => {
 describe("Veri Girisi yeni duzen (2026-10-24)", () => {
   const a = tm("tr")
   const y = a.yapi
+  let Tampon: typeof import("@/yonetim/bolumler/tampon").default
+  // Sekme modulu agir (tum Veri Girisi bilesenleri): ilk testin 5 sn sinirina sayilmasin diye bir kez, uzun sureyle yuklenir.
+  beforeAll(async () => {
+    Tampon = (await import("@/yonetim/bolumler/tampon")).default
+  }, 60_000)
   afterEach(() => {
     window.location.hash = ""
   })
   async function ac(hash: string) {
     window.location.hash = hash
-    const { default: Tampon } = await import("@/yonetim/bolumler/tampon")
     sarmala(<Tampon dil="tr" />)
     return screen.getAllByRole("tablist")
   }

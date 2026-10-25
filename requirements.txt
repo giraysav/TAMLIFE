@@ -1,18 +1,19 @@
-alembic==1.20.0
-fastapi==0.142.2
-pydantic==2.13.5
-pydantic-settings==2.15.0
+alembic==1.20.1
+fastapi==0.162.0
+pydantic==2.14.1
+pydantic-settings==2.16.1
 psycopg[binary]>=3.2
-SQLAlchemy==2.1.3
+SQLAlchemy==2.1.6
 uvicorn==0.54.0
 ldap3==2.9.1  # AD/LDAPS (yalniz AD_ENABLED=true iken yuklenir)
 pyasn1==0.6.4
+certifi>=2026.10.19  # PYSEC-2026-4320 (2026-10-25 denetimi); dolayli bagimlilik, guvenlik alt siniri
 oracledb==26.0.1  # Oracle (ReportDB/Onent/Urun-Tutar); yalniz isci surecte ve kaynak ENABLED=true iken yuklenir
-cryptography==50.0.1
+cryptography==50.0.2
 cffi==2.1.1
-pycparser==3.0
+pycparser==3.12
 openpyxl==3.1.5  # Urun-Tutar Excel (Utilizasyon); yalniz yuklemede tembel yuklenir
 et-xmlfile==2.0.0
-ctranslate2==4.8.2  # aylik rapor TR->EN ceviri (uretimle ayni); yalniz ayri isci surecte yuklenir, model: ceviri_modeli/tr_en
+ctranslate2==4.8.3  # aylik rapor TR->EN ceviri (uretimle ayni); yalniz ayri isci surecte yuklenir, model: ceviri_modeli/tr_en
 sentencepiece==0.2.2
 PyYAML==6.0.3  # ctranslate2 bagimliligi - cevrimdisi kurulumda ACIKCA gerekli
