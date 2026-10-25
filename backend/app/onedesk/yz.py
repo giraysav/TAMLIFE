@@ -2,6 +2,7 @@
 
 Acik olmasi icin ucu de gerekir:
   TAMLIFE_YZ_SAGLAYICI=anthropic, TAMLIFE_YZ_VERI_PAYLASIMI=izinli, ANTHROPIC_API_KEY (ortam degiskeni; koda/DB'ye yazilmaz).
+  Anahtar bir calisma alanina bagli degilse ANTHROPIC_WORKSPACE_ID de verilir (istege `anthropic-workspace-id` basligi eklenir).
 Modele YALNIZ kok sebep metinleri (kirpilmis) ve sayilar gider; musteri ve lokasyon adi gonderilmez.
 Kurumsal veri politikasi onayi olmadan VERI_PAYLASIMI acilmamali. Yeni bagimlilik yok (standart kutuphane).
 """
@@ -73,12 +74,10 @@ def tamamla(icerik: str, *, sistem: str = "", max_tokens: int = 1200, zaman_asim
     if sistem:
         istek_govdesi["system"] = sistem
     govde = json.dumps(istek_govdesi, ensure_ascii=False).encode("utf-8")
-    istek = urllib.request.Request(
-        ADRES,
-        data=govde,
-        method="POST",
-        headers={"content-type": "application/json", "x-api-key": _ortam("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01"},
-    )
+    basliklar = {"content-type": "application/json", "x-api-key": _ortam("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01"}
+    if _ortam("ANTHROPIC_WORKSPACE_ID"):  # calisma alanina bagli olmayan (kurum duzeyi) anahtar bu basligi ister
+        basliklar["anthropic-workspace-id"] = _ortam("ANTHROPIC_WORKSPACE_ID")
+    istek = urllib.request.Request(ADRES, data=govde, method="POST", headers=basliklar)
     try:
         with urllib.request.urlopen(istek, timeout=zaman_asimi) as yanit:
             veri = json.loads(yanit.read().decode("utf-8"))
