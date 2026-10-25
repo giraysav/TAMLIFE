@@ -14,8 +14,13 @@ function Tamlife-GorevKimligi {
 
 function Tamlife-GorevKimlikBilgisi {
     $bilgi = Get-Credential -UserName $TamlifeCalismaHesabi -Message 'TAMLIFE Windows gorevleri icin hesap parolasini girin. DB parolasi degildir.'
-    if ($null -eq $bilgi -or $bilgi.UserName -ine $TamlifeCalismaHesabi) {
-        throw 'Kimlik bilgisi iptal edildi veya hesap farkli. Gorevler degistirilmedi.'
+    if ($null -eq $bilgi) { throw 'Parola penceresi iptal edildi (ya da kapatildi). Gorevler degistirilmedi.' }
+    # Kullanici adi TURKCELL\TAMLIFEADLOG, TAMLIFEADLOG ya da TAMLIFEADLOG@... yazilabilir; hepsi ayni hesap.
+    $girilen = $bilgi.UserName.Trim()
+    if ($girilen.Contains('\')) { $girilen = $girilen.Split('\')[1] }
+    if ($girilen.Contains('@')) { $girilen = $girilen.Split('@')[0] }
+    if ($girilen -ine $TamlifeCalismaHesabi.Split('\')[1]) {
+        throw ('Hesap farkli: ' + $bilgi.UserName + ' girildi, ' + $TamlifeCalismaHesabi + ' bekleniyor. Gorevler degistirilmedi.')
     }
     # 2026-10-23: eskimis parola gorev kaydina yazilinca acilista 0x8007052E (oturum acilamadi) ile hicbir gorev baslamiyordu.
     # Kayittan ONCE etki alaninda dogrulanir; yanlissa hicbir gorev degismez.
