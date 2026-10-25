@@ -66,6 +66,12 @@ def test_elle_atama_kurallari(client, monkeypatch):
         db.commit()
     assert ata("22306933", a).status_code == 409  # alan dolu (200 karakter)
     assert client.post(f"{URL}/ata/kaldir", json={"musteri_no": "10000001"}, headers=hdr).status_code == 404  # elle atama degil
+    istirak = kart("TURK EKONOMI BANKASI ISTIRAK")
+    with Session(engine()) as db:
+        db.get(Customer, istirak).parent_id = b
+        db.commit()
+    assert ata("22306933", istirak).status_code == 400  # istirak karta atama yapilmaz
+    assert [k["id"] for k in client.get(f"{URL}/kartlar", params={"q": "türk ekonomi"}).json()["data"]] == [b]  # aramada yalniz cati
     assert client.post(f"{URL}/ata", json={"musteri_no": "22306933", "kart_id": b}).status_code == 403  # CSRF'siz
 
 

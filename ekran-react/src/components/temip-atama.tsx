@@ -9,7 +9,7 @@ import type { Dil } from "@/shell/metin"
 /** TEMIP Musteri No'sunu elle atama (yalniz admin; /api/v1/tampon/temip/*): TAM Radar ve Veri Girisi > TEMIP eslesmesi AYNI bileseni
  *  kullanir; bir yerde yapilan atama iki ekrani da tazeler. Iki yol: personelin MEVCUT kartina ekle (CRM isim karisikligi) ya da
  *  personele YENI kart ac (musteri hic kartli degilse). */
-type KartAday = { id: number; ad: string; musteri_no: string; istirak: boolean }
+type KartAday = { id: number; ad: string; musteri_no: string }
 type Personel = { id: number; ad: string }
 type ElleAtama = { musteri_no: string; temip_unvan: string; kart_id: number; kart: string; personel?: string; yeni_kart?: boolean; kayit: number; kim: string; zaman: string }
 type AtamaSonucu = { musteri_no: string; kart: string; kayit: number; yeniden_baglanan: number; yeni_kart: boolean }
@@ -26,7 +26,6 @@ const TR = {
   kartAra: "Kart ara (ünvan ya da numara)",
   kartYok: "Aramaya uyan kart yok.",
   personelSec: "Yeni kart için önce personel seçin.",
-  istirak: "İştirak",
   numarasiz: "numara yok",
   ata: "Bu karta ata",
   yeniUnvan: "Yeni kartın ünvanı",
@@ -59,7 +58,6 @@ const EN: typeof TR = {
   kartAra: "Search cards (name or number)",
   kartYok: "No card matches the search.",
   personelSec: "Select staff for a new card first.",
-  istirak: "Affiliate",
   numarasiz: "no number",
   ata: "Assign to this card",
   yeniUnvan: "New card name",
@@ -175,7 +173,6 @@ export function AtamaPaneli({ dil, hedef, onKapat }: { dil: Dil; hedef: AtamaHed
               {(kartlar.data ?? []).map((k) => (
                 <li key={k.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">
                   <span className="font-black text-tl-navy">{k.ad}</span>
-                  {k.istirak ? <Rozet ton="amber">{a.istirak}</Rozet> : null}
                   <span className="font-mono text-[0.6875rem] text-slate-500">{k.musteri_no || a.numarasiz}</span>
                   <button
                     type="button"

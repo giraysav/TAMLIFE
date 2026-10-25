@@ -775,7 +775,7 @@ describe("TEMIP elle atama", () => {
         const yol = String(girdi)
         cagrilar.push({ yol: `${ayar?.method ?? "GET"} ${yol}`, govde: typeof ayar?.body === "string" ? JSON.parse(ayar.body) : null })
         const veri = yol.includes("/temip/personel") ? [{ id: 5, ad: "Ornek Tam" }]
-          : yol.includes("/temip/kartlar") ? [{ id: 7, ad: "TÜRK EKONOMI BANKASI A.S", musteri_no: "11245635", istirak: false }]
+          : yol.includes("/temip/kartlar") ? [{ id: 7, ad: "TÜRK EKONOMI BANKASI A.S", musteri_no: "11245635" }]
           : yol.includes("/temip/ata/kaldir") ? { musteri_no: "22306933", kart_id: 7 }
           : yol.includes("/temip/atamalar") ? atamalar
           : yol.includes("/temip/ata") ? { musteri_no: "22306933", kart: "TÜRK EKONOMI BANKASI A.S", kayit: 3, yeniden_baglanan: 3, yeni_kart: false }

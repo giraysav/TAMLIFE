@@ -119,6 +119,8 @@ def ata(db: Session, musteri_no: str, kart_id: int, kullanici: str) -> dict[str,
     kart = db.get(Customer, kart_id)
     if kart is None:
         raise AtamaHata(404, "Kart bulunamadı.")
+    if kart.parent_id is not None:  # 2026-10-25 kullanici: "istiraklere atama yapilmamali" (yalniz ana / cati kart)
+        raise AtamaHata(400, "İştirak kartına atama yapılamaz; ana (çatı) kartı seçin.")
     sahipler = _numara_sahipleri(db, no)
     if any(c.id == kart.id for c in sahipler):
         raise AtamaHata(409, "Bu numara zaten bu kartta yazılı.")
@@ -194,19 +196,19 @@ def atamalar(db: Session) -> list[dict[str, Any]]:
 @musteri_alani.tum_alanlarda
 def kart_ara(db: Session, q: str, tam_id: int | None = None, adet: int = 15) -> list[dict[str, Any]]:
     """Atama icin kart arama (unvan ya da numara; harf / Turkce karakter farksiz). tam_id: yalniz o personelin kartlari (bos arama
-    o personelin tum kartlarini listeler)."""
+    o personelin tum kartlarini listeler). Yalniz ana (cati) kartlar: istirak karta atama yapilmaz (2026-10-25)."""
     from app.ortak import normal
 
     aranan = normal(q or "")
     if len(aranan) < 2 and not tam_id:
         return []
-    sorgu = select(Customer).order_by(Customer.name)
+    sorgu = select(Customer).where(Customer.parent_id.is_(None)).order_by(Customer.name)
     if tam_id:
         sorgu = sorgu.where(Customer.owner_id == tam_id)
     sonuc = []
     for c in db.scalars(sorgu):
         if not aranan or aranan in normal(c.name or "") or aranan in (c.customer_no or ""):
-            sonuc.append({"id": c.id, "ad": c.name, "musteri_no": c.customer_no or "", "istirak": c.parent_id is not None})
+            sonuc.append({"id": c.id, "ad": c.name, "musteri_no": c.customer_no or ""})
             if len(sonuc) >= adet:
                 break
     return sonuc
