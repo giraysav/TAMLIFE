@@ -111,5 +111,41 @@ describe("Musteri Radar sayfasi", () => {
     expect(cagrilar.find((c) => c.yol.startsWith("POST") && c.yol.endsWith("/temip/ata"))?.govde).toEqual({ musteri_no: "22306933", tam_id: 5, unvan: "TURK EKONOMI BANKASI A.S." })
     await waitFor(() => expect(cagrilar.filter((c) => c.yol.startsWith("GET /api/v1/radar")).length).toBeGreaterThan(2)) // atama Radar listesini tazeler
   })
-})
 
+  it("Yonetim sunumu: portfoy slayti (KPI, firsat siralamasi, tema), musteri slayti (kok neden, oneri, ozet, sikayet erisimi yok); YZ kapali notu", async () => {
+    const musteri = {
+      musteri_no: "30000003", unvan: "ORNEK LOJISTIK A.S.", toplam: 1257, acik: 23, kapanan: 1234, aylik_ortalama: 209.5, lokasyon_sayisi: 145, sdwan_oran: 45.5,
+      yedek_oran: 33.6, kendiliginden_oran: 48.3, medyan_cozum_dk: 236, anlik_oran: 0.1, uzun_oran: 96.3, kalite_oran: 0, son30: 224, onceki30: 269, degisim: -16.7, aylar: [{ ay: "2026-09", toplam: 300 }, { ay: "2026-10", toplam: 224 }],
+      sure_profili: [{ anahtar: "anlik", ad: "Anlık (< 5 dk)", adet: 1, oran: 0.1 }, { anahtar: "uzun", ad: "Uzun (1–8 sa)", adet: 900, oran: 96.3 }],
+      etki: [{ anahtar: "AVAILABILITY", ad: "Erişilemezlik (devre kesintisi)", adet: 1257, oran: 100 }],
+      hizmetler: [{ ad: "Mobil erişim (3G/4.5G)", adet: 734, lokasyon: 49, oran: 58.4 }],
+      lokasyonlar: [{ ad: "nw_li_cust_a_sdwan", adet: 76 }],
+      skor: 71, firsat: "yuksek", ozet: ["1.257 alarm (aylık ortalama 209,5)"], oneriler: [{ baslik: "Mevcut yedek hatların 4.5G/5G'ye yükseltilmesi", gerekce: "Kesintilerin %96,3'ü 1 saatten uzun" }], yz: null,
+    }
+    const sunum = {
+      veri_zamani: "2026-10-25T15:02:50Z", musteri_sayisi: 1, toplam_alarm: 1257, acik_alarm: 23, lokasyon: 145, firsat: { yuksek: 1, orta: 0, dusuk: 0 },
+      sure_profili: [{ anahtar: "uzun", ad: "Uzun (1–8 sa)", adet: 900, oran: 96.3 }], etki: [{ anahtar: "AVAILABILITY", ad: "Erişilemezlik (devre kesintisi)", adet: 1257, oran: 100 }], musteriler: [musteri],
+      sikayet_talep: { erisim: false, kaynak: "OneDesk", neden: "Okuma yetkisi yok." }, yz: { hazir: false, eksik: ["ANTHROPIC_API_KEY"] },
+    }
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      new Response(JSON.stringify({ status: "success", data: url.includes("/radar/sunum") ? sunum : { var: true, taze: true, veri_zamani: null, kaynak: "kayit", satirlar: [] } }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    ))
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RadarSayfasi dil="tr" yonetici />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole("tab", { name: "Yönetim sunumu" }))
+    expect(await screen.findByRole("region", { name: "Müşteri Radar · Satış Fırsatı Portföyü" })).toBeInTheDocument()
+    expect(screen.getByText(/1 TAM'sız kurumsal müşteri 1.257 ağ alarmı üretti; 1 müşteri yüksek fırsat sınıfında/)).toBeInTheDocument()
+    const slayt = screen.getByRole("region", { name: "ORNEK LOJISTIK A.S." })
+    expect(within(slayt).getByText("Önerilen fırsat: Mevcut yedek hatların 4.5G/5G'ye yükseltilmesi")).toBeInTheDocument()
+    expect(within(slayt).getByText("Mobil erişim (3G/4.5G)")).toBeInTheDocument()
+    expect(within(slayt).getByText("3,9 sa")).toBeInTheDocument() // medyan kesinti 236 dk
+    expect(within(slayt).getByText(/Veri bekleniyor: Okuma yetkisi yok./)).toBeInTheDocument()
+    expect(within(slayt).getByText("Lokasyonların %45,5'i SD-WAN")).toBeInTheDocument()
+    expect(screen.getByText(/YZ analizi kapalı/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText("Sunum kapsamı"), { target: { value: "portfoy" } })
+    expect(screen.queryByRole("region", { name: "ORNEK LOJISTIK A.S." })).toBeNull()
+  })
+})

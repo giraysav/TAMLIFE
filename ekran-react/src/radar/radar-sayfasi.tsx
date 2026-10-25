@@ -1,13 +1,15 @@
 import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Link2, Radar, Undo2 } from "lucide-react"
-import { AtamaPaneli, ElleAtamalar, atamaMetin, useAtamaYenile } from "@/components/temip-atama"
+import { Link2, List, Presentation, Radar, Undo2 } from "lucide-react"
+import { AtamaPaneli, atamaMetin, useAtamaYenile } from "@/components/temip-atama"
 import type { AtamaHedefi } from "@/components/temip-atama"
-import { Bildirim, BosKutu, DUGME, GIRDI, HataKutu, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { Bildirim, BosKutu, DUGME, GIRDI, HataKutu, Panel, Rozet, SayfaKabi, Sekmeler, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { sayi, zaman } from "@/lib/bicim"
 import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
 import { radarMetin } from "@/radar/radar-metin"
+import { RadarSunumu } from "@/radar/radar-sunum"
+import { sunumMetin } from "@/radar/radar-sunum-metin"
 
 type Aday = {
   sira: number
@@ -42,6 +44,8 @@ const ADET = 50
  *  Fark'ta Musteri Radar'a atanan kartsiz numaralardir (2026-10-25: Radar personel gibi). */
 export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: boolean }) {
   const t = radarMetin(dil)
+  const s = sunumMetin(dil)
+  const [sekme, setSekme] = useState<"liste" | "sunum">("liste")
   const [sayfa, setSayfa] = useState(1)
   const [arama, setArama] = useState("")
   const [secili, setSecili] = useState<string | null>(null)
@@ -70,10 +74,30 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
       —
     </span>
   )
+  const sekmeler = (
+    <Sekmeler
+      etiket={s.sekmeEtiket}
+      deger={sekme}
+      onDegis={setSekme}
+      secenekler={[
+        { id: "liste", etiket: s.sekmeListe, ikon: List },
+        { id: "sunum", etiket: s.sekmeSunum, ikon: Presentation },
+      ]}
+    />
+  )
+  if (sekme === "sunum")
+    return (
+      <div className="grid grid-cols-1 gap-4">
+        <SayfaKabi ikon={Radar} baslik={t.baslik} aciklama={t.aciklama} />
+        {sekmeler}
+        <RadarSunumu dil={dil} yonetici={yonetici} />
+      </div>
+    )
 
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={Radar} baslik={t.baslik} aciklama={t.aciklama} />
+      {sekmeler}
       <Bildirim>{kayitModu ? t.kuralKayit : t.kural}</Bildirim>
       <Panel>
         {q.isPending ? (
@@ -178,7 +202,6 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
             ) : null}
             {kayitModu && secili ? <KayitListesi musteriNo={secili} dil={dil} /> : null}
             {yonetici && hedef ? <AtamaPaneli key={hedef.musteri_no} dil={dil} hedef={hedef} onKapat={() => setHedef(null)} /> : null}
-            {yonetici && kayitModu ? <ElleAtamalar dil={dil} /> : null}
             <p className="text-[0.6875rem] font-bold text-slate-400">
               {kayitModu ? t.dipnotKayit : t.dipnot}
               {v.veri_zamani ? ` · ${t.veriZamani}: ${kayitModu ? zaman(v.veri_zamani) : v.veri_zamani}` : ""}

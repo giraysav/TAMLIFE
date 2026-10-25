@@ -70,7 +70,9 @@ def _radar_kosulu():
 def _radar_numaralari(db: Session) -> set[str]:
     from app.tampon import fark, temip_atama  # gec import: _temip ile ayni neden
 
-    return temip_atama.radar_numaralari(db) - fark.silinen_numaralar(db)
+    # 2026-10-25: yalniz Veri Girisi'nden (Fark) Radar'a atananlar; elle karta / personele atanan ya da silinen numara Radar'da gorunmez
+    elle = {str(a.get("musteri_no")) for a in temip_atama.atamalar(db)}
+    return temip_atama.radar_numaralari(db) - fark.silinen_numaralar(db) - elle
 
 
 def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
