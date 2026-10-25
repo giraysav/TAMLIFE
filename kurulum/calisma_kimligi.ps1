@@ -12,6 +12,12 @@ function Tamlife-GorevKimligi {
     New-ScheduledTaskPrincipal -UserId $TamlifeCalismaHesabi -LogonType Password -RunLevel Highest
 }
 
+# 2026-10-25: hesap parolasi kurum PAM'i ile 24 saatte bir donduruluyor; parolali (Password) gorev her donusten sonra 0x8007052E ile
+# baslamaz. Canli gorevler bu kimlikle kaydedilir: parola saklanmaz, hesabin acik oturumunda (RDP koparilsa da) yuksek yetkiyle kosar.
+function Tamlife-OturumKimligi {
+    New-ScheduledTaskPrincipal -UserId $TamlifeCalismaHesabi -LogonType Interactive -RunLevel Highest
+}
+
 function Tamlife-GorevKimlikBilgisi {
     # 2026-10-25: Get-Credential penceresi uzak masaustu / yukseltilmis oturumda acilmadan $null donuyordu; parola konsoldan sorulur.
     Write-Host ('TAMLIFE Windows gorevleri icin ' + $TamlifeCalismaHesabi + ' etki alani parolasi (DB parolasi degildir; bos = iptal).')

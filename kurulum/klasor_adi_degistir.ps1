@@ -3,7 +3,8 @@
 # YONETICI PowerShell'de, klasorun DISINDAN calistirin:
 #   cd E:\
 #   powershell -NoProfile -ExecutionPolicy Bypass -File E:\TAMLIFE_Dev\TAMLIFE_v3.5\kurulum\klasor_adi_degistir.ps1
-# Adimlar: hesap parolasi (Password kipindeki gorevler icin; dosyaya/gunluge yazilmaz) -> gorev yedegi (XML, %TEMP%) -> gorevleri
+# Parola sormaz: gorevler once canli_gorev_kur.ps1 -Hemen ile parolasiz kipe alinmis olmali (degilse hicbir sey degismeden durur).
+# Adimlar: gorev yedegi (XML, %TEMP%) -> gorevleri
 # durdur -> klasordeki surecleri kapat -> yeniden adlandir -> gorev yollarini guncelle -> venv activate yollari -> Claude hafizasi
 # kopyasi -> panel + TLS vekili baslat, saglik denetimi -> isci gorevini ac. Yeniden adlandirmadan sonra hata olursa klasor eski
 # adina dondurulur ve gorevler yedekten geri yuklenir. Sonra VS Code'da E:\TAMLIFE klasorunu acin.
@@ -42,14 +43,9 @@ function Surecleri-Kapat($kok) {
     $kalan = Klasor-Surecleri $kok
     if ($kalan.Count -gt 0) { throw ('Kapatilamayan surec var: ' + (($kalan | ForEach-Object { '' + $_.ProcessId + ' ' + $_.Name }) -join ', ')) }
 }
-function Gorev-Kaydet($ad, $xml, $parola) {
-    $yeniXml = [xml]$xml
-    $tip = $yeniXml.Task.Principals.Principal.LogonType
-    if ($tip -eq 'Password') {
-        Register-ScheduledTask -TaskName $ad -Xml $xml -User $TamlifeCalismaHesabi -Password $parola -Force | Out-Null
-    } else {
-        Register-ScheduledTask -TaskName $ad -Xml $xml -Force | Out-Null
-    }
+# Gorevler parolasiz (Interactive) kipte olmali; parolali kip on denetimde reddedilir (PAM 24 sa donusu, 2026-10-25).
+function Gorev-Kaydet($ad, $xml) {
+    Register-ScheduledTask -TaskName $ad -Xml $xml -Force | Out-Null
 }
 function Gorevleri-Durdur {
     if (Get-ScheduledTask -TaskName $Isci -ErrorAction SilentlyContinue) { Disable-ScheduledTask -TaskName $Isci | Out-Null }
@@ -79,12 +75,14 @@ if (-not $yonetici) { throw 'Yonetici (yukseltilmis) PowerShell gerekli.' }
 if (-not (Test-Path -LiteralPath $Eski)) { throw ('Kaynak klasor yok: ' + $Eski) }
 if (Test-Path -LiteralPath $Yeni) { throw ('Hedef zaten var: ' + $Yeni + ' (dokunulmadi)') }
 if ((Get-Location).Path -like ($Eski + '*')) { throw ('Klasorun disindan calistirin: once  cd E:\') }
-foreach ($ad in $Gorevler) { Get-ScheduledTask -TaskName $ad | Out-Null }
+foreach ($ad in $Gorevler) {
+    if ((Get-ScheduledTask -TaskName $ad).Principal.LogonType -eq 'Password') {
+        throw ($ad + ' parolali kipte. Once parolasiz kipe alin: ' + $PSScriptRoot + '\canli_gorev_kur.ps1 -Hemen')
+    }
+}
 $acik = @(Get-Process -Name 'Code' -ErrorAction SilentlyContinue)
 if ($acik.Count -gt 0) { Uyar 'VS Code acik gorunuyor. Klasorde dosya tutuyorsa yeniden adlandirma basarisiz olur (o durumda hicbir sey degismez).' }
 
-$bilgi = Tamlife-GorevKimlikBilgisi
-$parola = $bilgi.GetNetworkCredential().Password
 $yedekDizin = Join-Path $env:TEMP ('tamlife_gorev_yedek_' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $yedekDizin -Force | Out-Null
 $yedek = @{}
@@ -112,7 +110,7 @@ try {
     $asama = 'gorevler'
     foreach ($ad in $Gorevler) {
         $xml = [regex]::Replace($yedek[$ad], [regex]::Escape($Eski + '\'), ($Yeni + '\').Replace('$', '$$'), 'IgnoreCase')
-        Gorev-Kaydet $ad $xml $parola
+        Gorev-Kaydet $ad $xml
         Yaz ('Gorev guncellendi: ' + $ad)
     }
     Disable-ScheduledTask -TaskName $Isci | Out-Null  # saglik denetiminden sonra acilir
@@ -144,7 +142,7 @@ try {
             Uyar 'Geri aliniyor: klasor eski adina, gorevler yedekten.'
             Surecleri-Kapat $Yeni
             Rename-Item -LiteralPath $Yeni -NewName (Split-Path -Leaf $Eski)
-            foreach ($ad in $Gorevler) { Gorev-Kaydet $ad $yedek[$ad] $parola }
+            foreach ($ad in $Gorevler) { Gorev-Kaydet $ad $yedek[$ad] }
             Disable-ScheduledTask -TaskName $Isci | Out-Null
         }
         Gorevleri-Baslat
@@ -154,7 +152,4 @@ try {
         Write-Host ('    Gorev yedekleri: ' + $yedekDizin + '  (Register-ScheduledTask -Xml ile geri yuklenir)') -ForegroundColor Red
     }
     exit 1
-} finally {
-    $parola = $null
-    $bilgi = $null
 }

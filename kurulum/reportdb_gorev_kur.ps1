@@ -1,10 +1,10 @@
 # TAMLIFE v3.5 veri iscisi: ReportDB alarm senkronu (python -m app.isci reportdb) icin zamanlanmis gorevi kurar / kaldirir.
 # Uretim isletim\reportdb_gorev_kur.ps1 uyarlamasi. Betik saf ASCII (PS 5.1).
 #   .\reportdb_gorev_kur.ps1 -Kuru      : kurmaz; su anki kimlikle bir kez --kuru calistirir (yazmadan sorgu denemesi)
-#   .\reportdb_gorev_kur.ps1            : gorevi kurar (YONETICI PowerShell; -Kullanici parolasi sorulur)
+#   .\reportdb_gorev_kur.ps1            : gorevi kurar (YONETICI PowerShell; parola sorulmaz, hesabin oturumunda kosar)
 #   .\reportdb_gorev_kur.ps1 -Kaldir    : gorevi siler (Instant Client klasorune dokunmaz)
 # Gorev her -Dakika dakikada -Kullanici kimligiyle kosar: Oracle giris tetikleyicisi yalniz izinli kimlik/makineyi kabul eder,
-# panel (web) sureci Oracle'a baglanmaz. Ayni anda tek calisma, en fazla 5 dk. Parola yalniz gorev kaydina yazilir (dosya/gunluk yok).
+# panel (web) sureci Oracle'a baglanmaz. Ayni anda tek calisma, en fazla 5 dk. Windows parolasi saklanmaz.
 # Ayarlar backend\.env (panelle AYNI dosya): ORACLE_REPORTDB_* ve panel DB adresi (TAMLIFE_DATABASE_URL). ORACLE_REPORTDB_ENABLED=true
 # olmadan gorev Oracle'a baglanmaz, hicbir sey yazmaz (cikis 1). Gunluk: backend\var\logs\isci.log (ya da TAMLIFE_LOG_DIR).
 param([switch]$Kaldir,
@@ -63,14 +63,12 @@ if (-not ([Security.Principal.WindowsPrincipal]$kimlik).IsInRole([Security.Princ
 }
 if ($Dakika -lt 2 -or $Dakika -gt 60) { Dur "Dakika 2 ile 60 arasinda olmali" }
 
-$gorevBilgi = Tamlife-GorevKimlikBilgisi
 $eylem = New-ScheduledTaskAction -Execute $Pyw -Argument ('-m app.isci reportdb --client "{0}"' -f $Istemci) -WorkingDirectory $Backend
 $tetik = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(3) -RepetitionInterval (New-TimeSpan -Minutes $Dakika)
 $ayar = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-try {
-    Register-ScheduledTask -TaskName $Ad -Action $eylem -Trigger $tetik -Settings $ayar -User $TamlifeCalismaHesabi -Password ($gorevBilgi.GetNetworkCredential().Password) -RunLevel Highest -Force | Out-Null
-} finally { $gorevBilgi = $null }
-Adim "Gorev kuruldu: $Ad (her $Dakika dk; ilk calisma ~3 dk sonra)"
+# Parolasiz (2026-10-25): hesap parolasi PAM ile 24 saatte bir donuyor; gorev hesabin acik oturumunda kosar (calisma_kimligi.ps1).
+Register-ScheduledTask -TaskName $Ad -Action $eylem -Trigger $tetik -Settings $ayar -Principal (Tamlife-OturumKimligi) -Force | Out-Null
+Adim "Gorev kuruldu: $Ad (her $Dakika dk; ilk calisma ~3 dk sonra; TAMLIFEADLOG oturumu acikken, parolasiz)"
 Write-Host "Hemen denemek icin:  Start-ScheduledTask -TaskName $Ad ; Start-Sleep 30 ; Get-ScheduledTaskInfo -TaskName $Ad ; Get-Content $Backend\var\logs\isci.log -Tail 3" -ForegroundColor Green
 Write-Host "Cikis kodu: 0 basarili | 1 hata | 2 onceki calisma suruyor (atlandi)" -ForegroundColor Green
 Write-Host "Kaldirmak icin:      $PSScriptRoot\reportdb_gorev_kur.ps1 -Kaldir" -ForegroundColor Green
