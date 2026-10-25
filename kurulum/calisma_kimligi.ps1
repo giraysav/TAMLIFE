@@ -13,15 +13,11 @@ function Tamlife-GorevKimligi {
 }
 
 function Tamlife-GorevKimlikBilgisi {
-    $bilgi = Get-Credential -UserName $TamlifeCalismaHesabi -Message 'TAMLIFE Windows gorevleri icin hesap parolasini girin. DB parolasi degildir.'
-    if ($null -eq $bilgi) { throw 'Parola penceresi iptal edildi (ya da kapatildi). Gorevler degistirilmedi.' }
-    # Kullanici adi TURKCELL\TAMLIFEADLOG, TAMLIFEADLOG ya da TAMLIFEADLOG@... yazilabilir; hepsi ayni hesap.
-    $girilen = $bilgi.UserName.Trim()
-    if ($girilen.Contains('\')) { $girilen = $girilen.Split('\')[1] }
-    if ($girilen.Contains('@')) { $girilen = $girilen.Split('@')[0] }
-    if ($girilen -ine $TamlifeCalismaHesabi.Split('\')[1]) {
-        throw ('Hesap farkli: ' + $bilgi.UserName + ' girildi, ' + $TamlifeCalismaHesabi + ' bekleniyor. Gorevler degistirilmedi.')
-    }
+    # 2026-10-25: Get-Credential penceresi uzak masaustu / yukseltilmis oturumda acilmadan $null donuyordu; parola konsoldan sorulur.
+    Write-Host ('TAMLIFE Windows gorevleri icin ' + $TamlifeCalismaHesabi + ' etki alani parolasi (DB parolasi degildir; bos = iptal).')
+    $gizli = Read-Host -AsSecureString -Prompt 'Parola'
+    if ($null -eq $gizli -or $gizli.Length -eq 0) { throw 'Parola girilmedi. Gorevler degistirilmedi.' }
+    $bilgi = New-Object System.Management.Automation.PSCredential($TamlifeCalismaHesabi, $gizli)
     # 2026-10-23: eskimis parola gorev kaydina yazilinca acilista 0x8007052E (oturum acilamadi) ile hicbir gorev baslamiyordu.
     # Kayittan ONCE etki alaninda dogrulanir; yanlissa hicbir gorev degismez.
     Add-Type -AssemblyName System.DirectoryServices.AccountManagement
