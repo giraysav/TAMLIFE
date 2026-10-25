@@ -81,6 +81,31 @@ def test_toplu_ata_sinirlari_ve_personel(client, monkeypatch):
     assert client.post(f"{URL}/toplu-ata", json={"musteri_nolar": ["22306933"], "tam_id": 1}).status_code == 403  # CSRF'siz
 
 
+def test_radar_personel_gibi_atanir_farktan_duser_geri_doner(client, monkeypatch):
+    _kur(monkeypatch)
+    hdr = login_ok(client)
+    assert client.get("/api/v1/radar").json()["data"]["toplam_musteri"] == 0  # Radar yalniz kendisine atananlari gosterir
+    r = client.post(f"{URL}/radara-ata", json={"musteri_nolar": ["22306933", "33333333", "10000001", "99999999"]}, headers=hdr)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["atanan"] == 2 and {x["musteri_no"] for x in d["atlanan"]} == {"10000001", "99999999"}  # kartta yazili / TEMIP kaydi yok
+    tekrar = client.post(f"{URL}/radara-ata", json={"musteri_nolar": ["22306933"]}, headers=hdr).json()["data"]
+    assert tekrar["atanan"] == 0  # zaten Radar'da
+    f = client.get(URL, params={"tur": "radar"}).json()["data"]
+    assert [m["musteri_no"] for m in f["satirlar"]] == ["44444444"] and f["radarda"] == 2 and f["ozet"]["radar"]["musteri"] == 1
+    v = client.get("/api/v1/radar").json()["data"]
+    assert [s["musteri_no"] for s in v["satirlar"]] == ["22306933", "33333333"]
+    # Radar'dan personele atanan numara Radar'dan duser (kayitlar kartli)
+    assert client.post("/api/v1/tampon/temip/ata", json={"musteri_no": "33333333", "tam_id": kisi("tam")}, headers=hdr).status_code == 200
+    assert [s["musteri_no"] for s in client.get("/api/v1/radar").json()["data"]["satirlar"]] == ["22306933"]
+    # Radar'dan cikarilan kartsiz numara Fark'a doner
+    assert client.post(f"{URL}/radardan-cikar", json={"musteri_nolar": ["22306933"]}, headers=hdr).json()["data"]["cikarilan"] == 1
+    assert client.post(f"{URL}/radardan-cikar", json={"musteri_nolar": ["22306933"]}, headers=hdr).status_code == 404
+    assert client.get("/api/v1/radar").json()["data"]["toplam_musteri"] == 0
+    assert {m["musteri_no"] for m in client.get(URL, params={"tur": "radar"}).json()["data"]["satirlar"]} == {"22306933", "44444444"}
+    assert client.post(f"{URL}/radara-ata", json={"musteri_nolar": ["44444444"]}).status_code == 403  # CSRF'siz
+
+
 def test_personelsiz_karta_tam_secilir(client, monkeypatch):
     a = _kur(monkeypatch)
     tam = kisi("tam")
@@ -95,3 +120,4 @@ def test_personelsiz_karta_tam_secilir(client, monkeypatch):
 def test_fark_yalniz_admin(client):
     assert client.get(URL).status_code == 401
     assert client.post(f"{URL}/toplu-ata", json={"musteri_nolar": ["22306933"], "tam_id": 1}).status_code in (401, 403)
+    assert client.post(f"{URL}/radara-ata", json={"musteri_nolar": ["22306933"]}).status_code in (401, 403)

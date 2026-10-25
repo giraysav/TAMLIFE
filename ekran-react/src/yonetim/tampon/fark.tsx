@@ -4,7 +4,7 @@ import { Link2, UserPlus, X } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Alan, Bildirim, Bos, DUGME, DUGME_ANA, GIRDI, HataKutu, Panel, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
-import type { FarkListesi, FarkSatiri, FarkTuru, TopluAtamaSonucu } from "@/yonetim/api"
+import type { FarkListesi, FarkSatiri, FarkTuru, RadarAtamaSonucu, TopluAtamaSonucu } from "@/yonetim/api"
 import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import { sayi } from "@/lib/bicim"
 import { Gosterge, Sayfalama } from "@/yonetim/ui"
@@ -16,6 +16,7 @@ const TURLER: FarkTuru[] = ["radar", "belirsiz", "kart_personelsiz"]
 const TON: Record<FarkTuru, "kirmizi" | "amber" | "gri"> = { radar: "gri", belirsiz: "kirmizi", kart_personelsiz: "amber" }
 const GOSTERGE_TON = { radar: "notr", belirsiz: "hata", kart_personelsiz: "uyari" } as const
 const BAG = "font-black text-tl-blue underline-offset-2 hover:underline"
+const RADAR = "radar" // toplu atamada personel gibi secilen Musteri Radar (kart acilmaz, numara Radar'a gider)
 type Personel = { id: number; ad: string }
 type Mesaj = { ton: "yesil" | "amber"; metin: string }
 
@@ -23,12 +24,13 @@ function usePersonel() {
   return useQuery({ queryKey: ["tampon", "temip", "personel"], queryFn: () => oku<Personel[]>("/api/v1/tampon/temip/personel"), staleTime: 300_000 })
 }
 
-function PersonelSecimi({ dil, deger, onDegis, etiket }: { dil: Dil; deger: string; onDegis: (v: string) => void; etiket: string }) {
+function PersonelSecimi({ dil, deger, onDegis, etiket, radar = false }: { dil: Dil; deger: string; onDegis: (v: string) => void; etiket: string; radar?: boolean }) {
   const f = tm(dil).fark
   const personel = usePersonel()
   return (
     <select className={GIRDI} aria-label={etiket} value={deger} onChange={(e) => onDegis(e.target.value)}>
       <option value="">{f.personelSec}</option>
+      {radar ? <option value={RADAR}>{f.radarSecenek}</option> : null}
       {(personel.data ?? []).map((p) => (
         <option key={p.id} value={p.id}>
           {p.ad}
@@ -69,6 +71,16 @@ export function FarkAlani({ dil }: { dil: Dil }) {
     },
     onError: (e) => setMesaj({ ton: "amber", metin: hataMesaji(e, f.islemBasarisiz) }),
   })
+  const radar = useMutation({
+    mutationFn: (govde: { musteri_nolar: string[] }) => yaz<RadarAtamaSonucu>("POST", "/api/v1/tampon/fark/radara-ata", govde),
+    onSuccess: (s) => {
+      setMesaj({ ton: s.atlanan.length ? "amber" : "yesil", metin: f.radarSonuc(s.atanan, s.atlanan.length) })
+      setAtlanan(s.atlanan)
+      setSecili(new Set())
+      yenile()
+    },
+    onError: (e) => setMesaj({ ton: "amber", metin: hataMesaji(e, f.islemBasarisiz) }),
+  })
   const sahip = useMutation({
     mutationFn: (govde: { kart_id: number; tam_id: number }) => yaz<{ kart: string; personel: string }>("POST", "/api/v1/tampon/fark/kart-sahibi", govde),
     onSuccess: (s) => {
@@ -85,6 +97,7 @@ export function FarkAlani({ dil }: { dil: Dil }) {
   const farkKayit = TURLER.reduce((n, d) => n + r.ozet[d].kayit, 0)
   const sayfaKartsiz = r.satirlar.filter((m) => m.durum === "radar").map((m) => m.musteri_no)
   const kisi = personel.data?.find((p) => String(p.id) === tam)
+  const radaraMi = tam === RADAR
   const degistir = (no: string) =>
     setSecili((onceki) => {
       const yeni = new Set(onceki)
@@ -101,7 +114,18 @@ export function FarkAlani({ dil }: { dil: Dil }) {
     <div className="grid gap-4">
       <Panel baslik={f.baslik} aciklama={f.aciklama}>
         <div className={`grid gap-3 ${q.isPlaceholderData ? "opacity-70" : ""}`}>
-          <p className="text-xs font-black text-tl-navy">{f.toplamKayit(sayi(farkKayit), sayi(r.toplam_kayit))}</p>
+          <p className="text-xs font-black text-tl-navy">
+            {f.toplamKayit(sayi(farkKayit), sayi(r.toplam_kayit))}
+            {r.radarda ? (
+              <>
+                {" · "}
+                {f.radarda(sayi(r.radarda))}{" "}
+                <a href="#/radar" className={BAG}>
+                  {f.radaraGit}
+                </a>
+              </>
+            ) : null}
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {TURLER.map((d) => (
               <button key={d} type="button" className="text-left" aria-pressed={tur === d} onClick={() => filtre(() => setTur(tur === d ? "" : d))}>
@@ -156,14 +180,16 @@ export function FarkAlani({ dil }: { dil: Dil }) {
                 {f.secili(secili.size)}
               </span>
               <Alan etiket={f.topluPersonel} sinif="w-64">
-                <PersonelSecimi dil={dil} deger={tam} onDegis={setTam} etiket={f.topluPersonel} />
+                <PersonelSecimi dil={dil} deger={tam} onDegis={setTam} etiket={f.topluPersonel} radar />
               </Alan>
               <button
                 type="button"
                 className={DUGME_ANA}
-                disabled={!secili.size || !kisi || toplu.isPending}
+                disabled={!secili.size || !(kisi || radaraMi) || toplu.isPending || radar.isPending}
                 onClick={() => {
-                  if (kisi && window.confirm(f.topluOnay(secili.size, kisi.ad))) toplu.mutate({ musteri_nolar: [...secili], tam_id: kisi.id })
+                  if (radaraMi) {
+                    if (window.confirm(f.radarOnay(secili.size))) radar.mutate({ musteri_nolar: [...secili] })
+                  } else if (kisi && window.confirm(f.topluOnay(secili.size, kisi.ad))) toplu.mutate({ musteri_nolar: [...secili], tam_id: kisi.id })
                 }}
               >
                 <UserPlus aria-hidden className="size-4" />

@@ -5,6 +5,10 @@ eslesmeyen kayitlar Radar'indir. Liste Musteri No'ya gore toplanir (acik / kapal
 (ticket, CI, baslik, durum). Esleme yalniz numarayla; unvani bir kartla ayni olan musteri dislanmaz, 'kart_adayi' olarak isaretlenir
 (kartina Musteri No eklenince kayitlari sonraki turda o karta gecer). TEMIP kaydi yoksa asagidaki eski ozet kurali calisir.
 
+Musteri Radar personel gibi (2026-10-25 kullanici istegi): liste yalniz Veri Girisi > Fark'ta Radar'a atanan kartsiz numaralardir
+(tampon/temip_atama.RADAR_AYARI); atanmamis kartsiz numaralar Fark'ta bekler. Radar'da admin numarayi personele atar ya da Fark'a geri
+gonderir.
+
 Eski kural (TEMIP kaydi yokken):
 
 Kural (uretimle ayni): ReportDB tamponunun son hazir partisinde kayit (alarm; aktif + kapanan, yil basindan) ureten ama panelde
@@ -63,8 +67,15 @@ def _radar_kosulu():
     return (OnedeskRecord.source == _temip().KAYNAK_ADI) & OnedeskRecord.customer_id.is_(None)
 
 
+def _radar_numaralari(db: Session) -> set[str]:
+    from app.tampon import temip_atama  # gec import: _temip ile ayni neden
+
+    return temip_atama.radar_numaralari(db)
+
+
 def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
-    """Kartsiz TEMIP kayitlari Musteri No'ya gore (toplam azalan). Her yazimda degisen surum + kart tablosu izine gore onbellekte."""
+    """Radar'a atanan kartsiz TEMIP kayitlari Musteri No'ya gore (toplam azalan). Her yazimda (Radar atamasi dahil) degisen surum + kart
+    tablosu izine gore onbellekte."""
     global _KAYIT_ONBELLEK
     iz = (_temip().surum(db), *db.execute(select(func.count(), func.max(Customer.id))).one())
     with _KILIT:
@@ -81,6 +92,7 @@ def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
         .where(_radar_kosulu())
         .group_by(OnedeskRecord.customer_no)
     ).all()
+    radarda = _radar_numaralari(db)
     liste = [
         {
             "musteri_no": no,
@@ -93,6 +105,7 @@ def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
             "kart_adayi": cekirdekler.get(unvan_cekirdegi(unvan or "")),
         }
         for no, unvan, a, n, t, son in satirlar
+        if no in radarda
     ]
     liste.sort(key=lambda r: (-r["toplam"], r["unvan"]))
     for i, r in enumerate(liste, 1):
@@ -144,6 +157,8 @@ def kayitlar(db: Session, musteri_no: str, sayfa: int = 1) -> dict[str, Any]:
     if not musteri_no.isdigit() or len(musteri_no) > 20:
         raise RadarHata(400, "Müşteri No geçersiz.")
     sayfa = max(1, sayfa)
+    if musteri_no not in _radar_numaralari(db):
+        raise RadarHata(404, "Bu Müşteri No Müşteri Radar'a atanmamış.")
     kosul = _radar_kosulu() & (OnedeskRecord.customer_no == musteri_no)
     toplam = db.scalar(select(func.count()).select_from(OnedeskRecord).where(kosul)) or 0
     if not toplam:

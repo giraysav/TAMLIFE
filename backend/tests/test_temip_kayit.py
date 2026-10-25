@@ -15,7 +15,7 @@ from app.models import AppUser, Customer, OnedeskRecord
 from app.onedesk import servis as onedesk
 from app.radar import servis as radar
 from app.session import Principal
-from app.tampon import oracle, reportdb, temip_kayit
+from app.tampon import oracle, reportdb, temip_atama, temip_kayit
 from tests.conftest import login_ok
 
 ADMIN = Principal(username="admin", role="admin", is_admin=True)
@@ -202,9 +202,11 @@ def test_onedesk_radar_kayitlarini_saymaz_radar_musteri_bazinda_listeler(client,
         tsatir("2", "10000001"),
         tsatir("7", "40000004", unvan="VODAFONE NET ILETISIM A.S.", ticket=""),
         tsatir("8", "50000005", unvan="BASKA FIRMA"),
+        tsatir("9", "60000006", unvan="RADARA ATANMAMIS"),  # Fark'ta bekler, Radar'da yok
     ]
     calistir()
     with Session(engine()) as db:
+        assert temip_atama.radara_gonder(db, ["40000004", "50000005"], "admin")["atanan"] == 2
         d = onedesk.durum(db, ADMIN, "acik")
         assert d["toplam"]["alarm"] == 1 and [m["id"] for m in d["musteriler"]] == [a]  # kartsiz TEMIP kaydi Onedesk'e girmez
         v = radar.adaylar(db, adet=10)
@@ -223,6 +225,7 @@ def test_onedesk_radar_kayitlarini_saymaz_radar_musteri_bazinda_listeler(client,
         "ayrinti": "Closed/atm", "acilis": None, "kapanis": None}  # fmt: skip
     assert client.get("/api/v1/radar/10000001/kayitlar").status_code == 404  # karta bagli kayit Radar'da yok
     assert client.get("/api/v1/radar/abc/kayitlar").status_code == 400
+    assert client.get("/api/v1/radar/60000006/kayitlar").status_code == 404  # kartsiz ama Radar'a atanmamis
     assert client.get("/api/v1/radar?adet=2&q=VODAFONE").json()["data"]["toplam_musteri"] == 1
 
 

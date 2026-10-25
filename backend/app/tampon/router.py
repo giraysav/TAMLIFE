@@ -144,6 +144,10 @@ class FarkTopluGovde(BaseModel):
     tam_id: KimlikTipi
 
 
+class FarkRadarGovde(BaseModel):
+    musteri_nolar: list[str] = Field(min_length=1, max_length=fark.TOPLU_AZAMI)
+
+
 class FarkSahipGovde(BaseModel):
     kart_id: KimlikTipi
     tam_id: KimlikTipi
@@ -168,6 +172,22 @@ def fark_toplu_ata(govde: FarkTopluGovde, admin: Principal = Depends(require_adm
     """Secilen kartsiz numaralari personele ata: her numaraya TEMIP unvaniyla yeni kart, kayitlar tek seferde baglanir."""
     sonuc = fark.toplu_ata(db, admin, [n[:20] for n in govde.musteri_nolar], govde.tam_id)
     _denetim(admin, "tampon.fark_toplu_ata", f"tam={govde.tam_id} atanan={sonuc['atanan']} atlanan={len(sonuc['atlanan'])}")
+    return ok(sonuc)
+
+
+@router.post("/fark/radara-ata")
+def fark_radara_ata(govde: FarkRadarGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Secilen kartsiz numaralari Musteri Radar'a gonder (kart acilmaz); Radar sayfasinda personele atanir."""
+    sonuc = temip_atama.radara_gonder(db, [n[:20] for n in govde.musteri_nolar], admin.username)
+    _denetim(admin, "tampon.fark_radara_ata", f"atanan={sonuc['atanan']} atlanan={len(sonuc['atlanan'])}")
+    return ok(sonuc)
+
+
+@router.post("/fark/radardan-cikar")
+def fark_radardan_cikar(govde: FarkRadarGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Numaralari Musteri Radar'dan cikar (kartsizsa Fark'a doner)."""
+    sonuc = temip_atama.radardan_cikar(db, [n[:20] for n in govde.musteri_nolar], admin.username)
+    _denetim(admin, "tampon.fark_radardan_cikar", f"cikarilan={sonuc['cikarilan']}")
     return ok(sonuc)
 
 

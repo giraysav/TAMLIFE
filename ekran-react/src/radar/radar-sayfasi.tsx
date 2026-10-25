@@ -1,11 +1,11 @@
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { Link2, Radar } from "lucide-react"
-import { AtamaPaneli, ElleAtamalar, atamaMetin } from "@/components/temip-atama"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { Link2, Radar, Undo2 } from "lucide-react"
+import { AtamaPaneli, ElleAtamalar, atamaMetin, useAtamaYenile } from "@/components/temip-atama"
 import type { AtamaHedefi } from "@/components/temip-atama"
 import { Bildirim, BosKutu, DUGME, GIRDI, HataKutu, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { sayi, zaman } from "@/lib/bicim"
-import { hataMesaji, oku, sorguMetni } from "@/lib/sorgu"
+import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
 import { radarMetin } from "@/radar/radar-metin"
 
@@ -38,7 +38,8 @@ const ADET = 50
 
 /** TAM Radar: Musteri No'su hicbir kartla eslesmeyen TEMIP alarm kayitlari, musteri bazinda; elle giris yok. Sikayet/talep OneDesk'ten gelir (erisim bekleniyor). */
 /** yonetici (admin): her satirda "Personele ata" (TEMIP Musteri No'sunu personelin mevcut kartina ekle ya da personele yeni kart ac;
- *  Veri Girisi > TEMIP eslesmesi ile ayni bilesen ve ayni uclar) ve elle atamalar listesi. */
+ *  Veri Girisi > TEMIP eslesmesi ile ayni bilesen ve ayni uclar), "Fark'a gonder" ve elle atamalar listesi. Liste yalniz Veri Girisi >
+ *  Fark'ta Musteri Radar'a atanan kartsiz numaralardir (2026-10-25: Radar personel gibi). */
 export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: boolean }) {
   const t = radarMetin(dil)
   const [sayfa, setSayfa] = useState(1)
@@ -46,6 +47,17 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
   const [secili, setSecili] = useState<string | null>(null)
   const [hedef, setHedef] = useState<AtamaHedefi | null>(null)
   const a = atamaMetin(dil)
+  const yenile = useAtamaYenile()
+  const [mesaj, setMesaj] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
+  const farka = useMutation({
+    mutationFn: (no: string) => yaz<{ cikarilan: number }>("POST", "/api/v1/tampon/fark/radardan-cikar", { musteri_nolar: [no] }),
+    onSuccess: (_, no) => {
+      setMesaj({ ton: "yesil", metin: t.farkaGitti(no) })
+      if (secili === no) setSecili(null)
+      yenile()
+    },
+    onError: (e) => setMesaj({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
+  })
   const q = useQuery({
     queryKey: ["radar", sayfa, arama],
     queryFn: () => oku<RadarVeri>(`/api/v1/radar${sorguMetni({ sayfa, adet: ADET, q: arama.trim() || undefined })}`),
@@ -73,6 +85,7 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
         ) : v ? (
           <div className="grid gap-3">
             {!v.taze ? <Bildirim ton="amber">{t.bayat}</Bildirim> : null}
+            {mesaj ? <Bildirim ton={mesaj.ton}>{mesaj.metin}</Bildirim> : null}
             {kayitModu ? (
               <div className="flex flex-wrap items-end gap-3">
                 <label className="grid gap-1 text-xs font-bold text-slate-600">
@@ -98,7 +111,7 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
               satirlar={v.satirlar}
               anahtar={(a) => a.musteri_no}
               vurgulu={(a) => a.musteri_no === secili}
-              bos={<BosKutu ikon={Radar} baslik={t.bos} />}
+              bos={<BosKutu ikon={Radar} baslik={kayitModu ? t.bosKayit : t.bos} />}
               kolonlar={[
                 { baslik: "#", hucre: (a) => a.sira, sinif: "w-10 text-center text-slate-400" },
                 {
@@ -127,6 +140,19 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
                               <button type="button" className={DUGME} onClick={() => setHedef({ musteri_no: s.musteri_no, temip_unvan: s.unvan })}>
                                 <Link2 aria-hidden className="size-3.5" />
                                 {a.karttaAta}
+                              </button>
+                            ) : null}
+                            {yonetici ? (
+                              <button
+                                type="button"
+                                className={DUGME}
+                                disabled={farka.isPending}
+                                onClick={() => {
+                                  if (window.confirm(t.farkaOnay(s.musteri_no))) farka.mutate(s.musteri_no)
+                                }}
+                              >
+                                <Undo2 aria-hidden className="size-3.5" />
+                                {t.farkaGonder}
                               </button>
                             ) : null}
                             <button type="button" className={DUGME} aria-expanded={secili === s.musteri_no} onClick={() => setSecili(secili === s.musteri_no ? null : s.musteri_no)}>

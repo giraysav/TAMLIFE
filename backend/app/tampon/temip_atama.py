@@ -24,6 +24,10 @@ from app.tampon import temip_kayit
 from app.tampon.eslestirme import anahtar, musteri_anahtarlari
 
 ATAMA_AYARI = "temip.manuel_atamalar"
+# Fark > "Musteri Radar" (2026-10-25 kullanici istegi: "Fark'ta Musteri Radar'i bir personel gibi calistir; Radar'a gelenleri manuel
+# atayayim"): Radar yalniz buraya gonderilen kartsiz numaralari gosterir. Numara karta baglaninca Radar'dan kendiliginden duser
+# (kayitlar kartli); elle atamasi geri alininca yeniden Radar'da gorunur.
+RADAR_AYARI = "radar.atananlar"
 _NO = re.compile(r"^\d{8}$")
 NO_ALANI_UZUNLUK = 200  # customer.customer_no
 
@@ -32,15 +36,15 @@ class AtamaHata(UygulamaHatasi):
     pass
 
 
-def _liste(db: Session) -> list[dict[str, Any]]:
-    a = db.get(AppSetting, ATAMA_AYARI)
+def _liste(db: Session, ayar: str = ATAMA_AYARI) -> list[dict[str, Any]]:
+    a = db.get(AppSetting, ayar)
     return list(a.value) if a is not None and isinstance(a.value, list) else []
 
 
-def _liste_yaz(db: Session, liste: list[dict[str, Any]], kullanici: str) -> None:
-    a = db.get(AppSetting, ATAMA_AYARI)
+def _liste_yaz(db: Session, liste: list[dict[str, Any]], kullanici: str, ayar: str = ATAMA_AYARI) -> None:
+    a = db.get(AppSetting, ayar)
     if a is None:
-        db.add(AppSetting(key=ATAMA_AYARI, value=liste, updated_by=kullanici, updated_at=simdi()))
+        db.add(AppSetting(key=ayar, value=liste, updated_by=kullanici, updated_at=simdi()))
     else:
         a.value, a.updated_by, a.updated_at = liste, kullanici, simdi()
 
@@ -206,3 +210,52 @@ def kart_ara(db: Session, q: str, tam_id: int | None = None, adet: int = 15) -> 
             if len(sonuc) >= adet:
                 break
     return sonuc
+
+
+# --- Musteri Radar (Fark'ta personel gibi secilen hedef) ------------------------------------------------------------------
+def radar_listesi(db: Session) -> list[dict[str, Any]]:
+    return _liste(db, RADAR_AYARI)
+
+
+def radar_numaralari(db: Session) -> set[str]:
+    return {str(a.get("musteri_no")) for a in radar_listesi(db)}
+
+
+@musteri_alani.tum_alanlarda
+def radara_gonder(db: Session, musteri_nolar: list[str], kullanici: str) -> dict[str, Any]:
+    """Kartsiz numaralari Musteri Radar'a gonderir (kart acilmaz, kayitlar kartsiz kalir). Kartta yazili, TEMIP kaydi olmayan ya da zaten
+    Radar'da olan numara atlanir (neden listelenir)."""
+    liste = radar_listesi(db)
+    var = {a.get("musteri_no") for a in liste}
+    atanan: list[dict[str, Any]] = []
+    atlanan: list[dict[str, str]] = []
+    for ham in dict.fromkeys(n.strip() for n in musteri_nolar if n and n.strip()):
+        try:
+            no, kayit, unvan = _dogrula(db, ham)
+            if no in var:
+                raise AtamaHata(409, "Zaten Müşteri Radar'da.")
+            if sahipler := _numara_sahipleri(db, no):
+                raise AtamaHata(409, f"Bu numara zaten kartta yazılı: {', '.join(c.name for c in sahipler)}.")
+        except UygulamaHatasi as hata:
+            atlanan.append({"musteri_no": ham, "neden": hata.mesaj})
+            continue
+        var.add(no)
+        atanan.append({"musteri_no": no, "temip_unvan": unvan, "kayit": kayit, "kim": kullanici, "zaman": iso(simdi())})
+    if atanan:
+        _liste_yaz(db, [*atanan, *liste], kullanici, RADAR_AYARI)
+        surum_tazele(db)  # Radar / Fark onbellekleri
+        db.commit()
+    return {"atanan": len(atanan), "atlanan": atlanan}
+
+
+def radardan_cikar(db: Session, musteri_nolar: list[str], kullanici: str) -> dict[str, Any]:
+    """Numaralari Musteri Radar'dan cikarir; kartsizsa yeniden Fark'ta listelenir."""
+    nolar = {n.strip() for n in musteri_nolar if n and n.strip()}
+    liste = radar_listesi(db)
+    kalan = [a for a in liste if a.get("musteri_no") not in nolar]
+    if len(kalan) == len(liste):
+        raise AtamaHata(404, "Bu numara Müşteri Radar'da değil.")
+    _liste_yaz(db, kalan, kullanici, RADAR_AYARI)
+    surum_tazele(db)
+    db.commit()
+    return {"cikarilan": len(liste) - len(kalan)}

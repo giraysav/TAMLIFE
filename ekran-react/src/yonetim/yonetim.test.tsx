@@ -633,6 +633,7 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
         if (ayar?.method === "POST") govdeler.push({ yol, govde: JSON.parse(String(ayar.body)) })
         const veri = yol.includes("/fark/toplu-ata") ? { atanan: 1, atlanan: [{ musteri_no: "22222222", neden: "Bu ünvanla kayıtlı başka bir müşteri var." }], kartlar: ["ORNEK 11111111"], yeniden_baglanan: 3, etkilenen_kart: 1 }
           : yol.includes("/fark/kart-sahibi") ? { kart_id: 7, kart: "ORNEK-D", personel: "Ornek Tam" }
+          : yol.includes("/fark/radara-ata") ? { atanan: 2, atlanan: [] }
           : yol.includes("/tampon/fark") ? liste
           : yol.includes("/temip/personel") ? [{ id: 5, ad: "Ornek Tam" }]
           : yol.includes("/temip/atamalar") ? []
@@ -659,6 +660,14 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     fireEvent.click(screen.getByRole("button", { name: f.tamSec }))
     expect(await screen.findByText(f.tamAtandi("ORNEK-D", "Ornek Tam"))).toBeInTheDocument()
     expect(govdeler[1]).toEqual({ yol: "/api/v1/tampon/fark/kart-sahibi", govde: { kart_id: 7, tam_id: 5 } })
+
+    // Musteri Radar personel gibi secilir: kart acilmaz, numaralar Radar'a gider
+    fireEvent.click(screen.getByRole("button", { name: f.sayfayiSec }))
+    fireEvent.change(screen.getByRole("combobox", { name: f.topluPersonel }), { target: { value: "radar" } })
+    expect(screen.getByRole("option", { name: f.radarSecenek })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: f.topluAta }))
+    expect(await screen.findByText(f.radarSonuc(2, 0))).toBeInTheDocument()
+    expect(govdeler[2]).toEqual({ yol: "/api/v1/tampon/fark/radara-ata", govde: { musteri_nolar: ["11111111", "22222222"] } })
   })
 })
 

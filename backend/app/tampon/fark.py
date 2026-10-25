@@ -7,6 +7,8 @@ Canli DB (ReportDB TEMIP) kayitlarinin kartla ya da TAM ile eslesmeyen musteri n
 - kart_personelsiz: karta baglanir ama kartin ve catisinin TAM'i yok.
 Tekil atama temip_atama (/temip/ata) ile yapilir; bu modul toplu atamayi (secilen numaralar -> personel adina yeni kartlar, TEK yeniden
 baglama) ve personelsiz karta TAM secmeyi ekler. Yalniz admin (Veri Girisi).
+Musteri Radar personel gibi secilebilir (2026-10-25): secilen kartsiz numaralar kart acilmadan Radar'a gider ve Fark'tan duser; Radar
+sayfasinda personele atanir (temip_atama.radara_gonder).
 """
 
 from __future__ import annotations
@@ -30,7 +32,9 @@ TOPLU_AZAMI = 200
 def liste(db: Session, tur: str = "", q: str = "", sayfa: int = 1) -> dict[str, Any]:
     """Eslesmeyen musteri numaralari (acik kaydi cok olan once). tur: FARK_DURUMLARI'ndan biri ya da bos (hepsi)."""
     r = temip_kayit.eslesme_raporu(db)
-    fark = [m for m in r["musteriler"] if m["durum"] in FARK_DURUMLARI]
+    radarda = temip_atama.radar_numaralari(db)  # Radar'a atanan kartsiz numara Radar'in (personele atanmis gibi)
+    fark = [m for m in r["musteriler"] if m["durum"] in FARK_DURUMLARI and not (m["durum"] == "radar" and m["musteri_no"] in radarda)]
+    radar_sayisi = sum(1 for m in r["musteriler"] if m["durum"] == "radar" and m["musteri_no"] in radarda)
     ozet = {d: {"musteri": 0, "kayit": 0, "acik": 0} for d in FARK_DURUMLARI}
     for m in fark:
         o = ozet[m["durum"]]
@@ -48,6 +52,7 @@ def liste(db: Session, tur: str = "", q: str = "", sayfa: int = 1) -> dict[str, 
     bas = (sayfa - 1) * SAYFA
     return {
         "ozet": ozet,
+        "radarda": radar_sayisi,
         "toplam_kayit": sum(m["toplam"] for m in r["musteriler"]),
         "toplam": toplam,
         "sayfa": sayfa,
