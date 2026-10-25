@@ -12,7 +12,8 @@ echo ========================================================
 echo TAMLIFE v3.5 - Sistem Yeniden Baslatma
 echo ========================================================
 
-net session >nul 2>&1
+rem Yonetici denetimi PowerShell ile: net.exe kurumsal politikayla engelli (2026-10-25, 'Executable Blocked').
+powershell.exe -NoProfile -Command "exit [int](-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))" >nul 2>&1
 if %errorLevel% neq 0 (
     echo [!] HATA: Yonetici yetkisi gerekli. Dosyaya sag tiklayip "Yonetici olarak calistir" secin.
     pause
