@@ -153,7 +153,7 @@ def _baslangic(deger: Any) -> str:
     metin = str(deger).strip().replace("T", " ")
     for bicim, uzunluk in (("%Y-%m-%d %H:%M", 16), ("%Y-%m-%d", 10)):
         try:
-            return datetime.strptime(metin[:uzunluk], bicim).strftime("%Y-%m-%d %H:%M")  # noqa: DTZ007 - Oracle DATE dilimsiz
+            return datetime.strptime(metin[:uzunluk], bicim).strftime("%Y-%m-%d %H:%M")
         except ValueError:
             continue
     raise KatalogHata(400, "Başlangıç YYYY-AA-GG SS:DD biçiminde olmalı.")
@@ -226,11 +226,11 @@ def ham_hazirla(bag: sqlite3.Connection, tablo: str, adaylar: list[str]) -> None
 
 def _ay_dilimleri(bas: str) -> list[tuple[str, str]]:
     """'YYYY-AA-GG SS:DD' -> [(alt, ust)] ay ay (son dilimin ustu None = SYSDATE + 1)."""
-    alt = datetime.strptime(bas, "%Y-%m-%d %H:%M")  # noqa: DTZ007
-    bugun = datetime.now()  # noqa: DTZ005 - Oracle SYSDATE ile ayni (sunucu yerel saati)
+    alt = datetime.strptime(bas, "%Y-%m-%d %H:%M")
+    bugun = datetime.now()
     dilimler: list[tuple[str, str]] = []
     while alt <= bugun:
-        ust = datetime(alt.year + (alt.month == 12), alt.month % 12 + 1, 1)  # noqa: DTZ001
+        ust = datetime(alt.year + (alt.month == 12), alt.month % 12 + 1, 1)
         dilimler.append((alt.strftime("%Y-%m-%d %H:%M"), "" if ust > bugun else ust.strftime("%Y-%m-%d %H:%M")))
         alt = ust
     return dilimler

@@ -70,7 +70,7 @@ class SahteImlec:
             self.arama_binds.append(self.son_binds)
             if '"OZET_V"' in sql:
                 return ("__D", "NO"), [("(domain sütunu yok)", "nw_li_cust_v")]
-            return ("__D", "NO", "ZAMAN", "NETWORK"), [("NOC DESTECH", "nw_li_cust_ornek_1", datetime(2026, 10, 18), "NOC DESTECH")]  # noqa: DTZ001
+            return ("__D", "NO", "ZAMAN", "NETWORK"), [("NOC DESTECH", "nw_li_cust_ornek_1", datetime(2026, 10, 18), "NOC DESTECH")]
         if " AS D, COUNT(*) AS N" in sql:  # arama toplamasi: domain basina satir + metin sutunu basina isabet
             h = len(re.findall(r'"H\d+"', sql))
             if "REPLACE(" in sql:
@@ -81,16 +81,16 @@ class SahteImlec:
             return ("D", "N", "HERHANGI", *[f"H{i}" for i in range(h)]), [("(domain sütunu yok)", 3, 0, *[0] * h)]
         if sql.startswith("SELECT * FROM") and "INSTR(LOWER(" in sql:  # domain + arama filtreli ornek
             self.arama_binds.append(self.son_binds)
-            return ("NO", "ZAMAN", "NETWORK"), [("nw_li_cust_ornek_1", datetime(2026, 10, 18), "NOC DESTECH")]  # noqa: DTZ001
+            return ("NO", "ZAMAN", "NETWORK"), [("nw_li_cust_ornek_1", datetime(2026, 10, 18), "NOC DESTECH")]
         if sql.startswith("SELECT * FROM"):
             if '"GECMIS" WHERE "EVENTTIME" >= SYSDATE' in sql:
-                return ("EVENTTIME", "ADET"), [(datetime(2026, 10, 18, 10, 0), 5), (datetime(2026, 10, 18, 10, 5), None)]  # noqa: DTZ001 - Oracle DATE dilimsiz gelir
+                return ("EVENTTIME", "ADET"), [(datetime(2026, 10, 18, 10, 0), 5), (datetime(2026, 10, 18, 10, 5), None)]
             if '"OZET_V"' in sql:
                 return ("NO",), []
             return ("NO", "ZAMAN"), [
-                ("10000001", datetime(2026, 10, 18)),  # noqa: DTZ001 - Oracle DATE dilimsiz gelir
-                ("10000001", datetime(2026, 10, 18)),  # noqa: DTZ001 - Oracle DATE dilimsiz gelir
-                (None, datetime(2026, 10, 18)),  # noqa: DTZ001 - Oracle DATE dilimsiz gelir
+                ("10000001", datetime(2026, 10, 18)),
+                ("10000001", datetime(2026, 10, 18)),
+                (None, datetime(2026, 10, 18)),
             ]
         raise AssertionError(f"beklenmeyen sorgu: {sql[:80]}")
 

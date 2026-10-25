@@ -78,7 +78,7 @@ def sayac(cid):
 def test_sorgular_tek_select_kurumsal_iki_yonlu_sinirli_kisisel_veri_yok():
     acik = oracle.sorgu_temizle(temip_kayit.acik_sorgusu(date(2026, 1, 1)))
     kapali = oracle.sorgu_temizle(temip_kayit.kapali_sorgusu("DATE '2026-01-01'", "SYSDATE + 1"))
-    kimlik = oracle.sorgu_temizle(temip_kayit.kimlik_sorgusu(["43581308", "1"], datetime(2026, 10, 1), datetime(2026, 10, 3)))  # noqa: DTZ001 - Oracle DATE dilimsiz
+    kimlik = oracle.sorgu_temizle(temip_kayit.kimlik_sorgusu(["43581308", "1"], datetime(2026, 10, 1), datetime(2026, 10, 3)))
     for s in (acik, kapali, kimlik):
         assert "IN ('NOC DESTECH')" in s and "REGEXP_LIKE(INFORMATION1, '^[0-9]{8}$')" in s
         assert "INSTR(LOWER(MANAGEDOBJECT), 'nw_li_cust') > 0 OR INSTR(LOWER(NODE1), 'nw_li_cust') > 0" in s
@@ -94,7 +94,7 @@ def test_sorgular_tek_select_kurumsal_iki_yonlu_sinirli_kisisel_veri_yok():
     assert "WHEN CLOSEUSERIDENTIFIER IN ('atm', 'Auto-Clear') THEN CLOSEUSERIDENTIFIER" in kapali and "ELSE 'operator'" in kapali
     for kotu in ([], ["1 OR 1=1"], ["abc"], ["1)"]):
         with pytest.raises(reportdb.ReportdbHata):
-            temip_kayit.kimlik_sorgusu(kotu, datetime(2026, 1, 1), datetime(2026, 1, 2))  # noqa: DTZ001
+            temip_kayit.kimlik_sorgusu(kotu, datetime(2026, 1, 1), datetime(2026, 1, 2))
 
 
 def test_baslangic_ayari_ve_ay_dilimleri(monkeypatch):

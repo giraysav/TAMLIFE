@@ -218,7 +218,7 @@ def kaydet(db: Session, rol: str, moduller: object, landing: object, actor: str,
     if moduller is not None:
         if not isinstance(moduller, list) or not all(isinstance(x, str) for x in moduller) or len(moduller) > 500:
             raise RolHata(400, "Modul listesi gecersiz.")
-        temiz = sorted(set(k for k in moduller if k in evren), key=tum_kimlikler().index)
+        temiz = sorted({k for k in moduller if k in evren}, key=tum_kimlikler().index)
     elif satir and satir.modules is not None:
         temiz = [k for k in satir.modules if k in evren]
     else:
