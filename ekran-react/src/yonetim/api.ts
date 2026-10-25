@@ -262,12 +262,15 @@ export type FarkListesi =
       hazir: true
       ozet: Record<FarkTuru, { musteri: number; kayit: number; acik: number }>
       radarda?: number
+      silinen?: number
       toplam_kayit: number
       toplam: number
       sayfa: number
       adet: number
       satirlar: FarkSatiri[]
     }
+export type FarkSiralama = "toplam" | "acik" | "musteri_no" | "unvan" | "durum" | "kart"
+export type FarkSilinen = { musteri_no: string; temip_unvan: string; durum: FarkTuru; toplam: number; kim: string; zaman: string }
 export type RadarAtamaSonucu = { atanan: number; atlanan: { musteri_no: string; neden: string }[] }
 export type TopluAtamaSonucu = { atanan: number; atlanan: { musteri_no: string; neden: string }[]; kartlar: string[]; yeniden_baglanan: number; etkilenen_kart: number }
 /** Ham Musteri Verisi: dosyanin katalogla karsilastirmasi. bicim: sablon | liste (takma adlar) | genis (cati/istirak). */

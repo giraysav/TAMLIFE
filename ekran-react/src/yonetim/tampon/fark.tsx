@@ -1,12 +1,12 @@
 import { useState } from "react"
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
-import { Link2, UserPlus, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, Link2, Trash2, Undo2, UserPlus, X } from "lucide-react"
 import type { Dil } from "@/shell/metin"
 import { Alan, Bildirim, Bos, DUGME, DUGME_ANA, GIRDI, HataKutu, Panel, Rozet, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { ANAHTAR } from "@/yonetim/api"
-import type { FarkListesi, FarkSatiri, FarkTuru, RadarAtamaSonucu, TopluAtamaSonucu } from "@/yonetim/api"
+import type { FarkListesi, FarkSatiri, FarkSilinen, FarkSiralama, FarkTuru, RadarAtamaSonucu, TopluAtamaSonucu } from "@/yonetim/api"
 import { hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
-import { sayi } from "@/lib/bicim"
+import { sayi, zaman } from "@/lib/bicim"
 import { Gosterge, Sayfalama } from "@/yonetim/ui"
 import { tm } from "@/yonetim/tampon/metin"
 import { AtamaPaneli, ElleAtamalar, atamaMetin, useAtamaYenile } from "@/components/temip-atama"
@@ -17,7 +17,9 @@ const TON: Record<FarkTuru, "kirmizi" | "amber" | "gri"> = { radar: "gri", belir
 const GOSTERGE_TON = { radar: "notr", belirsiz: "hata", kart_personelsiz: "uyari" } as const
 const BAG = "font-black text-tl-blue underline-offset-2 hover:underline"
 const RADAR = "radar" // toplu atamada personel gibi secilen Musteri Radar (kart acilmaz, numara Radar'a gider)
+const SAYISAL: FarkSiralama[] = ["toplam", "acik"] // ilk tiklamada buyukten kucuge; metinler A -> Z
 type Personel = { id: number; ad: string }
+type Yon = "artan" | "azalan"
 type Mesaj = { ton: "yesil" | "amber"; metin: string }
 
 function usePersonel() {
@@ -41,7 +43,8 @@ function PersonelSecimi({ dil, deger, onDegis, etiket, radar = false }: { dil: D
 }
 
 /** Veri Girisi > Fark (2026-10-24): canli DB (TEMIP) kayitlarinin kartla / TAM ile eslesmeyen musteri numaralari. Kartsiz numara tek tek
- *  (AtamaPaneli: mevcut karta ekle / yeni kart) ya da secilerek toplu (personel adina yeni kartlar) atanir; TAM'siz karta TAM secilir. */
+ *  (AtamaPaneli: mevcut karta ekle / yeni kart) ya da secilerek toplu (personel adina yeni kartlar) atanir; TAM'siz karta TAM secilir.
+ *  2026-10-25: sutun basligiyla siralama (sunucuda, tum liste), satir / toplu silme (gizleme; Silinenler'den geri alinir). */
 export function FarkAlani({ dil }: { dil: Dil }) {
   const t = tm(dil)
   const f = t.fark
@@ -54,8 +57,10 @@ export function FarkAlani({ dil }: { dil: Dil }) {
   const [hedef, setHedef] = useState<AtamaHedefi | null>(null)
   const [mesaj, setMesaj] = useState<Mesaj | null>(null)
   const [atlanan, setAtlanan] = useState<TopluAtamaSonucu["atlanan"]>([])
+  const [sirala, setSirala] = useState<FarkSiralama | "">("")
+  const [yon, setYon] = useState<Yon>("azalan")
   const personel = usePersonel()
-  const sorgu = { tur, q: arama.trim(), sayfa }
+  const sorgu = { tur, q: arama.trim(), sayfa, sirala, yon: sirala ? yon : "" }
   const q = useQuery({
     queryKey: [...ANAHTAR.fark, sorgu],
     queryFn: () => oku<FarkListesi>(`/api/v1/tampon/fark${sorguMetni(sorgu)}`),
@@ -81,6 +86,19 @@ export function FarkAlani({ dil }: { dil: Dil }) {
     },
     onError: (e) => setMesaj({ ton: "amber", metin: hataMesaji(e, f.islemBasarisiz) }),
   })
+  const sil = useMutation({
+    mutationFn: (nolar: string[]) => yaz<{ silinen: number; atlanan: TopluAtamaSonucu["atlanan"] }>("POST", "/api/v1/tampon/fark/sil", { musteri_nolar: nolar }),
+    onSuccess: (s) => {
+      setMesaj({ ton: s.atlanan.length ? "amber" : "yesil", metin: f.silSonuc(s.silinen, s.atlanan.length) })
+      setAtlanan(s.atlanan)
+      setSecili(new Set())
+      yenile()
+    },
+    onError: (e) => setMesaj({ ton: "amber", metin: hataMesaji(e, f.islemBasarisiz) }),
+  })
+  const silOnayla = (nolar: string[]) => {
+    if (nolar.length && window.confirm(f.silOnay(nolar.length))) sil.mutate(nolar)
+  }
   const sahip = useMutation({
     mutationFn: (govde: { kart_id: number; tam_id: number }) => yaz<{ kart: string; personel: string }>("POST", "/api/v1/tampon/fark/kart-sahibi", govde),
     onSuccess: (s) => {
@@ -95,7 +113,7 @@ export function FarkAlani({ dil }: { dil: Dil }) {
   const r = q.data
   if (!r.hazir) return <Bildirim ton="amber">{f.hazirDegil(r.neden)}</Bildirim>
   const farkKayit = TURLER.reduce((n, d) => n + r.ozet[d].kayit, 0)
-  const sayfaKartsiz = r.satirlar.filter((m) => m.durum === "radar").map((m) => m.musteri_no)
+  const sayfaNolar = r.satirlar.map((m) => m.musteri_no)
   const kisi = personel.data?.find((p) => String(p.id) === tam)
   const radaraMi = tam === RADAR
   const degistir = (no: string) =>
@@ -108,6 +126,30 @@ export function FarkAlani({ dil }: { dil: Dil }) {
   const filtre = (fn: () => void) => {
     fn()
     setSayfa(1)
+  }
+  const baslik = (alan: FarkSiralama, etiket: string) => {
+    const etkin = sirala === alan
+    const Ok = !etkin ? ArrowUpDown : yon === "azalan" ? ArrowDown : ArrowUp
+    return (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 font-black hover:underline"
+        aria-label={f.sirala(etiket)}
+        aria-pressed={etkin}
+        onClick={() =>
+          filtre(() => {
+            if (etkin) setYon(yon === "azalan" ? "artan" : "azalan")
+            else {
+              setSirala(alan)
+              setYon(SAYISAL.includes(alan) ? "azalan" : "artan")
+            }
+          })
+        }
+      >
+        {etiket}
+        <Ok aria-hidden className={`size-3 ${etkin ? "" : "opacity-50"}`} />
+      </button>
+    )
   }
 
   return (
@@ -165,8 +207,8 @@ export function FarkAlani({ dil }: { dil: Dil }) {
               <button
                 type="button"
                 className={DUGME}
-                disabled={!sayfaKartsiz.length}
-                onClick={() => setSecili((onceki) => new Set([...onceki, ...sayfaKartsiz]))}
+                disabled={!sayfaNolar.length}
+                onClick={() => setSecili((onceki) => new Set([...onceki, ...sayfaNolar]))}
               >
                 {f.sayfayiSec}
               </button>
@@ -195,8 +237,13 @@ export function FarkAlani({ dil }: { dil: Dil }) {
                 <UserPlus aria-hidden className="size-4" />
                 {f.topluAta}
               </button>
+              <button type="button" className={`${DUGME} text-rose-700`} disabled={!secili.size || sil.isPending} onClick={() => silOnayla([...secili])}>
+                <Trash2 aria-hidden className="size-4" />
+                {f.topluSil}
+              </button>
             </div>
             <p className="text-[0.625rem] font-bold text-slate-400">{f.topluAciklama}</p>
+            <p className="text-[0.625rem] font-bold text-slate-400">{f.siralaIpucu}</p>
           </section>
 
           {mesaj ? <Bildirim ton={mesaj.ton}>{mesaj.metin}</Bildirim> : null}
@@ -224,17 +271,16 @@ export function FarkAlani({ dil }: { dil: Dil }) {
             kolonlar={[
               {
                 baslik: "",
-                hucre: (m) =>
-                  m.durum === "radar" ? (
-                    <input type="checkbox" className="size-4 accent-tl-navy" aria-label={f.sec(m.musteri_no)} checked={secili.has(m.musteri_no)} onChange={() => degistir(m.musteri_no)} />
-                  ) : null,
+                hucre: (m) => (
+                  <input type="checkbox" className="size-4 accent-tl-navy" aria-label={f.sec(m.musteri_no)} checked={secili.has(m.musteri_no)} onChange={() => degistir(m.musteri_no)} />
+                ),
               },
-              { baslik: f.musteriNo, hucre: (m) => <code className="text-[0.6875rem]">{m.musteri_no}</code> },
-              { baslik: f.unvan, hucre: (m) => <span className="line-clamp-1 max-w-64 font-normal">{m.temip_unvan || "—"}</span> },
+              { baslik: baslik("musteri_no", f.musteriNo), hucre: (m) => <code className="text-[0.6875rem]">{m.musteri_no}</code> },
+              { baslik: baslik("unvan", f.unvan), hucre: (m) => <span className="line-clamp-1 max-w-64 font-normal">{m.temip_unvan || "—"}</span> },
               { baslik: f.kaynak, hucre: (m) => m.kaynak },
-              { baslik: f.durum, hucre: (m) => <Rozet ton={TON[m.durum]}>{f.turAdi[m.durum]}</Rozet> },
+              { baslik: baslik("durum", f.durum), hucre: (m) => <Rozet ton={TON[m.durum]}>{f.turAdi[m.durum]}</Rozet> },
               {
-                baslik: f.kart,
+                baslik: baslik("kart", f.kart),
                 hucre: (m) =>
                   m.kart_id ? (
                     <a href={`#/musteri?m=${m.kart_id}`} className={BAG}>
@@ -244,19 +290,25 @@ export function FarkAlani({ dil }: { dil: Dil }) {
                     <span className="font-normal text-slate-400">{m.aday_kartlar || "—"}</span>
                   ),
               },
-              { baslik: f.acik, hucre: (m) => sayi(m.acik), sinif: "text-right font-mono" },
-              { baslik: f.toplam, hucre: (m) => sayi(m.toplam), sinif: "text-right font-mono" },
+              { baslik: baslik("acik", f.acik), hucre: (m) => sayi(m.acik), sinif: "text-right font-mono" },
+              { baslik: baslik("toplam", f.toplam), hucre: (m) => sayi(m.toplam), sinif: "text-right font-mono" },
               {
                 baslik: "",
-                hucre: (m) =>
-                  m.durum === "radar" ? (
+                hucre: (m) => (
+                  <span className="flex items-center justify-end gap-1">
+                    {m.durum === "radar" ? (
                     <button type="button" className={`${DUGME} !px-2 !py-1`} onClick={() => setHedef({ musteri_no: m.musteri_no, temip_unvan: m.temip_unvan })}>
                       <Link2 aria-hidden className="size-3.5" />
                       {atamaMetin(dil).karttaAta}
                     </button>
                   ) : m.durum === "kart_personelsiz" && m.kart_id ? (
                     <KartTami dil={dil} kartId={m.kart_id} kart={m.panel_unvan} bekliyor={sahip.isPending} onAta={(tamId) => sahip.mutate({ kart_id: Number(m.kart_id), tam_id: tamId })} />
-                  ) : null,
+                  ) : null}
+                    <button type="button" className={`${DUGME} !px-2 !py-1 text-rose-700`} aria-label={f.silEtiket(m.musteri_no)} title={f.sil} disabled={sil.isPending} onClick={() => silOnayla([m.musteri_no])}>
+                      <Trash2 aria-hidden className="size-3.5" />
+                    </button>
+                  </span>
+                ),
               },
             ]}
           />
@@ -264,8 +316,60 @@ export function FarkAlani({ dil }: { dil: Dil }) {
           {hedef ? <AtamaPaneli key={hedef.musteri_no} dil={dil} hedef={hedef} onKapat={() => setHedef(null)} /> : null}
         </div>
       </Panel>
+      {r.silinen ? <Silinenler dil={dil} /> : null}
       <ElleAtamalar dil={dil} />
     </div>
+  )
+}
+
+/** Fark'tan silinen (gizlenen) numaralar; geri alinca yeniden Fark'ta listelenir. */
+function Silinenler({ dil }: { dil: Dil }) {
+  const f = tm(dil).fark
+  const yenile = useAtamaYenile()
+  const [mesaj, setMesaj] = useState<Mesaj | null>(null)
+  const q = useQuery({ queryKey: [...ANAHTAR.fark, "silinenler"], queryFn: () => oku<FarkSilinen[]>("/api/v1/tampon/fark/silinenler") })
+  const geri = useMutation({
+    mutationFn: (no: string) => yaz<{ geri_alinan: number }>("POST", "/api/v1/tampon/fark/sil/geri-al", { musteri_nolar: [no] }),
+    onSuccess: (_, no) => {
+      setMesaj({ ton: "yesil", metin: f.geriAlindi(no) })
+      yenile()
+    },
+    onError: (e) => setMesaj({ ton: "amber", metin: hataMesaji(e, f.islemBasarisiz) }),
+  })
+  const liste = q.data ?? []
+  return (
+    <Panel baslik={f.silinenler(liste.length)} aciklama={f.silinenAciklama}>
+      <div className="grid gap-3">
+        {mesaj ? <Bildirim ton={mesaj.ton}>{mesaj.metin}</Bildirim> : null}
+        <details>
+          <summary className="cursor-pointer text-xs font-black text-tl-navy">{f.silinenler(liste.length)}</summary>
+          <div className="mt-2">
+            <VeriTablosu<FarkSilinen>
+              baslik={f.silinenler(liste.length)}
+              satirlar={liste}
+              anahtar={(s) => s.musteri_no}
+              kolonlar={[
+                { baslik: f.musteriNo, hucre: (s) => <code className="text-[0.6875rem]">{s.musteri_no}</code> },
+                { baslik: f.unvan, hucre: (s) => <span className="line-clamp-1 max-w-64 font-normal">{s.temip_unvan || "—"}</span> },
+                { baslik: f.durum, hucre: (s) => (f.turAdi[s.durum] ? <Rozet ton={TON[s.durum]}>{f.turAdi[s.durum]}</Rozet> : s.durum) },
+                { baslik: f.toplam, hucre: (s) => sayi(s.toplam), sinif: "text-right font-mono" },
+                { baslik: f.kim, hucre: (s) => s.kim },
+                { baslik: f.zaman, hucre: (s) => zaman(s.zaman), sinif: "whitespace-nowrap" },
+                {
+                  baslik: "",
+                  hucre: (s) => (
+                    <button type="button" className={`${DUGME} !px-2 !py-1`} disabled={geri.isPending} onClick={() => geri.mutate(s.musteri_no)}>
+                      <Undo2 aria-hidden className="size-3.5" />
+                      {f.geriAl}
+                    </button>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </details>
+      </div>
+    </Panel>
   )
 }
 

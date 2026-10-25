@@ -288,7 +288,7 @@ export function Alan({ etiket, children, ipucu, sinif = "" }: { etiket: string; 
   )
 }
 
-type Kolon<T> = { baslik: string; hucre: (satir: T) => ReactNode; sinif?: string }
+type Kolon<T> = { baslik: ReactNode; hucre: (satir: T) => ReactNode; sinif?: string }
 
 /** Basit, erisilebilir tablo (caption sr-only, th scope=col). Satir secimi icin hucreye gercek bir buton/baglanti koyun. */
 export function VeriTablosu<T>({

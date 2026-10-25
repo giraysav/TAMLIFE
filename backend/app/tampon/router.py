@@ -158,13 +158,15 @@ def fark_listesi(
     tur: str = Query(default="", max_length=20),
     q: str = Query(default="", max_length=100),
     sayfa: int = Query(default=1, ge=1, le=100_000),
+    sirala: str = Query(default="", max_length=20),
+    yon: str = Query(default="", max_length=10),
     admin: Principal = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Canli DB kayitlarinin kartla / TAM ile eslesmeyen musteri numaralari (kartsiz, belirsiz, personelsiz kart)."""
+    """Canli DB kayitlarinin kartla / TAM ile eslesmeyen musteri numaralari (kartsiz, belirsiz, personelsiz kart); silinenler haric."""
     if not akislar.temip_semasi_hazir(db):
         return ok({"hazir": False, "neden": "0013_onedesk_temip uygulanmadı."})
-    return ok({"hazir": True, **fark.liste(db, tur, q, sayfa)})
+    return ok({"hazir": True, **fark.liste(db, tur, q, sayfa, sirala, yon)})
 
 
 @router.post("/fark/toplu-ata")
@@ -189,6 +191,26 @@ def fark_radardan_cikar(govde: FarkRadarGovde, admin: Principal = Depends(requir
     sonuc = temip_atama.radardan_cikar(db, [n[:20] for n in govde.musteri_nolar], admin.username)
     _denetim(admin, "tampon.fark_radardan_cikar", f"cikarilan={sonuc['cikarilan']}")
     return ok(sonuc)
+
+
+@router.post("/fark/sil")
+def fark_sil(govde: FarkRadarGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Secilen numaralari Fark'tan sil (gizle; TEMIP kayitlari kalir). Geri alinabilir."""
+    sonuc = fark.sil(db, admin, [n[:20] for n in govde.musteri_nolar])
+    _denetim(admin, "tampon.fark_sil", f"silinen={sonuc['silinen']} atlanan={len(sonuc['atlanan'])}")
+    return ok(sonuc)
+
+
+@router.post("/fark/sil/geri-al")
+def fark_sil_geri_al(govde: FarkRadarGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    sonuc = fark.silineni_geri_al(db, admin, [n[:20] for n in govde.musteri_nolar])
+    _denetim(admin, "tampon.fark_sil_geri_al", f"geri={sonuc['geri_alinan']}")
+    return ok(sonuc)
+
+
+@router.get("/fark/silinenler")
+def fark_silinenler(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    return ok(fark.silinenler(db))
 
 
 @router.post("/fark/kart-sahibi")

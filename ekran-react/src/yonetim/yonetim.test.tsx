@@ -634,6 +634,7 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
         const veri = yol.includes("/fark/toplu-ata") ? { atanan: 1, atlanan: [{ musteri_no: "22222222", neden: "Bu ünvanla kayıtlı başka bir müşteri var." }], kartlar: ["ORNEK 11111111"], yeniden_baglanan: 3, etkilenen_kart: 1 }
           : yol.includes("/fark/kart-sahibi") ? { kart_id: 7, kart: "ORNEK-D", personel: "Ornek Tam" }
           : yol.includes("/fark/radara-ata") ? { atanan: 2, atlanan: [] }
+          : yol.includes("/fark/sil") ? { silinen: 1, atlanan: [] }
           : yol.includes("/tampon/fark") ? liste
           : yol.includes("/temip/personel") ? [{ id: 5, ad: "Ornek Tam" }]
           : yol.includes("/temip/atamalar") ? []
@@ -644,16 +645,16 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     await ac("#/yonetim/tampon?sekme=fark")
     expect(await screen.findByText(f.toplamKayit("12", "20"))).toBeInTheDocument()
     expect(screen.getByText("ORNEK-B, ORNEK-C")).toBeInTheDocument()
-    expect(screen.queryByRole("checkbox", { name: f.sec("33333333") })).toBeNull()  // yalniz kartsiz secilir
+    expect(screen.getByRole("checkbox", { name: f.sec("33333333") })).toBeInTheDocument()  // her satir secilir (silme icin)
     const ata = screen.getByRole("button", { name: f.topluAta })
     expect(ata).toBeDisabled()
     fireEvent.click(screen.getByRole("button", { name: f.sayfayiSec }))
-    expect(screen.getByText(f.secili(2))).toBeInTheDocument()
+    expect(screen.getByText(f.secili(4))).toBeInTheDocument()
     await screen.findAllByRole("option", { name: "Ornek Tam" })
     fireEvent.change(screen.getByRole("combobox", { name: f.topluPersonel }), { target: { value: "5" } })
     fireEvent.click(ata)
     expect(await screen.findByText(f.topluSonuc(1, "3", 1))).toBeInTheDocument()
-    expect(govdeler[0]).toEqual({ yol: "/api/v1/tampon/fark/toplu-ata", govde: { musteri_nolar: ["11111111", "22222222"], tam_id: 5 } })
+    expect(govdeler[0]).toEqual({ yol: "/api/v1/tampon/fark/toplu-ata", govde: { musteri_nolar: ["11111111", "22222222", "33333333", "44444444"], tam_id: 5 } })
     expect(screen.getByText(f.secili(0))).toBeInTheDocument()
 
     fireEvent.change(screen.getByRole("combobox", { name: `${f.tamSec} · ORNEK-D` }), { target: { value: "5" } })
@@ -667,7 +668,19 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     expect(screen.getByRole("option", { name: f.radarSecenek })).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: f.topluAta }))
     expect(await screen.findByText(f.radarSonuc(2, 0))).toBeInTheDocument()
-    expect(govdeler[2]).toEqual({ yol: "/api/v1/tampon/fark/radara-ata", govde: { musteri_nolar: ["11111111", "22222222"] } })
+    expect(govdeler[2]).toEqual({ yol: "/api/v1/tampon/fark/radara-ata", govde: { musteri_nolar: ["11111111", "22222222", "33333333", "44444444"] } })
+
+    // satir silme ve sutun basligiyla siralama (sunucuya sirala/yon gider)
+    fireEvent.click(screen.getByRole("button", { name: f.silEtiket("33333333") }))
+    expect(await screen.findByText(f.silSonuc(1, 0))).toBeInTheDocument()
+    expect(govdeler[3]).toEqual({ yol: "/api/v1/tampon/fark/sil", govde: { musteri_nolar: ["33333333"] } })
+    const cagrilar = () => vi.mocked(fetch).mock.calls.map((c) => String(c[0]))
+    fireEvent.click(screen.getByRole("button", { name: f.sirala(f.toplam) }))
+    await waitFor(() => expect(cagrilar().some((c) => c.includes("sirala=toplam&yon=azalan"))).toBe(true))
+    fireEvent.click(screen.getByRole("button", { name: f.sirala(f.toplam) }))
+    await waitFor(() => expect(cagrilar().some((c) => c.includes("sirala=toplam&yon=artan"))).toBe(true))
+    fireEvent.click(screen.getByRole("button", { name: f.sirala(f.unvan) }))
+    await waitFor(() => expect(cagrilar().some((c) => c.includes("sirala=unvan&yon=artan"))).toBe(true))
   })
 })
 

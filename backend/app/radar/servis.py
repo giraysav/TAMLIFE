@@ -68,9 +68,9 @@ def _radar_kosulu():
 
 
 def _radar_numaralari(db: Session) -> set[str]:
-    from app.tampon import temip_atama  # gec import: _temip ile ayni neden
+    from app.tampon import fark, temip_atama  # gec import: _temip ile ayni neden
 
-    return temip_atama.radar_numaralari(db)
+    return temip_atama.radar_numaralari(db) - fark.silinen_numaralar(db)
 
 
 def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
