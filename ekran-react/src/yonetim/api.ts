@@ -34,7 +34,7 @@ export type OracleBaglantisi = KurumOrtak & {
   son_parti: { id: number; durum: string; satir: number; zaman: string | null; hata: string } | null
   reportdb?: { kartlara_yaz: boolean; kural: number; yas_dk: number | null; taze: boolean; tazelik_dk: number }
 }
-export type PgKatalogOzeti = { id: number; durum: string; baslangic: string | null; bitis: string | null; kim: string; ozet: { semalar?: string[]; nesne?: number; sutun?: number }; hata: string }
+export type PgKatalogOzeti = { id: number; durum: string; baslangic: string | null; bitis: string | null; kim: string; ozet: { semalar?: string[]; nesne?: number; sutun?: number; yetkisiz_nesne?: number; yetkisiz_sema?: number }; hata: string }
 export type PostgresBaglantisi = KurumOrtak & {
   tur: "postgres"
   acma_anahtari: string

@@ -60,6 +60,7 @@ SORGU_SN = 15
 SAKLANAN = 5
 CALISIYOR_DK = 60
 TURLER = {"r": "tablo", "p": "bolumlu tablo", "v": "görünüm", "m": "somut görünüm", "f": "yabancı tablo"}
+_YETKISIZ = re.compile(r"permission denied|insufficient privilege", re.IGNORECASE)
 KISISEL = re.compile(
     r"(parola|password|passwd|pwd|secret|token|hash|salt|tckn|tc_?kimlik|kimlik_?no|identity|phone|telefon|tel_?no|gsm|msisdn|mobile|cep|"
     r"e_?mail|eposta|e_?posta|adres|address|iban)",
@@ -192,19 +193,27 @@ def erisim_adimlari(anahtar: str) -> list[dict[str, str]]:
 
 
 # --- katalog -----------------------------------------------------------------------------------------------------------
-NESNE_SORGUSU = """
+# 2026-10-26 kullanici: "PERMISSION DENIED veren sema, tablo, sutunlari ekrana getirme; ilk taramada engelle": katalogda yalniz hesabin
+# KULLANABILDIGI sema (USAGE) ve OKUYABILDIGI nesne (SELECT). Gecici semalar (pg_temp_*) her taramada degisir, alinmaz.
+_KAPSAM = """c.relkind IN ('r', 'p', 'v', 'm', 'f') AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+  AND n.nspname NOT LIKE 'pg_toast%%' AND n.nspname NOT LIKE 'pg_temp%%' AND NOT c.relispartition"""
+_OKUNUR = "has_schema_privilege(n.oid, 'USAGE') AND has_table_privilege(c.oid, 'SELECT')"
+NESNE_SORGUSU = f"""
 SELECT n.nspname, c.relname, c.relkind, c.reltuples::bigint, obj_description(c.oid, 'pg_class')
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%%'
-  AND NOT c.relispartition
+WHERE {_KAPSAM} AND {_OKUNUR}
 ORDER BY n.nspname, c.relname
 """
-SUTUN_SORGUSU = """
+SUTUN_SORGUSU = f"""
 SELECT n.nspname, c.relname, a.attname, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull, col_description(c.oid, a.attnum)
 FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE a.attnum > 0 AND NOT a.attisdropped AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-  AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%%' AND NOT c.relispartition
+WHERE a.attnum > 0 AND NOT a.attisdropped AND {_KAPSAM} AND {_OKUNUR}
 ORDER BY n.nspname, c.relname, a.attnum
+"""
+YETKISIZ_SORGUSU = f"""
+SELECT count(*) FILTER (WHERE NOT ({_OKUNUR})), count(DISTINCT n.nspname)
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE {_KAPSAM}
 """
 
 
@@ -237,18 +246,20 @@ def tara(db: Session, kaynak: str, kullanici: str, adet: int = ORNEK_ADET, bagla
     try:
         with (baglanti or a.baglan)() as conn:
             nesneler = conn.execute(NESNE_SORGUSU).fetchall()
+            yetkisiz_nesne, tum_sema = conn.execute(YETKISIZ_SORGUSU).fetchone()
             sutunlar: dict[tuple[str, str], list[dict[str, Any]]] = {}
             for sema, tablo, ad, tip, bos, aciklama in conn.execute(SUTUN_SORGUSU).fetchall():
                 sutunlar.setdefault((sema, tablo), []).append({"ad": ad, "tip": tip, "bos": bool(bos), "aciklama": (aciklama or "")[:300]})
             from psycopg import sql
 
-            for i, (sema, tablo, tur, satir, aciklama) in enumerate(nesneler):
+            alinan: list[tuple[str, str]] = []
+            for sema, tablo, tur, satir, aciklama in nesneler:
                 kolonlar = sutunlar.get((sema, tablo), [])
                 kayit = SourceCatalogObject(
                     catalog_id=kat.id, owner=sema[:128], name=tablo[:128], kind=TURLER.get(tur, tur), parent="", row_count=satir if satir and satir > 0 else None,
                     analyzed="", comment=(aciklama or "")[:1000], columns=kolonlar, details={}, sample_columns=[], sample_rows=0, sample_note="", sample_data=None,
                 )  # fmt: skip
-                if i >= AZAMI_NESNE:
+                if len(alinan) >= AZAMI_NESNE:
                     kayit.sample_note = f"Örnek alınmadı (ilk {AZAMI_NESNE} nesne örneklenir)."
                 else:
                     try:
@@ -258,11 +269,17 @@ def tara(db: Session, kaynak: str, kullanici: str, adet: int = ORNEK_ADET, bagla
                         kayit.sample_columns, kayit.sample_rows, kayit.sample_data = adlar, len(satirlar), _sikistir(satirlar)
                         if any(KISISEL.search(s) for s in adlar):
                             kayit.sample_note = "Kişisel veri gibi duran sütunların değeri gizlendi."
-                    except Exception as e:  # noqa: BLE001 - yetkisiz / zaman asimi: nesne yapisiyla kalir
+                    except Exception as e:  # noqa: BLE001 - zaman asimi vb.: nesne yapisiyla kalir; yetkisizse hic alinmaz
+                        if _YETKISIZ.search(str(e)):
+                            yetkisiz_nesne = int(yetkisiz_nesne or 0) + 1
+                            continue
                         kayit.sample_note = f"Örnek okunamadı: {hata_metni(e, a.gizliler())}"[:300]
+                alinan.append((sema, tablo))
                 db.add(kayit)
         kat.status, kat.finished_at = "ready", simdi()
-        kat.summary = {"semalar": sorted({n[0] for n in nesneler}), "nesne": len(nesneler), "sutun": sum(len(v) for v in sutunlar.values()), "ornek_adet": adet}
+        semalar = sorted({s for s, _ in alinan})
+        kat.summary = {"semalar": semalar, "nesne": len(alinan), "sutun": sum(len(sutunlar.get(k, [])) for k in alinan), "ornek_adet": adet,
+                       "yetkisiz_nesne": int(yetkisiz_nesne or 0), "yetkisiz_sema": max(int(tum_sema or 0) - len(semalar), 0)}  # fmt: skip
         db.commit()
     except Exception as e:
         db.rollback()

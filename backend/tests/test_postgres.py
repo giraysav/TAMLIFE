@@ -44,6 +44,8 @@ class _Sahte:
     def execute(self, q):
         metin = q if isinstance(q, str) else q.as_string(None)
         self.sorgular.append(metin)
+        if "count(*)" in metin:
+            return _Imlec([(9, 3)])  # sunucuda okunamayan 9 nesne; nesnesi olan 3 sema
         if "FROM pg_class c JOIN pg_namespace" in metin and "pg_attribute" not in metin:
             return _Imlec([("public", "musteri", "r", 120, "Müşteriler"), ("public", "v_ozet", "v", -1, None), ("gizli", "maas", "r", 5, None)])
         if "pg_attribute" in metin:
@@ -87,22 +89,22 @@ def test_katalog_taramasi_yapi_ornek_kisisel_gizli_ve_uclar(client, pg_ayar):
     sahte = _Sahte()
     with Session(engine()) as db:
         k = postgres.tara(db, "pg_onent", "admin", baglanti=lambda: sahte)
-        assert k.status == "ready" and k.summary == {"semalar": ["gizli", "public"], "nesne": 3, "sutun": 5, "ornek_adet": 20}
+        # gizli.maas: on filtreden gecti ama okunamadi ("permission denied") -> hic alinmaz, yetkisiz sayilir
+        assert k.status == "ready" and k.summary == {"semalar": ["public"], "nesne": 2, "sutun": 4, "ornek_adet": 20, "yetkisiz_nesne": 10, "yetkisiz_sema": 2}
     assert all(q.lstrip().upper().startswith("SELECT") for q in sahte.sorgular)  # yalniz SELECT
+    assert all("has_table_privilege" in q and "has_schema_privilege" in q for q in sahte.sorgular[:3])  # yetki ilk taramada
     login_ok(client)
     a = client.get("/api/v1/tampon/pg/pg_onent/katalog").json()["data"]
-    assert [s["ad"] for s in a["semalar"]] == ["gizli", "public"] and a["katalog"]["durum"] == "ready" and a["calisiyor"] is False
-    musteri = next(n for n in a["semalar"][1]["nesneler"] if n["ad"] == "musteri")
+    assert [s["ad"] for s in a["semalar"]] == ["public"] and a["katalog"]["durum"] == "ready" and a["calisiyor"] is False
+    musteri = next(n for n in a["semalar"][0]["nesneler"] if n["ad"] == "musteri")
     assert (musteri["tur"], musteri["satir"], musteri["sutun"]) == ("tablo", 120, 3)
-    assert next(n for n in a["semalar"][1]["nesneler"] if n["ad"] == "v_ozet")["satir"] is None  # tahmin yok (-1)
+    assert next(n for n in a["semalar"][0]["nesneler"] if n["ad"] == "v_ozet")["satir"] is None  # tahmin yok (-1)
     d = client.get(f"/api/v1/tampon/pg/nesne/{musteri['id']}").json()["data"]
     assert d["ornek"]["satirlar"] == [[1, "Alfa A.S.", "***"], [2, "Beta", None]] and "gizlendi" in d["ornek"]["not"]
     assert d["sutunlar"][1] == {"ad": "unvan", "tip": "text", "bos": True, "aciklama": "Ünvan"}
-    maas = a["semalar"][0]["nesneler"][0]
-    m = client.get(f"/api/v1/tampon/pg/nesne/{maas['id']}").json()["data"]
-    assert m["ornek"]["satirlar"] == [] and m["ornek"]["not"].startswith("Örnek okunamadı: permission denied")
+    assert "permission denied" not in str(a).lower()
     liste = client.get("/api/v1/tampon/pg").json()["data"]
-    assert [x["id"] for x in liste] == ["pg_onent", "pg_onedesk"] and liste[0]["katalog"]["ozet"]["nesne"] == 3 and liste[1]["state"] == "disabled"
+    assert [x["id"] for x in liste] == ["pg_onent", "pg_onedesk"] and liste[0]["katalog"]["ozet"]["nesne"] == 2 and liste[1]["state"] == "disabled"
     assert "gizli-parola-1" not in str(liste)
     assert client.get("/api/v1/tampon/pg/yok/katalog").status_code == 404
 

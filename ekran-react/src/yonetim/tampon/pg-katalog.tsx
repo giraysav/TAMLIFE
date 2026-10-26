@@ -26,6 +26,8 @@ export function pgMetin(dil: Dil) {
     yok: tr ? "Henüz katalog yok: bağlantı hazır olunca \"Kataloğu yenile\"." : "No catalog yet: use \"Refresh catalog\" once the connection is ready.",
     sonHata: tr ? "Son tarama başarısız" : "Last scan failed",
     ozet: (s: number, n: number, c: number, z: string) => (tr ? `${s} şema · ${n} nesne · ${c} sütun · ${z}` : `${s} schemas · ${n} objects · ${c} columns · ${z}`),
+    yetkisiz: (s: number, n: number) =>
+      tr ? `Okuma yetkisi olmayan ${s} şema / ${n} nesne listelenmedi.` : `${s} schemas / ${n} objects without read permission are not listed.`,
     satir: (n: number | null) => (n === null ? (tr ? "satır ?" : "rows ?") : tr ? `~${sayi(n)} satır` : `~${sayi(n)} rows`),
     sutunlar: tr ? "Sütunlar" : "Columns",
     ornek: (n: number) => (tr ? `Örnek satırlar (${n})` : `Sample rows (${n})`),
@@ -88,6 +90,7 @@ function PgKaynakKarti({ k, t }: { k: PgKaynagi; t: PM }) {
         {kat ? (
           <span className="text-[0.6875rem] font-bold text-slate-500">
             {t.ozet(kat.ozet.semalar?.length ?? 0, kat.ozet.nesne ?? 0, kat.ozet.sutun ?? 0, zaman(kat.bitis ?? kat.baslangic))}
+            {kat.ozet.yetkisiz_nesne ? ` · ${t.yetkisiz(kat.ozet.yetkisiz_sema ?? 0, kat.ozet.yetkisiz_nesne)}` : ""}
           </span>
         ) : null}
         <button type="button" className={`${DUGME_ANA} ml-auto`} disabled={!k.hazir || calisiyor} onClick={() => yenile.mutate()}>
