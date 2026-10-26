@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, extract, func, literal, literal_column, or_, select
 from sqlalchemy.orm import Session
 
+from app import gorunurluk, musteri_alani
 from app.models import Customer, OnedeskRecord
 from app.onedesk import rca, yz
 from app.ortak import UygulamaHatasi, iso, simdi
@@ -41,17 +42,20 @@ def _aralik(yil: int) -> tuple[datetime, datetime]:
 RADAR_KAYNAGI = "temip"  # karti olmayan TEMIP kaydi TAM Radar'indir (radar.servis); Onedesk sayilarina girmez
 
 
-def _kapsam_kosulu():
-    """2026-10-20 kullanici karari: herkes tum verileri gorur; yalniz kartsiz TEMIP kaydi (TAM Radar'in) Onedesk sayilarina girmez."""
-    return or_(OnedeskRecord.customer_id.is_not(None), OnedeskRecord.source != RADAR_KAYNAGI)
+def _kapsam_kosulu(db: Session, user: Principal):
+    """Kartsiz TEMIP kaydi (TAM Radar'in) Onedesk sayilarina girmez. 2026-10-26 (app.gorunurluk): Onedesk "Benim Yerim" modulu; admin ve
+    TeamMngr tum kayitlari, personel yalniz kendi kartlarina bagli kayitlari gorur (kartsiz kayit personelde sayilmaz)."""
+    temel = or_(OnedeskRecord.customer_id.is_not(None), OnedeskRecord.source != RADAR_KAYNAGI)
+    kartlar = gorunurluk.kart_kimlikleri(db, user, musteri_alani.secili())
+    return temel if kartlar is None else and_(temel, OnedeskRecord.customer_id.in_(kartlar or [-1]))
 
 
 def _musteri_adi():
     return func.coalesce(func.nullif(Customer.name, ""), func.nullif(OnedeskRecord.customer_label, ""), literal("—"))
 
 
-def _kosullar(*ek):
-    return and_(_kapsam_kosulu(), *ek)
+def _kosullar(db: Session, user: Principal, *ek):
+    return and_(_kapsam_kosulu(db, user), *ek)
 
 
 def kaynak_bilgisi(db: Session) -> dict:
@@ -65,10 +69,10 @@ def durum(db: Session, user: Principal, kapsam: str, yil: int | None = None) -> 
         raise OnedeskHata(400, "Kapsam acik ya da kapali olmali.")
     yil = _yil(yil)
     if kapsam == "acik":
-        kosul = _kosullar(OnedeskRecord.status == "open")
+        kosul = _kosullar(db, user, OnedeskRecord.status == "open")
     else:
         bas, son = _aralik(yil)
-        kosul = _kosullar(OnedeskRecord.status == "closed", OnedeskRecord.closed_at >= bas, OnedeskRecord.closed_at < son)
+        kosul = _kosullar(db, user, OnedeskRecord.status == "closed", OnedeskRecord.closed_at >= bas, OnedeskRecord.closed_at < son)
 
     ad = _musteri_adi()
     satirlar = db.execute(
@@ -134,11 +138,13 @@ _onbellek: dict[tuple, tuple[float, dict]] = {}
 _onbellek_kilidi = threading.Lock()
 
 
-def _onbellekli(db: Session, ad: str, parametre: tuple, hesapla) -> dict:
-    """Agir ozetin sonucu (ad, parametre, son kayit no, TEMIP yazim surumu) icin bellekte; en fazla ONBELLEK_SN."""
+def _onbellekli(db: Session, user: Principal, ad: str, parametre: tuple, hesapla) -> dict:
+    """Agir ozetin sonucu (ad, parametre, kapsam, son kayit no, TEMIP yazim surumu) icin bellekte; en fazla ONBELLEK_SN. Kapsam anahtari
+    (gorunurluk.kapsam_anahtari): admin / TeamMngr ortak sonucu paylasir, personelin sonucu kendine aittir."""
     from app.tampon.temip_kayit import surum  # gec import: tampon zinciri yalniz gerekince
 
-    anahtar = (str(db.get_bind().url), ad, *parametre, db.scalar(select(func.max(OnedeskRecord.id))), surum(db))
+    kapsam = gorunurluk.kapsam_anahtari(db, user, musteri_alani.secili())
+    anahtar = (str(db.get_bind().url), ad, *parametre, kapsam, db.scalar(select(func.max(OnedeskRecord.id))), surum(db))
     with _onbellek_kilidi:
         kayit = _onbellek.get(anahtar)
     if kayit is not None and time.monotonic() - kayit[0] < ONBELLEK_SN:
@@ -156,12 +162,12 @@ def top10(db: Session, user: Principal, yil: int | None = None, aralik: tuple[da
     toplam: araliktaki tum kayitlarin tur toplamlari."""
     yil = _yil(yil)
     bas, son = aralik or _aralik(yil)
-    return _onbellekli(db, "top10", (yil, bas, son), lambda: _top10_hesapla(db, yil, bas, son))
+    return _onbellekli(db, user, "top10", (yil, bas, son), lambda: _top10_hesapla(db, user, yil, bas, son))
 
 
-def _top10_hesapla(db: Session, yil: int, bas: datetime, son: datetime) -> dict:
+def _top10_hesapla(db: Session, user: Principal, yil: int, bas: datetime, son: datetime) -> dict:
     acilis = func.coalesce(OnedeskRecord.opened_at, OnedeskRecord.closed_at)
-    kosul = _kosullar(acilis >= bas, acilis < son)
+    kosul = _kosullar(db, user, acilis >= bas, acilis < son)
     ad = _musteri_adi()
     sayim: dict[str, dict] = {}
     for musteri, tur, adet in db.execute(
@@ -204,6 +210,8 @@ def _kapananlar(db: Session, user: Principal, yil: int) -> list[dict]:
     bas, son = _aralik(yil)
     ad = _musteri_adi()
     kosul = _kosullar(
+        db,
+        user,
         # Kismi indeksin (models.RCA_INDEKS_KOSULU) kullanilmasi icin kosul ayni LITERAL ile yazilir (bagli parametreyle kullanilmaz).
         OnedeskRecord.status == literal_column("'closed'"),
         OnedeskRecord.root_cause != literal_column("''"),
@@ -225,7 +233,7 @@ def rca_ozeti(db: Session, user: Principal, yil: int | None = None) -> dict:
     """Kok neden ortak noktalari: gruplar, anahtar kelimeler, tekrar eden lokasyonlar. 2026-10-20 performans: 20 bin kaydin Python'da
     gruplanmasi ~0,7 sn suruyordu ve Onedesk sayfasi /rca + /oneriler ile iki kez cagiriyordu; sonuc top10 gibi onbellekte."""
     yil = _yil(yil)
-    return _onbellekli(db, "rca", (yil,), lambda: _rca_hesapla(db, user, yil))
+    return _onbellekli(db, user, "rca", (yil,), lambda: _rca_hesapla(db, user, yil))
 
 
 def _rca_hesapla(db: Session, user: Principal, yil: int) -> dict:

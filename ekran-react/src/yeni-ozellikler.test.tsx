@@ -141,7 +141,7 @@ describe("Sekmeler", () => {
   })
 })
 
-const PROFIL = { username: "admin", display_name: "Ayşe Yılmaz", ad_user: false, first_name: "Ayşe", last_name: "Yılmaz", phone: "", company: "", address: "", website: "" }
+const PROFIL = { username: "admin", display_name: "Ayşe Yılmaz", ad_user: false, first_name: "Ayşe", last_name: "Yılmaz", phone: "", company: "", website: "" }
 const KULLANICI: Kullanici = { username: "admin", display_name: "Ayşe Yılmaz", profile: PROFIL, role: "admin", is_admin: true, idle_timeout_minutes: 30, landing: "ozet", navigation: [] }
 
 describe("KullaniciKarti (sol alt)", () => {

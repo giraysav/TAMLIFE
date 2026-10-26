@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import Column, Table, delete, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
-from app import musteri_alani
+from app import gorunurluk, musteri_alani
 from app.authz import is_admin, yonetici_mi
 from app.gelir.servis import tum_gelirler, unvan_tasi
 from app.kullanicilar import kullanici_kaydi, modul_yoneticisi_mi, musteri_personeli, musteri_personeli_mi
@@ -86,7 +86,9 @@ def eylem_yetkisi(user: Principal, eylem: str) -> bool:
     return eylem in {"add", "duzenle", "sync", "delete"}
 
 
-# 2026-10-20 kullanici karari: herkes TUM kartlari gorur. Degistirme:
+# GORME (2026-10-26 kullanici karari, app.gorunurluk): admin ve TeamMngr alanin tum kartlarini, yonetimli modulde sahibi o modulun
+# tum kartlarini, personel yalniz kendisine atanan kartlari (sorumlusu ya da catisinin sorumlusu) gorur. 2026-10-20'deki
+# "herkes TUM kartlari gorur" karari Benim Yerim icin kalkti. Degistirme (2026-10-20, degismedi):
 #   Musteri Yonetimi (alan musteri): admin ve TeamMngr her karti, personel yalniz kendisine atanan karti (sorumlusu ya da catisinin sorumlusu).
 #   Toptan / Baglantili Araclar: yalniz admin ve o modulun sahibi (kullanicilar.modul_yoneticisi_mi); digerleri salt okunur.
 def alan_yoneticisi_mi(db: Session, user: Principal, alan: str | None = None) -> bool:
@@ -127,9 +129,9 @@ def kullanici_id(db: Session, user: Principal) -> int | None:
 
 
 def musteri_getir(db: Session, user: Principal, musteri_id: int) -> Customer:
-    """Okuma (2026-10-20: modulu acabilen herkes alanin tum kartlarini gorur; yazma musteri_yaz_getir). Alanda olmayan kart 404."""
+    """Okuma: alanda olmayan ya da kullanicinin goremedigi kart 404 (varligi sizdirilmaz; gorunurluk.kart_gorur_mu). Yazma musteri_yaz_getir."""
     musteri = db.get(Customer, musteri_id)
-    if musteri is None:
+    if musteri is None or not gorunurluk.kart_gorur_mu(db, user, musteri):
         raise MusteriHata(404, "Müşteri bulunamadı.")
     return musteri
 
@@ -151,7 +153,9 @@ def liste(db: Session, user: Principal, arama: str = "", sayfa: int = 1, adet: i
     sayfa = max(1, sayfa)
     adet = min(max(1, adet), EN_FAZLA_SAYFA_BASINA)
     ust = aliased(Customer)
-    sorgu = select(Customer).outerjoin(ust, Customer.parent_id == ust.id)  # 2026-10-20: herkes tum kartlari gorur
+    sorgu = select(Customer).outerjoin(ust, Customer.parent_id == ust.id)
+    if (kosul := gorunurluk.kart_suzgeci(db, user, musteri_alani.secili())) is not None:
+        sorgu = sorgu.where(kosul)  # 2026-10-26: personel yalniz kendi kartlari
     if arama.strip():
         ham = arama.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         kalip = f"%{ham}%"
@@ -194,7 +198,9 @@ def secenekler(db: Session, user: Principal) -> dict:
     """Form ve filtre secenekleri: segmentler, TAM listesi (yalniz yonetici secer), iştirak icin cati musteriler."""
     uid = kullanici_id(db, user)
     yonetici = alan_yoneticisi_mi(db, user)
-    kisiler = musteri_personeli(db)  # personel kumesi: TAM suzgeci herkese (2026-10-20: herkes tum kartlari gorur)
+    kisiler = musteri_personeli(db)  # personel kumesi: TAM suzgeci
+    if not gorunurluk.tumunu_gorur(db, user, musteri_alani.secili()):
+        kisiler = [k for k in kisiler if k.id == uid]  # 2026-10-26: personel yalniz kendi kartlarini gorur
     catilar = select(Customer.id, Customer.name).where(Customer.parent_id.is_(None)).order_by(Customer.name)
     if not yonetici:  # istirak yalniz kendi catisina eklenir (yonetimli modulde sahibi olmayan hic ekleyemez)
         kendi = uid and musteri_alani.secili() == musteri_alani.VARSAYILAN
@@ -209,9 +215,11 @@ def secenekler(db: Session, user: Principal) -> dict:
     }
 
 
-def portfoy_catilari(arama: str = "", tam_id: int | None = None, segment: str = "") -> select:
-    """Portfoy filtresine (arama / TAM / segment) uyan cati kartlarinin sorgusu (2026-10-20: herkes tum kartlari gorur)."""
+def portfoy_catilari(arama: str = "", tam_id: int | None = None, segment: str = "", kosul=None) -> select:
+    """Portfoy filtresine (arama / TAM / segment) uyan cati kartlarinin sorgusu. kosul: gorunurluk.kart_suzgeci (None = hepsi)."""
     cati = select(Customer).where(Customer.parent_id.is_(None))
+    if kosul is not None:
+        cati = cati.where(kosul)
     if tam_id:
         cati = cati.where(Customer.owner_id == tam_id)
     if segment:
@@ -228,15 +236,20 @@ def portfoy(
 ) -> dict:
     """Cati musterilerin kart listesi (uretim 'Musterilerim'): iştirakler cati kartinin icinde; arama iştirak adini da kapsar.
 
-    2026-10-20: herkes tum kartlari gorur; kartin 'duzenlenebilir' bayragi kullaniciya atanmis mi (duzenleyebilir_mi).
+    2026-10-26: personel yalniz kendi kartlarini gorur (gorunurluk); kartin 'duzenlenebilir' bayragi kullaniciya atanmis mi.
     """
     adet = min(max(1, adet), EN_FAZLA_SAYFA_BASINA)
-    tum = list(db.scalars(portfoy_catilari(arama, tam_id, segment)))
+    hepsi = gorunurluk.tumunu_gorur(db, user, musteri_alani.secili())
+    uid = None if hepsi else kullanici_id(db, user)
+    tum = list(db.scalars(portfoy_catilari(arama, tam_id, segment, None if hepsi else gorunurluk.cati_kosulu(uid))))
     toplam = len(tum)
     sayfa = max(1, min(sayfa, max(1, math.ceil(toplam / adet))))
     parca = tum[(sayfa - 1) * adet : sayfa * adet]
 
     alt_sorgu = select(Customer).where(Customer.parent_id.in_([c.id for c in tum] or [-1]))
+    if not hepsi:
+        alt_sorgu = alt_sorgu.where(gorunurluk.kart_kosulu(uid))  # baskasinin catisinda yalniz kendi istirakleri
+    cerceve = set() if hepsi else {c.id for c in tum if c.owner_id != uid}  # catisi baskasinin: sayilari / skoru gosterilmez
     altlar: dict[int, list[Customer]] = {}
     for a in db.scalars(alt_sorgu.order_by(Customer.name)):
         altlar.setdefault(a.parent_id, []).append(a)
@@ -244,7 +257,12 @@ def portfoy(
         u.id: (u.display_name or u.username)
         for u in db.scalars(select(AppUser).where(AppUser.id.in_({c.owner_id for c in parca if c.owner_id} or {-1})))
     }
-    skorlu = [c.score for c in tum if c.score]
+    kendi = [c for c in tum if c.id not in cerceve]
+    skorlu = [c.score for c in kendi if c.score]
+
+    def say(c: Customer, alan: str) -> int:
+        return 0 if c.id in cerceve else (getattr(c, alan) or 0)
+
     return {
         "items": [
             {
@@ -253,24 +271,25 @@ def portfoy(
                 "segment": c.segment or "",
                 "owner": sahipler.get(c.owner_id) if c.owner_id else None,
                 "owner_id": c.owner_id,
-                "score": round(c.score, 1) if c.score else None,
-                "alarm": c.alarm_count or 0,
-                "sikayet": c.complaint_count or 0,
-                "talep": c.request_count or 0,
-                "alarm_kapanan": c.alarm_closed_count or 0,  # Onedesk kayitlari kutusu: acik / yil ici kapanan
-                "sikayet_kapanan": c.complaint_closed_count or 0,
-                "talep_kapanan": c.request_closed_count or 0,
+                "score": round(c.score, 1) if c.score and c.id not in cerceve else None,
+                "alarm": say(c, "alarm_count"),
+                "sikayet": say(c, "complaint_count"),
+                "talep": say(c, "request_count"),
+                "alarm_kapanan": say(c, "alarm_closed_count"),  # Onedesk kayitlari kutusu: acik / yil ici kapanan
+                "sikayet_kapanan": say(c, "complaint_closed_count"),
+                "talep_kapanan": say(c, "request_closed_count"),
                 "istirakler": [{"id": a.id, "name": a.name} for a in altlar.get(c.id, [])],
                 "duzenlenebilir": duzenleyebilir_mi(db, user, c),
+                "cerceve": c.id in cerceve,  # baskasinin catisi: yalniz kendi istiraklerinin cercevesi, kart acilmaz
             }
             for c in parca
         ],
         "ozet": {
-            "cati": toplam,
+            "cati": len(kendi),
             "istirak": sum(len(v) for v in altlar.values()),
-            "alarm": sum(c.alarm_count or 0 for c in tum),
-            "sikayet": sum(c.complaint_count or 0 for c in tum),
-            "talep": sum(c.request_count or 0 for c in tum),
+            "alarm": sum(c.alarm_count or 0 for c in kendi),
+            "sikayet": sum(c.complaint_count or 0 for c in kendi),
+            "talep": sum(c.request_count or 0 for c in kendi),
             "ortalama_skor": round(sum(skorlu) / len(skorlu), 1) if skorlu else None,
             "skorlu": len(skorlu),
         },
@@ -383,7 +402,6 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "ekip": _matris_satirlari(db, "destech", adlar),
         "iletisim": iletisim_sozlugu(db, musteri.id),
         "kritik_ci": _matris_satirlari(db, "ci", adlar),
-        "izleme": {"cacti": [str(u) for u in (musteri.cacti_urls or []) if u], "son_kazima": None, "kazima_adedi": 0},
     }
 
     rapor_izni = erisim("rapor")
@@ -414,7 +432,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         if apn_izni:
             kart["gelirler"]["apn"] = _gelirler(db, ApnRevenue, adlar, ek=("installation_pct",))
 
-    # 2026-10-20 kullanici karari: herkes gorur; yazma kullaniciya atanmis kartta (duzenleyebilir_mi), yonetimli modulde sahibinde
+    # Gorme musteri_getir'de (2026-10-26 gorunurluk); yazma kullaniciya atanmis kartta (duzenleyebilir_mi), yonetimli modulde sahibinde
     yazma = duzenleyebilir_mi(db, user, musteri)
     yonetici = alan_yoneticisi_mi(db, user, musteri.modul)
     kart["segmentler"] = list(alan_segmentleri(musteri.modul))  # kart duzenleme secenekleri (alana gore)

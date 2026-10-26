@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import imza
 from app.config import get_settings
 from app.models import AppUser, Base
 from app.ortak import UygulamaHatasi, simdi
@@ -23,7 +24,6 @@ PROFIL_ALANLARI = {
     "last_name": ("Soyad", 100),
     "phone": ("Telefon", 40),
     "company": ("Şirket", 200),
-    "address": ("Adres", 500),
     "website": ("Web adresi", 200),
 }
 _TELEFON = re.compile(r"^[0-9+()\-\s.]+$")
@@ -62,7 +62,7 @@ def ad_soyad(satir: AppUser) -> tuple[str, str]:
 def profil_sozlugu(satir: AppUser | None, user: Principal) -> dict:
     """/session/me ve profil yanitinin profil bolumu. Satir yoksa (kaydi henuz olmayan yerel oturum) bos alanlar doner."""
     if satir is None:
-        return {"username": user.username, "display_name": user.username, "ad_user": False, "first_name": "", "last_name": "", "phone": "", "company": "", "address": "", "website": ""}
+        return {"username": user.username, "display_name": user.username, "ad_user": False, "first_name": "", "last_name": "", "phone": "", "company": "", "website": ""}
     ad, soyad = ad_soyad(satir)
     return {
         "username": satir.username,
@@ -72,9 +72,26 @@ def profil_sozlugu(satir: AppUser | None, user: Principal) -> dict:
         "last_name": soyad,
         "phone": satir.phone,
         "company": satir.company,
-        "address": satir.address,
         "website": satir.website,
     }
+
+
+def imza_sozlugu(satir: AppUser) -> dict:
+    """E-posta imzasi (GET/PUT /session/imza; /me'ye girmez: gomulu gorselle ~200 KB). Bossa hazir sablon da doner: Teknocan +
+    ad / unvan / sirket / iletisim; kaydedilmedikce maile girmez."""
+    ad, soyad = ad_soyad(satir)
+    sablon = imza.varsayilan(
+        " ".join(p for p in (ad, soyad) if p) or satir.display_name or satir.username, "Teknik Müşteri Yöneticisi (TAM)", satir.company, satir.phone, satir.website
+    )
+    return {"html": satir.signature_html or "", "sablon": sablon, "kayitli": bool(satir.signature_html)}
+
+
+def imza_kaydet(db: Session, user: Principal, ham: object) -> AppUser:
+    """Kisinin kendi imzasi; izin listesiyle temizlenir (app.imza). Bos gonderilirse imza silinir (maile hazir imza girer)."""
+    satir = kullanici_kaydi(db, user)
+    satir.signature_html = imza.temizle(ham)
+    db.flush()
+    return satir
 
 
 def _profil_degeri(alan: str, ham: object) -> str:

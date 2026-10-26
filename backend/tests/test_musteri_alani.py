@@ -54,8 +54,9 @@ def test_baslik_yoksa_ve_gecersizse_musteri_alani_isci_sorgulari_suzulur(veri): 
     assert _adlar(veri, {"X-Musteri-Alani": "baglantili"}) == ["Bag Arac"]
 
 
-def test_toptan_yalniz_modul_sahibi_ve_admin_yazar_digerleri_gorur(veri, monkeypatch):  # noqa: F811
-    """2026-10-20 kullanici karari: Toptan (KAAN USTUN) / Baglantili Araclar (UGUR KULEKCI) yonetimli; sahibi ve admin yazar."""
+def test_toptan_yalniz_modul_sahibi_ve_admin_yazar_ve_gorur(veri, monkeypatch):  # noqa: F811
+    """2026-10-20 kullanici karari: Toptan (KAAN USTUN) / Baglantili Araclar (UGUR KULEKCI) yonetimli; sahibi ve admin yazar.
+    2026-10-26 (app.gorunurluk): sahibi olmayan personel baskasina atanmis Toptan kartini gormez de."""
     from app.models import AppUser
     from tests.test_musteri import _cikis, _giris
 
@@ -63,19 +64,20 @@ def test_toptan_yalniz_modul_sahibi_ve_admin_yazar_digerleri_gorur(veri, monkeyp
     kart = veri.post("/api/v1/musteri", json={"name": "Toptan Kart", "owner_id": 2}, headers={**hdr, **TOPTAN}).json()["data"]["id"]
     _cikis(veri, hdr)
     hdr = _giris(veri, monkeypatch, "TeamMember")  # 'admin' satirina bagli personel; Toptan'in sahibi degil
-    assert _adlar(veri, TOPTAN) == ["Toptan Kart"]  # icerigi gorur
-    assert veri.get(f"/api/v1/musteri/{kart}", headers=TOPTAN).json()["data"]["erisim"]["kimlik_duzenle"] is False
+    assert _adlar(veri, TOPTAN) == []  # baskasinin karti gorunmez
+    assert veri.get(f"/api/v1/musteri/{kart}", headers=TOPTAN).status_code == 404
     assert veri.get("/api/v1/musteri/secenekler", headers=TOPTAN).json()["data"]["ekleyebilir"] is False
-    assert veri.put(f"/api/v1/musteri/{kart}/kimlik", json={"sector": "X"}, headers={**hdr, **TOPTAN}).status_code == 403
+    assert veri.put(f"/api/v1/musteri/{kart}/kimlik", json={"sector": "X"}, headers={**hdr, **TOPTAN}).status_code == 404
     assert veri.post("/api/v1/musteri", json={"name": "Yeni Toptan"}, headers={**hdr, **TOPTAN}).status_code == 403
-    assert veri.delete(f"/api/v1/musteri/{kart}", headers={**hdr, **TOPTAN}).status_code == 403
+    assert veri.delete(f"/api/v1/musteri/{kart}", headers={**hdr, **TOPTAN}).status_code == 404
     with Session(engine()) as db:
         db.scalar(select(AppUser).where(AppUser.username == "admin")).module_owner = "toptan"
         db.commit()
+    assert _adlar(veri, TOPTAN) == ["Toptan Kart"]  # modul sahibi modulun tum kartlarini gorur
     assert veri.put(f"/api/v1/musteri/{kart}/kimlik", json={"sector": "X"}, headers={**hdr, **TOPTAN}).status_code == 200  # sahibi
     assert veri.put(f"/api/v1/musteri/{kart}/sorumlu", json={"owner_id": 2}, headers={**hdr, **TOPTAN}).status_code == 200
     assert veri.post("/api/v1/musteri", json={"name": "Yeni Toptan", "owner_id": 2}, headers={**hdr, **TOPTAN}).status_code == 200
-    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr).status_code == 403  # Musteri Yonetimi'nde: kendisine atanmamis
+    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr).status_code == 404  # Musteri Yonetimi'nde: kendisine atanmamis kart gorunmez
     assert veri.post("/api/v1/musteri", json={"name": "Bag"}, headers={**hdr, "X-Musteri-Alani": "baglantili"}).status_code == 403  # baska modul
 
 

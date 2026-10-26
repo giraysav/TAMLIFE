@@ -31,7 +31,6 @@ KAYNAK = "musteri_ham"
 SAYFA = "Müşteri Kartı"
 DOSYA_ADI = "TAM_Musteri_Ham_Veri_Sablonu.xlsx"
 AZAMI_TAMSAYI = 1_000_000_000
-URL_AYRACI = " ; "
 ARAMA_SATIRI = 15  # baslik satiri bu kadar satir icinde aranir
 
 
@@ -42,7 +41,7 @@ class Alan:
     anahtar: str
     grup: str
     baslik: str
-    tip: str  # metin | secim | tamsayi | tutar | evet_hayir | url_listesi | eposta | gsm | kisi | cati | musteri_no
+    tip: str  # metin | secim | tamsayi | tutar | evet_hayir | eposta | gsm | kisi | cati | musteri_no
     azami: int | None
     zorunlu: bool
     kart: str
@@ -138,17 +137,7 @@ ALANLAR: tuple[Alan, ...] = (
     _sayac("sikayet_closed_count", "Kapanan Şikayet Sayısı", "Operasyon › Şikayet (yıl içi kapanan)", "Yıl içinde kapanan şikayet adedi."),
     _sayac("talep_closed_count", "Kapanan Talep Sayısı", "Operasyon › Talep (yıl içi kapanan)", "Yıl içinde kapanan talep adedi."),
     *(_iletisim_alani(a) for a in ILETISIM_ALANLARI),
-    Alan(
-        "cacti",
-        "izleme",
-        "Cacti Adresleri",
-        "url_listesi",
-        2000,
-        False,
-        "İzleme › Cacti bağlantıları",
-        'http:// ya da https:// ile başlayan adresler; birden çoksa " ; " ile ayırın.',
-    ),
-)
+)  # 2026-10-26: "Cacti Adresleri" alani kalkti (aylik rapor grafikleri yalniz elle / GALAPAGOS)
 ALAN = {a.anahtar: a for a in ALANLAR}
 
 # sablon alani -> Customer sutunu (iletisim alanlari CustomerTeam'de, ayni adla)
@@ -167,7 +156,6 @@ KOLON = {
     "alarm_closed_count": "alarm_closed_count",
     "sikayet_closed_count": "complaint_closed_count",
     "talep_closed_count": "request_closed_count",
-    "cacti": "cacti_urls",
     "tam": "owner_id",
     "cati": "parent_id",
 }
@@ -541,7 +529,6 @@ def kart_degerleri(c: Customer, kayit: CustomerTeam | None, adlar: dict[int, str
         "alarm_closed_count": c.alarm_closed_count or 0,
         "sikayet_closed_count": c.complaint_closed_count or 0,
         "talep_closed_count": c.request_closed_count or 0,
-        "cacti": URL_AYRACI.join(str(u) for u in (c.cacti_urls or []) if u) if isinstance(c.cacti_urls, list) else "",
     }
     for a in ILETISIM_ALANLARI:
         deger[a] = (getattr(kayit, a, None) or "") if kayit else ""

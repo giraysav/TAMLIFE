@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Kullanici } from "@/lib/oturum"
@@ -11,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const PROFIL = { username: "gsav", display_name: "Giray Sav", ad_user: true, first_name: "Giray", last_name: "Sav", phone: "", company: "", address: "", website: "" }
+const PROFIL = { username: "gsav", display_name: "Giray Sav", ad_user: true, first_name: "Giray", last_name: "Sav", phone: "", company: "", website: "" }
 const kisi = (photo_version: number | null): Kullanici => ({
   username: "gsav",
   display_name: "Giray Sav",
@@ -39,13 +40,18 @@ describe("Profil fotografi", () => {
       "fetch",
       vi.fn(async (girdi: string, ayar?: RequestInit) => {
         const yontem = ayar?.method ?? "GET"
+        if (String(girdi).includes("/session/imza")) return new Response(JSON.stringify({ status: "success", data: { html: "", sablon: "", kayitli: false } }), { status: 200, headers: { "Content-Type": "application/json" } })
         cagrilar.push({ yol: String(girdi), yontem, tur: new Headers(ayar?.headers).get("Content-Type") })
         const data = { photo_version: yontem === "PUT" ? 456 : null }
         return new Response(JSON.stringify({ status: "success", data }), { status: 200, headers: { "Content-Type": "application/json" } })
       }),
     )
     const onKaydedildi = vi.fn()
-    render(<ProfilSayfasi kullanici={kisi(null)} dil="tr" onKaydedildi={onKaydedildi} />)
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ProfilSayfasi kullanici={kisi(null)} dil="tr" onKaydedildi={onKaydedildi} />
+      </QueryClientProvider>,
+    )
     fireEvent.change(screen.getByLabelText("Fotoğraf seç"), { target: { files: [new File(["x"], "ben.png", { type: "image/png" })] } })
     expect(await screen.findByText("Fotoğraf kaydedildi.")).toBeInTheDocument()
     expect(cagrilar[0]).toMatchObject({ yol: "/api/v1/session/photo", yontem: "PUT", tur: "image/jpeg" })

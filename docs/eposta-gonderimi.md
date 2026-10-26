@@ -47,7 +47,7 @@ Bilinen sınır: SMTP kabul ettikten sonra DB commit'i düşerse ileti gitmiş a
 | `SMTP_AZAMI_MB` | `20` | İleti (base64 dahil) üst sınırı; relay sınırından küçük tutulmalı |
 | `SMTP_ARSIV` | boş | İsteğe bağlı gizli kopya kutusu |
 
-Kimlik doğrulama (SMTP AUTH) bilinçli olarak YOK: relay IP tabanlı anonim olarak tasarlandı, `.env`'e parola girmez. Relay AUTH isterse ayrı karar (DPAPI ile saklama, `cacti_kimlik.py` deseni).
+Kimlik doğrulama (SMTP AUTH) bilinçli olarak YOK: relay IP tabanlı anonim olarak tasarlandı, `.env`'e parola girmez. Relay AUTH isterse ayrı karar (DPAPI ile saklama; eski `cacti_kimlik.py` deseni 2026-10-26da Cacti ile birlikte kalkti).
 
 ## İsterler (açılmadan önce karşılanmalı)
 

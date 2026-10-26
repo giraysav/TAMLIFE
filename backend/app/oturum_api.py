@@ -39,7 +39,6 @@ class ProfilBody(BaseModel):
     last_name: str | None = Field(default=None, max_length=400)
     phone: str | None = Field(default=None, max_length=400)
     company: str | None = Field(default=None, max_length=800)
-    address: str | None = Field(default=None, max_length=2000)
     website: str | None = Field(default=None, max_length=800)
 
 
@@ -149,11 +148,30 @@ def whoami(user: Principal = Depends(require_user), db: Session = Depends(get_db
 
 @router.put("/profile")
 def profil_yaz(body: ProfilBody, user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
-    """Oturum sahibi KENDI profilini gunceller (ad, soyad, telefon, sirket, adres, web). Baskasinin profili ve kullanici adi degismez."""
+    """Oturum sahibi KENDI profilini gunceller (ad, soyad, telefon, sirket, web). Baskasinin profili ve kullanici adi degismez."""
     satir, degisen = kullanicilar.profil_guncelle(db, user, body.model_dump(exclude_unset=True))
     db.commit()
     audit_log.remember(actor=user.username, action="profil.guncelle", outcome="allow", detail=f"alanlar={','.join(degisen) or '-'}")  # degerler (telefon, adres) gunluge yazilmaz
     return ok(kullanicilar.profil_sozlugu(satir, user))
+
+
+class ImzaBody(BaseModel):
+    model_config = {"extra": "forbid"}
+    html: str = Field(default="", max_length=1_600_000)  # boyut / gorsel siniri ve temizleme app.imza'da (Turkce mesaj)
+
+
+@router.get("/imza")
+def imza_oku(user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    """Oturum sahibinin e-posta imzasi (aylik rapor iletisinin imzasi) ve bossa hazir sablon."""
+    return ok(kullanicilar.imza_sozlugu(kullanicilar.kullanici_kaydi(db, user)))
+
+
+@router.put("/imza")
+def imza_yaz(body: ImzaBody, user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    satir = kullanicilar.imza_kaydet(db, user, body.html)
+    db.commit()
+    audit_log.remember(actor=user.username, action="profil.imza", outcome="allow", detail=f"bayt={len(satir.signature_html)}")
+    return ok(kullanicilar.imza_sozlugu(satir))
 
 
 @router.get("/photo")

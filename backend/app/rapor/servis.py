@@ -28,11 +28,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import imza as imza_modulu
 from app.authz import yonetici_mi
 from app.dil import m, secili
 from app.kullanicilar import kullanici_kaydi, personel
-from app.models import Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
-from app.musteri.servis import MusteriHata, kullanici_id, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
+from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
+from app.musteri.servis import MusteriHata, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
 from app.rapor import ceviri, eposta, sla, sla_analiz, smtp_gonderim
@@ -153,6 +154,13 @@ def gonderim_ozeti(g: ReportDispatch, musteri_adlari: dict[int, str] | None = No
     }
 
 
+def personel_adi(db: Session, user: Principal) -> str:
+    """Imzadaki ad: profildeki gorunen ad (AD'den), yoksa kullanici adi. 2026-10-26 duzeltme: hazir imza kullanici adiyla
+    ('tcgsav') yaziliyordu."""
+    kayit = db.scalar(select(AppUser).where(AppUser.username == user.username))
+    return ((kayit.display_name if kayit else "") or user.username).strip()
+
+
 def hazir_metinler(musteri_adi: str, ay: int, yil: int, personel: str, dil: str) -> dict[str, str]:
     return {
         "konu": rapor_metin.mail_konusu(musteri_adi, ay, yil, dil),
@@ -176,7 +184,7 @@ def _devreden(db: Session, user: Principal, musteri: Customer, yil: int, ay: int
     satir = db.get(ReportDraft, (musteri.id, oyil, oay))
     if satir is None or not isinstance(satir.fields, dict) or aktif_gonderim(db, musteri.id, oyil, oay) is None:
         return {}, None
-    hazir = [hazir_metinler(musteri.name, oay, oyil, user.username, d) for d in rapor_metin.DILLER]
+    hazir = [hazir_metinler(musteri.name, oay, oyil, ad, d) for ad in {user.username, personel_adi(db, user)} for d in rapor_metin.DILLER]
     alanlar = {
         ad: str(satir.fields[ad])
         for ad in DEVREDEN_ALANLAR
@@ -210,7 +218,7 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
     devreden, devreden_donem = ({}, None) if satir is not None else _devreden(db, user, musteri, yil, ay)
     kayitli = kayitli or devreden
     dil: str = str(kayitli.get("dil")) if kayitli.get("dil") in rapor_metin.DILLER else ("en" if secili() == "en" else "tr")
-    varsayilanlar = {d: hazir_metinler(musteri.name, ay, yil, user.username, d) for d in rapor_metin.DILLER}
+    varsayilanlar = {d: hazir_metinler(musteri.name, ay, yil, personel_adi(db, user), d) for d in rapor_metin.DILLER}
     gonderim = aktif_gonderim(db, musteri.id, yil, ay)
     return {
         "yil": yil,
@@ -226,6 +234,8 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
         "alicilar": alicilar_getir(db, musteri.id),
         "gonderim": gonderim_ozeti(gonderim) if gonderim else None,
         "gonderim_kipi": smtp_gonderim.kip(),
+        # profil imzasi varsa ileti onu tasir; formdaki imza alani yalniz yedektir (arayuz bilgi gosterir)
+        "profil_imza": bool(db.scalar(select(AppUser.signature_html).where(AppUser.username == user.username))),
     }
 
 
@@ -283,9 +293,10 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
             ),
             {"kilitli": True, "gonderim": gonderim_ozeti(onceki)},
         )
+    kayitli_alicilar = alicilar_getir(db, musteri.id) if "to" not in govde or "cc" not in govde else {}
     try:
-        kime = alicilari_ayikla(govde.get("to") if "to" in govde else alicilar_getir(db, musteri.id)["kime"])
-        bilgi = alicilari_ayikla(govde.get("cc") if "cc" in govde else alicilar_getir(db, musteri.id)["bilgi"])
+        kime = alicilari_ayikla(govde.get("to") if "to" in govde else kayitli_alicilar["kime"])
+        bilgi = alicilari_ayikla(govde.get("cc") if "cc" in govde else kayitli_alicilar["bilgi"])
     except RaporHata as exc:
         raise RaporHata(exc.kod, m("Alıcılar: ", "Recipients: ") + exc.mesaj) from exc
     dil = govde.get("lang") if govde.get("lang") in rapor_metin.DILLER else "tr"
@@ -357,6 +368,25 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
     return {**sonuc, "eml_adi": ileti_adi, "eml_base64": base64.b64encode(ileti).decode("ascii")}
 
 
+GONDERIM_ARIZASI = "TL-RAP-01"
+
+
+def gonderim_hatasi_bildir(user: Principal, musteri_id: int, neden: str, exc: BaseException | None = None) -> str:
+    """Admin bildirimi (2026-10-26 kullanici: "aylik rapor gonderiminde hata olunca admine bildirim"): fault_event TL-RAP-01; admin
+    panelin ust cubugunda acik kayit sayisini gorur (GET /yonetim/bildirimler). Musteri adi ayri oturumla okunur (istek oturumu
+    hatali olabilir). Kayit numarasini doner; ASLA istisna firlatmaz."""
+    from app import ariza
+    from app.db import oturum
+
+    ad = ""
+    try:
+        with oturum() as db:
+            ad = db.scalar(select(Customer.name).where(Customer.id == musteri_id)) or ""
+    except Exception:  # noqa: BLE001, S110 - ad bildirimi engellemesin
+        pass
+    return ariza.kaydet(GONDERIM_ARIZASI, f"müşteri #{musteri_id} {ad}: {neden}".strip(), exc=exc, kaynak="rapor.gonder", kullanici=user.username, arka_plan=True)
+
+
 def _ileti(
     db: Session,
     user: Principal,
@@ -381,7 +411,7 @@ def _ileti(
     dil = govde.get("lang") or kayitli.get("dil")
     dil = dil if dil in rapor_metin.DILLER else "tr"
     metin = str(govde.get("body_text") or kayitli.get("govde") or rapor_metin.mail_govdesi(ay, yil, dil))[: rapor_metin.TASLAK_ALANLARI["govde"]]
-    imza = govde["signature"] if govde.get("signature") is not None else kayitli.get("imza", rapor_metin.imza(user.username, dil))
+    imza = govde["signature"] if govde.get("signature") is not None else kayitli.get("imza", rapor_metin.imza(personel_adi(db, user), dil))
     imza = str(imza or "")[: rapor_metin.TASLAK_ALANLARI["imza"]]
     kok = eposta.dosya_adi(musteri.name)
     ekler: list[tuple[bytes, str, str]] = []
@@ -390,7 +420,12 @@ def _ileti(
     if sla_ek:
         ekler.append((sla_ek[0], sla_ek[1], eposta.XLSX))
     ekler.extend(ek_dosyalar or [])
-    html_govde = eposta.mail_html(musteri_adi=musteri.name, donem=f"{ay_adi(ay, dil)} {yil}", govde=metin, imza=imza, dil=dil)
+    # Profil imzasi (2026-10-26) varsa iletinin imzasi odur: formdaki duz metin imza yerine (gorseller cid parcasi, Teknocan tek parca).
+    profil_imzasi = db.scalar(select(AppUser.signature_html).where(AppUser.username == user.username)) or ""
+    imza_html, satir_ici = imza_modulu.gomulu_gorselleri_ayir(profil_imzasi, {v: k for k, v in eposta.gorseller().items()}) if profil_imzasi else ("", [])
+    if profil_imzasi:
+        imza = imza_modulu.duz_metin(profil_imzasi)
+    html_govde = eposta.mail_html(musteri_adi=musteri.name, donem=f"{ay_adi(ay, dil)} {yil}", govde=metin, imza=imza, dil=dil, imza_html=imza_html)
     try:
         veri = eposta.eml(
             konu=konu,
@@ -401,7 +436,10 @@ def _ileti(
             gonderen_adres=eposta.gonderen(user.username),
             ekler=ekler,
             taslak=taslak,
-            yanit=None if taslak else eposta.kisi_adresi(user.username),
+            satir_ici=satir_ici,
+            # 2026-10-26: Reply-To yazilmaz. kisi_adresi() oturum adindan UPN uretir (<ad>@AD_DOMAIN = turkcell.entp.tgc), bu bir
+            # posta kutusu degil; musteri yaniti geri donerdi. Yanit From'a (TAMLIFE@) gider (docs/eposta-gonderimi.md alternatifi).
+            yanit=None,
         )
     except ValueError as exc:  # baslikta CR/LF vb.
         raise RaporHata(400, m("İleti başlığında geçersiz karakter.", "Invalid character in the message header.")) from exc
@@ -436,7 +474,9 @@ def sla_yukle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_
     _sla_kilidi(db, musteri.id, yil, ay)
     if not veri:
         raise RaporHata(400, m("Excel dosyası seçilmedi.", "No Excel file was selected."))
-    sla.excel_yukle(musteri.id, yil, ay, veri, dosya_adi, user.username)
+    # Dosya yalniz bu rapor biriminin olabilir: kartin ve (ayri raporu olmayan) istiraklerinin unvanlari (2026-10-26).
+    istirakler = db.scalars(select(Customer.name).where(Customer.parent_id == musteri.id, Customer.separate_report.is_not(True))).all()
+    sla.excel_yukle(musteri.id, yil, ay, veri, dosya_adi, user.username, unvanlar=[musteri.name or "", *istirakler])
     return sla_getir(db, user, musteri.id)
 
 
@@ -572,53 +612,3 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
         satir["atilan" if c.id in atilanlar else "bekleyen"] += 1
     sirali = sorted(satirlar.values(), key=lambda s: (s["id"] is None, tr_kucuk(s["ad"])))  # "-" satiri hep sonda
     return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen")}}
-
-
-# --- Cacti: musteriye ait baglantilar ve donem grafigi -------------------------------------------
-def _cacti_duzenleyebilir(db: Session, user: Principal, musteri: Customer) -> bool:
-    """Grafik baglantilarini kim tanimlar (STANDART, kullanici karari 2026-10-17: "grafikler degisebilir, personel kendisi
-    girsin"): admin ya da musterinin sorumlu personeli (istirakte catinin sorumlusu da). Yonetici baskasinin musterisini degistirmez."""
-    if user.is_admin or user.role == "admin":
-        return True
-    uid = kullanici_id(db, user)
-    if uid is None:
-        return False
-    ust = db.get(Customer, musteri.parent_id) if musteri.parent_id else None
-    return musteri.owner_id == uid or bool(ust and ust.owner_id == uid)
-
-
-def cacti_ayar(db: Session, user: Principal, musteri_id: int) -> dict:
-    from app.rapor import cacti
-
-    musteri = musteri_getir(db, user, musteri_id)
-    yil, ay = donem()
-    return {"baglantilar": musteri.cacti_urls or [], "hazir": cacti.hazir(),
-            "duzenleyebilir": _cacti_duzenleyebilir(db, user, musteri),
-            "kilitli": bool(aktif_gonderim(db, musteri.id, yil, ay)), "yil": yil, "ay": ay}
-
-
-def cacti_kaydet(db: Session, user: Principal, musteri_id: int, baglantilar: list[str]) -> dict:
-    from app.rapor import cacti
-
-    musteri = musteri_yaz_getir(db, user, musteri_id)
-    if not _cacti_duzenleyebilir(db, user, musteri):
-        raise RaporHata(403, "Grafik bağlantılarını müşterinin sorumlu personeli ya da admin değiştirebilir.")
-    yil, ay = donem()
-    _sla_kilidi(db, musteri.id, yil, ay)
-    musteri.cacti_urls = cacti.baglantilar(baglantilar)
-    db.flush()
-    return cacti_ayar(db, user, musteri.id)
-
-
-def cacti_grafikleri(db: Session, user: Principal, musteri_id: int, parola: object = None) -> dict:
-    """Donem grafikleri. Lookouteyes icin kayit yoksa 428: arayuz kisinin LDAP parolasini sorar ve `parola` ile yeniden ister;
-    alim o kisinin hesabiyla yapilir (panel kullanici adi), parola saklanmaz."""
-    from app.rapor import cacti
-
-    musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
-    ids = cacti.baglantilar(musteri.cacti_urls or [])
-    hesap = cacti.kisi_kimligi(user.username, parola) if parola is not None else None
-    grafikler = cacti.grafikler(ids, yil, ay, rapor_klasoru() / "cacti" / str(musteri.id),
-                               kilitli=bool(aktif_gonderim(db, musteri.id, yil, ay)), hesap=hesap)
-    return {"yil": yil, "ay": ay, "grafikler": grafikler}

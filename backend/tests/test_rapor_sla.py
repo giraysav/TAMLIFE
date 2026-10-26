@@ -67,7 +67,8 @@ def _cizim_ekle(xlsx: bytes, sayfa_no: int, sutunlar: list[int]) -> bytes:
     return cikti.getvalue()
 
 
-def _sla_excel(donem: str) -> bytes:
+def _sla_excel(donem: str, musteri: str | None = None) -> bytes:
+    """musteri verilirse Detay sayfasina OneDesk ciktisindaki gibi 'Müşteri Adı' sutunu eklenir."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Alarm Analiz"
@@ -86,7 +87,7 @@ def _sla_excel(donem: str) -> bytes:
             ws.cell(row=i, column=5, value=ilk),
         )
     detay = wb.create_sheet("Alarm Detay")
-    detay.append(["No", "CI Adı", "Kategori", "Çağrı Servisi", "Kök Sebep", "Çözüm Açıklaması", "Kapanış Ayı"])
+    detay.append(["No", "CI Adı", "Kategori", "Çağrı Servisi", "Kök Sebep", "Çözüm Açıklaması", "Kapanış Ayı", *(["Müşteri Adı"] if musteri else [])])
     for no, (ci, kat, kok, ay) in enumerate(
         [
             ("IST-HAT-1", "Hat Down 1", "Fiber kesik", "2026-07"),
@@ -96,7 +97,7 @@ def _sla_excel(donem: str) -> bytes:
         ],
         start=1,
     ):
-        detay.append([no, ci, kat, "Data", kok, "Ekip yonlendirildi", ay])
+        detay.append([no, ci, kat, "Data", kok, "Ekip yonlendirildi", ay, *([musteri] if musteri else [])])
     hat = wb.create_sheet("Hat Availability")
     hat.append(["Devre", "Availability"])
     hat.append(["D-1", 99.5])
@@ -298,3 +299,17 @@ def test_gonderilen_metin_saklanir_ve_takip_alanlari_sonraki_aya_gecer(veri, mon
     veri.put(f"{URL}/taslak", json={"alanlar": {"devam": "Güncellendi."}}, headers=hdr)
     t = veri.get(f"{URL}/taslak").json()["data"]
     assert t["devreden"] is None and t["alanlar"]["devam"] == "Güncellendi."
+
+
+def test_sla_dosyasi_yalniz_kartin_musterisine_ait_olabilir(veri):
+    """2026-10-26 kullanici: "SLA exceli yalniz o musteriye ozel yuklenmeli". Dosyadaki 'Musteri Adi' karta (sirket eki / noktalama
+    farki gozetilmez) ya da ayni rapora giren istirakine uymali; baskasinin dosyasi yazilmaz."""
+    hdr = login_ok(veri)
+    yil, ay = rapor_servis.donem()
+    donem = f"{yil}-{ay:02d}"
+    r = veri.put(f"{URL}/sla", params={"dosya": "Beta.xlsx"}, content=_sla_excel(donem, "BETA LOJİSTİK LİMİTED ŞİRKETİ"), headers=hdr)
+    assert r.status_code == 400 and "başka bir müşteriye ait" in r.text and "BETA" in r.text
+    assert veri.get(f"{URL}/sla").json()["data"]["ozet"] is None  # hicbir sey yazilmadi
+    r = veri.put(f"{URL}/sla", params={"dosya": "Alfa.xlsx"}, content=_sla_excel(donem, "ALFA TEST ANONİM ŞİRKETİ"), headers=hdr)
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["analiz"]["musteriler"] == ["ALFA TEST ANONİM ŞİRKETİ"]

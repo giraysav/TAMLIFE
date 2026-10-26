@@ -94,7 +94,7 @@ class AppUser(Base):
     last_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
     phone: Mapped[str] = mapped_column(String(40), default="", server_default="")
     company: Mapped[str] = mapped_column(String(200), default="", server_default="")
-    address: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    signature_html: Mapped[str] = mapped_column(Text, default="", server_default="")  # e-posta imzasi (app.imza ile temizlenmis HTML)
     website: Mapped[str] = mapped_column(String(200), default="", server_default="")
     permissions: Mapped[list | None] = mapped_column(JSON, nullable=True)  # kisiye verilen ek yetkiler (rolgorunum.YETKILER); role eklenir
     # Sahibi oldugu modul (katalog anahtari: tamsms, tamapn, toptan, baglantili); dolu ise musteri sorumlusu (TAM) secilemez
@@ -138,7 +138,6 @@ class Customer(Base):
     complaint_closed_count: Mapped[int] = mapped_column(Integer, default=0)
     request_closed_count: Mapped[int] = mapped_column(Integer, default=0)
     report_count: Mapped[int] = mapped_column(Integer, default=0)
-    cacti_urls: Mapped[list] = mapped_column(JSON, default=list)
     separate_report: Mapped[bool] = mapped_column(Boolean, default=False)  # istirak icin ayri aylik rapor
 
 
@@ -187,7 +186,6 @@ class Report(Base):
     suggestions_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     bubble_report_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     excel_data: Mapped[str | None] = mapped_column(Text, nullable=True)
-    cacti_data: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_edited_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     flag_count: Mapped[int] = mapped_column(Integer, default=0)

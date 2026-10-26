@@ -11,7 +11,6 @@ import { blobBase64, dosyaIndir, raporPdfOlustur, seriGrafigi } from "@/musteri/
 import { EkDosyaKarti, GalapagosKarti, SlaKarti } from "@/musteri/sla-paneli"
 import type { SlaVeri } from "@/musteri/sla-paneli"
 import { SlaAnalizi } from "@/musteri/sla-analizi"
-import { CactiKarti, useCacti } from "@/musteri/cacti-paneli"
 import type { AnalizMetni } from "@/musteri/sla-analizi"
 
 type Gonderim = { id: number; yil: number; ay: number; gonderen: string; zaman: string; konu: string; durum: string; pdf: boolean; geri_alan: string | null }
@@ -31,6 +30,8 @@ type Taslak = {
   devreden?: { donem: string; alanlar: string[] } | null
   /** eml: Outlook taslagi iner (varsayilan); smtp: ileti sunucudan TAMLIFE@ kutusundan gider (rapor/smtp_gonderim.py). */
   gonderim_kipi?: "eml" | "smtp"
+  /** 2026-10-26: profil e-posta imzasi var mi (varsa ileti onu tasir; buradaki imza yalniz PDF'tedir) */
+  profil_imza?: boolean
 }
 
 /** Eski aylik rapor sayfasinin renkli etiketleri: olumlu (teal), devam (lacivert), kritik (kirmizi), bilgi (mavi), oneri (yesil). */
@@ -119,7 +120,6 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const t = musteriMetin(dil)
   const taban = `/api/v1/musteri/${musteriId}/rapor`
   const istemci = useQueryClient()
-  const cacti = useCacti(taban)
   const slaAnahtari = ["musteri", "rapor", musteriId, "sla"]
   const taslakQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "taslak"], queryFn: () => oku<Taslak>(`${taban}/taslak`) })
   const gecmisQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "gecmis"], queryFn: () => oku<Gonderim[]>(`${taban}/gecmis`) })
@@ -164,7 +164,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
       }),
     [sla, raporDili],
   )
-  const ekGorseller = useMemo<RaporGrafigi[]>(() => [...cacti.grafikler, ...(sla?.ekler ?? []).map((e) => ({ anahtar: `ek-${e.no}`, baslik: e.baslik, gorsel: e.gorsel }))], [sla, cacti.grafikler])
+  const ekGorseller = useMemo<RaporGrafigi[]>(() => (sla?.ekler ?? []).map((e) => ({ anahtar: `ek-${e.no}`, baslik: e.baslik, gorsel: e.gorsel })), [sla])
 
   const yukle = () => Promise.all([taslakQ.refetch(), gecmisQ.refetch()])
   const bildir = (anahtar: string, metin: string) => setMesaj((m) => ({ ...m, [anahtar]: metin }))
@@ -195,7 +195,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const donemYaz = (donem: string, d: Dil) => `${musteriMetin(d).aylar[Number(donem.slice(5, 7)) - 1] ?? ""} ${donem.slice(0, 4)}`
 
   async function pdfUret(): Promise<Blob> {
-    if (!sablon.current || cacti.engel) throw new Error("pdf")
+    if (!sablon.current) throw new Error("pdf")
     return raporPdfOlustur(sablon.current)
   }
 
@@ -328,7 +328,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
                 <button type="button" className={`${DUGME} border-tl-navy/30 font-black`} disabled={!!g} onClick={() => void taslagiKaydet()}>
                   {t.taslagiKaydet}
                 </button>
-                <button type="button" className={DUGME_SARI} disabled={!!g || pdfMesgul || cacti.engel} onClick={() => void gonder()}>
+                <button type="button" className={DUGME_SARI} disabled={!!g || pdfMesgul} onClick={() => void gonder()}>
                   {t.gonder}
                 </button>
               </div>
@@ -339,11 +339,6 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
               </span>
               <p className="text-[0.625rem] font-bold text-slate-400 sm:max-w-[60%] sm:text-right">{smtpKipi ? t.smtpNot : t.emlNot}</p>
             </div>
-            {cacti.engel && !g && !cacti.ayar.isPending && !cacti.grafik.isFetching ? (
-              <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-                {t.cactiBekliyor}
-              </p>
-            ) : null}
           </div>
 
           <form onSubmit={taslagiKaydet} className="space-y-5 text-xs font-bold" aria-label={t.raporIcerigi}>
@@ -366,6 +361,12 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
                   {t.imza}
                 </label>
                 <textarea id="r-imza" rows={3} maxLength={2000} disabled={!!g} value={alanlar.imza ?? ""} onChange={(ev) => alanYaz("imza", ev.target.value)} className={GIRDI} />
+                <p className="text-[0.625rem] font-bold text-slate-400">
+                  {taslak.profil_imza ? t.imzaProfilde : t.imzaProfilYok}{" "}
+                  <a href="#/profil" className="text-tl-blue underline-offset-2 hover:underline">
+                    {t.imzaProfilGit}
+                  </a>
+                </p>
               </div>
             </div>
 
@@ -389,7 +390,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
               <button type="button" className={DUGME} aria-expanded={onizlemeAcik} onClick={() => setOnizlemeAcik((a) => !a)}>
                 {onizlemeAcik ? t.onizlemeKapat : t.onizlemeAc}
               </button>
-              <button type="button" className={DUGME_ANA} disabled={pdfMesgul || cacti.engel} onClick={() => void pdfIndir()}>
+              <button type="button" className={DUGME_ANA} disabled={pdfMesgul} onClick={() => void pdfIndir()}>
                 {pdfMesgul ? t.pdfHazirlaniyor : t.pdfIndir}
               </button>
             </div>
@@ -475,7 +476,6 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
 
         <SlaKarti {...slaOrtak} />
         <SlaAnalizi taban={taban} t={t} dil={raporDili} slaVar={!!sla?.ozet?.dosya} yzHazir={!!sla?.araclar?.yz} kilitli={!!g} onYaz={ozetiYaz} />
-        <CactiKarti cacti={cacti} ingilizce={dil === "en"} />
         <GalapagosKarti {...slaOrtak} />
         <EkDosyaKarti {...slaOrtak} />
       </div>

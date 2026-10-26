@@ -89,5 +89,16 @@ def ozet(db: Session) -> dict[str, object]:
     return {"acik": acik, "son_24s": son24, "son_24s_hata": son24_hata, "son_zaman": iso(son)}
 
 
+BILDIRIM_KODLARI = ("TL-RAP-01",)  # admin'in ust cubukta gordugu ariza kodlari (2026-10-26: aylik rapor gonderim hatasi)
+
+
+def bildirimler(db: Session, adet: int = 5) -> dict[str, object]:
+    """Admin bildirimi: kapanmamis (open / ack) bildirim kodlu kayitlar; sayi + son kayitlar. Kayit kapatilinca bildirim duser."""
+    kosul = (FaultEvent.code.in_(BILDIRIM_KODLARI), FaultEvent.status != "closed")
+    toplam = db.scalar(select(func.count()).select_from(FaultEvent).where(*kosul)) or 0
+    son = db.scalars(select(FaultEvent).where(*kosul).order_by(FaultEvent.id.desc()).limit(adet)).all() if toplam else []
+    return {"toplam": toplam, "son": [_satir(f) for f in son]}
+
+
 def kodlar() -> list[dict[str, str]]:
     return [{"kod": k, "aciklama": a, "cozum": c} for k, (a, c) in KODLAR.items()]

@@ -141,6 +141,36 @@ def _kapanis_aylari(satirlar: list[tuple]) -> list[str]:
     return [ay_kodu(r[sutun - 1]) for r in satirlar[1:] if len(r) >= sutun and r[sutun - 1]]
 
 
+# Unvan karsilastirmasi (2026-10-26 kullanici: "SLA Excel'i yalniz o musteriye ozel yuklenmeli"): sirket turu ekleri ve noktalama
+# atilir, kalan ad bitisik karsilastirilir ("A.T.U TURIZM ISLETMECILIGI A.S." = "A.T.U.TURIZM ISLETMECILIGI ANONIM SIRKETI").
+_SIRKET_EKLERI = frozenset(["a", "s", "as", "anonim", "sirketi", "sirket", "ltd", "limited", "sti", "tic", "ticaret", "san", "sanayi", "ve", "inc", "co"])
+EN_KISA_ICERME = 5  # kisaltilmis unvan (ornek "ODEA BANK" / "ODEA BANK A.S.") ancak bu kadar harf varsa icerme sayilir
+
+
+def unvan_cekirdegi(unvan: object) -> str:
+    from app.ortak import normal
+
+    metin = re.sub(r"[^a-z0-9 ]+", "", normal(str(unvan or "")).replace(".", ""))
+    return "".join(p for p in metin.split() if p not in _SIRKET_EKLERI)
+
+
+def unvan_eslesir_mi(dosyadaki: object, karttaki: object) -> bool:
+    a, b = unvan_cekirdegi(dosyadaki), unvan_cekirdegi(karttaki)
+    if not a or not b:
+        return False
+    return a == b or (min(len(a), len(b)) >= EN_KISA_ICERME and (a in b or b in a))
+
+
+def _musteri_adlari(satirlar: list[tuple]) -> set[str]:
+    """Detay sayfasinin 'Musteri Adi' sutunundaki unvanlar (baslik ilk satir)."""
+    if not satirlar:
+        return set()
+    sutun = next((i for i, v in enumerate(satirlar[0]) if v and _k("Müşteri Adı") == _k(v)), None)
+    if sutun is None:
+        return set()
+    return {str(r[sutun]).strip() for r in satirlar[1:] if len(r) > sutun and r[sutun] and str(r[sutun]).strip()}
+
+
 def _baslik(kategori: str, tur: str, dil: str) -> str:
     ad = dict(KATEGORILER)[kategori]
     if dil == "en":
@@ -208,12 +238,14 @@ def analiz(veri: bytes, yil: int, ay: int) -> dict:
         hedef = f"{yil}-{ay:02d}"
         sayilar: dict[str, dict] = {}
         dosya_aylari: set[str] = set()
+        musteriler: set[str] = set()
         for kategori, ad in KATEGORILER:
             sayfa = anahtar.get(_k(f"{ad} Detay"))
             if sayfa is None:
                 continue
             satirlar = _sayfa_satirlari(wb[sayfa])
             kapanis = _kapanis_aylari(satirlar)
+            musteriler |= _musteri_adlari(satirlar)
             dosya_aylari.update(k for k in kapanis if re.fullmatch(r"\d{4}-\d{2}", k))
             sayilar[kategori] = {"donem": sum(1 for k in kapanis if k == hedef), "toplam": max(len(satirlar) - 1, 0)}
     finally:
@@ -226,6 +258,7 @@ def analiz(veri: bytes, yil: int, ay: int) -> dict:
         "sayilar": sayilar,
         "dosya_donemi": max(dosya_aylari) if dosya_aylari else None,
         "donem": hedef,
+        "musteriler": sorted(musteriler),
     }
 
 
@@ -300,8 +333,19 @@ def _kaydet_ya_da_sil(js: Path, kayit: dict) -> None:
         _yaz_json(js, kayit)
 
 
-def excel_yukle(musteri_id: int, yil: int, ay: int, veri: bytes, dosya_adi: str, yukleyen: str) -> dict:
+def excel_yukle(musteri_id: int, yil: int, ay: int, veri: bytes, dosya_adi: str, yukleyen: str, unvanlar: list[str] | None = None) -> dict:
+    """unvanlar: kartin (ve ayni rapora giren istiraklerinin) unvanlari. Dosyanin Detay sayfalarindaki her 'Musteri Adi' bunlardan
+    birine uymali; uymayan unvan varsa dosya YAZILMAZ (400). Dosyada musteri adi hic yoksa denetlenemez, kabul edilir."""
     sonuc = analiz(veri, yil, ay)
+    if unvanlar is not None:
+        yabanci = [a for a in sonuc["musteriler"] if not any(unvan_eslesir_mi(a, u) for u in unvanlar)]
+        if yabanci:
+            liste = ", ".join(yabanci[:3]) + (" …" if len(yabanci) > 3 else "")
+            raise SlaHata(
+                400,
+                m(f"Bu SLA dosyası başka bir müşteriye ait ({liste}); yalnız bu kartın müşterisine ait dosya yüklenebilir.",
+                  f"This SLA file belongs to another customer ({liste}); only this card's own file can be uploaded."),
+            )  # fmt: skip
     xlsx, js = _yollar(musteri_id, yil, ay)
     xlsx.parent.mkdir(parents=True, exist_ok=True)
     onceki = oku(musteri_id, yil, ay) or {}

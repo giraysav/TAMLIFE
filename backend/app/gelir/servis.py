@@ -18,7 +18,8 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.authz import is_admin
+from app import gorunurluk
+from app.authz import is_admin, yonetici_mi
 from app.db import dis_kimlik, kimlik_coz, kullanici_dosyasi, kullanici_oturumu, mevcut_oturumlar
 from app.kullanicilar import kullanici_kaydi, modul_sahibi, personel, personel_mi
 from app.models import ApnRevenue, ApnWork, AppUser, Customer, SmsRevenue
@@ -137,9 +138,16 @@ def _ad(db: Session, user: Principal) -> str:
     return kullanici_kaydi(db, user).display_name or user.username
 
 
+def _modul(model: Any) -> str:
+    return "tamsms" if model is SmsRevenue else "tamapn"
+
+
 def _topla(db: Session, user: Principal, model: Any) -> list[tuple[int, Any]]:
-    """Tum dosyalardaki kayitlar: (sahip id, satir). 2026-10-20: herkes hepsini gorur."""
+    """Gorulebilen dosyalardaki kayitlar: (sahip id, satir). 2026-10-26 (app.gorunurluk): admin, TeamMngr ve modulun sahibi tum
+    dosyalari; personel yalniz kendi dosyasini (TAM'i oldugu kayitlar) gorur. 2026-10-20'deki "herkes hepsini gorur" kalkti."""
     kisiler = {u.username: u.id for u in db.scalars(select(AppUser))}
+    if not gorunurluk.tumunu_gorur(db, user, _modul(model)):
+        kisiler = {ad: i for ad, i in kisiler.items() if ad == user.username}
     cikti: list[tuple[int, Any]] = []
     for ad, k in mevcut_oturumlar(kisiler):
         cikti += [(kisiler[ad], r) for r in k.scalars(select(model).limit(EN_COK_KAYIT))]
@@ -200,8 +208,10 @@ def _sil(db: Session, user: Principal, model: Any, kimlik: int) -> dict:
 
 
 def musteri_adlari(db: Session, user: Principal) -> list[str]:
-    """Form onerileri: musteri unvanlari (herkes hepsini gorur)."""
+    """Form onerileri: musteri unvanlari. 2026-10-26: admin, TeamMngr ve gelir modulu sahibi hepsini, personel yalniz kendi kartlarini."""
     sorgu = select(Customer.name)
+    if not (yonetici_mi(user) or _yonetici(db, user)):
+        sorgu = sorgu.where(gorunurluk.kart_kosulu(gorunurluk.kullanici_kimligi(db, user)))
     return sorted({n for n in db.scalars(sorgu.order_by(Customer.name).limit(1000)) if n})
 
 

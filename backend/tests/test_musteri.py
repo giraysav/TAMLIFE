@@ -55,11 +55,12 @@ def test_kapsam_yonetici_hepsini_member_kendininkini_gorur(veri, monkeypatch):
     assert d["total"] == 3 and [i["name"] for i in d["items"]] == ["Alfa Istirak", "Alfa Test A.S.", "Beta Test Ltd"]
     assert next(i for i in d["items"] if i["id"] == 1)["score"] == 71.3 and next(i for i in d["items"] if i["id"] == 2)["score"] is None  # istirakin skoru yok
     _cikis(veri, hdr)
-    _giris(veri, monkeypatch, "TeamMember")  # 2026-10-20: herkes tum kartlari gorur; yazma yalniz kendisine atanan kartta
+    _giris(veri, monkeypatch, "TeamMember")  # 2026-10-26: personel yalniz kendisine atanan kartlari gorur (app.gorunurluk)
     d = veri.get("/api/v1/musteri").json()["data"]
-    assert {i["id"] for i in d["items"]} == {1, 2, 3}
-    baskasi = veri.get("/api/v1/musteri/3").json()["data"]
-    assert baskasi["erisim"]["kimlik_duzenle"] is False and baskasi["erisim"]["sil"] is False and baskasi["erisim"]["aylik_rapor"] is False
+    assert {i["id"] for i in d["items"]} == {1, 2} and d["total"] == 2  # 2: kendi catisinin istiraki
+    assert veri.get("/api/v1/musteri/3").status_code == 404  # baskasinin karti: varligi sizdirilmaz
+    assert {i["id"] for i in veri.get("/api/v1/musteri/portfoy").json()["data"]["items"]} == {1}
+    assert [k["id"] for k in veri.get("/api/v1/musteri/secenekler").json()["data"]["tam"]] in ([], [1])  # TAM suzgecinde yalniz kendisi
     assert veri.get("/api/v1/musteri/1").json()["data"]["erisim"]["kimlik_duzenle"] is True
 
 
@@ -73,7 +74,7 @@ def test_arama_joker_karakterleri_literaldir(veri):
 def test_kart_semasi(veri):
     login_ok(veri)
     k = veri.get("/api/v1/musteri/1").json()["data"]
-    assert set(k) >= {"kimlik", "operasyon", "ekip", "iletisim", "kritik_ci", "izleme", "raporlar", "gelirler", "erisim", "tam_secenekleri"}
+    assert set(k) >= {"kimlik", "operasyon", "ekip", "iletisim", "kritik_ci", "raporlar", "gelirler", "erisim", "tam_secenekleri"}
     assert k["kimlik"]["unvan"] == "Alfa Test A.S." and k["kimlik"]["tam"] == "Admin Kisi" and k["kimlik"]["cati"] is None
     assert [i["unvan"] for i in k["kimlik"]["istirakler"]] == ["Alfa Istirak"]
     assert k["operasyon"]["final_skor"] == 71.3 and k["operasyon"]["kendi"]["alarm"] == 2
@@ -154,10 +155,11 @@ def test_ekle_tam_degistir_sil_kurallari(veri, monkeypatch):
     assert veri.put("/api/v1/musteri/2/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 200
     assert veri.put("/api/v1/musteri/2/kimlik", json={"parent_id": 3}, headers=hdr2).status_code == 404  # baskasinin catisina baglayamaz
     assert veri.put("/api/v1/musteri/2/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 200
-    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 403  # baskasinin karti: salt okunur
-    assert veri.put("/api/v1/musteri/3/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 403
-    assert veri.put("/api/v1/musteri/3/rapor/taslak", json={"alanlar": {}}, headers=hdr2).status_code == 403  # aylik rapor da
-    assert veri.delete("/api/v1/musteri/3", headers=hdr2).status_code == 403
+    # baskasinin karti 2026-10-26'dan beri gorunmez: yazma da 404 (varligi sizdirilmaz)
+    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "X"}, headers=hdr2).status_code == 404
+    assert veri.put("/api/v1/musteri/3/iletisim", json={"tac_name": "X"}, headers=hdr2).status_code == 404
+    assert veri.put("/api/v1/musteri/3/rapor/taslak", json={"alanlar": {}}, headers=hdr2).status_code == 404  # aylik rapor da
+    assert veri.delete("/api/v1/musteri/3", headers=hdr2).status_code == 404
     kart = veri.get("/api/v1/musteri/2").json()["data"]
     assert all(kart["erisim"][k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "ayri_rapor_sec"))
     assert kart["erisim"]["tam_degistir"] is False and "tam_secenekleri" not in kart
@@ -182,7 +184,7 @@ def test_taslak_varsayilanlari_kayit_ve_dil(veri):
     assert (t["yil"], t["ay"]) == AY and t["kayitli"] is False and t["birim"] is True and t["gonderim"] is None
     a = t["alanlar"]
     assert a["dil"] == "tr" and a["konu"].startswith("TAM Aylık Rapor - ") and a["konu"].endswith("| Alfa Test A.S.")
-    assert "Sayın Müşterimiz" in a["govde"] and a["imza"].startswith("admin\nTeknik Müşteri Yöneticisi")
+    assert "Sayın Müşterimiz" in a["govde"] and a["imza"].startswith("Admin Kisi\nTeknik Müşteri Yöneticisi")  # gorunen ad (2026-10-26)
     assert a["olumlu"].startswith("Bu dönem") and "Erişim & Arıza Takibi" in a["bilgi"]
     assert veri.put("/api/v1/musteri/1/rapor/taslak", json={"alanlar": {"dil": "de"}}, headers=hdr).status_code == 400
     assert veri.put("/api/v1/musteri/1/rapor/taslak", json={"alanlar": {"dil": "en", "olumlu": "Iyi gecti", "bilinmeyen": "at", "konu": "k" * 500}}, headers=hdr).status_code == 200
@@ -260,7 +262,7 @@ def test_gonderim_outlook_taslagi_eml(veri, monkeypatch, tmp_path):
     d = r.json()["data"]
     assert d["eml_adi"].startswith("TAM_Aylik_Rapor_") and d["eml_adi"].endswith(".eml")
     msg = message_from_bytes(base64.b64decode(d["eml_base64"]), policy=default)
-    assert msg["X-Unsent"] == "1" and msg["Subject"] == "Konu" and msg["From"] == "admin@turkcell.com.tr"
+    assert msg["X-Unsent"] == "1" and msg["Subject"] == "Konu" and msg["From"] is None  # taslak: Outlook kisinin hesabindan (2026-10-26)
     assert msg["To"] == "GIRAY SAV <giray.sav@turkcell.com.tr>" and msg["Cc"] == "b@example.com"  # musteri adresine ad uydurulmaz
     html = msg.get_body(("html",)).get_content()
     assert "Sayın &lt;b&gt;Müşterimiz&lt;/b&gt;," in html and "<b>Müşterimiz" not in html  # personel metni kacislanir
@@ -335,7 +337,7 @@ def test_smtp_kipi_tek_kutudan_gonderir(veri, smtp_kipi):
     assert adres == ("mail.test", 25) and zarf_gonderen == "TAMLIFE@turkcell.com.tr"
     assert zarf == ["musteri@example.com", "giray.sav@turkcell.com.tr", "arsiv@turkcell.com.tr"]
     msg = message_from_bytes(ham, policy=default)
-    assert msg["X-Unsent"] is None and msg["From"] == "TAMLIFE@turkcell.com.tr" and msg["Reply-To"] == "ADMIN <admin@turkcell.com.tr>"
+    assert msg["X-Unsent"] is None and msg["From"] == "TAMLIFE@turkcell.com.tr" and msg["Reply-To"] is None  # UPN posta kutusu degil (2026-10-26)
     assert msg["Message-ID"].endswith("@turkcell.com.tr>") and msg["Date"] and "arsiv" not in str(msg["To"]) + str(msg["Cc"]) and msg["Bcc"] is None
     assert [e.get_filename() for e in msg.iter_attachments()] == ["TAM_Aylik_Rapor_Alfa_Test_AS.pdf"]
 
@@ -354,6 +356,39 @@ def test_smtp_teslim_edilemezse_kayit_ve_pdf_kalmaz(veri, smtp_kipi):
     assert veri.get(f"{url}/taslak").json()["data"]["gonderim"] is None
     _SahteSmtp.hata = None
     assert veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr).status_code == 200
+
+
+def _rapor_arizalari(bekle: int = 0) -> list:
+    """TL-RAP-01 kayitlari (ariza kaydi arka planda yazilir: en cok ~2 sn beklenir)."""
+    import time
+
+    from app.yonetim.models import FaultEvent
+
+    for _ in range(40):
+        with Session(engine()) as db:
+            kayitlar = [(f.code, f.source, f.message, f.actor) for f in db.query(FaultEvent).filter(FaultEvent.code == "TL-RAP-01")]
+        if len(kayitlar) >= bekle:
+            return kayitlar
+        time.sleep(0.05)
+    return kayitlar
+
+
+def test_gonderim_hatasi_admin_bildirimi(veri, smtp_kipi):
+    """2026-10-26: teslim edilemeyen gonderim TL-RAP-01 ariza kaydi + admin ust cubuk bildirimi; kullanici hatasi bildirim uretmez."""
+    hdr = login_ok(veri)
+    url = "/api/v1/musteri/1/rapor"
+    assert veri.post(f"{url}/gonder", json={"onay": False, "to": "musteri@example.com"}, headers=hdr).status_code == 400  # onay yok
+    assert veri.post(f"{url}/gonder", json={"onay": True, "to": ""}, headers=hdr).status_code == 400  # alici yok
+    _SahteSmtp.hata = TimeoutError()
+    assert veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr).status_code == 503
+    (kod, kaynak, mesaj, kisi), = _rapor_arizalari(bekle=1)
+    assert (kod, kaynak, kisi) == ("TL-RAP-01", "rapor.gonder", "admin") and mesaj.startswith("müşteri #1 Alfa Test") and "mail.test:25" in mesaj
+    b = veri.get("/api/v1/yonetim/bildirimler").json()["data"]
+    assert b["toplam"] == 1 and b["son"][0]["kod"] == "TL-RAP-01"
+    a = veri.get("/api/v1/yonetim/arizalar?kod=TL-RAP-01").json()["data"]
+    assert a["toplam"] == 1
+    veri.post(f"/api/v1/yonetim/arizalar/{a['satirlar'][0]['id']}/durum", json={"durum": "closed", "notu": "SMTP duzeldi"}, headers=hdr)
+    assert veri.get("/api/v1/yonetim/bildirimler").json()["data"]["toplam"] == 0  # kapatilan kayit bildirimden duser
 
 
 def test_smtp_kipinde_alici_ve_ayar_zorunlu(veri, smtp_kipi, monkeypatch):
@@ -410,7 +445,7 @@ def test_yetkisiz_ve_csrf(veri, monkeypatch):
     _cikis(veri, admin_hdr)
     hdr = _giris(veri, monkeypatch, "TeamMember")
     assert veri.get("/api/v1/musteri").status_code == 200  # okuma acik
-    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "x"}, headers=hdr).status_code == 403  # 2026-10-20: kendisine atanmamis kart
+    assert veri.put("/api/v1/musteri/3/kimlik", json={"sector": "x"}, headers=hdr).status_code == 404  # 2026-10-26: kendisine atanmamis kart gorunmez
 
 
 def test_yazan_kisinin_kullanici_satiri_yoksa_olusturulur(client):
@@ -441,3 +476,15 @@ def test_modul_sahibi_musteri_personel_listesinde_yer_alir(veri):
     assert {2, 3} <= tam
     assert 3 in {k["id"] for k in veri.get("/api/v1/musteri/1").json()["data"]["tam_secenekleri"]}
     assert veri.put("/api/v1/musteri/1/sorumlu", json={"owner_id": 3}, headers=hdr).status_code == 200
+
+
+def test_raporlar_herkese_acik_benim_yerim_kisiye_ozel(veri, monkeypatch):
+    """2026-10-26 kullanici karari: Benim Yerim (Musteri Yonetimi) kisiye ozel, Raporlar (Aylik Raporlar durum ozeti) herkese acik."""
+    hdr = login_ok(veri)
+    yonetici = veri.get("/api/v1/rapor/durum").json()["data"]
+    _cikis(veri, hdr)
+    _giris(veri, monkeypatch, "TeamMember")
+    assert veri.get("/api/v1/musteri").json()["data"]["total"] == 2  # yalniz kendi kartlari
+    durum = veri.get("/api/v1/rapor/durum").json()["data"]
+    assert durum["toplam"] == yonetici["toplam"] and durum["toplam"]["musteri"] >= 2  # rapor birimlerinin hepsi (baskasininki dahil)
+    assert any(s["ad"] == "Ayse Test" for s in durum["satirlar"])  # baska TAM'in satiri da gorunur

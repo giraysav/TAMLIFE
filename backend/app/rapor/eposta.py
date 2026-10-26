@@ -58,14 +58,20 @@ def paragraflar(metin: str) -> list[list[str]]:
     return [satirlar(p) for p in (metin or "").replace("\r\n", "\n").split("\n\n") if p.strip()]
 
 
-def mail_html(*, musteri_adi: str, donem: str, govde: str, imza: str, dil: str = "tr") -> str:
-    """Aylik rapor iletisinin HTML govdesi. Personel metni kacislanir; HTML olarak yorumlanmaz."""
+def mail_html(*, musteri_adi: str, donem: str, govde: str, imza: str, dil: str = "tr", imza_html: str = "") -> str:
+    """Aylik rapor iletisinin HTML govdesi. Personel metni kacislanir; HTML olarak yorumlanmaz.
+    imza_html: kisinin profil imzasi (app.imza ile TEMIZLENMIS, gorselleri cid:'e cevrilmis); verilirse lacivert imza bandi yerine o
+    girer (2026-10-26 kullanici: "profildeki imza formati aylik rapor mail govdesinde de olacak")."""
     dil = "en" if dil == "en" else "tr"
     k = html.escape
     govde_html = "".join('<p style="margin:0 0 14px 0;">' + "<br>".join(k(s) for s in p) + "</p>" for p in paragraflar(govde))
     imza_satirlari = [s for s in satirlar(imza) if s.strip()]
-    imza_html = ""
-    if imza_satirlari:
+    if imza_html:
+        imza_html = (
+            '<tr><td bgcolor="#FFC72C" style="height:4px;line-height:4px;font-size:0;">&nbsp;</td></tr>'
+            f'<tr><td bgcolor="#ffffff" style="padding:18px 28px;background:#ffffff;{MAIL_YAZI}font-size:13px;line-height:1.5;color:#334155;">{imza_html}</td></tr>'
+        )
+    elif imza_satirlari:
         imza_html = _sablon("rapor_mail_imza.html").substitute(
             yazi=MAIL_YAZI, ad=k(imza_satirlari[0]), satirlar="".join("<br>" + k(s) for s in imza_satirlari[1:])
         )
@@ -105,7 +111,7 @@ def kisi_adresi(kullanici: str) -> str | None:
 
 
 def gonderen(kullanici: str) -> str:
-    """Uretimle ayni sira: SMTP_USER > kullanici adi (alan yoksa @AD_DOMAIN eklenir) > varsayilan kutu."""
+    """SMTP kipinin From'u (taslakta From yazilmaz): SMTP_USER > kullanici adi (alan yoksa @AD_DOMAIN eklenir) > varsayilan kutu."""
     return os.environ.get("SMTP_USER", "").strip() or kisi_adresi(kullanici) or VARSAYILAN_GONDEREN
 
 
@@ -126,11 +132,14 @@ def eml(
     ekler: list[tuple[bytes, str, str]] | None = None,
     taslak: bool = True,
     yanit: str | None = None,
+    satir_ici: list[tuple[str, bytes, str]] | None = None,
 ) -> bytes:
     """RFC 822 baytlari. Basliklar email paketiyle kurulur (CR/LF enjeksiyonu istisna atar); alicilar zaten dogrulanmistir.
 
     `ekler`: (bayt, dosya adi, MIME turu) - rapor PDF'i, SLA Excel'i ve personelin ekledigi dosyalar.
-    `taslak=False` (SMTP kipi, rapor/smtp_gonderim.py): X-Unsent yok; Message-ID ve Date eklenir, `yanit` Reply-To olur."""
+    `taslak=True` (Outlook .eml): From YAZILMAZ (2026-10-26 duzeltme): Outlook taslagi personelin kendi hesabindan acar. Eskiden
+    From = SMTP_USER (TAMLIFE@) yaziliyordu; personelin o kutu icin Send-As yetkisi olmadigindan ileti NDR ile donerdi.
+    `taslak=False` (SMTP kipi, rapor/smtp_gonderim.py): X-Unsent yok; From, Message-ID ve Date eklenir, `yanit` Reply-To olur."""
     msg = MIMEMultipart("mixed")
     if taslak:
         msg["X-Unsent"] = "1"
@@ -139,7 +148,7 @@ def eml(
         msg["Date"] = formatdate(localtime=True)
         if yanit and yanit.lower() != gonderen_adres.lower():
             msg["Reply-To"] = gorunen_adli(yanit)
-    msg["From"] = gonderen_adres
+        msg["From"] = gonderen_adres
     if kime:
         msg["To"] = ", ".join(gorunen_adli(a) for a in kime)
     if bilgi:
@@ -156,6 +165,11 @@ def eml(
         parca = MIMEImage(png, _subtype="png")
         parca.add_header("Content-ID", f"<{cid}>")
         parca.add_header("Content-Disposition", "inline", filename=f"{cid.split('@')[0]}.png")
+        ilgili.attach(parca)
+    for cid, veri, alt in satir_ici or []:  # profil imzasinin gomulu gorselleri (app.imza.gomulu_gorselleri_ayir)
+        parca = MIMEImage(veri, _subtype=alt)
+        parca.add_header("Content-ID", f"<{cid}>")
+        parca.add_header("Content-Disposition", "inline", filename=f"{cid.split('@')[0]}.{'jpg' if alt == 'jpeg' else alt}")
         ilgili.attach(parca)
     alternatif.attach(ilgili)
     msg.attach(alternatif)

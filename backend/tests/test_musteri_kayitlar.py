@@ -56,7 +56,7 @@ def test_kart_kayitlari_tur_durum_siralama_yil_ve_gorunurluk(veri, monkeypatch):
     assert veri.get(URL.format(1), params={"tur": "alarm"}).status_code == 422
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")
-    assert veri.get(URL.format(3), params={"tur": "alarm", "durum": "acik"}).status_code == 200  # 2026-10-20: herkes gorur (salt okunur)
+    assert veri.get(URL.format(3), params={"tur": "alarm", "durum": "acik"}).status_code == 404  # 2026-10-26: baskasinin karti (kayitlari da) gorunmez
     assert veri.get(URL.format(1), params={"tur": "alarm", "durum": "acik"}).status_code == 200
 
 

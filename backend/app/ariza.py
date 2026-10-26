@@ -28,6 +28,10 @@ KODLAR: dict[str, tuple[str, str]] = {
     "TL-TAM-01": ("Tampon verisi işlenemedi", "Yönetim › Veri Girişi: partinin hata mesajına bakın."),
     "TL-KAY-01": ("Veri kaynağına erişilemiyor", "Kaynak yapılandırma anahtarlarını (Veri Girişi › Kaynaklar) kontrol edin."),
     "TL-YDK-01": ("Yedek alınamadı", "Yedek klasörünün yazma iznini ve boş alanı kontrol edin."),
+    "TL-RAP-01": (
+        "Aylık rapor gönderilemedi",
+        "Kayıttaki müşteri ve nedene bakın; SMTP ise Kurum Bağlantıları › E-posta testi. Personel raporu yeniden gönderebilir (ay kilitlenmedi).",
+    ),
     "TL-SRV-01": ("Beklenmeyen sunucu hatası", "Kayıt numarasıyla uygulama günlüğünde yığın izini arayın."),
 }
 SEVIYELER = ("error", "warning")

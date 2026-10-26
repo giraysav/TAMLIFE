@@ -28,11 +28,11 @@ def test_profil_okuma_ve_guncelleme(client):
     hdr = login_ok(client)
     d = client.get("/api/v1/session/me").json()["data"]
     assert d["profile"]["username"] == "admin" and d["display_name"] and d["profile"]["phone"] == ""
-    govde = {"first_name": " Giray ", "last_name": "Sav", "phone": "+90 532 000 00 00", "company": "Turkcell Teknoloji", "address": "Kartal\nİstanbul", "website": "turkcell.com.tr"}
+    govde = {"first_name": " Giray ", "last_name": "Sav", "phone": "+90 532 000 00 00", "company": "Turkcell Teknoloji", "website": "turkcell.com.tr"}
     r = client.put("/api/v1/session/profile", json=govde, headers=hdr)
     assert r.status_code == 200, r.text
     p = r.json()["data"]
-    assert (p["first_name"], p["last_name"], p["website"], p["address"]) == ("Giray", "Sav", "https://turkcell.com.tr", "Kartal İstanbul")
+    assert (p["first_name"], p["last_name"], p["website"]) == ("Giray", "Sav", "https://turkcell.com.tr") and "address" not in p  # adres 2026-10-26 kalkti
     assert p["username"] == "admin" and p["display_name"] == "Giray Sav"
     d = client.get("/api/v1/session/me").json()["data"]
     assert d["display_name"] == "Giray Sav" and d["username"] == "admin" and d["profile"]["phone"] == "+90 532 000 00 00"

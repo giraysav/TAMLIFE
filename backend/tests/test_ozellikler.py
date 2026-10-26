@@ -199,7 +199,7 @@ def test_onedesk_yz_yorumu_yalniz_kok_sebep_gonderir(veri, monkeypatch):
     assert veri.get("/api/v1/onedesk/oneriler").json()["data"]["yz"] == {"saglayici": "anthropic", "hazir": True, "model": yz.VARSAYILAN_MODEL, "eksik": []}
 
 
-def test_onedesk_herkes_tum_kayitlari_gorur(veri, monkeypatch):
+def test_onedesk_yonetici_hepsini_personel_kendi_kartlarini_gorur(veri, monkeypatch):
     hdr = login_ok(veri)
     with Session(engine()) as db:
         _kayit(db, status="open", closed_at=None, external_key="a1")  # Alfa (admin kullanicisinin musterisi)
@@ -209,8 +209,10 @@ def test_onedesk_herkes_tum_kayitlari_gorur(veri, monkeypatch):
         db.commit()
     assert veri.get("/api/v1/onedesk/durum", params={"kapsam": "acik"}).json()["data"]["toplam"]["hepsi"] == 4  # yonetici hepsi
     _cikis(veri, hdr)
-    _giris(veri, monkeypatch, "TeamMember")  # 2026-10-20 kullanici karari: herkes tum verileri gorur (Onedesk analizi dahil)
-    assert veri.get("/api/v1/onedesk/durum", params={"kapsam": "acik"}).json()["data"]["toplam"]["hepsi"] == 4
+    _giris(veri, monkeypatch, "TeamMember")  # 2026-10-26 (app.gorunurluk): personel yalniz kendi kartlarinin kayitlarini gorur
+    d = veri.get("/api/v1/onedesk/durum", params={"kapsam": "acik"}).json()["data"]
+    assert d["toplam"]["hepsi"] == 2 and {m["id"] for m in d["musteriler"]} == {1, 2}  # Alfa + istiraki; Beta ve kartsiz yok
+    assert veri.get("/api/v1/onedesk/top10").json()["data"]["toplam"]["hepsi"] == 2  # onbellek kisiye ozel (yoneticinin sonucu gelmez)
 
 
 def test_onedesk_modul_yetkisi_ve_kaynak_yalniz_admin(veri, monkeypatch):
@@ -306,7 +308,7 @@ def test_sms_gelirleri_ekle_duzenle_sil_ve_dogrulama(veri):
     assert veri.get("/api/v1/gelir/musteri-adlari").json()["data"] == ["Alfa Istirak", "Alfa Test A.S.", "Beta Test Ltd"]
 
 
-def test_gelir_herkes_gorur_yalniz_modul_sahibi_ve_admin_yazar(veri, monkeypatch):
+def test_gelir_personel_kendini_sahip_hepsini_gorur_yalniz_modul_sahibi_ve_admin_yazar(veri, monkeypatch):
     hdr = login_ok(veri)
     with kullanici_oturumu("ayse") as k:
         k.add(SmsRevenue(tam_name="Ayse Test", customer_name="Beta", project="X", amount=5, currency="TRY", year=YIL, month=1, created_by="ayse"))
@@ -317,9 +319,10 @@ def test_gelir_herkes_gorur_yalniz_modul_sahibi_ve_admin_yazar(veri, monkeypatch
         k.commit()
     assert len(veri.get("/api/v1/gelir/sms").json()["data"]["items"]) == 2  # yonetici hepsi
     _cikis(veri, hdr)
-    # 2026-10-20 kullanici karari: ICT SMS / APN yonetimli; herkes tum kayitlari gorur, yalniz modul sahibi ve admin yazar
+    # 2026-10-20: ICT SMS / APN yonetimli, yalniz modul sahibi ve admin yazar. 2026-10-26: personel yalniz kendi dosyasini gorur
     hdr = _giris(veri, monkeypatch, "TeamMember")
-    assert sorted(i["proje"] for i in veri.get("/api/v1/gelir/sms").json()["data"]["items"]) == ["X", "Y"]
+    assert sorted(i["proje"] for i in veri.get("/api/v1/gelir/sms").json()["data"]["items"]) == ["Y"]
+    assert veri.get("/api/v1/gelir/musteri-adlari").json()["data"] == ["Alfa Istirak", "Alfa Test A.S."]  # oneriler de kendi kartlari
     assert veri.put(f"/api/v1/gelir/sms/{diger}", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 403
     assert veri.delete(f"/api/v1/gelir/sms/{diger}", headers=hdr).status_code == 403
     assert veri.post("/api/v1/gelir/sms", json={"musteri": "B", "proje": "Z", "tutar": 1}, headers=hdr).status_code == 403
@@ -327,6 +330,7 @@ def test_gelir_herkes_gorur_yalniz_modul_sahibi_ve_admin_yazar(veri, monkeypatch
     with Session(engine()) as db:  # oturumdaki kisi (admin satiri) ICT SMS sahibi olur
         db.scalar(select(AppUser).where(AppUser.username == "admin")).module_owner = "tamsms"
         db.commit()
+    assert sorted(i["proje"] for i in veri.get("/api/v1/gelir/sms").json()["data"]["items"]) == ["X", "Y"]  # sahibi hepsini gorur
     yeni = veri.post("/api/v1/gelir/sms", json={"musteri": "B", "proje": "Z", "tutar": 1, "tam": "Ayse Test"}, headers=hdr)
     assert yeni.status_code == 200 and kimlik_coz(yeni.json()["data"]["id"])[0] == 2  # sahip TAM secer: ayse'nin dosyasina
     assert veri.put(f"/api/v1/gelir/sms/{diger}", json={"musteri": "B", "proje": "W", "tutar": 2}, headers=hdr).status_code == 200  # baskasinin kaydi
@@ -617,9 +621,9 @@ def test_portfoy_cati_kartlari_istirak_ve_filtreler(veri, monkeypatch):
     assert sec["yonetici"] is True and sec["segmentler"] == ["SMB", "SA", "MA", "PA"]  # WHOLESALE yalniz Toptan'da
     assert {t["ad"] for t in sec["tam"]} == {"Ayse Test"} and {c["ad"] for c in sec["catilar"]} == {"Alfa Test A.S.", "Beta Test Ltd"}
     _cikis(veri, hdr)
-    _giris(veri, monkeypatch, "TeamMember")  # 'admin' kullanicisi member olarak: 2026-10-20 herkes tum kartlari gorur
+    _giris(veri, monkeypatch, "TeamMember")  # 'admin' kullanicisi member olarak: 2026-10-26 yalniz kendi kartlari
     m = veri.get("/api/v1/musteri/portfoy").json()["data"]
-    assert [(c["name"], c["duzenlenebilir"]) for c in m["items"]] == [("Alfa Test A.S.", True), ("Beta Test Ltd", False)] and m["ozet"]["cati"] == 2
+    assert [(c["name"], c["duzenlenebilir"], c["cerceve"]) for c in m["items"]] == [("Alfa Test A.S.", True, False)] and m["ozet"]["cati"] == 1
     s = veri.get("/api/v1/musteri/secenekler").json()["data"]
     assert s["yonetici"] is False and s["ekleyebilir"] is True and [c["ad"] for c in s["catilar"]] == ["Alfa Test A.S."]  # istirak yalniz kendi catisina
 
@@ -635,6 +639,9 @@ def test_portfoy_istirak_sahibi_catiyi_gorur_ama_yalniz_istiraki_degistirir(veri
     m = veri.get("/api/v1/musteri/portfoy").json()["data"]
     alfa = next(c for c in m["items"] if c["name"] == "Alfa Test A.S.")
     assert [i["name"] for i in alfa["istirakler"]] == ["Alfa Istirak"] and alfa["duzenlenebilir"] is False  # cati ayse'nin
+    # 2026-10-26: baskasinin catisi yalniz cerceve: sayilari / skoru gelmez, karti acilmaz; Beta (ayse'nin) hic gelmez
+    assert alfa["cerceve"] is True and alfa["alarm"] == 0 and alfa["score"] is None and m["ozet"]["cati"] == 0
+    assert [c["name"] for c in m["items"]] == ["Alfa Test A.S."] and veri.get("/api/v1/musteri/1").status_code == 404
     assert veri.get("/api/v1/musteri/2").json()["data"]["erisim"]["kimlik_duzenle"] is True  # istirak kendisinin
 
 

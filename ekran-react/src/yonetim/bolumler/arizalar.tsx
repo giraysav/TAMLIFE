@@ -8,6 +8,7 @@ import type { Ariza, ArizaKodu, Sayfali } from "@/yonetim/api"
 import { ym } from "@/yonetim/metin"
 import { Sayfalama } from "@/yonetim/ui"
 import { zaman } from "@/lib/bicim"
+import { sorguAyarla, useHashSorgu } from "@/shell/rota"
 
 const ADET = 15
 const DURUM_TON = { open: "kirmizi", ack: "amber", closed: "yesil" } as const
@@ -101,6 +102,8 @@ export default function Arizalar({ dil }: { dil: Dil }) {
   const [q, setQ] = useState("")
   const [sayfa, setSayfa] = useState(1)
   const [secili, setSecili] = useState<Ariza | null>(null)
+  // Adresten kod suzgeci (#/yonetim/arizalar?kod=TL-RAP-01): ust cubuktaki admin bildirimi bu adrese gider.
+  const kod = useHashSorgu().get("kod") ?? ""
 
   useEffect(() => {
     const zamanlayici = window.setTimeout(() => {
@@ -110,7 +113,7 @@ export default function Arizalar({ dil }: { dil: Dil }) {
     return () => window.clearTimeout(zamanlayici)
   }, [giris])
 
-  const filtre = { durum, seviye, q, sayfa, adet: ADET }
+  const filtre = { durum, seviye, kod, q, sayfa, adet: ADET }
   const liste = useQuery({
     queryKey: [...ANAHTAR.arizalar, filtre],
     queryFn: () => oku<Sayfali<Ariza>>(`/api/v1/yonetim/arizalar${sorguMetni(filtre)}`),
@@ -162,6 +165,11 @@ export default function Arizalar({ dil }: { dil: Dil }) {
         <Alan etiket={t.ara} sinif="min-w-56 flex-1">
           <input className={GIRDI} placeholder={t.arizaAra} value={giris} onChange={(e) => setGiris(e.target.value)} />
         </Alan>
+        {kod ? (
+          <button type="button" className={DUGME} onClick={() => sorguAyarla("yonetim/arizalar", {})} aria-label={t.kodSuzgeciKaldir(kod)}>
+            {t.kod}: <code>{kod}</code> ✕
+          </button>
+        ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

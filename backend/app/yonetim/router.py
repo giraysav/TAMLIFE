@@ -123,6 +123,12 @@ def ariza_durumu(
     return ok(sonuc)
 
 
+@router.get("/bildirimler")
+def bildirimler(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Ust cubuk bildirimi (yalniz admin): kapanmamis aylik rapor gonderim hatalari (TL-RAP-01)."""
+    return ok(arizalar.bildirimler(db))
+
+
 @router.get("/ariza-kodlari")
 def ariza_kodlari(admin: Principal = Depends(require_admin)) -> dict[str, Any]:
     return ok(arizalar.kodlar())

@@ -19,6 +19,8 @@ export type PortfoyKart = {
   sikayet_kapanan?: number
   talep_kapanan?: number
   istirakler: { id: number; name: string }[]
+  /** 2026-10-26: baskasinin catisi; yalniz kisinin kendi istiraklerinin cercevesi (sayilar 0, kart acilmaz: ilk istirak acilir) */
+  cerceve?: boolean
 }
 export type Secenekler = { segmentler: string[]; yonetici: boolean; ekleyebilir?: boolean; kendi_id: number | null; tam: { id: number; ad: string }[]; catilar: { id: number; ad: string }[] }
 
@@ -106,7 +108,7 @@ export function MusteriKarti({ m, dil, onizleme = false }: { m: PortfoyKart; dil
   return onizleme ? (
     <div className={sinif}>{icerik}</div>
   ) : (
-    <a href={`#/${yol}?m=${m.id}`} aria-label={`${t.kartiAc}: ${m.name}`} className={`${sinif} hover:-translate-y-1 hover:border-tl-yellow hover:shadow-xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow`}>
+    <a href={`#/${yol}?m=${m.cerceve && m.istirakler[0] ? m.istirakler[0].id : m.id}`} aria-label={`${t.kartiAc}: ${m.name}`} className={`${sinif} hover:-translate-y-1 hover:border-tl-yellow hover:shadow-xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow`}>
       {icerik}
     </a>
   )

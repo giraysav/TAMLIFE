@@ -21,7 +21,7 @@ Kaynak (yalnız okundu): `kutucuklar/portfoy/{servis.py,kart/servis.py,kart/duze
 - **Eylemler (2026-10-11):** veri ekleme, değiştirme ve silme (müşteri ekle, kimlik, iletişim, iştirak, sorumlu TAM devri, ayrı rapor seçimi, sil) **yalnız admin**; Member kartı yalnız okur. Kural tek yerde: `deps.require_veri_yazma`; kartın `erisim` bayrakları aynı kurala bağlıdır, arayüz düğmeleri bu bayraklardan gizlenir. Aylık rapor hazırlama/gönderme ve final skor talebi bu kuralın dışındadır. Aylık rapor geri alma yalnız admin.
 - **Kimlik:** ünvan benzersiz (büyük/küçük harf ve boşluk farkı yok sayılır, 409); segment `SMB/SA/MA/PA/WHOLESALE` (eski değer yalnız müşterinin mevcut değeriyse korunur); ünvan değişince gelirler ve Destech/CI/RACI satırları yeni ünvana taşınır.
 - **Ekip ve iletişim:** e-posta ve GSM biçimi doğrulanır; boş değer alanı temizler.
-- **Kart bölümleri:** kimlik, operasyon özeti (kendisi / iştirak dahil), ekip (Destech), iletişim, kritik CI, raporlar (**Gönderilen Aylık Rapor** modülü verilmişse), gelirler (**ICT Sms & Gelir** / **APN Gelir ve Kurulum** modülleri verilmişse), izleme (Cacti adresleri).
+- **Kart bölümleri:** kimlik, operasyon özeti (kendisi / iştirak dahil), ekip (Destech), iletişim, kritik CI, raporlar (**Gönderilen Aylık Rapor** modülü verilmişse), gelirler (**ICT Sms & Gelir** / **APN Gelir ve Kurulum** modülleri verilmişse). Izleme (Cacti) bolumu 2026-10-26da tamamen kalkti.
 - **Rapor birimi:** çatı müşteri; iştirak yalnız "ayrı aylık rapor" seçilmişse. Çatıya dahil iştirak için hazırlanan rapor çatının sayılır.
 - **Aylık rapor (karttan):** taslak bu ay için (UTC) hazır tr/en metinlerle gelir; alıcılar bir kez girilir; gönderim **onaylı** ve ayda **tek**, ikinci gönderim 409 (kilit), gönderilmiş ayın taslağı değişmez; PDF isteğe bağlı (≤30 MB, `%PDF` imzası) `data/reports/<yıl>/<ay>` altına arşivlenir; yalnız admin geri alabilir (rapor kaydı silinir, sayaç azalır, gönderim `reverted` olarak kalır).
 
@@ -31,7 +31,7 @@ Kaynak (yalnız okundu): `kutucuklar/portfoy/{servis.py,kart/servis.py,kart/duze
 ## Yapılmayan / dogrulanmadi
 - Outlook taslağı (`.eml`, `rapor/eposta.py`) gerçek Outlook'ta açılarak denenmedi; testler MIME yapısını doğrular.
 - `rapor_ceviri` (otomatik çeviri) ve toplu aylık rapor temizliği (`aylik_rapor_kaydi_sil`, `gecmisi_temizle`).
-- Excel ile müşteri/matris/gelir yükleme, Cacti kazıma.
+- Excel ile müşteri/matris/gelir yükleme.
 - `report` metin alanlarının taslak alanlarıyla eşlemesi.
 - Ayın sınırı UTC'dir (üretimle aynı); Türkiye saatiyle ay başı/sonu farkı doğrulanmadı.
 

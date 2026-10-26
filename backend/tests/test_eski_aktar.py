@@ -190,7 +190,7 @@ def test_uygulama_musteriler(hedef, capsys):
         assert (h.segment, h.customer_no, h.sector, h.score, h.inventory_count, h.ncst) == ("SA", "10000001", "Finans", 77.5, 12, "NC-1")
         assert (h.alarm_count, h.complaint_count, h.request_count, h.alarm_closed_count, h.complaint_closed_count, h.report_count) == (5, 2, 1, 3, 1, 4)
         assert h.ft_volume == "1.234,00 ₺" and h.tam_ft == "0,00 ₺"
-        assert h.cacti_urls == ["http://cacti.ornek.invalid/a"]  # javascript:, bosluklu ve tekrar eden adresler elenir
+        assert not hasattr(h, "cacti_urls")  # 2026-10-26: Cacti kalkti; eski paneldeki adresler alinmaz
         # istirak: ust musteriye baglanir, sorumlu ve segment ustten gelir, ayri rapor + final dahil bayragi tasinir, puan yalniz catida
         assert (ist.parent_id, ist.owner_id, ist.segment, ist.separate_report, ist.score) == (h.id, h.owner_id, "SA", True, None)
         flag = db.get(AffiliateFinalFlag, ist.id)

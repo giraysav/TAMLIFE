@@ -23,7 +23,6 @@ function sunucu(kip: "eml" | "smtp") {
   const taslak = { yil: 2026, ay: 9, birim: true, alanlar: {}, varsayilanlar: { tr: {}, en: {} }, kayitli: false, guncelleyen: null, zaman: null,
     alicilar: { kime: "musteri@example.com", bilgi: "" }, gonderim: null, gonderim_kipi: kip }
   vi.mocked(oku).mockImplementation(async (url: string) => {
-    if (url.endsWith("/cacti")) return { baglantilar: [], hazir: false, duzenleyebilir: false, kilitli: false, yil: 2026, ay: 9 }
     if (url.endsWith("/taslak")) return taslak
     if (url.endsWith("/gecmis")) return []
     return { dosyalar: [], ekler: [] }

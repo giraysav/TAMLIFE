@@ -15,7 +15,7 @@ Kurallar (tekrar calistirmak guvenli: ayni veri ikinci kez cogalmaz):
     gercek ad-soyad yazilir. Giris yalniz AD ile olur: eski kaydi AD kullanicisi olmayanlar girissiz tasinir (--ad-hepsi hepsini AD yapar).
   * Musteri: unvan (buyuk/kucuk harf, I/i, bosluk farksiz) ile eslesir. Yeni musteri olusur; panelde olan musteride yalniz BOS alanlar
     doldurulur. Sorumlu TAM (eski user_id -> kullanici adi), cati/istirak, segment, sektor, Musteri No, NCST, ayri rapor, final skora
-    dahil, envanter, FT, sayaclar ve cacti adresleri gelir. Ayni unvanli ikinci eski kayit ilkine birlestirilir (sayilir).
+    dahil, envanter, FT ve sayaclar gelir (cacti adresleri 2026-10-26'dan beri alinmaz). Ayni unvanli ikinci eski kayit ilkine birlestirilir (sayilir).
   * Iletisim: eski destech_contacts, unvan eslesmesiyle musteri kartinin ekip/iletisim bolumune; yalniz bos alanlar doldurulur.
   * Tampon: eski ham_veri.db'deki ReportDB tamponu (reportdb_tampon) yeni tampona 'ready' parti olarak alinir; Musteri Radar'i hemen
     doldurur. Kartlara yazilmaz (dagitim kurallari kapali kalir). Ayni veri zamani ikinci kez alinmaz.
@@ -50,7 +50,6 @@ from app.tampon.musteri_aktar import _segment_kodu
 
 ADIMLAR = ("kullanici", "musteri", "iletisim", "tampon")
 TR = timezone(timedelta(hours=3))  # eski panelin yerel saati (Turkiye, yaz saati yok)
-AZAMI_CACTI, AZAMI_URL = 20, 500
 ROL_YONETICI = {"teammngr", "teammanager", "manager", "yonetici"}
 
 
@@ -205,22 +204,10 @@ def kullanicilari_aktar(db: Session, eski: Kaynak, say: Counter, yaz: bool, ad_h
 
 
 # --- musteriler -----------------------------------------------------------------------------------------
-def _cacti(ham: object) -> list[str]:
-    liste = _json(ham)
-    if not isinstance(liste, list):
-        return []
-    sonuc: list[str] = []
-    for u in liste:
-        u = str(u).strip()
-        if u.lower().startswith(("http://", "https://")) and len(u) <= AZAMI_URL and " " not in u and u not in sonuc:
-            sonuc.append(u)
-    return sonuc[:AZAMI_CACTI]
-
-
 _MUSTERI_SUTUNLARI = (
     "id", "name", "user_id", "parent_customer_id", "customer_no", "segment", "sector", "score", "envanter_count", "ft_hacim", "tam_ft",
     "alarm_count", "sikayet_count", "talep_count", "alarm_closed_count", "sikayet_closed_count", "talep_closed_count", "report_count",
-    "cacti_urls", "pinned_entries",
+    "pinned_entries",
 )  # fmt: skip
 
 
@@ -277,7 +264,6 @@ def musterileri_aktar(db: Session, eski: Kaynak, kisiler: dict[int, int], say: C
             "complaint_closed_count": _tamsayi(r["sikayet_closed_count"]),
             "request_closed_count": _tamsayi(r["talep_closed_count"]),
             "report_count": _tamsayi(r["report_count"]),
-            "cacti_urls": _cacti(r["cacti_urls"]),
             "ncst": _ad(pin.get("ncst"), 50),
         }
         for alan, deger in degerler.items():

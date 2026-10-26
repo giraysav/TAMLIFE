@@ -222,7 +222,23 @@ def alicilar(musteri_id: KimlikTipi, body: AlicilarGovde, e: Erisim = Depends(mu
 
 @router.post("/musteri/{musteri_id:int}/rapor/gonder")
 def gonder(musteri_id: KimlikTipi, body: GonderGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    sonuc = _yap(db, lambda: rs.gonder(db, e.user, musteri_id, _govde(body)), yaz=True)
+    """Gonderim hatasi admin'e bildirilir (rs.gonderim_hatasi_bildir): teslim hatasi (EpostaHata) ve beklenmeyen hata. Kullanici
+    girdisi hatalari (onay yok, ay kilitli, gecersiz alici: RaporHata 4xx) bildirim uretmez."""
+    from app import ariza
+    from app.ortak import UygulamaHatasi
+    from app.rapor import smtp_gonderim
+
+    try:
+        sonuc = _yap(db, lambda: rs.gonder(db, e.user, musteri_id, _govde(body)), yaz=True)
+    except UygulamaHatasi as exc:
+        if isinstance(exc, smtp_gonderim.EpostaHata) or exc.kod >= 500:
+            db.rollback()  # istek oturumunun yazma kilidi birakilsin: ariza kaydi ayri oturumla yazilir
+            rs.gonderim_hatasi_bildir(e.user, musteri_id, exc.mesaj)
+        raise
+    except Exception as exc:
+        db.rollback()  # SMTP kipinde ileti teslim edilmis, kayit yazilamamis olabilir: bildirimde belirtilir
+        kayit = rs.gonderim_hatasi_bildir(e.user, musteri_id, f"{type(exc).__name__} (SMTP kipinde ileti alıcıya gitmiş olabilir)", exc=exc)
+        raise UygulamaHatasi(500, ariza.mesaj(rs.GONDERIM_ARIZASI, kayit)) from exc
     if isinstance(sonuc, dict):
         _denetim(e.user, "rapor.gonder", f"musteri={musteri_id}")
     return sonuc
@@ -337,42 +353,3 @@ def durum(
 ):
     simdi_yil, simdi_ay = rs.donem()
     return _yap(db, lambda: rs.durum_ozeti(db, e.user, ay or simdi_ay, yil or simdi_yil))
-
-
-# --- Cacti grafik baglantilari ve aylik rapor -----------------------------------------------------
-class CactiGovde(BaseModel):
-    baglantilar: list[str] = Field(max_length=6)
-
-    model_config = {"str_max_length": 2048}
-
-
-@router.get("/musteri/{musteri_id:int}/rapor/cacti")
-def cacti_ayar(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.cacti_ayar(db, e.user, musteri_id))
-
-
-@router.put("/musteri/{musteri_id:int}/rapor/cacti")
-def cacti_kaydet(musteri_id: KimlikTipi, body: CactiGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    # Grafik baglantisini sorumlu personel de tanimlar (rs._cacti_duzenleyebilir).
-    sonuc = _yap(db, lambda: rs.cacti_kaydet(db, e.user, musteri_id, body.baglantilar), yaz=True)
-    _denetim(e.user, "rapor.cacti_ayar", f"musteri={musteri_id} adet={len(body.baglantilar)}")
-    return sonuc
-
-
-@router.get("/musteri/{musteri_id:int}/rapor/cacti/grafikler")
-def cacti_grafikleri(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    # Senkron endpoint FastAPI threadpool'unda calisir; ag I/O event loop'u tutmaz.
-    return _yap(db, lambda: rs.cacti_grafikleri(db, e.user, musteri_id))
-
-
-class CactiParola(BaseModel):
-    # Uzunluk servis katmaninda denetlenir: sema siniri 422 yanitinda girdiyi geri yazardi.
-    parola: str
-
-
-@router.post("/musteri/{musteri_id:int}/rapor/cacti/grafikler")
-def cacti_grafikleri_kisi(musteri_id: KimlikTipi, body: CactiParola, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    """Kisinin kendi LDAP hesabiyla Lookouteyes alimi; parola yalniz bu istekte kullanilir, saklanmaz ve gunluge yazilmaz."""
-    sonuc = _yap(db, lambda: rs.cacti_grafikleri(db, e.user, musteri_id, body.parola))
-    _denetim(e.user, "rapor.cacti_kisi_alim", f"musteri={musteri_id}")
-    return sonuc

@@ -46,9 +46,6 @@ from app.tampon import musteri_ham as H
 from app.tampon.models import CustomerImportRun
 
 GOSTERILEN_SATIR = 1000  # onizlemede listelenen en fazla satir ('degisiklik yok' satirlari listelenmez)
-AZAMI_CACTI = 20
-AZAMI_URL = 500
-_URL = re.compile(r"^https?://\S+$", re.IGNORECASE)
 _kilit = threading.Lock()
 
 # Segment acik adlari ve liste dosyalarinda gorulen yazim hatalari (en yakin ada cekilir; esik 0.85).
@@ -121,20 +118,6 @@ def _evet_hayir(ham: object, etiket: str) -> bool:
     raise _Hata(m(f"{etiket}: Evet ya da Hayır olmalı", f"{etiket}: must be Evet (yes) or Hayır (no)"))
 
 
-def _cacti(ham: object, etiket: str) -> list[str]:
-    sonuc: list[str] = []
-    for p in (p.strip() for p in re.split(r"[;\n]+", str(ham)) if p.strip()):
-        if len(p) > AZAMI_URL or not _URL.match(p):
-            raise _Hata(
-                m(f'{etiket}: "{p[:40]}" http:// ya da https:// ile başlamalı', f'{etiket}: "{p[:40]}" must start with http:// or https://')
-            )
-        if p not in sonuc:
-            sonuc.append(p)
-    if len(sonuc) > AZAMI_CACTI:
-        raise _Hata(m(f"{etiket}: en fazla {AZAMI_CACTI} adres olabilir", f"{etiket}: at most {AZAMI_CACTI} addresses"))
-    return sonuc
-
-
 def _segment_kodu(metin: str) -> str | None:
     s = metin.strip()
     for x in SEGMENTLER:
@@ -194,9 +177,6 @@ def _alan_coz(
     if alan.tip == "evet_hayir":
         v = _evet_hayir(ham, b)
         return ("Evet" if v else "Hayır"), v
-    if alan.tip == "url_listesi":
-        liste = _cacti(ham, b)
-        return H.URL_AYRACI.join(liste), liste
     if alan.grup == "iletisim":
         _, azami = ILETISIM_ALANLARI[a]
         s = _metin(ham, azami, b, satir_sonu=(a == "mobil_kmt_detail"))
@@ -655,7 +635,6 @@ def uygula(db: Session, parti_id: int, yeni_olustur: bool, plan_ozeti: str, kull
                 parent_id=cati.id if cati else None,
                 ft_volume=VARSAYILAN_TUTAR,
                 tam_ft=VARSAYILAN_TUTAR,
-                cacti_urls=[],
             )
             db.add(c)
             db.flush()

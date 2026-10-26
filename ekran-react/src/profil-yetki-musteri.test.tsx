@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Kullanici } from "@/lib/oturum"
+import { ImzaEditoru } from "@/shell/imza-editoru"
 import { ProfilSayfasi } from "@/shell/profil-sayfasi"
 import { RollerSayfasi } from "@/shell/roller-sayfasi"
 import { MusteriListesi, satirlariAyir } from "@/yonetim/utilizasyon/musteri-listesi"
@@ -39,14 +40,14 @@ function sahteSunucu(cevaplar: Record<string, Cevap>): Cagri[] {
   return cagrilar
 }
 
-const PROFIL = { username: "gsav", display_name: "Giray Sav", ad_user: true, first_name: "Giray", last_name: "Sav", phone: "", company: "", address: "", website: "" }
+const PROFIL = { username: "gsav", display_name: "Giray Sav", ad_user: true, first_name: "Giray", last_name: "Sav", phone: "", company: "", website: "" }
 const KULLANICI: Kullanici = { username: "gsav", display_name: "Giray Sav", profile: PROFIL, role: "TeamMember", is_admin: false, idle_timeout_minutes: 30, landing: "ozet", navigation: [] }
 
 describe("Profil: kisi kendi bilgilerini duzenler", () => {
   it("AD kullanici adi kilitli; diger alanlar duzenlenir, kaydet yalniz degisince acilir ve PUT gonderir", async () => {
     const cagrilar = sahteSunucu({ "/api/v1/session/profile": { ...PROFIL, phone: "+90 532 000 00 00", company: "Teknocan", display_name: "Giray Sav" } })
     const onKaydedildi = vi.fn()
-    render(<ProfilSayfasi kullanici={KULLANICI} dil="tr" onKaydedildi={onKaydedildi} />)
+    sarmala(<ProfilSayfasi kullanici={KULLANICI} dil="tr" onKaydedildi={onKaydedildi} />)
 
     const kullaniciAdi = screen.getByLabelText("Kullanıcı adı (AD/LDAP)")
     expect(kullaniciAdi).toHaveValue("gsav")
@@ -59,7 +60,7 @@ describe("Profil: kisi kendi bilgilerini duzenler", () => {
     fireEvent.change(screen.getByLabelText("Telefon"), { target: { value: "+90 532 000 00 00" } })
     fireEvent.change(screen.getByLabelText("Şirket"), { target: { value: "Teknocan" } })
     fireEvent.change(screen.getByLabelText("Web adresi"), { target: { value: "teknocan.com" } })
-    fireEvent.change(screen.getByLabelText("Adres"), { target: { value: "İstanbul" } })
+    expect(screen.queryByLabelText("Adres")).toBeNull() // 2026-10-26: adres alani kalkti (yerine e-posta imzasi)
     expect(kaydet).toBeEnabled()
     fireEvent.click(kaydet)
 
@@ -67,7 +68,7 @@ describe("Profil: kisi kendi bilgilerini duzenler", () => {
     const put = cagrilar.find((c) => c.yontem === "PUT")
     expect(put?.yol).toContain("/api/v1/session/profile")
     // Kullanici adi ve rol govdeye girmez: yalniz kisinin duzenleyebildigi alanlar gider.
-    expect(put?.govde).toEqual({ first_name: "Giray", last_name: "Sav", phone: "+90 532 000 00 00", company: "Teknocan", address: "İstanbul", website: "teknocan.com" })
+    expect(put?.govde).toEqual({ first_name: "Giray", last_name: "Sav", phone: "+90 532 000 00 00", company: "Teknocan", website: "teknocan.com" })
     expect(onKaydedildi).toHaveBeenCalledTimes(1)
     expect(screen.getByRole("button", { name: "Kaydet" })).toBeDisabled() // sunucunun dondurdugu deger artik "kayitli"
   })
@@ -75,7 +76,7 @@ describe("Profil: kisi kendi bilgilerini duzenler", () => {
   it("sunucu reddederse hata metni gosterilir ve oturum yenilenmez", async () => {
     sahteSunucu({ "/api/v1/session/profile": { __durum: 400, detail: "Telefon numarası geçersiz." } })
     const onKaydedildi = vi.fn()
-    render(<ProfilSayfasi kullanici={KULLANICI} dil="tr" onKaydedildi={onKaydedildi} />)
+    sarmala(<ProfilSayfasi kullanici={KULLANICI} dil="tr" onKaydedildi={onKaydedildi} />)
     fireEvent.change(screen.getByLabelText("Telefon"), { target: { value: "abc" } })
     fireEvent.click(screen.getByRole("button", { name: "Kaydet" }))
     expect(await screen.findByText("Telefon numarası geçersiz.")).toBeInTheDocument()
@@ -84,7 +85,7 @@ describe("Profil: kisi kendi bilgilerini duzenler", () => {
   })
 
   it("hesap bilgileri karti salt okunur kalir", () => {
-    render(<ProfilSayfasi kullanici={KULLANICI} dil="tr" />)
+    sarmala(<ProfilSayfasi kullanici={KULLANICI} dil="tr" />)
     expect(screen.getByText("Hesap bilgileri")).toBeInTheDocument()
     expect(screen.getByText("Member")).toBeInTheDocument()
     expect(screen.getByText("Standart")).toBeInTheDocument()
@@ -371,5 +372,35 @@ describe("Musteri Listesi: toplu ekleme ve silme", () => {
       parent_id: 1,
       owner_id: 9,
     })
+  })
+})
+
+describe("Profil: e-posta imzasi (2026-10-26)", () => {
+  it("kayit yoksa hazir sablon acilir; kaydet duzenleyicinin HTML'ini gonderir ve sunucunun temizledigini gosterir", async () => {
+    const SABLON = '<table><tbody><tr><td><img src="data:image/png;base64,AAAA" width="96" alt="Teknocan"></td><td><b>Giray Sav</b></td></tr></tbody></table>'
+    const cagrilar: Cagri[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (girdi: string, ayar?: RequestInit) => {
+        const yontem = ayar?.method ?? "GET"
+        const govde = typeof ayar?.body === "string" ? JSON.parse(ayar.body) : null
+        cagrilar.push({ yol: String(girdi), yontem, govde })
+        const data = yontem === "PUT" ? { html: govde.html, sablon: SABLON, kayitli: true } : { html: "", sablon: SABLON, kayitli: false }
+        return new Response(JSON.stringify({ status: "success", data }), { status: 200, headers: { "Content-Type": "application/json" } })
+      }),
+    )
+    sarmala(<ImzaEditoru dil="tr" />)
+    const alan = await screen.findByRole("textbox", { name: "E-posta imzası" })
+    await waitFor(() => expect(alan.innerHTML).toContain("Giray Sav"))
+    expect(screen.getByText("Henüz kaydedilmedi: hazır şablon gösteriliyor.")).toBeInTheDocument()
+    expect(alan.querySelector("img")?.getAttribute("alt")).toBe("Teknocan")
+    fireEvent.click(alan.querySelector("img") as HTMLImageElement)
+    fireEvent.change(screen.getByLabelText("Seçili görselin genişliği"), { target: { value: "140" } })
+    expect(alan.querySelector("img")?.getAttribute("width")).toBe("140")
+    fireEvent.click(screen.getByRole("button", { name: "İmzayı kaydet" }))
+    expect(await screen.findByText("İmza kaydedildi; aylık rapor iletisinde bu imza kullanılır.")).toBeInTheDocument()
+    const put = cagrilar.find((c) => c.yontem === "PUT")
+    expect(put?.yol).toContain("/api/v1/session/imza")
+    expect(put && (put.govde as { html: string }).html).toContain('width="140"')
   })
 })

@@ -57,7 +57,7 @@ describe("Gorunum olcegi (yazi boyutu)", () => {
   })
 
   it("hesap menusunde Yazi boyutu secenekleri var; secim uygulanir", () => {
-    const kullanici: Kullanici = { username: "x", display_name: "X Y", profile: { username: "x", display_name: "X Y", ad_user: false, first_name: "X", last_name: "Y", phone: "", company: "", address: "", website: "" }, role: "TeamMember", is_admin: false, idle_timeout_minutes: 30, landing: "ozet", navigation: [] }
+    const kullanici: Kullanici = { username: "x", display_name: "X Y", profile: { username: "x", display_name: "X Y", ad_user: false, first_name: "X", last_name: "Y", phone: "", company: "", website: "" }, role: "TeamMember", is_admin: false, idle_timeout_minutes: 30, landing: "ozet", navigation: [] }
     render(<KullaniciKarti kullanici={kullanici} dil="tr" onDil={() => {}} onGit={() => {}} onCikis={() => {}} talepVar={false} />)
     fireEvent.click(screen.getByRole("button", { name: /Hesap menüsü/ }))
     const grup = screen.getByRole("group", { name: "Yazı boyutu" })
@@ -156,8 +156,8 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     erisim: { rapor: true, gelir: true, kimlik_duzenle: true, iletisim_duzenle: true, sil: true, tam_degistir: false, rapor_geri_al: true, ayri_rapor_sec: true, istirak_ekle: true },
   }
 
-  it("Ekip (Destech), Gelirler ve Izleme (Cacti) yok; ekip ve iletisim musteri bilgileriyle ayni cercevede", async () => {
-    sahteSunucu({ "/api/v1/musteri/9": { ...KART, ekip: { basliklar: ["Ad"], satirlar: [["x"]] }, izleme: { cacti: ["http://c"], son_kazima: null, kazima_adedi: 0 }, gelirler: { ict: { toplam: {}, son: [] } } } })
+  it("Ekip (Destech), Gelirler ve Izleme (Cacti, 2026-10-26 tamamen kalkti) yok; ekip ve iletisim musteri bilgileriyle ayni cercevede", async () => {
+    sahteSunucu({ "/api/v1/musteri/9": { ...KART, ekip: { basliklar: ["Ad"], satirlar: [["x"]] }, gelirler: { ict: { toplam: {}, son: [] } } } })
     sarmala(<MusteriKarti id={9} dil="tr" />)
     const baslik = await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
     expect(baslik).toBeInTheDocument()

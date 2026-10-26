@@ -159,6 +159,7 @@ const TR = {
 
   // Arızalar
   arizaAra: "Kayıt no ya da mesaj ara…",
+  kodSuzgeciKaldir: (kod: string) => `${kod} süzgecini kaldır`,
   durumlar: { open: "Açık", ack: "İncelemede", closed: "Kapalı" } as Record<string, string>,
   seviyeler: { error: "Hata", warning: "Uyarı" } as Record<string, string>,
   seviye: "Seviye",
@@ -458,6 +459,7 @@ const EN: typeof TR = {
   yedekDesteklenmiyor: "Backups cannot be taken from the panel on this engine (use pg_dump for PostgreSQL).",
 
   arizaAra: "Search record no or message…",
+  kodSuzgeciKaldir: (kod) => `Remove the ${kod} filter`,
   durumlar: { open: "Open", ack: "Investigating", closed: "Closed" },
   seviyeler: { error: "Error", warning: "Warning" },
   seviye: "Severity",
