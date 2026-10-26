@@ -57,10 +57,32 @@ def test_profil_imza_uclari_ve_adres_kalkti(client):
     assert "address" not in client.get("/api/v1/session/me").json()["data"]["profile"]
     assert client.put("/api/v1/session/profile", json={"address": "X"}, headers=hdr).status_code == 422  # alan kalkti
     bos = client.get("/api/v1/session/imza").json()["data"]
-    assert bos["html"] == "" and bos["kayitli"] is False and "Teknocan" in bos["sablon"] and "data:image/png;base64," in bos["sablon"]
-    r = client.put("/api/v1/session/imza", json={"html": '<p>Giray <b>Sav</b><script>x</script></p>'}, headers=hdr)
+    assert bos["mod"] == "" and bos["html"] == "" and bos["kayitli"] is False
+    assert 'alt="Turkcell TAM"' in bos["kurumsal_html"] and "data:image/jpeg;base64," in bos["kurumsal_html"] and bos["sablon"] == bos["kurumsal_html"]
+    r = client.put("/api/v1/session/imza", json={"mod": "serbest", "html": '<p>Giray <b>Sav</b><script>x</script></p>'}, headers=hdr)
     assert r.status_code == 200 and r.json()["data"]["html"] == "<p>Giray <b>Sav</b></p>" and r.json()["data"]["kayitli"] is True
-    assert client.put("/api/v1/session/imza", json={"html": ""}, headers=hdr).json()["data"]["kayitli"] is False
+    assert client.put("/api/v1/session/imza", json={"mod": "serbest", "html": ""}, headers=hdr).json()["data"]["kayitli"] is False  # bos = imza yok
+    assert client.put("/api/v1/session/imza", json={"mod": "baska"}, headers=hdr).status_code == 400
+
+
+def test_kurumsal_imza_alanlar_onizleme_ve_kayit(client):
+    """2026-10-26 kullanici: imza.html tasarimi panele: ad / cep / sirket / web profilden, unvan / birim / sabit / e-posta imza alanlarindan."""
+    hdr = login_ok(client)
+    assert client.put("/api/v1/session/profile", json={"first_name": "Giray", "last_name": "Sav", "phone": "0532 210 72 84", "website": "superonline.net"}, headers=hdr).status_code == 200
+    alanlar = {"unvan": "Teknik Müşteri Yöneticisi", "birim": "Kurumsal <Çözümler>", "sabit": "+90 212 000 00 00", "eposta": "giray.sav@turkcell.com.tr"}
+    on = client.post("/api/v1/session/imza/onizleme", json={"alanlar": alanlar}, headers=hdr).json()["data"]["html"]
+    assert ">Giray Sav<" in on and ">Teknik Müşteri Yöneticisi<" in on and "Kurumsal &lt;Çözümler&gt;" in on  # metin kacislanir
+    assert 'href="tel:05322107284"' in on and 'href="mailto:giray.sav@turkcell.com.tr"' in on and 'href="https://superonline.net"' in on
+    assert ">Turkcell<" in on and 'width="620"' in on  # sirket bos: Turkcell; mail genisligine uygun
+    assert client.get("/api/v1/session/imza").json()["data"]["kayitli"] is False  # onizleme kaydetmez
+    hatali = client.put("/api/v1/session/imza", json={"mod": "kurumsal", "alanlar": {"eposta": "gecersiz"}}, headers=hdr)
+    assert hatali.status_code == 400 and "E-posta" in hatali.text
+    assert client.put("/api/v1/session/imza", json={"mod": "kurumsal", "alanlar": {"adres": "x"}}, headers=hdr).status_code == 400
+    d = client.put("/api/v1/session/imza", json={"mod": "kurumsal", "alanlar": alanlar}, headers=hdr).json()["data"]
+    assert d["mod"] == "kurumsal" and d["kayitli"] and d["alanlar"]["eposta"] == "giray.sav@turkcell.com.tr" and d["kurumsal_html"] == on
+    # serbest kipe gecince kurumsal alanlar kalir; kurumsal HTML serbest duzenlemede bicimini korur (font kisaltmasi izinli)
+    d = client.put("/api/v1/session/imza", json={"mod": "serbest", "html": on}, headers=hdr).json()["data"]
+    assert d["mod"] == "serbest" and "font:700 19px/1.1 Arial" in d["html"] and d["alanlar"]["unvan"] == "Teknik Müşteri Yöneticisi"
 
 
 def test_aylik_rapor_iletisi_profil_imzasini_tasir(client, monkeypatch, tmp_path):
@@ -71,7 +93,7 @@ def test_aylik_rapor_iletisi_profil_imzasini_tasir(client, monkeypatch, tmp_path
         db.add(Customer(id=1, external_key="t-a", name="Alfa Test A.S.", segment="MA", owner_id=kisi.id))
         db.commit()
     imza_html = f'<table><tr><td><img src="{PNG_URL}" width="96"></td><td><b>Giray Sav</b><br>TAM</td></tr></table>'
-    assert client.put("/api/v1/session/imza", json={"html": imza_html}, headers=hdr).status_code == 200
+    assert client.put("/api/v1/session/imza", json={"mod": "serbest", "html": imza_html}, headers=hdr).status_code == 200
     assert client.get("/api/v1/musteri/1/rapor/taslak").json()["data"]["profil_imza"] is True
     r = client.post("/api/v1/musteri/1/rapor/gonder", json={"onay": True, "to": "musteri@example.com", "signature": "Eski metin imza"}, headers=hdr)
     assert r.status_code == 200, r.text
@@ -81,3 +103,20 @@ def test_aylik_rapor_iletisi_profil_imzasini_tasir(client, monkeypatch, tmp_path
     gomulu = {p["Content-ID"]: p.get_content() for p in msg.walk() if p.get("Content-ID")}
     assert gomulu["<imza1@tamlife>"] == PNG
     assert "Giray Sav" in msg.get_body(("plain",)).get_content()
+
+
+def test_aylik_rapor_iletisi_kurumsal_imzayi_tasir(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(tmp_path / "raporlar"))
+    hdr = login_ok(client)
+    with Session(engine()) as db:
+        kisi = db.query(AppUser).filter(AppUser.username == "admin").one()
+        db.add(Customer(id=1, external_key="t-a", name="Alfa Test A.S.", segment="MA", owner_id=kisi.id))
+        db.commit()
+    client.put("/api/v1/session/imza", json={"mod": "kurumsal", "alanlar": {"unvan": "TAM", "eposta": "tam@turkcell.com.tr"}}, headers=hdr)
+    r = client.post("/api/v1/musteri/1/rapor/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr)
+    assert r.status_code == 200, r.text
+    msg = message_from_bytes(base64.b64decode(r.json()["data"]["eml_base64"]), policy=default)
+    html = msg.get_body(("html",)).get_content()
+    assert 'alt="Turkcell TAM"' in html and 'src="cid:imza1@tamlife"' in html and "data:image" not in html
+    assert any(p.get_content_type() == "image/jpeg" and p["Content-ID"] == "<imza1@tamlife>" for p in msg.walk())
+    assert "tam@turkcell.com.tr" in msg.get_body(("plain",)).get_content()

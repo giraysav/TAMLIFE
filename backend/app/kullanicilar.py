@@ -76,20 +76,92 @@ def profil_sozlugu(satir: AppUser | None, user: Principal) -> dict:
     }
 
 
-def imza_sozlugu(satir: AppUser) -> dict:
-    """E-posta imzasi (GET/PUT /session/imza; /me'ye girmez: gomulu gorselle ~200 KB). Bossa hazir sablon da doner: Teknocan +
-    ad / unvan / sirket / iletisim; kaydedilmedikce maile girmez."""
+# --- e-posta imzasi (2026-10-26) ------------------------------------------------------------------------------------------------
+IMZA_KIPLERI = ("kurumsal", "serbest")
+# kurumsal imzanin profilde olmayan alanlari: govde anahtari -> (sutun, etiket, azami)
+IMZA_ALANLARI = {"unvan": ("title", "Görev / unvan", 120), "birim": ("department", "Birim", 120), "sabit": ("landline", "Sabit telefon", 40),
+                 "eposta": ("email", "E-posta", 200)}  # fmt: skip
+_EPOSTA = re.compile(r"^[^@\s<>\"']+@[^@\s<>\"']+\.[^@\s<>\"']+$")
+
+
+def _imza_alanlari(satir: AppUser) -> dict[str, str]:
+    return {k: getattr(satir, sutun) or "" for k, (sutun, _, _) in IMZA_ALANLARI.items()}
+
+
+def kurumsal_imza(satir: AppUser, alanlar: dict[str, str] | None = None) -> str:
+    """Kurumsal imza: ad / cep / sirket / web profilden, unvan / birim / sabit / e-posta `alanlar`dan (yoksa kayitli degerler)."""
+    a = {**_imza_alanlari(satir), **(alanlar or {})}
     ad, soyad = ad_soyad(satir)
-    sablon = imza.varsayilan(
-        " ".join(p for p in (ad, soyad) if p) or satir.display_name or satir.username, "Teknik Müşteri Yöneticisi (TAM)", satir.company, satir.phone, satir.website
+    return imza.kurumsal(
+        ad=" ".join(p for p in (ad, soyad) if p) or satir.display_name or satir.username,
+        unvan=a["unvan"] or imza.VARSAYILAN_UNVAN,
+        sirket=satir.company or imza.VARSAYILAN_SIRKET,
+        birim=a["birim"],
+        cep=satir.phone,
+        sabit=a["sabit"],
+        eposta=a["eposta"],
+        web=satir.website,
     )
-    return {"html": satir.signature_html or "", "sablon": sablon, "kayitli": bool(satir.signature_html)}
 
 
-def imza_kaydet(db: Session, user: Principal, ham: object) -> AppUser:
-    """Kisinin kendi imzasi; izin listesiyle temizlenir (app.imza). Bos gonderilirse imza silinir (maile hazir imza girer)."""
+def kisi_imzasi(satir: AppUser | None) -> str:
+    """Iletiye girecek imza HTML'i (gorseller data:); imza yoksa "". Kurumsal imza her cagrida guncel profilden uretilir."""
+    if satir is None:
+        return ""
+    if satir.signature_mode == "kurumsal":
+        return kurumsal_imza(satir)
+    return (satir.signature_html or "") if satir.signature_mode == "serbest" else ""
+
+
+def imza_sozlugu(satir: AppUser) -> dict:
+    """E-posta imzasi (GET/PUT /session/imza; /me'ye girmez: gomulu gorselle onlarca KB). kurumsal_html: su anki kurumsal imza
+    (onizleme); sablon: serbest duzenleyicinin bos acilisi (kurumsal imzayla ayni)."""
+    kurumsal_html = kurumsal_imza(satir)
+    return {
+        "mod": satir.signature_mode or "",
+        "kayitli": bool(kisi_imzasi(satir)),
+        "alanlar": _imza_alanlari(satir),
+        "kurumsal_html": kurumsal_html,
+        "html": satir.signature_html or "",
+        "sablon": kurumsal_html,
+    }
+
+
+def _imza_alani(anahtar: str, ham: object) -> str:
+    _, etiket, azami = IMZA_ALANLARI[anahtar]
+    if ham is None:
+        return ""
+    if not isinstance(ham, str):
+        raise ProfilHata(400, f"{etiket} geçersiz.")
+    deger = " ".join(_KONTROL.sub(" ", ham).split())
+    if len(deger) > azami:
+        raise ProfilHata(400, f"{etiket} en fazla {azami} karakter olabilir.")
+    if anahtar == "sabit" and deger and not _TELEFON.match(deger):
+        raise ProfilHata(400, "Sabit telefon yalnızca rakam, +, (, ), - ve boşluk içerebilir.")
+    if anahtar == "eposta" and deger and not _EPOSTA.match(deger):
+        raise ProfilHata(400, "E-posta adresi geçersiz.")
+    return deger
+
+
+def imza_alanlarini_dogrula(ham: object) -> dict[str, str]:
+    if ham is None:
+        return {}
+    if not isinstance(ham, dict) or set(ham) - set(IMZA_ALANLARI):
+        raise ProfilHata(400, "İmza alanları geçersiz.")
+    return {k: _imza_alani(k, v) for k, v in ham.items()}
+
+
+def imza_kaydet(db: Session, user: Principal, mod: object, alanlar: object = None, ham: object = None) -> AppUser:
+    """Kisinin kendi imzasi. mod: 'kurumsal' (alanlar profile yazilir) | 'serbest' (ham HTML izin listesiyle temizlenir) | '' (imza
+    yok: iletide hazir bant). Kurumsal alanlar her kipte saklanir (kip degisince kaybolmaz)."""
+    if mod not in (*IMZA_KIPLERI, ""):
+        raise ProfilHata(400, "İmza türü geçersiz.")
     satir = kullanici_kaydi(db, user)
-    satir.signature_html = imza.temizle(ham)
+    for k, deger in imza_alanlarini_dogrula(alanlar).items():
+        setattr(satir, IMZA_ALANLARI[k][0], deger)
+    if mod == "serbest" or ham is not None:
+        satir.signature_html = imza.temizle(ham)
+    satir.signature_mode = str(mod) if mod != "serbest" or satir.signature_html else ""  # bos serbest imza = imza yok
     db.flush()
     return satir
 

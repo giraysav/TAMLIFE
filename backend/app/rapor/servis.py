@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from app import imza as imza_modulu
 from app.authz import yonetici_mi
 from app.dil import m, secili
-from app.kullanicilar import kullanici_kaydi, personel
+from app.kullanicilar import kisi_imzasi, kullanici_kaydi, personel
 from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
 from app.musteri.servis import MusteriHata, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
 from app.onedesk import yz
@@ -235,7 +235,7 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
         "gonderim": gonderim_ozeti(gonderim) if gonderim else None,
         "gonderim_kipi": smtp_gonderim.kip(),
         # profil imzasi varsa ileti onu tasir; formdaki imza alani yalniz yedektir (arayuz bilgi gosterir)
-        "profil_imza": bool(db.scalar(select(AppUser.signature_html).where(AppUser.username == user.username))),
+        "profil_imza": bool(kisi_imzasi(db.scalar(select(AppUser).where(AppUser.username == user.username)))),
     }
 
 
@@ -421,7 +421,7 @@ def _ileti(
         ekler.append((sla_ek[0], sla_ek[1], eposta.XLSX))
     ekler.extend(ek_dosyalar or [])
     # Profil imzasi (2026-10-26) varsa iletinin imzasi odur: formdaki duz metin imza yerine (gorseller cid parcasi, Teknocan tek parca).
-    profil_imzasi = db.scalar(select(AppUser.signature_html).where(AppUser.username == user.username)) or ""
+    profil_imzasi = kisi_imzasi(db.scalar(select(AppUser).where(AppUser.username == user.username)))
     imza_html, satir_ici = imza_modulu.gomulu_gorselleri_ayir(profil_imzasi, {v: k for k, v in eposta.gorseller().items()}) if profil_imzasi else ("", [])
     if profil_imzasi:
         imza = imza_modulu.duz_metin(profil_imzasi)

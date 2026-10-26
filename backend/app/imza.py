@@ -22,7 +22,6 @@ from app.ortak import UygulamaHatasi
 AZAMI_HTML = 1_500_000  # karakter (gomulu gorseller dahil)
 AZAMI_GORSEL = 600 * 1024  # tek gorsel (bayt)
 EN_FAZLA_GORSEL = 8
-TEKNOCAN = Path(__file__).resolve().parent / "rapor" / "sablon" / "teknocan.png"
 
 ETIKETLER = {
     "p", "div", "span", "br", "b", "strong", "i", "em", "u", "s", "a", "img", "table", "tbody", "thead", "tr", "td", "th",
@@ -44,7 +43,7 @@ STILLER = {
     "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
     "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
     "border", "border-top", "border-right", "border-bottom", "border-left", "border-color", "border-width", "border-style",
-    "border-radius", "border-collapse", "display",
+    "border-radius", "border-collapse", "display", "font", "object-fit", "min-height", "max-height",
 }  # fmt: skip
 _TEHLIKELI_STIL = re.compile(r"url\s*\(|expression|javascript|vbscript|@import|[<>\\]|/\*", re.IGNORECASE)
 _DISPLAY = {"block", "inline", "inline-block", "table", "table-cell", "table-row"}
@@ -181,29 +180,6 @@ def duz_metin(guvenli_html: str) -> str:
     return "\n".join(s.strip() for s in metin.splitlines() if s.strip())
 
 
-@cache
-def teknocan_veri_url() -> str:
-    return "data:image/png;base64," + base64.b64encode(TEKNOCAN.read_bytes()).decode("ascii") if TEKNOCAN.is_file() else ""
-
-
-def varsayilan(ad: str, unvan: str, sirket: str, telefon: str, web: str) -> str:
-    """Ilk imza: solda Teknocan, sagda ad / unvan / sirket / iletisim (Outlook imzasi gibi duzenlenebilir)."""
-    k = html.escape
-    satirlar = [f'<span style="font-size:15px;font-weight:700;color:#002855">{k(ad)}</span>']
-    satirlar += [k(s) for s in (unvan, sirket) if s]
-    iletisim = " · ".join(p for p in (k(telefon) if telefon else "", f'<a href="{k(web)}">{k(web)}</a>' if web else "") if p)
-    if iletisim:
-        satirlar.append(iletisim)
-    gorsel = teknocan_veri_url()
-    sol = f'<td valign="middle" style="padding-right:16px"><img src="{gorsel}" alt="Teknocan" width="96" height="96"></td>' if gorsel else ""
-    return (
-        '<table cellpadding="0" cellspacing="0" border="0"><tbody><tr>'
-        f"{sol}"
-        f'<td valign="middle" style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;line-height:1.5;color:#334155">{"<br>".join(satirlar)}</td>'
-        "</tr></tbody></table>"
-    )
-
-
 def gomulu_gorselleri_ayir(guvenli_html: str, bilinen: dict[bytes, str] | None = None) -> tuple[str, list[tuple[str, bytes, str]]]:
     """data:image gorselleri cid: basvurusuna cevirir. Donus: (html, [(cid, bayt, alt tur)]). Ayni gorsel tek parca olur; `bilinen`
     (bayt -> cid) iletide zaten olan gorseldir (Teknocan), yeni parca eklenmez."""
@@ -220,3 +196,77 @@ def gomulu_gorselleri_ayir(guvenli_html: str, bilinen: dict[bytes, str] | None =
 
     yeni = re.sub(r'src="data:image/(png|jpeg|jpg|gif);base64,([A-Za-z0-9+/=]+)"', cevir, guvenli_html or "")
     return yeni, [(cid, veri, tur) for veri, (cid, tur) in parcalar.items()]
+
+
+# --- kurumsal imza (2026-10-26 kullanici: "masaustundeki imza.html tasarimini panele tasiyalim; kurumsal kimlige uygun kisimlari sonra
+# revize ederiz") ------------------------------------------------------------------------------------------------------------------
+# imza.html'in tablo duzeni: solda Turkcell + Teknocan gorseli, ince mavi ayrac, sagda ad / unvan / birim / sirket, sari cizgi, T S E W
+# iletisim satirlari. Farklar: genislik 690 -> 620 px (rapor iletisi 640 px), adres satiri yok (2026-10-26 karari), gorsel 1120 px
+# PNG (726 KB) yerine 512 px JPEG (~33 KB; 256 px gosterilir, iki kat cozunurluk). Metinler kacislanir; bu HTML sunucuda uretilir.
+KURUMSAL_GORSEL = Path(__file__).resolve().parent / "rapor" / "sablon" / "tam_imza.jpg"
+KURUMSAL_GENISLIK, GORSEL_GENISLIK, GORSEL_YUKSEKLIK = 620, 256, 158
+VARSAYILAN_UNVAN = "Technical Account Manager"
+VARSAYILAN_SIRKET = "Turkcell"
+
+
+@cache
+def kurumsal_gorsel_url() -> str:
+    return "data:image/jpeg;base64," + base64.b64encode(KURUMSAL_GORSEL.read_bytes()).decode("ascii") if KURUMSAL_GORSEL.is_file() else ""
+
+
+def _web(adres: str) -> str:
+    adres = (adres or "").strip()
+    if not adres:
+        return ""
+    return adres if re.match(r"^https?://", adres, re.IGNORECASE) else "https://" + adres
+
+
+def _tel(numara: str) -> str:
+    return "tel:" + re.sub(r"[^+0-9]", "", numara or "")
+
+
+def kurumsal(*, ad: str, unvan: str, sirket: str, birim: str = "", cep: str = "", sabit: str = "", eposta: str = "", web: str = "") -> str:
+    """Kurumsal imza HTML'i (tablo tabanli; Outlook ve Gmail'de ayni gorunur). Gorsel data: URI; iletide cid parcasi olur."""
+    k = html.escape
+    yazi = "font-family:Arial,Helvetica,sans-serif"
+
+    def satir(harf: str, metin: str, href: str = "") -> str:
+        icerik = f'<a href="{k(href)}" style="color:#203052;text-decoration:none">{k(metin)}</a>' if href else k(metin)
+        return (
+            f'<tr><td style="width:26px;min-width:26px;padding:3px 7px 3px 0;vertical-align:top;font:700 11px Arial,sans-serif;color:#1b4abb">{harf}</td>'
+            f'<td style="padding:3px 0;vertical-align:top;font:12px Arial,Helvetica,sans-serif;color:#203052;line-height:1.3">{icerik}</td></tr>'
+        )
+
+    iletisim = "".join(
+        (
+            satir("T", cep, _tel(cep)) if cep else "",
+            satir("S", sabit, _tel(sabit)) if sabit else "",
+            satir("E", eposta, "mailto:" + eposta) if eposta else "",
+            satir("W", web.removeprefix("https://").removeprefix("http://"), _web(web)) if web else "",
+        )
+    )
+    gorsel = kurumsal_gorsel_url()
+    sol = (
+        f'<td width="{GORSEL_GENISLIK}" style="padding:0;width:{GORSEL_GENISLIK}px;vertical-align:middle;border:0">'
+        f'<img src="{gorsel}" alt="Turkcell TAM" width="{GORSEL_GENISLIK}" height="{GORSEL_YUKSEKLIK}" '
+        f'style="display:block;border:0;width:{GORSEL_GENISLIK}px;height:{GORSEL_YUKSEKLIK}px"></td>'
+        '<td width="2" style="background-color:#d6e3ff;width:2px;padding:0;font-size:0">&nbsp;</td>'
+        if gorsel
+        else ""
+    )
+    sag_genislik = KURUMSAL_GENISLIK - (GORSEL_GENISLIK + 2 if gorsel else 0)
+    birim_satiri = f'<tr><td style="font:12px/1.3 Arial,Helvetica,sans-serif;color:#51617e;padding:0 0 2px 0">{k(birim)}</td></tr>' if birim else ""
+    return (
+        f'<table cellspacing="0" cellpadding="0" border="0" width="{KURUMSAL_GENISLIK}" '
+        f'style="width:{KURUMSAL_GENISLIK}px;max-width:{KURUMSAL_GENISLIK}px;border-collapse:collapse;background-color:#ffffff;{yazi}"><tbody><tr>'
+        f"{sol}"
+        f'<td style="vertical-align:middle;padding:14px 10px 12px 20px;width:{sag_genislik}px;border:0">'
+        '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tbody>'
+        f'<tr><td style="font:700 19px/1.1 Arial,Helvetica,sans-serif;color:#061d65;padding:0 0 5px 0">{k(ad)}</td></tr>'
+        f'<tr><td style="font:700 13px/1.3 Arial,Helvetica,sans-serif;color:#1650c2;padding:0 0 3px 0">{k(unvan)}</td></tr>'
+        f"{birim_satiri}"
+        f'<tr><td style="font:12px/1.3 Arial,Helvetica,sans-serif;color:#6a7792;padding:0 0 7px 0">{k(sirket)}</td></tr>'
+        f'<tr><td style="border-top:2px solid #ffcb05;padding:6px 0 0 0"><table cellspacing="0" cellpadding="0" border="0" '
+        f'style="border-collapse:collapse"><tbody>{iletisim}</tbody></table></td></tr>'
+        "</tbody></table></td></tr></tbody></table>"
+    )

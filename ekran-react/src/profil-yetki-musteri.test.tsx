@@ -376,8 +376,10 @@ describe("Musteri Listesi: toplu ekleme ve silme", () => {
 })
 
 describe("Profil: e-posta imzasi (2026-10-26)", () => {
-  it("kayit yoksa hazir sablon acilir; kaydet duzenleyicinin HTML'ini gonderir ve sunucunun temizledigini gosterir", async () => {
-    const SABLON = '<table><tbody><tr><td><img src="data:image/png;base64,AAAA" width="96" alt="Teknocan"></td><td><b>Giray Sav</b></td></tr></tbody></table>'
+  const KURUMSAL = '<table><tbody><tr><td><img src="data:image/jpeg;base64,AAAA" alt="Turkcell TAM"></td><td>Giray Sav</td></tr></tbody></table>'
+  const VERI = { mod: "", kayitli: false, alanlar: { unvan: "", birim: "", sabit: "", eposta: "" }, kurumsal_html: KURUMSAL, html: "", sablon: KURUMSAL }
+
+  function imzaSunucusu() {
     const cagrilar: Cagri[] = []
     vi.stubGlobal(
       "fetch",
@@ -385,22 +387,44 @@ describe("Profil: e-posta imzasi (2026-10-26)", () => {
         const yontem = ayar?.method ?? "GET"
         const govde = typeof ayar?.body === "string" ? JSON.parse(ayar.body) : null
         cagrilar.push({ yol: String(girdi), yontem, govde })
-        const data = yontem === "PUT" ? { html: govde.html, sablon: SABLON, kayitli: true } : { html: "", sablon: SABLON, kayitli: false }
+        let data: unknown = VERI
+        if (String(girdi).includes("/onizleme")) data = { html: `<p>Onizleme ${govde.alanlar.unvan}</p>` }
+        else if (yontem === "PUT") data = { ...VERI, mod: govde.mod, kayitli: true, html: govde.html ?? "", alanlar: { ...VERI.alanlar, ...govde.alanlar } }
         return new Response(JSON.stringify({ status: "success", data }), { status: 200, headers: { "Content-Type": "application/json" } })
       }),
     )
+    return cagrilar
+  }
+
+  it("kurumsal imza varsayilan: alanlar yazildikca onizleme yenilenir, kaydet kurumsal kipi gonderir", async () => {
+    const cagrilar = imzaSunucusu()
     sarmala(<ImzaEditoru dil="tr" />)
+    const onizleme = await screen.findByLabelText("Önizleme · e-postada böyle görünür")
+    expect(onizleme.innerHTML).toContain("Giray Sav")
+    expect(screen.getByText("Kayıtlı imza yok: e-postada hazır imza bandı gider")).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText("Görev / unvan"), { target: { value: "TAM" } })
+    await waitFor(() => expect(onizleme.innerHTML).toContain("Onizleme TAM"), { timeout: 2000 })
+    fireEvent.change(screen.getByLabelText("E-posta"), { target: { value: "giray.sav@turkcell.com.tr" } })
+    fireEvent.click(screen.getByRole("button", { name: "Kurumsal imzayı kullan" }))
+    expect(await screen.findByText("Kurumsal imza kaydedildi; aylık rapor iletisinde bu imza kullanılır.")).toBeInTheDocument()
+    const put = cagrilar.find((c) => c.yontem === "PUT")
+    expect(put?.govde).toEqual({ mod: "kurumsal", alanlar: { unvan: "TAM", birim: "", sabit: "", eposta: "giray.sav@turkcell.com.tr" } })
+    expect(await screen.findByText("Kullanılan: kurumsal imza")).toBeInTheDocument()
+  })
+
+  it("serbest duzenle: kurumsal tasarimla acilir, gorsel genisligi ayarlanir, kaydet serbest kipi gonderir", async () => {
+    const cagrilar = imzaSunucusu()
+    sarmala(<ImzaEditoru dil="tr" />)
+    fireEvent.click(await screen.findByRole("tab", { name: "Serbest düzenle" }))
     const alan = await screen.findByRole("textbox", { name: "E-posta imzası" })
     await waitFor(() => expect(alan.innerHTML).toContain("Giray Sav"))
-    expect(screen.getByText("Henüz kaydedilmedi: hazır şablon gösteriliyor.")).toBeInTheDocument()
-    expect(alan.querySelector("img")?.getAttribute("alt")).toBe("Teknocan")
     fireEvent.click(alan.querySelector("img") as HTMLImageElement)
     fireEvent.change(screen.getByLabelText("Seçili görselin genişliği"), { target: { value: "140" } })
     expect(alan.querySelector("img")?.getAttribute("width")).toBe("140")
     fireEvent.click(screen.getByRole("button", { name: "İmzayı kaydet" }))
     expect(await screen.findByText("İmza kaydedildi; aylık rapor iletisinde bu imza kullanılır.")).toBeInTheDocument()
     const put = cagrilar.find((c) => c.yontem === "PUT")
-    expect(put?.yol).toContain("/api/v1/session/imza")
+    expect(put && (put.govde as { mod: string }).mod).toBe("serbest")
     expect(put && (put.govde as { html: string }).html).toContain('width="140"')
   })
 })

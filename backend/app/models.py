@@ -94,7 +94,14 @@ class AppUser(Base):
     last_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
     phone: Mapped[str] = mapped_column(String(40), default="", server_default="")
     company: Mapped[str] = mapped_column(String(200), default="", server_default="")
-    signature_html: Mapped[str] = mapped_column(Text, default="", server_default="")  # e-posta imzasi (app.imza ile temizlenmis HTML)
+    signature_html: Mapped[str] = mapped_column(Text, default="", server_default="")  # serbest e-posta imzasi (app.imza ile temizlenmis HTML)
+    # E-posta imzasi kipi (2026-10-26): "" = imza yok (iletide hazir bant) | "kurumsal" (app.imza.kurumsal: kurumsal tasarim, alanlar
+    # asagida + profil) | "serbest" (signature_html). Kurumsal imza her gonderimde guncel profilden yeniden uretilir.
+    signature_mode: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    title: Mapped[str] = mapped_column(String(120), default="", server_default="")  # imza: gorev / unvan
+    department: Mapped[str] = mapped_column(String(120), default="", server_default="")  # imza: birim
+    landline: Mapped[str] = mapped_column(String(40), default="", server_default="")  # imza: sabit telefon
+    email: Mapped[str] = mapped_column(String(200), default="", server_default="")  # imza: e-posta (AD'den gelmez; kisi yazar)
     website: Mapped[str] = mapped_column(String(200), default="", server_default="")
     permissions: Mapped[list | None] = mapped_column(JSON, nullable=True)  # kisiye verilen ek yetkiler (rolgorunum.YETKILER); role eklenir
     # Sahibi oldugu modul (katalog anahtari: tamsms, tamapn, toptan, baglantili); dolu ise musteri sorumlusu (TAM) secilemez

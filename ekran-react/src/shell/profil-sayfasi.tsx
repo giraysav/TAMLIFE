@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
 import { Camera, Lock, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -108,6 +109,7 @@ function ProfilFotografi({ kullanici, dil, onDegisti }: { kullanici: Kullanici; 
  */
 export function ProfilSayfasi({ kullanici, dil, onKaydedildi }: { kullanici: Kullanici; dil: Dil; onKaydedildi?: () => void }) {
   const t = metin(dil)
+  const istemci = useQueryClient()
   const [taslak, setTaslak] = useState<Taslak>(() => taslaktan(kullanici.profile))
   const [kayitli, setKayitli] = useState<Taslak>(() => taslaktan(kullanici.profile))
   const [durum, setDurum] = useState<{ tur: "bos" | "kaydediliyor" | "tamam" | "hata"; metin: string }>({ tur: "bos", metin: "" })
@@ -128,6 +130,7 @@ export function ProfilSayfasi({ kullanici, dil, onKaydedildi }: { kullanici: Kul
       setTaslak(yeni)
       setKayitli(yeni)
       setDurum({ tur: "tamam", metin: t.profilKaydedildi })
+      void istemci.invalidateQueries({ queryKey: ["oturum", "imza"] }) // kurumsal imza ad / telefon / sirket / web'i profilden alir
       onKaydedildi?.()
     } catch (hata) {
       setDurum({ tur: "hata", metin: hataMesaji(hata, t.profilKaydedilemedi) })

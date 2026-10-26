@@ -40,7 +40,7 @@ describe("Profil fotografi", () => {
       "fetch",
       vi.fn(async (girdi: string, ayar?: RequestInit) => {
         const yontem = ayar?.method ?? "GET"
-        if (String(girdi).includes("/session/imza")) return new Response(JSON.stringify({ status: "success", data: { html: "", sablon: "", kayitli: false } }), { status: 200, headers: { "Content-Type": "application/json" } })
+        if (String(girdi).includes("/session/imza")) return new Response(JSON.stringify({ status: "success", data: { mod: "", kayitli: false, alanlar: { unvan: "", birim: "", sabit: "", eposta: "" }, kurumsal_html: "", html: "", sablon: "" } }), { status: 200, headers: { "Content-Type": "application/json" } })
         cagrilar.push({ yol: String(girdi), yontem, tur: new Headers(ayar?.headers).get("Content-Type") })
         const data = { photo_version: yontem === "PUT" ? 456 : null }
         return new Response(JSON.stringify({ status: "success", data }), { status: 200, headers: { "Content-Type": "application/json" } })

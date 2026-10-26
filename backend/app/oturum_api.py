@@ -157,20 +157,34 @@ def profil_yaz(body: ProfilBody, user: Principal = Depends(require_user), db: Se
 
 class ImzaBody(BaseModel):
     model_config = {"extra": "forbid"}
-    html: str = Field(default="", max_length=1_600_000)  # boyut / gorsel siniri ve temizleme app.imza'da (Turkce mesaj)
+    mod: str = Field(default="", max_length=20)  # kurumsal | serbest | "" (imza yok)
+    alanlar: dict[str, str | None] | None = None  # kurumsal: unvan, birim, sabit, eposta (dogrulama servis katmaninda)
+    html: str | None = Field(default=None, max_length=1_600_000)  # serbest imza (boyut / gorsel siniri ve temizleme app.imza'da)
+
+
+class OnizlemeBody(BaseModel):
+    model_config = {"extra": "forbid"}
+    alanlar: dict[str, str | None] = Field(default_factory=dict)
 
 
 @router.get("/imza")
 def imza_oku(user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
-    """Oturum sahibinin e-posta imzasi (aylik rapor iletisinin imzasi) ve bossa hazir sablon."""
+    """Oturum sahibinin e-posta imzasi (aylik rapor iletisinin imzasi): kip, kurumsal alanlar ve onizlemesi, serbest HTML."""
     return ok(kullanicilar.imza_sozlugu(kullanicilar.kullanici_kaydi(db, user)))
+
+
+@router.post("/imza/onizleme")
+def imza_onizle(body: OnizlemeBody, user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    """Kaydetmeden kurumsal imza (yazilan alanlar + guncel profil). Yazma yok."""
+    satir = kullanicilar.kullanici_kaydi(db, user)
+    return ok({"html": kullanicilar.kurumsal_imza(satir, kullanicilar.imza_alanlarini_dogrula(body.alanlar))})
 
 
 @router.put("/imza")
 def imza_yaz(body: ImzaBody, user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
-    satir = kullanicilar.imza_kaydet(db, user, body.html)
+    satir = kullanicilar.imza_kaydet(db, user, body.mod, body.alanlar, body.html)
     db.commit()
-    audit_log.remember(actor=user.username, action="profil.imza", outcome="allow", detail=f"bayt={len(satir.signature_html)}")
+    audit_log.remember(actor=user.username, action="profil.imza", outcome="allow", detail=f"kip={satir.signature_mode or '-'} bayt={len(satir.signature_html)}")
     return ok(kullanicilar.imza_sozlugu(satir))
 
 
