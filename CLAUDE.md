@@ -8,7 +8,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 - İş bitince (testler geçip canlıya alındıktan sonra) **sormadan commit at**. Push yalnız kullanıcı isterse.
 - Commit yalnız o işte **senin** değiştirdiğin dosya/satırları içerir. Başka oturumun commit edilmemiş değişikliği olan dosyayı katma; aynı dosyada karışıksa yalnız kendi parçanı index'e al (`git hash-object -w` + `git update-index --cacheinfo`) ve kullanıcıya hangi dosyanın neden dışarıda kaldığını yaz.
 - Asla: `backend/.env` ve sırlar, `backend/var/`, `backend/data/reports/` (canlı müşteri raporları), derleme çıktıları; `git add -f` yok.
-- Mesaj Türkçe `tür(alan): özet` + madde listesi + `Co-Authored-By`. `--no-verify` / amend yok. Kırmızı testle commit yok (şu an bilinen kırık test YOK: 900/900, arayüz 230/230).
+- Mesaj Türkçe `tür(alan): özet` + madde listesi + `Co-Authored-By`. `--no-verify` / amend yok. Kırmızı testle commit yok (şu an bilinen kırık test YOK: 908/908, arayüz 231/231).
 
 ## Ortam, kimlik, canlı
 

@@ -522,7 +522,7 @@ describe("Veri Girisi optimizasyonu", () => {
     sarmala(<TemipEslesmesi dil="tr" />)
     expect(await screen.findByRole("link", { name: "ORNEK-A" })).toHaveAttribute("href", "#/musteri?m=3")
     expect(screen.getAllByText("Ornek Tam").length).toBeGreaterThan(0)
-    expect(screen.getByText(/8 haneden uzun Müşteri No yazılı \(hiç eşleşmez\): UZUN-NO/)).toBeTruthy()
+    expect(screen.getByText(/Müşteri No'su TEMIP'te yok .*: UZUN-NO/)).toBeTruthy()
   })
 
   it("genel CSV: kaynak adi ve dosyayla tampona yukler", async () => {

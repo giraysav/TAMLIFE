@@ -105,11 +105,14 @@ export type GunlukDosyasi = { dosya: string; var: boolean; satirlar: string[] }
 export type Kaynak = {
   anahtar: string
   ad: string
-  tur: "dosya" | "oracle" | "oracle_parti"
+  tur: "dosya" | "oracle" | "oracle_parti" | "postgres" | "pg_parti"
   hazir: boolean
   neden: string
   yapilandirma: "tamam" | "eksik" | "kapalı"
   eksik: string[]
+  /** yalniz postgres: <ON EK>_IMPORT_QUERY gecerli mi ve anahtarin adi */
+  sorgu_tamam?: boolean
+  sorgu_anahtari?: string
   parti_sayisi: number
   son: { id: number; durum: string; satir: number; zaman: string | null; hata: string } | null
   reportdb?: { kartlara_yaz: boolean; kural: number; yas_dk: number | null; taze: boolean; tazelik_dk: number }

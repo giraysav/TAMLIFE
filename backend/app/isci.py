@@ -12,6 +12,8 @@
       Paneldeki "Yenile" ayni komutu ayri surecte baslatir.
   ..\\.venv\\Scripts\\python.exe -m app.isci pg-katalog --kaynak pg_onent|pg_onedesk [--ornek 20]
       PostgreSQL katalogu (ONENTDB / ONEDESKDB, salt okunur): sema -> tablo -> sutun + ornek satirlar (tampon/postgres).
+  ..\\.venv\\Scripts\\python.exe -m app.isci pg-cek --kaynak pg_onedesk|pg_onent [--kuru]
+      <ON EK>_IMPORT_QUERY (ONEDESKDB_PG_IMPORT_QUERY ...) sonucu -> tampon partisi '<kaynak>_import'. Paneldeki "Simdi cek" ayni komut.
   ..\\.venv\\Scripts\\python.exe -m app.isci temip-eslesme [--csv]
       Oracle'a baglanmaz: paneldeki TEMIP kayitlarinin eslesmesi (kart / TAM Radar / belirsiz / personelsiz kart, personel basina acik).
       --csv: backend/var/kesif/temip-eslesme-<zaman>-{musteri,personel}.csv (git disi; musteri unvani icerir).
@@ -214,7 +216,7 @@ def _eslesme_yaz(r: dict, csv: bool) -> None:
     if u["personelsiz_kart"]:
         print(f"[!] Sorumlusu TAM olmayan eslesen kart ({len(u['personelsiz_kart'])}): {', '.join(u['personelsiz_kart'][:10])}")
     if u["bicimsiz_kart_no"]:
-        print(f"[!] 8 haneden uzun Musteri No yazili kart ({len(u['bicimsiz_kart_no'])}): {', '.join(u['bicimsiz_kart_no'][:10])}")
+        print(f"[!] Musteri No'su TEMIP bicimine (8 hane) uymayan kart ({len(u['bicimsiz_kart_no'])}): {', '.join(u['bicimsiz_kart_no'][:10])}")
     print(f"  Numarasi olup TEMIP kaydi eslesmeyen kart: {u['kayitsiz_numarali_kart']}")
     if "bagli_olmayan" in r:
         print(f"  Kart baglantisi guncel olmayan kayit (sonraki turda baglanir): {r['bagli_olmayan']}")
@@ -374,6 +376,45 @@ def pg_katalog_calistir(kaynak: str, adet: int, kullanici: str) -> int:
     return 0
 
 
+def pg_cek(anahtar: str, kuru: bool = False, kullanici: str = "isci") -> int:
+    """PostgreSQL iceri alma sorgusu -> tampon partisi (oracle_cek ile ayni kalip). Kaynak basina ayni anda tek calisma."""
+    a = postgres.ayar(anahtar)
+    if not a.ENABLED:
+        return _hata(anahtar, f"{a.tanim.enabled_key}=true degil; PostgreSQL'e baglanilmadi.")
+    kilit = _klasor() / f"isci_{anahtar}_cek.kilit"
+    if not kilit_al(kilit):
+        print("[-] Baska bir cekim suruyor; atlandi.")
+        gunluge_yaz(f"{anahtar} ATLANDI baska calisma suruyor")
+        return 2
+    t0 = time.time()
+    try:
+        if kuru:
+            akis = a.akis(oracle.sorgu_temizle(a.IMPORT_QUERY), 5)
+            basliklar = next(akis)
+            satirlar = [[oracle.deger(v) for v in s] for blok in akis for s in blok]
+            print(f"[OK] KURU: ilk {len(satirlar)} satir, {time.time() - t0:.1f} sn. Sutunlar: {basliklar}")
+            for s in satirlar:
+                print("    ", s)
+            return 0
+        with oturum() as db:
+            parti = kaynak.pg_parti(db, anahtar, kullanici)
+            parti_id, durum, n, red = parti.id, parti.status, parti.row_count, parti.error
+    except UygulamaHatasi as e:  # parti 'failed' olarak kalir (pg_parti), mesaj maskeli
+        return _hata(anahtar, f"Cekim basarisiz: {postgres.maskele(e.mesaj, a.gizliler())}")
+    except Exception as e:  # noqa: BLE001 - kuru calismada surucu / ag hatasi
+        return _hata(anahtar, f"Cekim basarisiz: {postgres.hata_metni(e, a.gizliler())}")
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+    if durum != "ready":
+        return _hata(anahtar, f"parti #{parti_id} kabul edilmedi: {red}")
+    print(f"[OK] parti #{parti_id}: {n} satir, {time.time() - t0:.1f} sn")
+    gunluge_yaz(f"{anahtar} OK parti #{parti_id}: {n} satir, {time.time() - t0:.1f} sn")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     for akim in (sys.stdout, sys.stderr):
         if hasattr(akim, "reconfigure"):
@@ -403,6 +444,10 @@ def main(argv: list[str] | None = None) -> int:
     pg.add_argument("--kaynak", required=True, choices=sorted(postgres.KAYNAKLAR))
     pg.add_argument("--ornek", type=int, default=postgres.ORNEK_ADET, help="nesne basina ornek satir (1-200)")
     pg.add_argument("--kullanici", default="isci", help="kataloga yazilan baslatan")
+    pc = alt.add_parser("pg-cek", help="PostgreSQL <ON EK>_IMPORT_QUERY -> tampon partisi")
+    pc.add_argument("--kaynak", required=True, choices=sorted(postgres.KAYNAKLAR))
+    pc.add_argument("--kuru", action="store_true", help="yazmadan dene (ilk 5 satir)")
+    pc.add_argument("--kullanici", default="isci", help="partiye yazilan baslatan")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
     for alt_p in (r, c):
@@ -414,6 +459,8 @@ def main(argv: list[str] | None = None) -> int:
         return temip_eslesme(a.csv)
     if a.is_ == "pg-katalog":
         return pg_katalog_calistir(a.kaynak, max(1, min(int(a.ornek), 200)), a.kullanici)
+    if a.is_ == "pg-cek":
+        return pg_cek(a.kaynak, a.kuru, a.kullanici)
     hata = _istemci(a.client)
     if hata:
         return _hata(a.is_ if a.is_ != "cek" else a.kaynak, hata)

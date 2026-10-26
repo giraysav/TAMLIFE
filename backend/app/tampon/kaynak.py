@@ -1,4 +1,5 @@
-"""Kaynaklar: tampona veri getiren yollar. CSV yukleme ve Oracle kaynaklari (REPORTDB, ONENTDB, GALAPAGOSDB).
+"""Kaynaklar: tampona veri getiren yollar. CSV yukleme, Oracle kaynaklari (REPORTDB, ONENTDB, GALAPAGOSDB) ve PostgreSQL kaynaklari
+(ONEDESKDB, ONENTDB; <ON EK>_IMPORT_QUERY -> '<kaynak>_import' partisi, isci 'pg-cek').
 
 Oracle: <ON EK>_ENABLED=true + zorunlu anahtarlar doluyken 'hazir'. Cekimi panel DEGIL isci surec yapar (python -m app.isci; uretimde de
 boyleydi: surucu web surecine yuklenmez, panel kimligi Oracle giris tetikleyicisinden gecmez). Panel yalniz durumu gosterir ve
@@ -21,7 +22,7 @@ from app.config import get_settings
 from app.dil import m
 from app.models import IngestBatch
 from app.ortak import UygulamaHatasi, iso
-from app.tampon import depo, oracle, reportdb
+from app.tampon import depo, oracle, postgres, reportdb
 from app.tampon.musteri_ham import KAYNAK
 
 CSV_ON_EK = "csv_"
@@ -39,6 +40,9 @@ def _parti_adi(anahtar: str) -> str:
     for k, s in oracle.KAYNAKLAR.items():
         if anahtar == f"{k}_import":
             return f"{s.label} · " + m("içeri alma sorgusu", "import query")
+    for k, p in postgres.KAYNAKLAR.items():
+        if anahtar == postgres.parti_anahtari(k):
+            return f"{p.label} · " + m("içeri alma sorgusu", "import query")
     return anahtar
 
 
@@ -92,8 +96,12 @@ def csv_oku(veri: bytes) -> tuple[list[str], Iterator[list[Any]]]:
 
 
 def _oracle_durum(db: Session) -> list[dict[str, Any]]:
+    from app.baglantilar import GIZLI_ORACLE  # eski Oracle ONENTDB yuvasi: ONENTDB artik PostgreSQL (Kurum Baglantilari ile ayni)
+
     cikti = []
     for anahtar, s in oracle.KAYNAKLAR.items():
+        if anahtar in GIZLI_ORACLE:
+            continue
         d = oracle.durum(anahtar)
         if not d["acik"]:
             neden = f"Kaynak kapalı ({s.enabled_key}=true değil)."
@@ -116,6 +124,25 @@ def _oracle_durum(db: Session) -> list[dict[str, Any]]:
     return cikti
 
 
+def _pg_durum() -> list[dict[str, Any]]:
+    """PostgreSQL kaynaklari: baglanti + iceri alma sorgusu durumu. Partileri '<kaynak>_import' satirinda (pg_parti) gorunur."""
+    cikti = []
+    for anahtar, t in postgres.KAYNAKLAR.items():
+        d = postgres.durum(anahtar)
+        if not d["acik"]:
+            neden = f"Kaynak kapalı ({t.enabled_key}=true değil)."
+        elif d["eksik"]:
+            neden = "Bağlantı ayarı eksik."
+        else:
+            neden = d["sorgu_hata"] or "Çekim ayrı işçi süreçte (python -m app.isci pg-cek); panel PostgreSQL'e bağlanmaz."
+        cikti.append({
+            "anahtar": anahtar, "ad": t.label, "tur": "postgres", "hazir": d["hazir"], "neden": neden,
+            "yapilandirma": "kapalı" if not d["acik"] else ("eksik" if d["eksik"] else "tamam"), "eksik": d["eksik"],
+            "sorgu_tamam": d["sorgu_hata"] is None, "sorgu_anahtari": f"{t.on_ek}_IMPORT_QUERY",
+        })  # fmt: skip
+    return cikti
+
+
 def durumlar(db: Session) -> list[dict[str, Any]]:
     """Kaynak listesi + her kaynagin son partisi ve parti sayisi."""
     liste: list[dict[str, Any]] = [
@@ -130,15 +157,16 @@ def durumlar(db: Session) -> list[dict[str, Any]]:
         },
     ]
     liste.extend(_oracle_durum(db))
+    liste.extend(_pg_durum())
     anahtarlar = db.scalars(select(IngestBatch.source_key).distinct()).all()
     for k in anahtarlar:
         csv_mi = k.startswith(CSV_ON_EK)
-        if (csv_mi or k.startswith("oracle_")) and not any(x["anahtar"] == k for x in liste):
+        if (csv_mi or k.startswith(("oracle_", "pg_"))) and not any(x["anahtar"] == k for x in liste):
             liste.append(
                 {
                     "anahtar": k,
                     "ad": f"CSV · {k[len(CSV_ON_EK) :]}" if csv_mi else _parti_adi(k),
-                    "tur": "dosya" if csv_mi else "oracle_parti",
+                    "tur": "dosya" if csv_mi else ("pg_parti" if k.startswith("pg_") else "oracle_parti"),
                     "hazir": True,
                     "neden": "",
                     "yapilandirma": "tamam",
@@ -189,3 +217,24 @@ def oracle_parti(db: Session, anahtar: str, kullanici: str) -> IngestBatch:
         mesaj = " ".join(oracle.hata_metni(e, a.gizliler())).strip()
         depo.basarisiz(db, parti_id, mesaj)
         raise oracle.OracleHata(mesaj, 502) from e
+
+
+def pg_parti(db: Session, anahtar: str, kullanici: str, baglanti: Any = None) -> IngestBatch:
+    """<ON EK>_IMPORT_QUERY sonucu (PostgreSQL, salt okunur) -> tampon partisi '<kaynak>_import'. YALNIZ isci surec cagirir.
+    oracle_parti ile ayni kurallar: akarak yazilir, sinir asilirsa / hata olursa parti 'failed' (mesaj maskeli)."""
+    a = postgres.ayar(anahtar)
+    sorgu = oracle.sorgu_temizle(a.IMPORT_QUERY)
+    parti = depo.parti_olustur(db, postgres.parti_anahtari(anahtar), f"{a.tanim.label} (içeri alma sorgusu)", kullanici)
+    db.commit()
+    parti_id = parti.id
+    try:
+        akis = a.akis(sorgu, get_settings().ingest_max_rows + 1, baglanti=baglanti)
+        basliklar = _basliklari_tekillestir([str(b or "") for b in next(akis)])
+        return depo.ice_al(db, parti, basliklar, ([oracle.deger(v) for v in s] for blok in akis for s in blok))
+    except UygulamaHatasi as e:
+        depo.basarisiz(db, parti_id, e.mesaj)
+        raise
+    except Exception as e:
+        mesaj = postgres.hata_metni(e, a.gizliler())
+        depo.basarisiz(db, parti_id, mesaj)
+        raise postgres.PgHata(mesaj, 502) from e

@@ -212,7 +212,8 @@ def test_kaynaklar_listesi(veri):
     hdr = login_ok(veri)
     _yukle(veri, hdr)
     k = {x["anahtar"]: x for x in veri.get("/api/v1/tampon/kaynaklar").json()["data"]}
-    assert "ornek" not in k and "csv" not in k and {"musteri_ham", "oracle_reportdb", "oracle_onent", "oracle_galapagos", "csv_alarm"} <= set(k)
+    assert "ornek" not in k and "csv" not in k and {"musteri_ham", "oracle_reportdb", "oracle_galapagos", "pg_onedesk", "pg_onent", "csv_alarm"} <= set(k)
+    assert "oracle_onent" not in k  # eski Oracle ONENTDB yuvasi gizli (ONENTDB PostgreSQL)
     assert k["csv_alarm"]["son"]["durum"] == "ready" and k["csv_alarm"]["parti_sayisi"] == 1
     assert k["oracle_reportdb"]["hazir"] is False and "kapalı" in k["oracle_reportdb"]["neden"]
     assert all("password" not in str(v).lower() for v in k.values())

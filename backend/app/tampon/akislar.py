@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AppSetting, AuditEvent, IngestBatch, OnedeskRecord, UrunTutarOzet
 from app.ortak import iso, simdi
-from app.tampon import kaynak, oracle, reportdb
+from app.tampon import kaynak, oracle, postgres, reportdb
 from app.tampon.models import CustomerImportRun, DistributionLog, DistributionRule
 
 TEMIP_SURUM = "temip.surum"  # temip_kayit.SURUM_AYARI (temip_kayit oracle zincirini yukler; burada yalniz ayar okunur)
@@ -135,6 +135,18 @@ def akislar(db: Session) -> dict[str, Any]:
     liste.append(
         _akis("temip", "TEMIP alarm kayıtları", "işçi (6 dk) + CLI", "yonetim/tampon?sekme=akis", tzaman, tdurum, taciklama, sema=sema, **sayilar)
     )
+
+    # PostgreSQL iceri alma (ONEDESKDB / ONENTDB): yalniz acik kaynaklar; elle / isci 'pg-cek' (tazelik beklentisi yok)
+    for pk, t in postgres.KAYNAKLAR.items():
+        pd = postgres.durum(pk)
+        if not pd["acik"]:
+            continue
+        phazir, pson = _son_parti(db, postgres.parti_anahtari(pk))
+        pzaman = _utc(phazir.received_at) if phazir else None
+        phata = pson is not None and pson.status == "failed" and (phazir is None or pson.id > phazir.id)
+        paciklama = (pson.error or "Son çekim başarısız.") if phata and pson else (pd["sorgu_hata"] or "")
+        liste.append(_akis(postgres.parti_anahtari(pk), f"{t.label} içeri alma", "işçi (pg-cek)", "yonetim/tampon?sekme=akis", pzaman,
+                           _durum(pzaman, None, phata), paciklama, parti=phazir.id if phazir else None))  # fmt: skip
 
     # 4-6. Baska ekranlardan gelen dosyalar (denetim kaydi / yukleme zamani)
     denetim = _denetim_son(db, ("onedesk.ice_al", "gelir_uretim.ice_al"))

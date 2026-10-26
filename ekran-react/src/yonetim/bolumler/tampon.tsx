@@ -106,7 +106,7 @@ function VeriAkisi({ dil, seciliId, onSec }: { dil: Dil; seciliId: number | null
     retry: false,
   })
   const kaynaklar = useQuery({ queryKey: ANAHTAR.kaynaklar, queryFn: () => oku<Kaynak[]>("/api/v1/tampon/kaynaklar") })
-  const kaynakAnahtarlari = (kaynaklar.data ?? []).filter((k) => k.tur !== "oracle").map((k) => k.anahtar)
+  const kaynakAnahtarlari = (kaynaklar.data ?? []).filter((k) => k.tur !== "oracle" && k.tur !== "postgres").map((k) => k.anahtar)
   const dagitimOzeti = useVeriAkislari().data?.dagitim
   return (
     <div className="grid gap-4">

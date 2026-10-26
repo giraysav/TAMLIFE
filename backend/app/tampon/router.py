@@ -322,6 +322,14 @@ def pg_katalog_yenile(kaynak: str, admin: Principal = Depends(require_admin), db
     return ok(sonuc)
 
 
+@router.post("/pg/{kaynak}/cek")
+def pg_cek(kaynak: str, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Iceri alma sorgusu (<ON EK>_IMPORT_QUERY) -> tampon partisi; isci ayri surecte (panel PostgreSQL'e baglanmaz)."""
+    sonuc = postgres.cek_baslat(db, _pg_kaynagi(kaynak), admin.username)
+    _denetim(admin, "tampon.pg_cek", f"kaynak={kaynak} basladi={sonuc['basladi']}")
+    return ok(sonuc)
+
+
 TEMIP_DURUMLARI = ("kart", "kart_personelsiz", "radar", "belirsiz")
 TEMIP_SAYFA = 50
 
