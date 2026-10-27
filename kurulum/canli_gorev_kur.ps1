@@ -71,8 +71,11 @@ if ($Calistir) {
             Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'tls_vekili\.ps1' })
     }
     if (Sahipsiz-Calisiyor) {
-        Add-Content -Path $Log -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [gorev] calisan sahipsiz $Calistir bulundu; izleniyor, durunca devralinacak" -Encoding ASCII
+        # 2026-10-27: sahipsiz sunucunun cmd'si canli_<kip>.log'u acik tutar; oraya yazmak hata verip donguyu dusuruyordu. Ayri gunluk.
+        $bekciLog = Join-Path $LogKlasoru 'canli_bekci.log'
+        try { Add-Content -Path $bekciLog -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [$Calistir] calisan sahipsiz sunucu bulundu; izleniyor, durunca devralinacak" -Encoding ASCII } catch { }
         while (Sahipsiz-Calisiyor) { Start-Sleep -Seconds 20 }
+        try { Add-Content -Path $bekciLog -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [$Calistir] sahipsiz sunucu durdu; devraliniyor" -Encoding ASCII } catch { }
     }
     while ($true) {
         if ((Test-Path $Log) -and ((Get-Item $Log).Length -gt 10MB)) { Move-Item -Path $Log -Destination "$Log.1" -Force }
@@ -153,7 +156,7 @@ function Gorev-Baslat($ad) {
 function Hepsini-Durdur([string]$Yalniz = '') {
     $gorevler = if ($Yalniz -eq 'panel') { @($GorevPanel) } else { @($GorevVekil, $GorevPanel) }
     foreach ($ad in $gorevler) { Stop-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue }
-    $surecler = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='python.exe' OR Name='pythonw.exe' OR Name='cmd.exe'" |
+    $surecler = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='python.exe' OR Name='pythonw.exe' OR Name='cmd.exe' OR Name='conhost.exe'" |
         Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (
             ($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir panel') -or $_.CommandLine -match 'canli_baslat\.ps1' -or
             ($Yalniz -ne 'panel' -and (($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir vekil') -or $_.CommandLine -match 'tls_vekili\.ps1'))) }
@@ -184,13 +187,20 @@ function Https-Saglik {
 # Gorev oturum acamazsa: ayni -Calistir dongusu WMI ile bu oturumun surec agaci DISINDA acilir (bu pencere kapansa da calisir;
 # sunucu yeniden baslayinca durur).
 function Dogrudan-Baslat($kip, $ekArg) {
-    $satir = "`"$PsExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Betik`" -Calistir $kip$ekArg"
+    $satir = "`"$(Join-Path $env:SystemRoot 'System32\conhost.exe')`" --headless `"$PsExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Betik`" -Calistir $kip$ekArg"
     $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $satir; CurrentDirectory = $Kok }
     if ($r.ReturnValue -eq 0) { Uyari "$kip dogrudan surec olarak acildi (PID $($r.ProcessId))." } else { Uyari "$kip acilamadi (WMI $($r.ReturnValue))." }
 }
 
 $PanelEk = " -PanelPort $PanelPort"
 $VekilEk = " -VekilAd `"$VekilAd`" -PanelPort $PanelPort -VekilPort $VekilPort"
+
+# 2026-10-27 KOK NEDEN (bes kez 0xC000013A): oturumun varsayilan terminali Windows Terminal; -WindowStyle Hidden powershell gorevi
+# de WT'ye (OpenConsole.exe) devrediliyor, o WT penceresi kapaninca dongu 'konsol kapandi' ile oluyordu (Guvenlik gunlugu 4688/4689:
+# 12:47:30 OpenConsole ile dongu ayni anda cikti). conhost.exe --headless: penceresiz klasik konsol, hicbir terminale devredilmez.
+function Gizli-Eylem($arg, $dizin) {
+    New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\conhost.exe') -Argument "--headless powershell.exe $arg" -WorkingDirectory $dizin
+}
 
 function Gorevleri-Kaydet {
     foreach ($d in 'kurulum\canli_baslat.ps1', 'kurulum\tls_vekili.ps1') {
@@ -210,7 +220,7 @@ function Gorevleri-Kaydet {
                @($GorevVekil, 'vekil', $VekilEk, 'TAMLIFE v3.5 TLS vekili (http.sys, https)'))
     foreach ($g in $liste) {
         $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Betik`" -Calistir $($g[1])$($g[2])"
-        $eylem = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg -WorkingDirectory $Kok
+        $eylem = Gizli-Eylem $arg $Kok
         [void](Register-ScheduledTask -TaskName $g[0] -Action $eylem -Trigger $tetik -Settings $ayar -Principal $kimlik -Description $g[3] -Force)
         Tamam "Gorev kaydedildi: $($g[0]) (oturum acilinca, parolasiz)"
     }
@@ -233,7 +243,7 @@ function Gorevleri-Kaydet {
         Uyari "$GorevGece su an calisiyor; yeniden kaydedilmedi."
     } else {
         $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $PSScriptRoot 'gece_sync.ps1')`""
-        $eylem = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg -WorkingDirectory $Kok
+        $eylem = Gizli-Eylem $arg $Kok
         $gAyar = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 2) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         [void](Register-ScheduledTask -TaskName $GorevGece -Action $eylem -Trigger (New-ScheduledTaskTrigger -Daily -At '04:00') -Settings $gAyar -Principal $kimlik -Description 'TAMLIFE v3.5 gece senkronu (Citrix <-> prod) ve panel yeniden baslatma' -Force)
         Tamam "Gorev kaydedildi: $GorevGece (her gun 04:00, parolasiz)"

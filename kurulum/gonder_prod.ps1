@@ -107,11 +107,22 @@ $ErrorActionPreference = 'Continue'
 $freeze = @(& $Py -m pip freeze --disable-pip-version-check 2>$null)
 $ErrorActionPreference = 'Stop'
 $pyVer = (& $Py -c "import sys; print(sys.version.split()[0])").Trim()
-[IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $Proje '.venv'), (Join-Path $Gecici 'python_venv.zip'), [IO.Compression.CompressionLevel]::Optimal, $false)
-Tamam "python_venv.zip (Python $pyVer, $(@($freeze).Count) paket)"
 $kilit = Join-Path $Proje 'ekran-react\package-lock.json'
-[IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $Proje 'ekran-react\node_modules'), (Join-Path $Gecici 'node_modules.zip'), [IO.Compression.CompressionLevel]::Optimal, $false)
-Tamam 'node_modules.zip'
+# 2026-10-27: iki zip Citrix'te ~35 dk suruyor. Paketler onceki gonderimle ayniysa (parmak izi + saglam zip) onceki zip kullanilir.
+$onceki = $null
+if (Test-Path (Join-Path $Cikis 'manifest.json')) { try { $onceki = Get-Content (Join-Path $Cikis 'manifest.json') -Raw | ConvertFrom-Json } catch { } }
+function Zip-Hazirla($ad, $kaynak, $ayni, $etiket) {
+    $eski = Join-Path $Cikis $ad
+    if ($ayni -and (Test-Path $eski) -and ((Get-FileHash -Algorithm SHA256 -LiteralPath $eski).Hash -eq $onceki.dosyalar.$ad)) {
+        Copy-Item -LiteralPath $eski -Destination (Join-Path $Gecici $ad) -Force
+        Tamam "$ad ($etiket; degismedi, onceki paketten)"
+        return
+    }
+    [IO.Compression.ZipFile]::CreateFromDirectory($kaynak, (Join-Path $Gecici $ad), [IO.Compression.CompressionLevel]::Optimal, $false)
+    Tamam "$ad ($etiket)"
+}
+Zip-Hazirla 'python_venv.zip' (Join-Path $Proje '.venv') ($onceki -and $onceki.python -eq $pyVer -and $onceki.pip_freeze -eq (Parmak-Izi $freeze)) "Python $pyVer, $(@($freeze).Count) paket"
+Zip-Hazirla 'node_modules.zip' (Join-Path $Proje 'ekran-react\node_modules') ($onceki -and $onceki.package_lock -eq (Get-FileHash -Algorithm SHA256 -LiteralPath $kilit).Hash) 'arayuz paketleri'
 $dosyalar = [ordered]@{}
 foreach ($d in 'kod.bundle', 'python_venv.zip', 'node_modules.zip') { $dosyalar[$d] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Gecici $d)).Hash }
 $manifest = [ordered]@{

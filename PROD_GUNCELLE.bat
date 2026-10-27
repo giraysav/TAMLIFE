@@ -5,4 +5,11 @@ rem Once dogrular ve yeni surumu canlidan ayri bir kopyada test eder; onayinizla
 rem Asil is: kurulum\prod_guncelle.ps1
 title TAMLIFE - Prod guncelleme
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0kurulum\prod_guncelle.ps1"
-exit /b %errorLevel%
+set "KOD=%errorLevel%"
+rem 2026-10-27: betik beklenmedik hatayla (Enter sorusundan once) kapaninca pencere de kapaniyordu; hata okunamiyordu.
+if not "%KOD%"=="0" (
+    echo.
+    echo [!] Cikis kodu %KOD%. Rapor: E:\TAMLIFE_gelen altindaki en yeni klasor ^(rapor.txt^).
+    pause
+)
+exit /b %KOD%

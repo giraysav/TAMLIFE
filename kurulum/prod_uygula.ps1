@@ -39,7 +39,8 @@ try {
     if (-not $YedekYok) {
         Adim 'Veritabani yedegi'
         if ((Komut (Join-Path $Proje 'backend') $Py 'araclar\db_yedek.py prod_guncelleme') -ne 0) { throw 'Veritabani yedegi alinamadi; hicbir sey degismedi.' }
-        $durum.yedek = (Get-Content $Gunluk | Where-Object { $_ -match 'tamlife_.*\.db$' } | Select-Object -Last 1)
+        # [string]: Get-Content satiri PSPath vb. ek ozellik tasir; JSON'a nesne yazilir, geri almada -DbGeriYukle "@{value=...}" olurdu
+        $durum.yedek = [string](Get-Content $Gunluk | Where-Object { $_ -match 'tamlife_.*\.db$' } | Select-Object -Last 1)
         Yaz "  yedek: $($durum.yedek)" 'Green'
     }
 
