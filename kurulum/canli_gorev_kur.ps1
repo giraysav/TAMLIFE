@@ -14,6 +14,8 @@
 #   .\canli_gorev_kur.ps1 -YenidenBaslat   : (full_reboot.bat) her seyi durdurur, gorevleri baslatir; gorev baslamazsa paneli ve
 #                                            vekili dogrudan surec olarak acar (bir sonraki yeniden baslatmaya kadar)
 #   .\canli_gorev_kur.ps1 -Durum           : gorevleri, panel portunu ve gunluklerin son satirlarini gosterir
+#   .\canli_gorev_kur.ps1 -Durdur          : panel, vekil ve ReportDB iscisini durdurur (gorevler kayitli kalir; prod_uygula.ps1 kod /
+#                                            bagimlilik degistirmeden once kullanir). Baslatmak: -YenidenBaslat
 #   .\canli_gorev_kur.ps1 -Kaldir          : panel ve vekil gorevlerini durdurur ve siler (ReportDB: reportdb_gorev_kur.ps1 -Kaldir)
 #   -VekilAd '+'                           : tum adlar (tamlife, FQDN, IP) (varsayilan: +)
 #   -PanelPort 8117 -VekilPort 443         : portlar;  -Istemci : Oracle Instant Client klasoru (ReportDB gorevi)
@@ -21,6 +23,7 @@ param([switch]$Hemen,
       [switch]$Kaldir,
       [switch]$Durum,
       [switch]$YenidenBaslat,
+      [switch]$Durdur,
       [ValidateSet('', 'panel', 'vekil')]
       [string]$Calistir = '',
       [string]$VekilAd = '+',
@@ -207,6 +210,17 @@ if ($Kaldir) {
     Gorev-Sil $GorevVekil
     Gorev-Sil $GorevPanel
     Uyari "Gorev durunca panel ve vekil de kapanmis olmali. Denetim: Get-NetTCPConnection -LocalPort $PanelPort -State Listen"
+    exit 0
+}
+
+if ($Durdur) {
+    Adim 'Panel, vekil ve ReportDB iscisi durduruluyor (gorevler kayitli kalir)'
+    Hepsini-Durdur
+    Stop-ScheduledTask -TaskName $GorevRapor -ErrorAction SilentlyContinue
+    $isci = Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe'" | Where-Object { $_.CommandLine -match 'app\.isci' }
+    foreach ($p in $isci) { & cmd.exe /c "taskkill /PID $($p.ProcessId) /T /F >nul 2>&1" }
+    if (Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue) { Dur "Port $PanelPort hala dolu; panel durdurulamadi." }
+    Tamam 'Durduruldu. Baslatmak icin: .\canli_gorev_kur.ps1 -YenidenBaslat'
     exit 0
 }
 
