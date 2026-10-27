@@ -57,6 +57,17 @@ if ($Calistir) {
         $Hedef = Join-Path $PSScriptRoot 'tls_vekili.ps1'
         $Ek = " -Ad `"$VekilAd`" -Port $VekilPort -HedefPort $PanelPort"
     }
+    # 2026-10-26/27: dongu bes kez 0xC000013A ile kapandi, alttaki sunucu sahipsiz calismayi surdurdu. Gorev 5 dk'da bir yeniden
+    # tetiklenir (bekci); yeni dongu calisan sahipsiz sunucu bulursa ikinci kopya acmaz (port cakisirdi): o durana kadar izler, sonra devralir.
+    function Sahipsiz-Calisiyor {
+        if ($Calistir -eq 'panel') { return [bool](Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue) }
+        return [bool](Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'tls_vekili\.ps1' })
+    }
+    if (Sahipsiz-Calisiyor) {
+        Add-Content -Path $Log -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [gorev] calisan sahipsiz $Calistir bulundu; izleniyor, durunca devralinacak" -Encoding ASCII
+        while (Sahipsiz-Calisiyor) { Start-Sleep -Seconds 20 }
+    }
     while ($true) {
         if ((Test-Path $Log) -and ((Get-Item $Log).Length -gt 10MB)) { Move-Item -Path $Log -Destination "$Log.1" -Force }
         $an = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
@@ -166,6 +177,10 @@ function Gorevleri-Kaydet {
     $ayar = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew `
         -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
     $tetik = New-ScheduledTaskTrigger -AtLogOn -User $TamlifeCalismaHesabi
+    # Bekci (2026-10-27): ikinci tetik hemen baslar ve 5 dk'da bir surekli yinelenir (oturum acilisina bagli tetigin tekrari ancak bir
+    # sonraki girisle baslardi). Dongu calisiyorsa MultipleInstances IgnoreNew yeni ornegi yok sayar; olmusse en gec 5 dk icinde kalkar.
+    $bekci = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
+    $tetik = @($tetik, $bekci)
     $liste = @(@($GorevPanel, 'panel', $PanelEk, 'TAMLIFE v3.5 paneli (canli mod, 127.0.0.1)'),
                @($GorevVekil, 'vekil', $VekilEk, 'TAMLIFE v3.5 TLS vekili (http.sys, https)'))
     foreach ($g in $liste) {

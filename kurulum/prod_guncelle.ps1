@@ -183,24 +183,25 @@ $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\prod_uygula.ps1
 if ($pyFarkli) { $arg += " -VenvDizin `"$Calisma\venv`"" }
 if ($nodeFarkli) { $arg += " -NodeDizin `"$Calisma\node_modules`"" }
 Write-Host '  Windows onay penceresinde "Evet" deyin (yonetici yetkisi).' -ForegroundColor Cyan
+$guncellemeBaslangic = (Get-Date).AddSeconds(-5).ToString('yyyy-MM-dd HH:mm:ss')   # canli dogrulama bu andan sonrasina bakar
 try { Start-Process -FilePath 'powershell.exe' -ArgumentList $arg -Verb RunAs -Wait } catch { Dur 'Yonetici onayi verilmedi; uygulanmadi.' }
 $u = if (Test-Path $sonuc) { Get-Content $sonuc -Raw | ConvertFrom-Json } else { $null }
 if ($null -eq $u) { Dur 'Uygulama sonucu okunamadi.' }
 
 # --- 5) Denetim ve gerekirse geri alma ------------------------------------------------------------------------------------
-Adim '5/5 Denetim'
+Adim '5/5 Canli dogrulama (en cok ~10 dk; ReportDB iscisinin bir turu beklenir)'
 $sorun = @()
 if (-not $u.basari) { $sorun += "uygulama: $($u.adim): $($u.hata)" }
-foreach ($x in (Saglik)) { if ($x.Ok) { Tamam "$($x.Adres) yanit veriyor" } else { $sorun += "$($x.Adres) yanit vermiyor" } }
-$f = Join-Path $Calisma 'saglik_sonrasi.txt'
-[void](Calistir (Join-Path $Proje 'backend') $Py 'araclar\panel_saglik.py' $f)
-foreach ($satir in (Get-Content $f -Encoding UTF8)) {
-    $p = $satir -split '\|', 3
-    if ($p.Count -eq 3) { if ($p[0] -eq 'HATA') { $sorun += "$($p[1]): $($p[2])" } elseif ($p[0] -eq 'TAMAM') { Tamam $p[1] } else { Uyari "$($p[1]): $($p[2])" } }
-}
+# prod_dogrula.ps1: gorevler, https, panel_saglik.py, guncelleme_dogrula.py (kod = gonderilen commit, sema, arayuz bu guncellemede
+# derlenmis ve canlida yukleniyor, modul API uclari, isci guncelleme sonrasi calisti, yeni sunucu hatasi yok). Yeni kodla gelir.
+$dogrula = Join-Path $PSScriptRoot 'prod_dogrula.ps1'
+$dRapor = Join-Path $Calisma 'canli_dogrulama.txt'
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $dogrula -Commit $yeni -Baslangic $guncellemeBaslangic -Rapor $dRapor
+if ($LASTEXITCODE -ne 0) { $sorun += "canli dogrulama: $LASTEXITCODE HATA (ayrinti: $dRapor)" }
+Get-Content $dRapor -ErrorAction SilentlyContinue | Add-Content -Path $Rapor -Encoding UTF8
 if ($sorun.Count -eq 0) {
     Write-Host ''
-    Write-Host "BITTI: prod $($yeni.Substring(0, 7)) surumunde ve calisiyor. Yedek: $($u.yedek)" -ForegroundColor Green
+    Write-Host "BITTI ve DOGRULANDI: prod $($yeni.Substring(0, 7)) surumunde, canlida sorunsuz calisiyor. Yedek: $($u.yedek)" -ForegroundColor Green
     Write-Host "Rapor: $Rapor"
     Read-Host 'Kapatmak icin Enter'
     exit 0

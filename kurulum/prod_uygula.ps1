@@ -76,6 +76,10 @@ try {
     Adim 'Arayuz derleniyor'
     if ((Komut (Join-Path $Proje 'ekran-react') 'npm.cmd' 'run build') -ne 0) { throw 'Arayuz derlenemedi (npm run build).' }
 
+    Adim 'Gorevler koddaki tanimla yeniden kaydediliyor'
+    # 1:1: gorev ayarlari da (tetikler, bekci) gelen koddaki canli_gorev_kur.ps1'den; parola sorulmaz (parolasiz kip)
+    if ((Komut $Proje 'powershell.exe' "-NoProfile -ExecutionPolicy Bypass -File `"$Gorev`"") -ne 0) { throw 'Gorevler kaydedilemedi.' }
+
     Adim 'Panel, vekil ve ReportDB iscisi baslatiliyor (veritabani semasi otomatik guncellenir)'
     $k = Komut $Proje 'powershell.exe' "-NoProfile -ExecutionPolicy Bypass -File `"$Gorev`" -YenidenBaslat"
     $durduruldu = $false
