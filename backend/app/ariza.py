@@ -33,6 +33,10 @@ KODLAR: dict[str, tuple[str, str]] = {
         "Kayıttaki müşteri ve nedene bakın; SMTP ise Kurum Bağlantıları › E-posta testi. Personel raporu yeniden gönderebilir (ay kilitlenmedi).",
     ),
     "TL-SRV-01": ("Beklenmeyen sunucu hatası", "Kayıt numarasıyla uygulama günlüğünde yığın izini arayın."),
+    "TL-SNC-01": (
+        "Gece senkronu / panel yeniden başlatma sorunu",
+        "Sunucuda var\\log\\gece_sync günlüğüne bakın; panel kapalıysa full_reboot.bat (yönetici). Citrix erişimi yoksa uzak masaüstü bağlantısı açık mı?",
+    ),
 }
 SEVIYELER = ("error", "warning")
 _SIR = re.compile(r"(?i)(password|parola|pwd|secret)\s*[=:]\s*\S+")

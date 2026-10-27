@@ -89,7 +89,8 @@ def ozet(db: Session) -> dict[str, object]:
     return {"acik": acik, "son_24s": son24, "son_24s_hata": son24_hata, "son_zaman": iso(son)}
 
 
-BILDIRIM_KODLARI = ("TL-RAP-01",)  # admin'in ust cubukta gordugu ariza kodlari (2026-10-26: aylik rapor gonderim hatasi)
+# admin'in ust cubukta gordugu ariza kodlari (2026-10-26: aylik rapor gonderim hatasi; 2026-10-27: gece senkronu / yeniden baslatma)
+BILDIRIM_KODLARI = ("TL-RAP-01", "TL-SNC-01")
 
 
 def bildirimler(db: Session, adet: int = 5) -> dict[str, object]:

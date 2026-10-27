@@ -125,7 +125,7 @@ def ariza_durumu(
 
 @router.get("/bildirimler")
 def bildirimler(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Ust cubuk bildirimi (yalniz admin): kapanmamis aylik rapor gonderim hatalari (TL-RAP-01)."""
+    """Ust cubuk bildirimi (yalniz admin): kapanmamis aylik rapor gonderim (TL-RAP-01) ve gece senkronu (TL-SNC-01) arizalari."""
     return ok(arizalar.bildirimler(db))
 
 

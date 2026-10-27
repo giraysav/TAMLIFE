@@ -11,9 +11,13 @@
 # Onay [E/H] -> 4 Uygulama (YONETICI, Windows onay penceresi; kurulum\prod_uygula.ps1): DB yedegi, durdur, kod, paketler, derleme,
 #   baslat (alembic upgrade) -> 5 Denetim (saglik + panel_saglik.py). Sorun varsa GERI ALMA onerilir (eski commit; yeni veritabani
 #   gocu calistiysa yedek de geri yazilir).
+# -Otomatik (gece senkronu, kurulum\gece_sync.ps1): soru sorulmaz; prod zaten paketteki commit'teyse hicbir sey yapilmaz; aday testi
+#   gecerse uygulanir, canli dogrulama basarisizsa KENDILIGINDEN geri alinir. Cikis: 0 uygulandi ve dogrulandi, 10 degisiklik yok,
+#   1 uygulanmadi (prod degismedi), 3 dogrulanamadi ve geri alindi, 4 dogrulanamadi ve geri alma da tamamlanamadi.
 param(
     [string]$Kaynak = '\\tsclient\C\Users\tcgsav\Desktop\TAMLIFE_GONDER',
-    [switch]$YalnizDene          # 1-3 adimlari: hicbir sey uygulanmaz, soru sorulmaz
+    [switch]$YalnizDene,         # 1-3 adimlari: hicbir sey uygulanmaz, soru sorulmaz
+    [switch]$Otomatik
 )
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8  # git ciktisindaki Turkce harfler bozulmasin
@@ -40,9 +44,10 @@ function Dur($m) {
     Add-Content -Path $Rapor -Value "[HATA] $m" -Encoding UTF8
     try { Temizle } catch { }
     Write-Host "  Prod DEGISMEDI. Rapor: $Rapor"
-    if (-not $YalnizDene) { Read-Host 'Kapatmak icin Enter' }
+    Bekle-Kapat
     exit 1
 }
+function Bekle-Kapat { if (-not ($YalnizDene -or $Otomatik)) { Read-Host 'Kapatmak icin Enter' } }
 function G {
     $onceki = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     $c = & git -C $Proje @args 2>&1 | ForEach-Object { "$_" }
@@ -55,6 +60,12 @@ function Calistir($dizin, $program, $argumanlar, $dosya) {
         -RedirectStandardOutput $dosya -RedirectStandardError "$dosya.err"
     if (Test-Path "$dosya.err") { Get-Content "$dosya.err" | Add-Content $dosya; Remove-Item "$dosya.err" -Force }
     return $s.ExitCode
+}
+# prod_uygula.ps1 yonetici ister: elle kipte Windows onay penceresi; -Otomatik (yuksek yetkili gorev) dogrudan.
+function Yonetici-Calistir($arg, $redMesaji) {
+    if ($Otomatik) { Start-Process -FilePath 'powershell.exe' -ArgumentList $arg -NoNewWindow -Wait; return }
+    Write-Host '  Windows onay penceresinde "Evet" deyin (yonetici yetkisi).' -ForegroundColor Cyan
+    try { Start-Process -FilePath 'powershell.exe' -ArgumentList $arg -Verb RunAs -Wait } catch { Dur $redMesaji }
 }
 function Parmak-Izi($metin) {
     $b = [Text.Encoding]::UTF8.GetBytes(($metin -join "`n"))
@@ -101,7 +112,10 @@ G fetch --quiet $bundle "+refs/heads/$($m.dal):refs/citrix/$($m.dal)" | Out-Null
 $yeni = $m.commit
 if ((G rev-parse "refs/citrix/$($m.dal)").Trim() -ne $yeni) { Dur 'Paketteki dal manifestteki commit ile ayni degil.' }
 $eski = (G rev-parse HEAD).Trim()
-if ($eski -eq $yeni) { Tamam 'Prod zaten bu commit''te; kod degisikligi yok.' }
+if ($eski -eq $yeni) {
+    Tamam 'Prod zaten bu commit''te; kod degisikligi yok.'
+    if ($Otomatik) { Write-Host "Rapor: $Rapor"; exit 10 }
+}
 $onde = $true
 try { G merge-base --is-ancestor $eski $yeni | Out-Null } catch { $onde = $false }
 if (-not $onde) {
@@ -173,7 +187,7 @@ if ($YalnizDene) { Write-Host ''; Write-Host "DENEME BITTI: yeni surum uygulanab
 Adim '4/5 Uygulama'
 Write-Host "  Prod $($eski.Substring(0, 7)) -> $($yeni.Substring(0, 7)) ($($commitler.Count) commit)." -ForegroundColor Cyan
 Write-Host '  Uygularken: veritabani yedegi alinir, panel 2-3 dakika kapali kalir (kullanicilar yeniden giris yapar).'
-$c = ''
+$c = if ($Otomatik) { 'E' } else { '' }
 while ($c -notin @('E', 'H')) { $c = (Read-Host '  Uygulayayim mi? [E/H]').Trim().ToUpper() }
 if ($c -ne 'E') { Write-Host '  Uygulanmadi; prod degismedi.' -ForegroundColor Yellow; Read-Host 'Kapatmak icin Enter'; exit 0 }
 if ($pyFarkli -and -not (Test-Path "$Calisma\venv")) { Ac (Join-Path $Calisma 'paket\python_venv.zip') "$Calisma\venv"; Copy-Item -Force (Join-Path $Proje '.venv\pyvenv.cfg') "$Calisma\venv\pyvenv.cfg" }
@@ -182,9 +196,8 @@ $sonuc = Join-Path $Calisma 'uygula_sonuc.json'
 $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\prod_uygula.ps1`" -Commit $yeni -Dal $($m.dal) -Sonuc `"$sonuc`""
 if ($pyFarkli) { $arg += " -VenvDizin `"$Calisma\venv`"" }
 if ($nodeFarkli) { $arg += " -NodeDizin `"$Calisma\node_modules`"" }
-Write-Host '  Windows onay penceresinde "Evet" deyin (yonetici yetkisi).' -ForegroundColor Cyan
 $guncellemeBaslangic = (Get-Date).AddSeconds(-5).ToString('yyyy-MM-dd HH:mm:ss')   # canli dogrulama bu andan sonrasina bakar
-try { Start-Process -FilePath 'powershell.exe' -ArgumentList $arg -Verb RunAs -Wait } catch { Dur 'Yonetici onayi verilmedi; uygulanmadi.' }
+Yonetici-Calistir $arg 'Yonetici onayi verilmedi; uygulanmadi.'
 $u = if (Test-Path $sonuc) { Get-Content $sonuc -Raw | ConvertFrom-Json } else { $null }
 if ($null -eq $u) { Dur 'Uygulama sonucu okunamadi.' }
 
@@ -203,24 +216,28 @@ if ($sorun.Count -eq 0) {
     Write-Host ''
     Write-Host "BITTI ve DOGRULANDI: prod $($yeni.Substring(0, 7)) surumunde, canlida sorunsuz calisiyor. Yedek: $($u.yedek)" -ForegroundColor Green
     Write-Host "Rapor: $Rapor"
-    Read-Host 'Kapatmak icin Enter'
+    Bekle-Kapat
     exit 0
 }
 $sorun | ForEach-Object { Write-Host "  [HATA] $_" -ForegroundColor Red; Add-Content -Path $Rapor -Value "[HATA] $_" -Encoding UTF8 }
 Write-Host ''
 Write-Host "  Geri alma: kod $($eski.Substring(0, 7)) surumune doner$(if ($goc.Count) { '; yeni veritabani gocu oldugu icin veritabani da guncelleme oncesi yedekten geri yazilir (aradaki birkac dakikanin verisi gider)' })." -ForegroundColor Yellow
-$c = ''
+$c = if ($Otomatik) { 'E' } else { '' }   # gece: dogrulanamayan surum kendiliginden geri alinir
 while ($c -notin @('E', 'H')) { $c = (Read-Host '  Geri alayim mi? [E/H]').Trim().ToUpper() }
+$cikis = 1
 if ($c -eq 'E') {
     $sonuc2 = Join-Path $Calisma 'geri_al_sonuc.json'
     $dal = (G rev-parse --abbrev-ref HEAD).Trim()
     $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\prod_uygula.ps1`" -Commit $eski -Dal $dal -Sonuc `"$sonuc2`" -YedekYok"
     if ($goc.Count -and $u.yedek) { $arg += " -DbGeriYukle `"$($u.yedek)`"" }
     if ($pyFarkli) { Uyari '.venv da degismisti: geri almada eski paketler icin onceki paketi yeniden uygulayin ya da gelistiriciye haber verin.' }
-    try { Start-Process -FilePath 'powershell.exe' -ArgumentList $arg -Verb RunAs -Wait } catch { Write-Host '  Onay verilmedi; geri alinmadi.' -ForegroundColor Red }
+    if ($Otomatik) { Start-Process -FilePath 'powershell.exe' -ArgumentList $arg -NoNewWindow -Wait }
+    else { try { Start-Process -FilePath 'powershell.exe' -ArgumentList $arg -Verb RunAs -Wait } catch { Write-Host '  Onay verilmedi; geri alinmadi.' -ForegroundColor Red } }
     $g = if (Test-Path $sonuc2) { Get-Content $sonuc2 -Raw | ConvertFrom-Json } else { $null }
-    if ($g -and $g.basari) { Write-Host "  Geri alindi: prod $($eski.Substring(0, 7)) surumunde." -ForegroundColor Green } else { Write-Host "  Geri alma tamamlanamadi: $($g.hata)" -ForegroundColor Red }
+    if ($g -and $g.basari) { Write-Host "  Geri alindi: prod $($eski.Substring(0, 7)) surumunde." -ForegroundColor Green; $cikis = 3 }
+    else { Write-Host "  Geri alma tamamlanamadi: $($g.hata)" -ForegroundColor Red; $cikis = 4 }
+    Add-Content -Path $Rapor -Value "GERI ALMA: $(if ($cikis -eq 3) { "tamam ($($eski.Substring(0, 7)))" } else { "tamamlanamadi: $($g.hata)" })" -Encoding UTF8
 }
 Write-Host "Rapor: $Rapor"
-Read-Host 'Kapatmak icin Enter'
-exit 1
+Bekle-Kapat
+exit $cikis

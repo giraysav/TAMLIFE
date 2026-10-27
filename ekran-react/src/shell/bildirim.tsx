@@ -4,12 +4,13 @@ import { oku } from "@/lib/sorgu"
 import { metin } from "@/shell/metin"
 import type { Dil } from "@/shell/metin"
 
-type Bildirimler = { toplam: number; son: { kayit_no: string; mesaj: string; zaman: string | null }[] }
+type Bildirimler = { toplam: number; son: { kayit_no: string; kod: string; mesaj: string; zaman: string | null }[] }
 
-export const BILDIRIM_ADRESI = "#/yonetim/arizalar?kod=TL-RAP-01"
+export const bildirimAdresi = (kod = "TL-RAP-01") => `#/yonetim/arizalar?kod=${kod}`
 
-/** Admin ust cubuk bildirimi (2026-10-26): kapanmamis aylik rapor gonderim hatalari (TL-RAP-01). Kayit Arizalar'da kapatilinca
- *  rozet duser. Hata yoksa sessiz zil; yalniz admin icin cizilir (ucu da yalniz admin acar). */
+/** Admin ust cubuk bildirimi: kapanmamis aylik rapor gonderim hatalari (TL-RAP-01, 2026-10-26) ve gece senkronu / yeniden baslatma
+ *  sorunlari (TL-SNC-01, 2026-10-27). Zil en son kaydin koduna suzulmus Arizalar'a gider; kayit kapatilinca rozet duser. Hata yoksa
+ *  sessiz zil; yalniz admin icin cizilir (ucu da yalniz admin acar). */
 export function AdminBildirimi({ dil, dugmeSinifi }: { dil: Dil; dugmeSinifi: string }) {
   const t = metin(dil)
   const q = useQuery({ queryKey: ["yonetim", "bildirimler"], queryFn: () => oku<Bildirimler>("/api/v1/yonetim/bildirimler"), refetchInterval: 60_000 })
@@ -18,7 +19,7 @@ export function AdminBildirimi({ dil, dugmeSinifi }: { dil: Dil; dugmeSinifi: st
   const ayrinti = (q.data?.son ?? []).map((s) => `• ${s.mesaj}`).join("\n")
   return (
     <a
-      href={BILDIRIM_ADRESI}
+      href={bildirimAdresi(q.data?.son[0]?.kod)}
       aria-label={etiket}
       title={ayrinti ? `${etiket}\n${ayrinti}` : etiket}
       className={`relative inline-flex size-9 items-center justify-center rounded-md ${dugmeSinifi}`}

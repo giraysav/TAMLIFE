@@ -391,6 +391,16 @@ def test_gonderim_hatasi_admin_bildirimi(veri, smtp_kipi):
     assert veri.get("/api/v1/yonetim/bildirimler").json()["data"]["toplam"] == 0  # kapatilan kayit bildirimden duser
 
 
+def test_gece_senkronu_admin_bildirimi(veri):
+    """2026-10-27: gece senkronu sorunu (kurulum/gece_sync.ps1 -> araclar/ariza_bildir.py) TL-SNC-01 ile admin zilinde gorunur."""
+    from app import ariza
+
+    login_ok(veri)
+    ariza.kaydet("TL-SNC-01", "gece senkronu HATA: PANEL ACILAMADI", kaynak="gece_sync", kullanici="sistem")
+    b = veri.get("/api/v1/yonetim/bildirimler").json()["data"]
+    assert b["toplam"] == 1 and b["son"][0]["kod"] == "TL-SNC-01"
+
+
 def test_smtp_kipinde_alici_ve_ayar_zorunlu(veri, smtp_kipi, monkeypatch):
     hdr = login_ok(veri)
     url = "/api/v1/musteri/1/rapor"

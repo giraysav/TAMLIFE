@@ -2,6 +2,7 @@
 #   TAMLIFE_v35_Panel         -> kurulum\canli_baslat.ps1  (panel, 127.0.0.1:8117, canli mod)        oturum acilinca
 #   TAMLIFE_v35_TLS_Vekil     -> kurulum\tls_vekili.ps1    (https://<VekilAd>:443/ -> panel)          oturum acilinca
 #   TAM_Life_v35_ReportDB_6dk -> python -m app.isci reportdb (reportdb_gorev_kur.ps1 ile ayni eylem)  her 6 dk
+#   TAMLIFE_v35_Gece_Sync     -> kurulum\gece_sync.ps1     (Citrix <-> prod senkronu, panel yeniden baslatma)  her gun 04:00
 # PAROLA YOK (2026-10-25): hesap parolasi kurum PAM'i ile 24 saatte bir donduruluyor; parolali (Password) gorev her donusten sonra
 # 0x8007052E ile baslamiyordu. Gorevler LogonType Interactive + en yuksek yetki: parola saklanmaz/sorulmaz, donus gorevleri bozmaz.
 # Kosul: hesabin oturumu ACIK olmali. RDP penceresini kapatmak / baglantinin kopmasi sorun degil (oturum surer); "Oturumu kapat"
@@ -11,8 +12,11 @@
 # Gerekli: TAMLIFEADLOG oturumunda YONETICI PowerShell.
 #   .\canli_gorev_kur.ps1                  : uc gorevi kaydeder (baslatmaz; bir sonraki oturum acilisinda calisir)
 #   .\canli_gorev_kur.ps1 -Hemen           : kaydeder, hemen baslatir, gorevlerin gercekten basladigini ve panel sagligini dogrular
-#   .\canli_gorev_kur.ps1 -YenidenBaslat   : (full_reboot.bat) her seyi durdurur, gorevleri baslatir; gorev baslamazsa paneli ve
-#                                            vekili dogrudan surec olarak acar (bir sonraki yeniden baslatmaya kadar)
+#   .\canli_gorev_kur.ps1 -YenidenBaslat   : (full_reboot.bat) panel, vekil, donguler, sahipsiz surecler ve ReportDB iscisi durdurulur;
+#                                            gorevler koddaki tanimla yeniden kaydedilir (silinmis / bozulmus gorev onarilir) ve
+#                                            baslatilir; gorev baslamazsa panel ve vekil dogrudan surec olarak acilir (bir sonraki
+#                                            yeniden baslatmaya kadar). Cikis: 0 tamam, 2 panel acik ama gorevsiz, 1 panel acilamadi
+#   .\canli_gorev_kur.ps1 -PanelYenile     : yalniz paneli yeniden baslatir (vekil / isci dokunulmaz); 0 = 120 sn icinde saglikli
 #   .\canli_gorev_kur.ps1 -Durum           : gorevleri, panel portunu ve gunluklerin son satirlarini gosterir
 #   .\canli_gorev_kur.ps1 -Durdur          : panel, vekil ve ReportDB iscisini durdurur (gorevler kayitli kalir; prod_uygula.ps1 kod /
 #                                            bagimlilik degistirmeden once kullanir). Baslatmak: -YenidenBaslat
@@ -24,6 +28,7 @@ param([switch]$Hemen,
       [switch]$Durum,
       [switch]$YenidenBaslat,
       [switch]$Durdur,
+      [switch]$PanelYenile,
       [ValidateSet('', 'panel', 'vekil')]
       [string]$Calistir = '',
       [string]$VekilAd = '+',
@@ -37,6 +42,7 @@ $LogKlasoru = Join-Path $Kok 'var\log'
 $GorevPanel = 'TAMLIFE_v35_Panel'
 $GorevVekil = 'TAMLIFE_v35_TLS_Vekil'
 $GorevRapor = 'TAM_Life_v35_ReportDB_6dk'
+$GorevGece = 'TAMLIFE_v35_Gece_Sync'
 $PsExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
 function Adim($m) { Write-Host "[*] $m" -ForegroundColor Cyan }
@@ -142,18 +148,37 @@ function Gorev-Baslat($ad) {
     return $false
 }
 
-# Panel ve vekil donguleri (gorevden ya da dogrudan acilmis) ve portu tutan surec agaclari kapatilir. Bu betigin kendisi haric.
-function Hepsini-Durdur {
-    foreach ($ad in $GorevVekil, $GorevPanel) { Stop-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue }
+# Panel ve vekil donguleri (gorevden ya da dogrudan acilmis), sahipsiz kalmis sunucular ve portu tutan surec agaclari kapatilir.
+# Bu betigin kendisi haric. -Yalniz 'panel': vekile dokunulmaz.
+function Hepsini-Durdur([string]$Yalniz = '') {
+    $gorevler = if ($Yalniz -eq 'panel') { @($GorevPanel) } else { @($GorevVekil, $GorevPanel) }
+    foreach ($ad in $gorevler) { Stop-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue }
     $surecler = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='python.exe' OR Name='pythonw.exe' OR Name='cmd.exe'" |
         Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (
-            ($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir') -or
-            $_.CommandLine -match 'canli_baslat\.ps1' -or $_.CommandLine -match 'tls_vekili\.ps1') }
+            ($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir panel') -or $_.CommandLine -match 'canli_baslat\.ps1' -or
+            ($Yalniz -ne 'panel' -and (($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir vekil') -or $_.CommandLine -match 'tls_vekili\.ps1'))) }
     $portu = Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
     foreach ($p in @($surecler.ProcessId) + @($portu) | Where-Object { $_ } | Sort-Object -Unique) {
         & cmd.exe /c "taskkill /PID $p /T /F >nul 2>&1"   # PS 5.1: dogrudan 2>$null, Stop altinda hata kaydina donusur
     }
     for ($i = 0; $i -lt 10 -and (Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
+    # 2026-10-27: Stop-ScheduledTask'tan hemen sonra gorev birkac sn 'Running' gorunur; Gorev-Baslat onu "zaten calisiyor" sayip
+    # baslatmiyordu (panel kapali kalirdi). Gorevler gercekten durana kadar beklenir.
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not ($gorevler | Where-Object { (Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue).State -eq 'Running' })) { break }
+        Start-Sleep -Seconds 1
+    }
+}
+
+# ReportDB iscisi: gorev durdurulur, takili kalmis isci surecleri kapatilir (Gorev-Baslat bir sonraki turu hemen baslatir).
+function Isci-Durdur {
+    Stop-ScheduledTask -TaskName $GorevRapor -ErrorAction SilentlyContinue
+    $isci = Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe'" | Where-Object { $_.CommandLine -match 'app\.isci' }
+    foreach ($p in $isci) { & cmd.exe /c "taskkill /PID $($p.ProcessId) /T /F >nul 2>&1" }
+}
+
+function Https-Saglik {
+    try { return ((Invoke-WebRequest -Uri 'https://tamlife/api/v1/health' -UseBasicParsing -TimeoutSec 10).StatusCode -eq 200) } catch { return $false }
 }
 
 # Gorev oturum acamazsa: ayni -Calistir dongusu WMI ile bu oturumun surec agaci DISINDA acilir (bu pencere kapansa da calisir;
@@ -169,9 +194,9 @@ $VekilEk = " -VekilAd `"$VekilAd`" -PanelPort $PanelPort -VekilPort $VekilPort"
 
 function Gorevleri-Kaydet {
     foreach ($d in 'kurulum\canli_baslat.ps1', 'kurulum\tls_vekili.ps1') {
-        if (-not (Test-Path (Join-Path $Kok $d))) { Dur "Dosya yok: $Kok\$d" }
+        if (-not (Test-Path (Join-Path $Kok $d))) { throw "Dosya yok: $Kok\$d" }
     }
-    if (-not (Test-Path (Join-Path $Kok 'ekran-react\dist\index.html'))) { Dur 'Arayuz derlemesi yok (ekran-react\dist\index.html).' }
+    if (-not (Test-Path (Join-Path $Kok 'ekran-react\dist\index.html'))) { throw 'Arayuz derlemesi yok (ekran-react\dist\index.html).' }
     Tamlife-KimlikDogrula
     $kimlik = Tamlife-OturumKimligi   # parolasiz: hesabin acik oturumunda kosar (PAM 24 sa donusu gorevleri bozmaz)
     $ayar = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew `
@@ -199,6 +224,19 @@ function Gorevleri-Kaydet {
         Tamam "Gorev kaydedildi: $GorevRapor (her 6 dk, parolasiz)"
     } else {
         Uyari "ReportDB gorevi atlandi: $Pyw ya da $Istemci\oci.dll yok."
+    }
+    # Gece senkronu (2026-10-27 kullanici: "her gun 04:00 sync iscisi; isciler bitince panel restart, acilmazsa full_reboot"):
+    # kurulum\gece_sync.ps1. StartWhenAvailable YOK: kacirilan gece gun icinde calisip paneli yeniden baslatmasin. Calisirken
+    # yeniden kaydedilmez (gece_sync kendi icinden prod_uygula / full_reboot ile bu fonksiyonu cagirir).
+    $gs = Get-ScheduledTask -TaskName $GorevGece -ErrorAction SilentlyContinue
+    if ($gs -and $gs.State -eq 'Running') {
+        Uyari "$GorevGece su an calisiyor; yeniden kaydedilmedi."
+    } else {
+        $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $PSScriptRoot 'gece_sync.ps1')`""
+        $eylem = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg -WorkingDirectory $Kok
+        $gAyar = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 2) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        [void](Register-ScheduledTask -TaskName $GorevGece -Action $eylem -Trigger (New-ScheduledTaskTrigger -Daily -At '04:00') -Settings $gAyar -Principal $kimlik -Description 'TAMLIFE v3.5 gece senkronu (Citrix <-> prod) ve panel yeniden baslatma' -Force)
+        Tamam "Gorev kaydedildi: $GorevGece (her gun 04:00, parolasiz)"
     }
 }
 
@@ -231,20 +269,34 @@ if ($Kaldir) {
 if ($Durdur) {
     Adim 'Panel, vekil ve ReportDB iscisi durduruluyor (gorevler kayitli kalir)'
     Hepsini-Durdur
-    Stop-ScheduledTask -TaskName $GorevRapor -ErrorAction SilentlyContinue
-    $isci = Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe'" | Where-Object { $_.CommandLine -match 'app\.isci' }
-    foreach ($p in $isci) { & cmd.exe /c "taskkill /PID $($p.ProcessId) /T /F >nul 2>&1" }
+    Isci-Durdur
     if (Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue) { Dur "Port $PanelPort hala dolu; panel durdurulamadi." }
     Tamam 'Durduruldu. Baslatmak icin: .\canli_gorev_kur.ps1 -YenidenBaslat'
     exit 0
 }
 
+if ($PanelYenile) {
+    # gece_sync.ps1: isciler bittikten sonra olagan yeniden baslatma. Basarisizsa cagiran full_reboot.bat'i calistirir.
+    Adim 'Panel yeniden baslatiliyor (vekil ve isci dokunulmaz)'
+    Hepsini-Durdur 'panel'
+    $panelOk = Gorev-Baslat $GorevPanel
+    $saglik = $panelOk -and (Panel-Saglik 120)
+    $https = $saglik -and (Https-Saglik)
+    Write-Host "    Panel gorevi: $panelOk  127.0.0.1:$PanelPort : $(if ($saglik) { 'CALISIYOR' } else { 'YANIT YOK' })  https: $(if ($https) { 'CALISIYOR' } else { 'YANIT YOK' })"
+    if ($https) { Tamam 'Panel yeniden baslatildi ve yanit veriyor.'; exit 0 }
+    Log-Sonu 'canli_panel.log'
+    Dur 'Panel yeniden baslatmadan sonra acilmadi.'
+}
+
 if ($YenidenBaslat) {
-    Adim 'Calisan panel, vekil ve donguleri durduruluyor'
+    Adim 'Calisan panel, vekil, donguler, sahipsiz surecler ve ReportDB iscisi durduruluyor'
     Hepsini-Durdur
+    Isci-Durdur
+    Adim 'Gorevler koddaki tanimla yeniden kaydediliyor (silinmis / bozulmus gorev onarilir)'
+    try { Gorevleri-Kaydet } catch { Uyari "Gorevler yeniden kaydedilemedi ($($_.Exception.Message)); mevcut kayitlarla devam ediliyor." }
     Adim 'Gorevler baslatiliyor'
     $panelOk = Gorev-Baslat $GorevPanel
-    if ($panelOk -and -not (Panel-Saglik 60)) { Uyari 'Panel gorevi basladi ama 60 sn icinde yanit vermedi.' }
+    if ($panelOk -and -not (Panel-Saglik 120)) { Uyari 'Panel gorevi basladi ama 120 sn icinde yanit vermedi.' }
     $vekilOk = Gorev-Baslat $GorevVekil
     $raporOk = Gorev-Baslat $GorevRapor
     if (-not ($panelOk -and $vekilOk -and $raporOk)) {
@@ -253,8 +305,7 @@ if ($YenidenBaslat) {
         if (-not $vekilOk) { Dogrudan-Baslat 'vekil' $VekilEk; Start-Sleep -Seconds 5 }
     }
     $saglik = Panel-Saglik 30
-    $https = $false
-    try { $https = ((Invoke-WebRequest -Uri 'https://tamlife/api/v1/health' -UseBasicParsing -TimeoutSec 10).StatusCode -eq 200) } catch { }
+    $https = Https-Saglik
     Write-Host ''
     Write-Host "    Panel (127.0.0.1:$PanelPort) : $(if ($saglik) { 'CALISIYOR' } else { 'YANIT YOK' })"
     Write-Host "    https://tamlife/        : $(if ($https) { 'CALISIYOR' } else { 'YANIT YOK' })"
@@ -270,7 +321,7 @@ if ($YenidenBaslat) {
 $tutan = Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($tutan -and $Hemen) { Adim "Port $PanelPort dolu (surec $($tutan.OwningProcess)): once durdurulacak" }
 Adim 'Gorevler kaydediliyor (TURKCELL\TAMLIFEADLOG oturumu, parolasiz)'
-Gorevleri-Kaydet
+try { Gorevleri-Kaydet } catch { Dur $_.Exception.Message }
 
 if (-not $Hemen) {
     Tamam 'Tamam. Simdi baslatmak icin: .\canli_gorev_kur.ps1 -YenidenBaslat  (ya da full_reboot.bat)'
