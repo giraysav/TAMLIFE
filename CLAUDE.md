@@ -21,7 +21,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 - **Sır yok:** `.env` değeri, parola, anahtar okumam/yazmam/göstermem. Windows parolasını isteme. `.env` anahtar ADLARI verilebilir, değerleri kullanıcı yazar.
 - **Canlıya alma:** arayüz `cd ekran-react; npm run build` (dist her istekte okunur). Backend değişince 8117'yi dinleyen uvicorn sürecini durdur; görev döngüsü ~15 sn'de `alembic upgrade head` + yeniden başlatır; `GET /api/v1/health` 200'ü bekle. Migration öncesi DB yedeği: SQLite backup API → `backend/var/yedek/` (en yeni 5 tutulur).
 - Panelden uzun süreç başlatan her yol **WMI `Win32_Process.Create`** ile panelin süreç ağacı DIŞINDA başlatır (`tampon/katalog._ayri_baslat`); `subprocess.Popen` panel yeniden başlatmasını kilitler (2026-10-18 olayı).
-- `_eski/_yeni/_yedek` adlı dosya/klasör açma; sürüm/etiket yok. `.ps1`/`.bat` saf ASCII. AD kullanıcısı DB'den silinmez. Üretimden ham veri/müşteri satırı kopyalanmaz; uydurma veri yok (testler kendi test DB'sinde kurar).
+- `_eski/_yeni/_yedek` adlı dosya/klasör açma; sürüm/etiket yok. `.ps1`/`.bat` saf ASCII; PowerShell fonksiyon adı yerleşik takma adla çakışmaz (`Get-Alias <ad>` boş olmalı: `Ps`=Get-Process, `Ac`=Add-Content, `G`… 2026-10-27'de iki kez kırdı). AD kullanıcısı DB'den silinmez. Üretimden ham veri/müşteri satırı kopyalanmaz; uydurma veri yok (testler kendi test DB'sinde kurar).
 - Yük testi canlıya (8117/443) karşı ÇALIŞTIRILMAZ: `python -m araclar.yuk.ornek --kaynak var\dev.db --port 8199` canlı DB'nin kopyasını ayrı portta açar (`--arayuz` ile arayüz de sunulur; çıktıyı `PYTHONUNBUFFERED=1` ile al; bitince Temp'teki `tamlife_yuk_*` kopyasını sil).
 
 ## Komutlar

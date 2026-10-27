@@ -47,7 +47,12 @@ function Alt($dosya, $argumanlar) {
     foreach ($x in $f, "$f.err") { if (Test-Path $x) { Get-Content $x | ForEach-Object { "    $_" } | Add-Content -Path $Gunluk -Encoding UTF8 } }
     return $p.ExitCode
 }
-function Ps($betik, $argumanlar) { return (Alt 'powershell.exe' "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\$betik`" $argumanlar") }
+# Adi 'Ps' OLAMAZ: ps = Get-Process takma adi, takma ad fonksiyondan once cozulur (2026-10-27 -Dene yakaladi).
+# Cikis kodu sayi degilse (alt surec acilamadi) -1: basari sayilmaz.
+function Betik-Calistir($betik, $argumanlar) {
+    $kod = Alt 'powershell.exe' "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\$betik`" $argumanlar"
+    if ($kod -is [int]) { return $kod } else { return -1 }
+}
 function Bitir {
     $sonuc.bitis = (Get-Date).ToString('s')
     $sonuc.hatalar = $hatalar; $sonuc.uyarilar = $uyarilar
@@ -149,7 +154,7 @@ else {
     } else {
         $sonuc.paket_imza = "$($m.commit.Substring(0, 7)) $($m.commit_zamani)"
         Yaz 'BILGI' "YENI GELISTIRME: paket $($m.commit.Substring(0, 7)) ($($m.commit_zamani); paket $($m.olusturma)), prod $($prodCommit.Substring(0, 7)) ($prodZaman): prod_guncelle.ps1 -Otomatik"
-        $kod = Ps 'prod_guncelle.ps1' $(if ($Dene) { '-YalnizDene' } else { '-Otomatik' })
+        $kod = Betik-Calistir 'prod_guncelle.ps1' $(if ($Dene) { '-YalnizDene' } else { '-Otomatik' })
         $aciklama = @{ 0 = 'uygulandi ve dogrulandi'; 10 = 'degisiklik yok'; 1 = 'uygulanmadi (aday testi / denetim; prod degismedi)'; 3 = 'dogrulanamadi, GERI ALINDI'; 4 = 'dogrulanamadi, geri alma TAMAMLANAMADI' }[$kod]
         if (-not $aciklama) { $aciklama = "beklenmeyen cikis $kod" }
         $sonuc.kod = "$($m.commit.Substring(0, 7)): $aciklama"
@@ -167,7 +172,7 @@ if ($Dene) {
     Adim '4-5/6 Deneme: isci bekleme ve panel yeniden baslatma yapilmadi'
     $sonuc.isci = 'deneme'; $sonuc.panel = 'deneme'
     Adim '6/6 Son denetim'
-    $kod = Ps 'prod_dogrula.ps1' "-Commit $prodCommit -Bekle 0 -Rapor `"$Calisma\dogrulama_deneme.txt`""
+    $kod = Betik-Calistir 'prod_dogrula.ps1' "-Commit $prodCommit -Bekle 0 -Rapor `"$Calisma\dogrulama_deneme.txt`""
     $sonuc.dogrulama = if ($kod -eq 0) { 'DOGRULANDI' } else { "$kod HATA" }
     Yaz $(if ($kod -eq 0) { 'TAMAM' } else { 'UYARI' }) "canli dogrulama: $($sonuc.dogrulama)"
     Bitir
@@ -206,7 +211,7 @@ else { $sonuc.isci = "bitti ($bekleme sn beklendi)"; Yaz 'TAMAM' "isci calismiyo
 # --- 5) Panel yeniden baslatma; acilmazsa full_reboot ----------------------------------------------------------------------------
 Adim '5/6 Panel yeniden baslatiliyor'
 $yenidenBaslangic = (Get-Date).AddSeconds(-5).ToString('yyyy-MM-dd HH:mm:ss')
-$kod = Ps 'canli_gorev_kur.ps1' '-PanelYenile'
+$kod = Betik-Calistir 'canli_gorev_kur.ps1' '-PanelYenile'
 if ($kod -eq 0) { $sonuc.panel = 'yeniden baslatildi'; $sonuc.full_reboot = 'gerekmedi'; Yaz 'TAMAM' 'panel yeniden baslatildi ve yanit veriyor' }
 else {
     $sonuc.panel = "acilmadi (kod $kod)"
@@ -223,7 +228,7 @@ else {
 # --- 6) Son denetim ------------------------------------------------------------------------------------------------------------
 Adim '6/6 Son denetim (ReportDB iscisinin bir turu beklenir, en cok ~8 dk)'
 $prodCommit = (& git -C $Proje rev-parse HEAD 2>$null | Out-String).Trim()
-$kod = Ps 'prod_dogrula.ps1' "-Commit $prodCommit -Baslangic `"$yenidenBaslangic`" -Rapor `"$GunlukDizini\$Zaman.dogrulama.txt`""
+$kod = Betik-Calistir 'prod_dogrula.ps1' "-Commit $prodCommit -Baslangic `"$yenidenBaslangic`" -Rapor `"$GunlukDizini\$Zaman.dogrulama.txt`""
 $sonuc.dogrulama = if ($kod -eq 0) { 'DOGRULANDI' } else { "$kod HATA" }
 if ($kod -eq 0) { Yaz 'TAMAM' 'canli dogrulama: DOGRULANDI' } else { $hatalar += "canli dogrulama: $kod HATA"; Yaz 'HATA' "canli dogrulama: $kod HATA" }
 Bitir
