@@ -7,7 +7,8 @@
 #   kod.bundle            : git bundle (dalin tum gecmisi; kucuk). Prod bunu fetch edip commit'e gecer.
 #   python_venv.zip       : .venv (yalniz prod'daki paketlerden FARKLIYSA kullanilir; pip freeze parmak izi manifestte)
 #   node_modules.zip      : ekran-react\node_modules (yalniz package-lock.json farkliysa kullanilir)
-#   manifest.json         : dal, commit, Python surumu, pip freeze / package-lock parmak izleri, dosya SHA-256'lari
+#   manifest.json         : dal, commit, commit zamani, Python surumu, pip freeze / package-lock parmak izleri, dosya SHA-256'lari
+#                           (commit + commit zamani = surumun imzasi; gece senkronu prod'dakiyle ayniysa hicbir sey yapmaz)
 # Prod'da: sunucuda E:\TAMLIFE\TAMLIFE_v3.5\PROD_GUNCELLE.bat (paketi \\tsclient uzerinden alir, dogrular, test eder, uygular).
 # Gonderilmeyenler: backend\.env, veritabani, gunlukler, var\ (prod kendi canli verisini ve ayarlarini korur).
 
@@ -71,8 +72,9 @@ if ($kirli.Count -gt 0) {
 $dal = (G rev-parse --abbrev-ref HEAD).Trim()
 $commit = (G rev-parse HEAD).Trim()
 $ozet = (G log -1 --format='%h %s').Trim()
+$commitZamani = (G log -1 --format='%ci').Trim()
 if ($dal -eq 'HEAD') { Dur 'Bir dalda degilsiniz (detached HEAD). Bir dala gecin.' }
-Tamam "dal $dal, commit $ozet"
+Tamam "dal $dal, commit $ozet ($commitZamani)"
 
 # --- 2) Testler (istege bagli, onerilen) -------------------------------------------------------------------------------------
 Adim '2/4 Testler'
@@ -114,7 +116,7 @@ $dosyalar = [ordered]@{}
 foreach ($d in 'kod.bundle', 'python_venv.zip', 'node_modules.zip') { $dosyalar[$d] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Gecici $d)).Hash }
 $manifest = [ordered]@{
     olusturma = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'); kullanici = $env:USERNAME; makine = $env:COMPUTERNAME
-    dal = $dal; commit = $commit; ozet = $ozet; testler = ($test -eq 'E')
+    dal = $dal; commit = $commit; commit_zamani = $commitZamani; ozet = $ozet; testler = ($test -eq 'E')
     python = $pyVer; pip_freeze = (Parmak-Izi $freeze); package_lock = (Get-FileHash -Algorithm SHA256 -LiteralPath $kilit).Hash
     dosyalar = $dosyalar
 }

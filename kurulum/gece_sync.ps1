@@ -7,10 +7,13 @@
 #   2 VERI prod -> Citrix: canli veritabaninin tutarli kopyasi (araclar\db_yedek.py) Citrix'teki TAMLIFE_v3.5\backend\var\dev.db olur.
 #     Citrix'in onceki dev.db'si backend\var\yedek\dev_citrix_onceki.db'ye alinir (tek, her gece yenilenir). Citrix paneli aciksa
 #     (dosya kilitli) atlanir.
-#   3 KOD Citrix -> prod: Citrix'te PRODA_GONDER.bat'in hazirladigi paket prod'dan farkliysa prod_guncelle.ps1 -Otomatik (aday testi,
-#     uygulama, canli dogrulama, basarisizsa kendiliginden geri alma). Commit edilip paketlenmemis Citrix gelistirmesi alinmaz.
-#   4 Isciler: ReportDB iscisinin turu bitene kadar beklenir (en cok 10 dk).
-#   5 Panel yeniden baslatilir (canli_gorev_kur.ps1 -PanelYenile, 120 sn); acilmazsa full_reboot.bat /oto.
+#   3 KOD Citrix -> prod: her 24 saatte bir yeni gelistirme var mi bakilir. Imza = commit + commit zamani (PRODA_GONDER manifesti).
+#     Paketin imzasi prod'daki son commit'le AYNIYSA hicbir sey yapilmaz (guncelleme baslamaz, panel yeniden baslatilmaz).
+#     Farkliysa prod_guncelle.ps1 -Otomatik (aday testi, uygulama, canli dogrulama, basarisizsa kendiliginden geri alma). Commit
+#     edilip PRODA_GONDER ile paketlenmemis Citrix gelistirmesi alinmaz.
+#   4 Isciler: ReportDB iscisinin turu bitene kadar beklenir (en cok 10 dk). Yalniz yeni surum uygulandiysa.
+#   5 Panel yeniden baslatilir (canli_gorev_kur.ps1 -PanelYenile, 120 sn); acilmazsa full_reboot.bat /oto. Yalniz yeni surum
+#     uygulandiysa; yeni gelistirme yoksa panele dokunulmaz, yalniz sagligina bakilir (yanit vermiyorsa full_reboot.bat /oto).
 #   6 Son denetim (prod_dogrula.ps1). Sorun varsa yoneticiye bildirim: TL-SNC-01 (panel ust cubuk zili + Yonetim > Arizalar).
 # Gunluk: var\log\gece_sync\<zaman>.txt ; son sonuc: var\log\gece_sync\son.json. Cikis: 0 tamam, 1 uyari (senkron eksik), 2 hata.
 param([switch]$Dene)   # canli sisteme dokunmaz: 2 Citrix'e deneme kopyasi yazip siler, 3 -YalnizDene, 4-5 yapilmaz
@@ -128,8 +131,11 @@ else {
 }
 
 # --- 3) Kod Citrix -> prod -------------------------------------------------------------------------------------------------------
-Adim '3/6 Kod: Citrix -> prod'
+Adim '3/6 Kod: Citrix -> prod (yeni gelistirme var mi?)'
 $prodCommit = (& git -C $Proje rev-parse HEAD 2>$null | Out-String).Trim()
+$prodZaman = (& git -C $Proje log -1 --format=%ci 2>$null | Out-String).Trim()
+$uygulandi = $false   # yeni surum prod'a yazildi mi (geri alinsa da): 4-5 yalniz o zaman
+$sonuc.prod_imza = "$($prodCommit.Substring(0, 7)) $prodZaman"
 if (-not $citrix) { $sonuc.kod = 'atlandi (Citrix yok)'; Yaz 'BILGI' 'atlandi' }
 else {
     $citrixCommit = (& git -C $CitrixProje -c safe.directory=* rev-parse HEAD 2>$null | Out-String).Trim()
@@ -137,14 +143,17 @@ else {
     $m = if ((Test-Path $manifest) -and -not (Test-Path (Join-Path $Paket '_hazirlaniyor'))) { Get-Content $manifest -Raw | ConvertFrom-Json } else { $null }
     if ($null -eq $m) {
         $sonuc.kod = 'paket yok'; Yaz 'BILGI' "Citrix'te hazir paket yok ($Paket)"
-    } elseif ($m.commit -eq $prodCommit) {
-        $sonuc.kod = "guncel ($($prodCommit.Substring(0, 7)))"; Yaz 'TAMAM' "prod paketteki surumde: $($prodCommit.Substring(0, 7))"
+    } elseif ($m.commit -eq $prodCommit -and (-not $m.commit_zamani -or $m.commit_zamani -eq $prodZaman)) {
+        $sonuc.kod = "yeni gelistirme yok ($($prodCommit.Substring(0, 7)), $prodZaman)"
+        Yaz 'TAMAM' "yeni gelistirme yok: paket imzasi prod'daki son commit ile ayni ($($prodCommit.Substring(0, 7)), $prodZaman); guncelleme baslatilmadi"
     } else {
-        Yaz 'BILGI' "paket $($m.commit.Substring(0, 7)) ($($m.olusturma)), prod $($prodCommit.Substring(0, 7)): prod_guncelle.ps1 -Otomatik"
+        $sonuc.paket_imza = "$($m.commit.Substring(0, 7)) $($m.commit_zamani)"
+        Yaz 'BILGI' "YENI GELISTIRME: paket $($m.commit.Substring(0, 7)) ($($m.commit_zamani); paket $($m.olusturma)), prod $($prodCommit.Substring(0, 7)) ($prodZaman): prod_guncelle.ps1 -Otomatik"
         $kod = Ps 'prod_guncelle.ps1' $(if ($Dene) { '-YalnizDene' } else { '-Otomatik' })
         $aciklama = @{ 0 = 'uygulandi ve dogrulandi'; 10 = 'degisiklik yok'; 1 = 'uygulanmadi (aday testi / denetim; prod degismedi)'; 3 = 'dogrulanamadi, GERI ALINDI'; 4 = 'dogrulanamadi, geri alma TAMAMLANAMADI' }[$kod]
         if (-not $aciklama) { $aciklama = "beklenmeyen cikis $kod" }
         $sonuc.kod = "$($m.commit.Substring(0, 7)): $aciklama"
+        $uygulandi = (-not $Dene) -and ($kod -in 0, 3, 4)
         if ($kod -in 0, 10) { Yaz 'TAMAM' $aciklama }
         elseif ($kod -eq 1 -or $kod -eq 3) { $uyarilar += "kod senkronu: $aciklama"; Yaz 'UYARI' $aciklama }
         else { $hatalar += "kod senkronu: $aciklama"; Yaz 'HATA' $aciklama }
@@ -164,6 +173,23 @@ if ($Dene) {
     Bitir
 }
 
+$yenidenBaslangic = (Get-Date).AddMinutes(-15).ToString('yyyy-MM-dd HH:mm:ss')
+if (-not $uygulandi) {
+    # 2026-10-27 kullanici: "yeni gelistirme varsa uygulasin, yoksa dokunmasin". Panel yeniden baslatilmaz; yalniz sagligina bakilir.
+    Adim '4-5/6 Yeni surum uygulanmadi: panele dokunulmuyor, yalniz sagligina bakiliyor'
+    $sonuc.isci = 'gerekmedi'
+    $saglik = $false
+    try { $saglik = ((Invoke-WebRequest -Uri 'https://tamlife/api/v1/health' -UseBasicParsing -TimeoutSec 10).StatusCode -eq 200) } catch { }
+    if ($saglik) { $sonuc.panel = 'dokunulmadi (calisiyor)'; $sonuc.full_reboot = 'gerekmedi'; Yaz 'TAMAM' 'panel calisiyor; dokunulmadi' }
+    else {
+        $sonuc.panel = 'yanit vermiyordu'
+        Yaz 'UYARI' 'panel yanit vermiyor: full_reboot.bat /oto'
+        $kod = Alt (Join-Path $Proje 'full_reboot.bat') '/oto'
+        $sonuc.full_reboot = if ($kod -eq 0) { 'TAMAM' } else { "BASARISIZ (kod $kod)" }
+        if ($kod -eq 0) { $uyarilar += 'panel gece yanit vermiyordu; full_reboot ile acildi'; Yaz 'UYARI' 'full_reboot ile acildi' }
+        else { $hatalar += "PANEL ACILAMADI: full_reboot da basarisiz (kod $kod)"; Yaz 'HATA' $sonuc.full_reboot }
+    }
+} else {
 # --- 4) Iscilerin bitmesi -------------------------------------------------------------------------------------------------------
 Adim '4/6 Iscilerin bitmesi bekleniyor'
 $t0 = Get-Date
@@ -191,6 +217,7 @@ else {
     if ($kod -eq 0) { $uyarilar += 'panel ilk yeniden baslatmada acilmadi; full_reboot ile acildi'; Yaz 'UYARI' 'full_reboot ile acildi' }
     elseif ($kod -eq 2) { $hatalar += 'full_reboot: panel acik ama gorevlerle degil (sunucu yeniden baslayinca kapanir)'; Yaz 'HATA' $sonuc.full_reboot }
     else { $hatalar += "PANEL ACILAMADI: full_reboot da basarisiz (kod $kod)"; Yaz 'HATA' $sonuc.full_reboot }
+}
 }
 
 # --- 6) Son denetim ------------------------------------------------------------------------------------------------------------
