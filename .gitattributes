@@ -1,0 +1,2 @@
+# Windows toplu dosyalari CRLF olmali (cmd LF ile etiket / satir hatasi verebilir)
+*.bat text eol=crlf
