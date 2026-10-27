@@ -63,7 +63,8 @@ try {
 
     if ($VenvDizin) {
         Adim 'Python paketleri (.venv) guncelleniyor'
-        $k = Komut $Proje 'robocopy.exe' "`"$VenvDizin`" `"$Proje\.venv`" /MIR /R:3 /W:3 /NP /NFL /NDL"
+        # pyvenv.cfg aynalanmaz: Citrix'in Python yolunu (kullanici klasoru) tasir; prod kendi C:\Program Files\Python314 yolunu korur
+        $k = Komut $Proje 'robocopy.exe' "`"$VenvDizin`" `"$Proje\.venv`" /MIR /XF pyvenv.cfg /R:3 /W:3 /NP /NFL /NDL"
         if ($k -ge 8) { throw ".venv aynalanamadi (robocopy $k)." }
     }
     if ($NodeDizin) {

@@ -16,6 +16,7 @@ param(
     [string]$HedefKok = '\\tsclient\C\Users\tcgsav\Desktop'
 )
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8  # git ciktisindaki Turkce harfler bozulmasin
 
 $Kaynak = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent       # E:\TAMLIFE
 $Proje = Join-Path $Kaynak 'TAMLIFE_v3.5'
@@ -83,6 +84,14 @@ if (Test-Path $Zip) { Remove-Item -LiteralPath $Zip -Force }
 [IO.Compression.ZipFile]::CreateFromDirectory($Icerik, $Zip, [IO.Compression.CompressionLevel]::Optimal, $false)
 $ozet = (Get-FileHash -Algorithm SHA256 -LiteralPath $Zip).Hash
 Set-Content -Path (Join-Path $Gonder 'TAMLIFE_paket.sha256') -Value $ozet -Encoding ASCII
+# Python kurulumu: .venv'in pyvenv.cfg 'home' klasoru (prod: C:\Program Files\Python314). Citrix'te yoksa kur_citrix.ps1 bunu
+# kullanici klasorune acar (yonetici / internet gerekmez) ve .venv'i ona baglar: gelistirme prod ile ayni Python surumunde kalir.
+$pyHome = ((Get-Content (Join-Path $Proje '.venv\pyvenv.cfg') | Where-Object { $_ -match '^home\s*=' }) -replace '^home\s*=\s*', '').Trim()
+$pyZip = Join-Path $Gonder 'python.zip'
+if (Test-Path $pyZip) { Remove-Item -LiteralPath $pyZip -Force }
+[IO.Compression.ZipFile]::CreateFromDirectory($pyHome, $pyZip, [IO.Compression.CompressionLevel]::Optimal, $false)
+Set-Content -Path (Join-Path $Gonder 'python.sha256') -Value (Get-FileHash -Algorithm SHA256 -LiteralPath $pyZip).Hash -Encoding ASCII
+Tamam "python.zip ($pyHome, $([math]::Round((Get-Item $pyZip).Length / 1MB)) MB)"
 Copy-Item -Force (Join-Path $PSScriptRoot 'kur_citrix.ps1') $Gonder
 Copy-Item -Force (Join-Path $PSScriptRoot 'KUR_CITRIX.bat') $Gonder
 $boyut = (Get-Item $Zip).Length
@@ -97,7 +106,7 @@ $kod = Robocopy-Calistir $arg 'gonder'
 if ($kod -ge 8) { Dur "Hedefe kopyalama basarisiz (robocopy kodu $kod). Baglantiyi kontrol edip yeniden calistirin; zaten giden dosyalar tekrar gonderilmez." }
 $uzak = Get-Item -LiteralPath (Join-Path $Hedef 'TAMLIFE_paket.zip')
 if ($uzak.Length -ne $boyut) { Dur "Hedefteki zip boyutu farkli ($($uzak.Length) / $boyut bayt)" }
-Tamam "4 dosya gonderildi, zip boyutu dogrulandi"
+Tamam "paket dosyalari gonderildi, zip boyutu dogrulandi"
 
 # --- 5) Sonuc --------------------------------------------------------------------------------------------------------------
 Adim '5/5 Bitti'

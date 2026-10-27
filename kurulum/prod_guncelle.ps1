@@ -16,6 +16,7 @@ param(
     [switch]$YalnizDene          # 1-3 adimlari: hicbir sey uygulanmaz, soru sorulmaz
 )
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8  # git ciktisindaki Turkce harfler bozulmasin
 $Proje = Split-Path $PSScriptRoot -Parent
 $Py = Join-Path $Proje '.venv\Scripts\python.exe'
 $Zaman = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -138,7 +139,11 @@ if ($nodeFarkli) { Uyari 'Arayuz paketleri (package-lock) degismis: node_modules
 # --- 3) Aday testi (canli klasorun disinda) -----------------------------------------------------------------------------------
 Adim '3/5 Yeni surum ayri kopyada test ediliyor (~10 dk; canli sistem etkilenmez)'
 G worktree add --detach $Aday $yeni | Out-Null
-if ($pyFarkli) { Ac (Join-Path $Calisma 'paket\python_venv.zip') "$Calisma\venv"; New-Item -ItemType Junction -Path "$Aday\.venv" -Target "$Calisma\venv" | Out-Null }
+if ($pyFarkli) {
+    Ac (Join-Path $Calisma 'paket\python_venv.zip') "$Calisma\venv"
+    Copy-Item -Force (Join-Path $Proje '.venv\pyvenv.cfg') "$Calisma\venv\pyvenv.cfg"   # Citrix'in Python yolu yerine prod'unki
+    New-Item -ItemType Junction -Path "$Aday\.venv" -Target "$Calisma\venv" | Out-Null
+}
 else { New-Item -ItemType Junction -Path "$Aday\.venv" -Target (Join-Path $Proje '.venv') | Out-Null }
 if ($nodeFarkli) { Ac (Join-Path $Calisma 'paket\node_modules.zip') "$Calisma\node_modules"; New-Item -ItemType Junction -Path "$Aday\ekran-react\node_modules" -Target "$Calisma\node_modules" | Out-Null }
 else { New-Item -ItemType Junction -Path "$Aday\ekran-react\node_modules" -Target (Join-Path $Proje 'ekran-react\node_modules') | Out-Null }
@@ -171,7 +176,7 @@ Write-Host '  Uygularken: veritabani yedegi alinir, panel 2-3 dakika kapali kali
 $c = ''
 while ($c -notin @('E', 'H')) { $c = (Read-Host '  Uygulayayim mi? [E/H]').Trim().ToUpper() }
 if ($c -ne 'E') { Write-Host '  Uygulanmadi; prod degismedi.' -ForegroundColor Yellow; Read-Host 'Kapatmak icin Enter'; exit 0 }
-if ($pyFarkli -and -not (Test-Path "$Calisma\venv")) { Ac (Join-Path $Calisma 'paket\python_venv.zip') "$Calisma\venv" }
+if ($pyFarkli -and -not (Test-Path "$Calisma\venv")) { Ac (Join-Path $Calisma 'paket\python_venv.zip') "$Calisma\venv"; Copy-Item -Force (Join-Path $Proje '.venv\pyvenv.cfg') "$Calisma\venv\pyvenv.cfg" }
 if ($nodeFarkli -and -not (Test-Path "$Calisma\node_modules")) { Ac (Join-Path $Calisma 'paket\node_modules.zip') "$Calisma\node_modules" }
 $sonuc = Join-Path $Calisma 'uygula_sonuc.json'
 $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\prod_uygula.ps1`" -Commit $yeni -Dal $($m.dal) -Sonuc `"$sonuc`""

@@ -10,6 +10,7 @@
 #   5) Python ve paketlerin calistigini denetler; sonuc ozeti.
 param([string]$Hedef = (Join-Path ([Environment]::GetFolderPath('Desktop')) 'TAMLIFE'))
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8  # git ciktisindaki Turkce harfler bozulmasin
 
 $Paket = $PSScriptRoot
 $Zip = Join-Path $Paket 'TAMLIFE_paket.zip'
@@ -95,9 +96,28 @@ Tamam 'kok dosyalari guncellendi'
 # --- 5) Denetim ------------------------------------------------------------------------------------------------------------
 Adim '5/5 Denetim'
 $cfg = Join-Path $hedefProje '.venv\pyvenv.cfg'
-$home_ = ((Get-Content $cfg | Where-Object { $_ -match '^home\s*=' }) -replace '^home\s*=\s*', '').Trim()
+$satirlar = Get-Content $cfg
+$home_ = (($satirlar | Where-Object { $_ -match '^home\s*=' }) -replace '^home\s*=\s*', '').Trim()
+$surum = (($satirlar | Where-Object { $_ -match '^version\s*=' }) -replace '^version\s*=\s*', '').Trim()
 if (-not (Test-Path (Join-Path $home_ 'python.exe'))) {
-    Uyari ".venv bu makinedeki Python'u bulamiyor: $home_\python.exe yok. Python 3.14'u ayni klasore kurun ya da .venv'i yeniden olusturun."
+    # Prod'un Python'u (ayni surum) kullanici klasorune: yonetici / internet gerekmez. .venv pyvenv.cfg bu klasore baglanir.
+    $kisisel = Join-Path $env:LOCALAPPDATA ('Programs\Python\Python' + ($surum -replace '^(\d+)\.(\d+).*', '$1$2'))
+    $pyZip = Join-Path $Paket 'python.zip'
+    if (-not (Test-Path (Join-Path $kisisel 'python.exe'))) {
+        if (-not (Test-Path $pyZip)) { Dur "Python $surum bu makinede yok ve pakette python.zip yok." }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $pyZip).Hash -ne (Get-Content (Join-Path $Paket 'python.sha256') | Select-Object -First 1).Trim()) { Dur 'python.zip aktarimda bozulmus (SHA-256).' }
+        try { [IO.Compression.ZipFile]::ExtractToDirectory($pyZip, $kisisel) } catch { Dur "Python acilamadi: $($_.Exception.Message)" }
+        Tamam "Python $surum kuruldu: $kisisel (yalniz bu kullanici)"
+    }
+    $satirlar = $satirlar | ForEach-Object {
+        if ($_ -match '^home\s*=') { "home = $kisisel" } elseif ($_ -match '^executable\s*=') { "executable = $kisisel\python.exe" } else { $_ }
+    }
+    Set-Content -Path $cfg -Value $satirlar -Encoding ASCII
+    $home_ = $kisisel
+    Tamam ".venv bu Python'a baglandi"
+}
+if (-not (Test-Path (Join-Path $home_ 'python.exe'))) {
+    Uyari ".venv Python'u bulamiyor: $home_\python.exe yok."
 } else {
     $py = Join-Path $hedefProje '.venv\Scripts\python.exe'
     Push-Location (Join-Path $hedefProje 'backend')

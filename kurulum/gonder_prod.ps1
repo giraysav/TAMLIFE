@@ -13,6 +13,7 @@
 
 param([switch]$TestYok, [string]$Cikis = (Join-Path ([Environment]::GetFolderPath('Desktop')) 'TAMLIFE_GONDER'))
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8  # git ciktisindaki Turkce harfler bozulmasin
 
 $Proje = Split-Path $PSScriptRoot -Parent
 $Py = Join-Path $Proje '.venv\Scripts\python.exe'
