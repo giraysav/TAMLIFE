@@ -30,10 +30,23 @@ function G {
     if ($kod -ne 0) { throw "git $($args -join ' '): $c" }
     return $c
 }
+# 2026-10-27: Citrix'te Start-Process -Wait "Access is denied" verdi (surec basliyor, PowerShell onu bekleyemiyordu; venv python.exe
+# asil Python'u alt surec acar). Surec .NET Process ile acilir: tutamac bizde, bekleme ve cikis kodu ondan.
 function Calistir($dizin, $program, $argumanlar, $dosya) {
-    $s = Start-Process -FilePath $program -ArgumentList $argumanlar -WorkingDirectory $dizin -NoNewWindow -Wait -PassThru `
-        -RedirectStandardOutput $dosya -RedirectStandardError "$dosya.err"
-    if (Test-Path "$dosya.err") { Get-Content "$dosya.err" | Add-Content $dosya; Remove-Item "$dosya.err" -Force }
+    # tam yol: yalniz adla acilan npx.cmd kendi klasorunu (%~dp0) bulamiyor
+    if (-not [IO.Path]::IsPathRooted($program)) { $program = (Get-Command $program -CommandType Application | Select-Object -First 1).Source }
+    $bilgi = New-Object Diagnostics.ProcessStartInfo $program, $argumanlar
+    $bilgi.WorkingDirectory = $dizin
+    $bilgi.UseShellExecute = $false
+    $bilgi.RedirectStandardOutput = $true
+    $bilgi.RedirectStandardError = $true
+    $bilgi.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $bilgi.StandardErrorEncoding = [Text.Encoding]::UTF8
+    $s = [Diagnostics.Process]::Start($bilgi)
+    $hata = $s.StandardError.ReadToEndAsync()   # iki akis birden okunur: biri dolup sureci kilitlemesin
+    $cikti = $s.StandardOutput.ReadToEnd()
+    $s.WaitForExit()
+    [IO.File]::WriteAllText($dosya, $cikti + $hata.Result, (New-Object Text.UTF8Encoding $false))
     return $s.ExitCode
 }
 function Parmak-Izi($metin) {
