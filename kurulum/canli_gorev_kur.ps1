@@ -180,8 +180,14 @@ function Isci-Durdur {
     foreach ($p in $isci) { & cmd.exe /c "taskkill /PID $($p.ProcessId) /T /F >nul 2>&1" }
 }
 
-function Https-Saglik {
-    try { return ((Invoke-WebRequest -Uri 'https://tamlife/api/v1/health' -UseBasicParsing -TimeoutSec 10).StatusCode -eq 200) } catch { return $false }
+# 2026-10-27 full_reboot_testi: vekil gorevi basladiktan 3-7 sn sonra 443'u dinler; tek deneme "YANIT YOK" deyip basarili yeniden
+# baslatmayi hata (kod 1) sayiyordu. $sn boyunca 3 sn arayla denenir.
+function Https-Saglik($sn = 30) {
+    for ($i = 0; $i -lt $sn; $i += 3) {
+        try { if ((Invoke-WebRequest -Uri 'https://tamlife/api/v1/health' -UseBasicParsing -TimeoutSec 10).StatusCode -eq 200) { return $true } } catch { }
+        Start-Sleep -Seconds 3
+    }
+    return $false
 }
 
 # Gorev oturum acamazsa: ayni -Calistir dongusu WMI ile bu oturumun surec agaci DISINDA acilir (bu pencere kapansa da calisir;

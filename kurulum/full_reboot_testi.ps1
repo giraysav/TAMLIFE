@@ -33,9 +33,10 @@ function Durum {
         $d[$g] = if ($t) { "$($t.State)" } else { 'yok' }
     }
     $d.port = @(Get-NetTCPConnection -LocalPort 8117 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique).Count
-    $d.panel_dongu = (Surecler 'canli_gorev_kur\.ps1.*-Calistir panel').Count
-    $d.vekil_dongu = (Surecler 'canli_gorev_kur\.ps1.*-Calistir vekil').Count
-    $d.vekil = (Surecler 'tls_vekili\.ps1').Count
+    # @(): tek eleman donunce PS 5.1'de CimInstance.Count bos geliyordu (2026-10-27 ilk calisma)
+    $d.panel_dongu = @(Surecler 'canli_gorev_kur\.ps1.*-Calistir panel').Count
+    $d.vekil_dongu = @(Surecler 'canli_gorev_kur\.ps1.*-Calistir vekil').Count
+    $d.vekil = @(Surecler 'tls_vekili\.ps1').Count
     return $d
 }
 
