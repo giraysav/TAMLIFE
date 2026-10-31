@@ -9,6 +9,8 @@ import { ANAHTAR } from "@/yonetim/api"
 import { oku } from "@/lib/sorgu"
 import type { Kaynak, PartiAyrintisi } from "@/yonetim/api"
 import { IceAktar } from "@/gelir-uretim/ice-aktar"
+import { ProjeIceAktar } from "@/proje/ice-aktar"
+import { projeMetin } from "@/proje/proje-metin"
 import { gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
 import { UrunTutarYukleme } from "@/yonetim/utilizasyon/urun-tutar"
 import { Analiz } from "@/yonetim/tampon/analiz"
@@ -147,6 +149,8 @@ function Import({ dil, onYeniParti }: { dil: Dil; onYeniParti: (id: number) => v
   const y = tm(dil).yapi
   const g = gelirUretimMetin(dil)
   const [gelirAcik, setGelirAcik] = useState(false)
+  const [projeAcik, setProjeAcik] = useState(false)
+  const p = projeMetin(dil)
   return (
     <div className="grid gap-4">
       <Bildirim>{y.importAciklama}</Bildirim>
@@ -158,8 +162,15 @@ function Import({ dil, onYeniParti }: { dil: Dil; onYeniParti: (id: number) => v
           {g.excelIceAktar}
         </button>
       </Panel>
+      <Panel baslik={p.iceBaslik} aciklama={p.iceAciklama}>
+        <button type="button" className={DUGME} onClick={() => setProjeAcik(true)}>
+          <Upload aria-hidden className="size-4" />
+          {p.excelIceAktar}
+        </button>
+      </Panel>
       <UrunTutarYukleme dil={dil} baslik={y.urunTutar} />
       {gelirAcik ? <IceAktar dil={dil} onKapat={() => setGelirAcik(false)} /> : null}
+      {projeAcik ? <ProjeIceAktar dil={dil} onKapat={() => setProjeAcik(false)} /> : null}
     </div>
   )
 }

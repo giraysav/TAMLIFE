@@ -574,12 +574,14 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     expect(within(hat).getAllByRole("listitem").map((x) => x.textContent?.replace("→", "").trim())).toEqual(y.adimlar.map((s, i) => `${i + 1} · ${s}`))
   })
 
-  it("Import: tek giris noktasi - ham musteri, genel CSV, Gelir Faydasi ve Urun-Tutar", async () => {
+  it("Import: tek giris noktasi - ham musteri, genel CSV, Gelir Faydasi, Takip Edilen Projeler ve Urun-Tutar", async () => {
     sahteSunucu({})
     await ac("#/yonetim/tampon?sekme=import")
     expect(screen.getByText(y.importAciklama)).toBeInTheDocument()
     for (const b of [a.ham.baslik, a.csv.baslik, y.gelirFaydasi, y.urunTutar]) expect(screen.getAllByText(b).length).toBeGreaterThan(0)
     expect(screen.getByRole("button", { name: "Excel'den içe aktar" })).toBeInTheDocument()
+    expect(screen.getByText("Takip Edilen Projeler · Excel içe aktarma")).toBeInTheDocument() // 2026-10-31
+    expect(screen.getByRole("button", { name: "Projeleri Excel'den içe aktar" })).toBeInTheDocument()
   })
 
   it("Musteri Eslesmesi: kaynak bazinda oran rozeti, kartsiz numaralar ve yonlendirme", async () => {

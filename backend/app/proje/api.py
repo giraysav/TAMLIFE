@@ -8,22 +8,28 @@
   GET    /proje/musteri                  -> musteri bazli calismalar (?tam_id=)
   PUT    /proje/musteri/{id}/{kategori}  -> isaret + detay (aninda kaydedilir)
   GET    /proje/rapor.xlsx               -> musteri bazli calisma raporu (?tam_id=)
+  POST   /proje/ice-al/onizleme?dosya=&atamalar=  -> TAM ceyrek Excel'i (ham .xlsx/.xlsm govdesi): onizleme, hicbir sey yazmaz (admin)
+  POST   /proje/ice-al/uygula?dosya=&atamalar=    -> ayni dosya: yalniz YENI kayitlari tek islemde acar (admin; Veri Girisi > Import)
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.audit import audit_log
-from app.db import get_db
+from app.db import get_db, oturum
+from app.deps import require_veri_yazma
 from app.erisim import Erisim, modul_erisim
-from app.ortak import KimlikTipi, ok
-from app.proje import servis
+from app.ortak import KimlikTipi, govde_oku, ok
+from app.proje import ice_al, servis
+from app.session import Principal
 
 router = APIRouter(prefix="/api/v1/proje", tags=["proje"])
 proje_erisim = modul_erisim("proje")
@@ -127,3 +133,57 @@ def rapor(tam_id: KimlikTipi | None = None, e: Erisim = Depends(proje_erisim), d
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{ad}"'},
     )
+
+
+# --- Excel ice aktarma (Veri Girisi > Import) -------------------------------------------------------------------------
+def _atamalar(ham: str) -> dict[str, int]:
+    """?atamalar={"<TAM ad anahtari>": <kisi id>} (eslesmeyen TAM -> secilen personel). Bozuk deger 400."""
+    if not ham:
+        return {}
+    try:
+        veri = json.loads(ham)
+        if not isinstance(veri, dict):
+            raise TypeError
+        return {str(k): int(v) for k, v in veri.items() if v}
+    except (ValueError, TypeError) as exc:
+        raise servis.ProjeHata(400, "TAM atamaları okunamadı.") from exc
+
+
+def _onizle(veri: bytes, dosya: str, atamalar: dict[str, int]) -> dict:
+    with oturum() as db:
+        return ice_al.onizleme(db, veri, dosya, atamalar)
+
+
+def _uygula(user: Principal, veri: bytes, dosya: str, atamalar: dict[str, int]) -> dict:
+    with oturum() as db:
+        sonuc = ice_al.uygula(db, user, veri, dosya, atamalar)
+        db.commit()
+        return sonuc
+
+
+@router.post("/ice-al/onizleme")
+async def ice_al_onizleme(
+    request: Request,
+    dosya: str = Query(default="", max_length=200),
+    atamalar: str = Query(default="", max_length=4000),
+    _e: Erisim = Depends(proje_erisim),
+    _y: Principal = Depends(require_veri_yazma),
+):
+    secim = _atamalar(atamalar)
+    veri = await govde_oku(request, ice_al.AZAMI_BAYT)
+    return ok(await run_in_threadpool(_onizle, veri, dosya, secim))
+
+
+@router.post("/ice-al/uygula")
+async def ice_al_uygula(
+    request: Request,
+    dosya: str = Query(default="", max_length=200),
+    atamalar: str = Query(default="", max_length=4000),
+    e: Erisim = Depends(proje_erisim),
+    _y: Principal = Depends(require_veri_yazma),
+):
+    secim = _atamalar(atamalar)
+    veri = await govde_oku(request, ice_al.AZAMI_BAYT)
+    sonuc = await run_in_threadpool(_uygula, e.user, veri, dosya, secim)
+    _denetim(e, "proje.ice_al", f"kayit={sonuc['toplam']} eklendi={sonuc['eklendi']} var={sonuc['var']} tekrar={sonuc['tekrar']} tam_yok={sonuc['tam_yok']}")
+    return ok(sonuc)
