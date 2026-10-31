@@ -1,125 +1,138 @@
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { Ban, FileCheck2, Hourglass, Send, Users } from "lucide-react"
 import { Halka, Lejant } from "@/components/grafik"
-import { Rozet } from "@/components/sayfa-ui"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { oku } from "@/lib/sorgu"
+import { BosKutu, GIRDI, HataKutu, Kpi, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { zaman } from "@/lib/bicim"
+import { oku, sorguMetni } from "@/lib/sorgu"
+import { yilSecenekleri } from "@/lib/yillar"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
 
 type Gonderim = { id: number; customer_id: number; musteri: string; yil: number; ay: number; gonderen: string; zaman: string; konu: string; durum: string }
-type Durum = {
-  yil: number
-  ay: number
-  satirlar: { id: number | null; ad: string; musteri: number; atilan: number; bekleyen: number; muaf: number }[]
-  toplam: { musteri: number; atilan: number; bekleyen: number; muaf: number }
-}
+type TamSatiri = { id: number | null; ad: string; musteri: number; atilan: number; bekleyen: number; muaf: number }
+type Durum = { yil: number; ay: number; satirlar: TamSatiri[]; toplam: Omit<TamSatiri, "id" | "ad"> }
+type Donem = { yil: number; ay: number }
 
-/** Gonderilen Aylik Rapor: bu ayin TAM basina atilan/bekleyen ozeti ve gorebildigi gonderimler. */
+/** Gonderilen Aylik Rapor (APN Kurulum duzeni, 2026-10-31): ay + yil secimi, KPI karolari, gonderim orani halkasi, TAM basina
+ *  atilan/bekleyen tablosu ve secilen donemin gonderim gecmisi. Secim yokken sunucunun donemi (bu ay hazirlanan rapor = onceki ay). */
 export function RaporSayfasi({ dil }: { dil: Dil }) {
   const t = musteriMetin(dil)
-  const durumQ = useQuery({ queryKey: ["rapor", "durum"], queryFn: () => oku<Durum>("/api/v1/rapor/durum") })
-  const listeQ = useQuery({ queryKey: ["rapor", "gonderilenler"], queryFn: () => oku<Gonderim[]>("/api/v1/rapor/gonderilenler") })
+  const [secim, setSecim] = useState<Donem | null>(null)
+  const durumQ = useQuery({ queryKey: ["rapor", "durum", secim], queryFn: () => oku<Durum>(`/api/v1/rapor/durum${sorguMetni({ yil: secim?.yil, ay: secim?.ay })}`) })
+  const donem: Donem | null = secim ?? (durumQ.data ? { yil: durumQ.data.yil, ay: durumQ.data.ay } : null)
+  const listeQ = useQuery({
+    queryKey: ["rapor", "gonderilenler", donem],
+    queryFn: () => oku<Gonderim[]>(`/api/v1/rapor/gonderilenler${sorguMetni({ yil: donem?.yil, ay: donem?.ay })}`),
+    enabled: donem !== null,
+  })
   const durum = durumQ.data
-  const liste = listeQ.data ?? []
   const seriler = [
     { anahtar: "atilan", ad: t.atilan, renk: "#16a34a" },
     { anahtar: "bekleyen", ad: t.bekleyen, renk: "#f5c400" },
   ]
+  const oran = durum?.toplam.musteri ? Math.round((durum.toplam.atilan / durum.toplam.musteri) * 100) : 0
+  const donemAdi = donem ? `${t.aylar[donem.ay - 1]} ${donem.yil}` : ""
 
-  if (durumQ.isPending) return <p className="text-sm text-muted-foreground">…</p>
-  if (!durum) {
-    return (
-      <p role="alert" className="text-sm text-destructive">
-        {t.yuklenemedi}
-      </p>
-    )
-  }
+  const filtre = (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <label className="flex items-center gap-2 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">
+        {t.ay}
+        <select className={`${GIRDI} !w-auto`} value={donem?.ay ?? ""} disabled={!donem} onChange={(e) => donem && setSecim({ ...donem, ay: Number(e.target.value) })}>
+          {t.aylar.map((ad, i) => (
+            <option key={ad} value={i + 1}>
+              {ad}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2 text-[0.625rem] font-black uppercase tracking-wide text-slate-400">
+        {t.yil}
+        <select className={`${GIRDI} !w-auto`} value={donem?.yil ?? ""} disabled={!donem} onChange={(e) => donem && setSecim({ ...donem, yil: Number(e.target.value) })}>
+          {yilSecenekleri().map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
 
   return (
-    <div className="grid gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {t.donem}: {t.aylar[durum.ay - 1]} / {durum.yil}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          {/* 2026-10-31 kullanici: gonderilen rapor sayisinin rapor birimi toplamina orani (muaflar toplama girmez) */}
-          <div className="flex flex-wrap items-center gap-4">
-            <Halka
-              dilimler={seriler.map((s) => ({ ...s, deger: durum.toplam[s.anahtar as "atilan" | "bekleyen"] }))}
-              baslik={`%${durum.toplam.musteri ? Math.round((durum.toplam.atilan / durum.toplam.musteri) * 100) : 0}`}
-              alt={t.gonderimOrani}
-              boyut={136}
-              kalinlik={18}
-            />
-            <Lejant seriler={seriler} sayilar={durum.toplam} />
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th scope="col" className="py-2 font-medium">{t.sorumlu}</th>
-                <th scope="col" className="py-2 text-right font-medium">{t.toplamBirim}</th>
-                <th scope="col" className="py-2 text-right font-medium">{t.atilan}</th>
-                <th scope="col" className="py-2 text-right font-medium">{t.bekleyen}</th>
-                <th scope="col" className="py-2 text-right font-medium">{t.muaf}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {durum.satirlar.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-4 text-center text-muted-foreground">
-                    {t.sonucYok}
-                  </td>
-                </tr>
-              ) : (
-                durum.satirlar.map((s) => (
-                  <tr key={s.id ?? s.ad} className="border-b last:border-0">
-                    <td className="py-2">{s.ad}</td>
-                    <td className="py-2 text-right tabular-nums">{s.musteri}</td>
-                    <td className="py-2 text-right tabular-nums">{s.atilan}</td>
-                    <td className="py-2 text-right tabular-nums">{s.bekleyen}</td>
-                    <td className="py-2 text-right tabular-nums text-muted-foreground">{s.muaf}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="font-medium">
-                <td className="py-2">{t.genelToplam}</td>
-                <td className="py-2 text-right tabular-nums">{durum.toplam.musteri}</td>
-                <td className="py-2 text-right tabular-nums">{durum.toplam.atilan}</td>
-                <td className="py-2 text-right tabular-nums">{durum.toplam.bekleyen}</td>
-                <td className="py-2 text-right tabular-nums text-muted-foreground">{durum.toplam.muaf}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-1 gap-4">
+      <SayfaKabi ikon={FileCheck2} baslik={t.raporSayfasi} aciklama={t.raporSayfasiAciklama} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi etiket={t.toplamBirim} deger={durum?.toplam.musteri ?? "—"} alt={donemAdi} ikon={Users} ton="mavi" />
+        <Kpi etiket={t.atilan} deger={durum?.toplam.atilan ?? "—"} alt={durum ? `%${oran}` : undefined} ikon={Send} ton="yesil" />
+        <Kpi etiket={t.bekleyen} deger={durum?.toplam.bekleyen ?? "—"} ikon={Hourglass} ton="amber" />
+        <Kpi etiket={t.muaf} deger={durum?.toplam.muaf ?? "—"} ikon={Ban} ton="gri" />
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t.gecmis}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {liste.length === 0 ? <p className="text-sm text-muted-foreground">{t.gecmisYok}</p> : null}
-          <ul className="grid gap-2 text-sm">
-            {liste.map((g) => (
-              <li key={g.id} className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-0">
-                <span className="tabular-nums">
-                  {t.aylar[g.ay - 1]} / {g.yil}
-                </span>
-                <a className="font-medium underline-offset-4 hover:underline" href={`#/musteri?m=${g.customer_id}`}>
-                  {g.musteri}
-                </a>
-                <span className="flex-1 text-muted-foreground">{g.konu}</span>
-                <span className="text-muted-foreground">{g.gonderen}</span>
-                {g.durum === "reverted" ? <Rozet>{t.geriAlindi}</Rozet> : null}
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3">{filtre}</div>
+        {durumQ.isPending ? (
+          <Yukleniyor metin="…" />
+        ) : durumQ.isError || !durum ? (
+          <HataKutu metin={t.yuklenemedi} tekrar={() => void durumQ.refetch()} />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[auto_1fr] lg:items-start">
+            {/* 2026-10-31 kullanici: gonderilen rapor sayisinin rapor birimi toplamina orani (muaflar toplama girmez) */}
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 p-4">
+              <Halka
+                dilimler={seriler.map((s) => ({ ...s, deger: durum.toplam[s.anahtar as "atilan" | "bekleyen"] }))}
+                baslik={`%${oran}`}
+                alt={t.gonderimOrani}
+                boyut={136}
+                kalinlik={18}
+              />
+              <Lejant seriler={seriler} sayilar={durum.toplam} />
+            </div>
+            <VeriTablosu<TamSatiri>
+              baslik={`${t.tamDurumu} · ${donemAdi}`}
+              satirlar={durum.satirlar}
+              anahtar={(s) => s.id ?? s.ad}
+              bos={<BosKutu ikon={Users} baslik={t.sonucYok} />}
+              kolonlar={[
+                { baslik: t.sorumlu, hucre: (s) => s.ad },
+                { baslik: t.toplamBirim, hucre: (s) => s.musteri, sinif: "text-right tabular-nums" },
+                { baslik: t.atilan, hucre: (s) => s.atilan, sinif: "text-right tabular-nums" },
+                { baslik: t.bekleyen, hucre: (s) => (s.bekleyen ? <Rozet ton="amber">{s.bekleyen}</Rozet> : 0), sinif: "text-right tabular-nums" },
+                { baslik: t.muaf, hucre: (s) => s.muaf, sinif: "text-right tabular-nums text-slate-400" },
+              ]}
+            />
+          </div>
+        )}
+      </div>
+
+      <Panel baslik={t.gecmis} aciklama={donemAdi}>
+        {listeQ.isPending ? (
+          <Yukleniyor metin="…" />
+        ) : listeQ.isError ? (
+          <HataKutu metin={t.yuklenemedi} tekrar={() => void listeQ.refetch()} />
+        ) : (
+          <VeriTablosu<Gonderim>
+            baslik={t.gecmis}
+            satirlar={listeQ.data ?? []}
+            anahtar={(g) => g.id}
+            bos={<BosKutu ikon={Send} baslik={t.gecmisYok} />}
+            kolonlar={[
+              {
+                baslik: t.musteriKolon,
+                hucre: (g) => (
+                  <a className="text-tl-blue underline-offset-4 hover:underline" href={`#/musteri?m=${g.customer_id}`}>
+                    {g.musteri}
+                  </a>
+                ),
+              },
+              { baslik: t.konuKolon, hucre: (g) => <span className="font-normal text-slate-600">{g.konu}</span> },
+              { baslik: t.gonderen, hucre: (g) => g.gonderen },
+              { baslik: t.zamanKolon, hucre: (g) => <span className="font-mono text-slate-500">{zaman(g.zaman)}</span>, sinif: "whitespace-nowrap" },
+              { baslik: "", hucre: (g) => (g.durum === "reverted" ? <Rozet>{t.geriAlindi}</Rozet> : null) },
+            ]}
+          />
+        )}
+      </Panel>
     </div>
   )
 }

@@ -180,6 +180,14 @@ const TR = {
   genelToplam: "Toplam",
   muaf: "Rapor atılmıyor",
   gonderimOrani: "Gönderilen",
+  raporSayfasi: "Gönderilen Aylık Rapor",
+  raporSayfasiAciklama: "Seçilen dönemde TAM bazında atılan / bekleyen aylık raporlar ve gönderim geçmişi",
+  ay: "Ay",
+  yil: "Yıl",
+  tamDurumu: "TAM bazında durum",
+  musteriKolon: "Müşteri",
+  konuKolon: "Konu",
+  zamanKolon: "Gönderim zamanı",
 }
 
 const EN: typeof TR = {
@@ -354,6 +362,14 @@ const EN: typeof TR = {
   genelToplam: "Total",
   muaf: "No report",
   gonderimOrani: "Sent",
+  raporSayfasi: "Sent Monthly Reports",
+  raporSayfasiAciklama: "Monthly reports sent / pending per TAM in the selected period, and the dispatch history",
+  ay: "Month",
+  yil: "Year",
+  tamDurumu: "Status per TAM",
+  musteriKolon: "Customer",
+  konuKolon: "Subject",
+  zamanKolon: "Sent at",
 }
 
 export function musteriMetin(dil: Dil) {
