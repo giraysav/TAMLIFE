@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { Halka, Lejant } from "@/components/grafik"
 import { Rozet } from "@/components/sayfa-ui"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { oku } from "@/lib/sorgu"
@@ -9,8 +10,8 @@ type Gonderim = { id: number; customer_id: number; musteri: string; yil: number;
 type Durum = {
   yil: number
   ay: number
-  satirlar: { id: number | null; ad: string; musteri: number; atilan: number; bekleyen: number }[]
-  toplam: { musteri: number; atilan: number; bekleyen: number }
+  satirlar: { id: number | null; ad: string; musteri: number; atilan: number; bekleyen: number; muaf: number }[]
+  toplam: { musteri: number; atilan: number; bekleyen: number; muaf: number }
 }
 
 /** Gonderilen Aylik Rapor: bu ayin TAM basina atilan/bekleyen ozeti ve gorebildigi gonderimler. */
@@ -20,6 +21,10 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
   const listeQ = useQuery({ queryKey: ["rapor", "gonderilenler"], queryFn: () => oku<Gonderim[]>("/api/v1/rapor/gonderilenler") })
   const durum = durumQ.data
   const liste = listeQ.data ?? []
+  const seriler = [
+    { anahtar: "atilan", ad: t.atilan, renk: "#16a34a" },
+    { anahtar: "bekleyen", ad: t.bekleyen, renk: "#f5c400" },
+  ]
 
   if (durumQ.isPending) return <p className="text-sm text-muted-foreground">…</p>
   if (!durum) {
@@ -38,7 +43,18 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
             {t.donem}: {t.aylar[durum.ay - 1]} / {durum.yil}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
+          {/* 2026-10-31 kullanici: gonderilen rapor sayisinin rapor birimi toplamina orani (muaflar toplama girmez) */}
+          <div className="flex flex-wrap items-center gap-4">
+            <Halka
+              dilimler={seriler.map((s) => ({ ...s, deger: durum.toplam[s.anahtar as "atilan" | "bekleyen"] }))}
+              baslik={`%${durum.toplam.musteri ? Math.round((durum.toplam.atilan / durum.toplam.musteri) * 100) : 0}`}
+              alt={t.gonderimOrani}
+              boyut={136}
+              kalinlik={18}
+            />
+            <Lejant seriler={seriler} sayilar={durum.toplam} />
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs text-muted-foreground">
@@ -46,12 +62,13 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
                 <th scope="col" className="py-2 text-right font-medium">{t.toplamBirim}</th>
                 <th scope="col" className="py-2 text-right font-medium">{t.atilan}</th>
                 <th scope="col" className="py-2 text-right font-medium">{t.bekleyen}</th>
+                <th scope="col" className="py-2 text-right font-medium">{t.muaf}</th>
               </tr>
             </thead>
             <tbody>
               {durum.satirlar.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-4 text-center text-muted-foreground">
+                  <td colSpan={5} className="py-4 text-center text-muted-foreground">
                     {t.sonucYok}
                   </td>
                 </tr>
@@ -62,6 +79,7 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
                     <td className="py-2 text-right tabular-nums">{s.musteri}</td>
                     <td className="py-2 text-right tabular-nums">{s.atilan}</td>
                     <td className="py-2 text-right tabular-nums">{s.bekleyen}</td>
+                    <td className="py-2 text-right tabular-nums text-muted-foreground">{s.muaf}</td>
                   </tr>
                 ))
               )}
@@ -72,6 +90,7 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
                 <td className="py-2 text-right tabular-nums">{durum.toplam.musteri}</td>
                 <td className="py-2 text-right tabular-nums">{durum.toplam.atilan}</td>
                 <td className="py-2 text-right tabular-nums">{durum.toplam.bekleyen}</td>
+                <td className="py-2 text-right tabular-nums text-muted-foreground">{durum.toplam.muaf}</td>
               </tr>
             </tfoot>
           </table>

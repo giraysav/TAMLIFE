@@ -4,6 +4,8 @@ import type { Dil } from "@/shell/metin"
 export const TURLER = ["ozellik", "iyilestirme", "hata"] as const
 export const ONCELIKLER = ["dusuk", "orta", "yuksek", "kritik"] as const
 export const DURUMLAR = ["yeni", "incelemede", "planlandi", "yapiliyor", "tamamlandi", "reddedildi"] as const
+/** Talebin gelis yolu (2026-10-31): panel ya da e-posta (yoneten baskasi adina girer). */
+export const KANALLAR = ["panel", "eposta"] as const
 export const EKRANLAR = ["musteri", "utilizasyon", "takvim", "onedesk", "roller", "dashboard", "diger"] as const
 export type Tur = (typeof TURLER)[number]
 export type Oncelik = (typeof ONCELIKLER)[number]
@@ -28,6 +30,11 @@ const TR = {
   kabulIpucu: "Örn: Listede personel filtresi çalışıyorsa",
   ekran: "İlgili ekran",
   seciniz: "— Seçiniz —",
+  talepEden: "Talep eden",
+  kendim: "Kendim",
+  gelisYolu: "Geliş yolu",
+  kanal_: { panel: "Panel", eposta: "E-posta" } as Record<string, string>,
+  giren: (ad: string) => `Giren: ${ad}`,
   gonder: "Talebi Gönder",
   gonderiliyor: "Gönderiliyor…",
   eksik: "Başlık, “Şu an ne oluyor?” ve “Ne olmasını istiyorsunuz?” alanları zorunlu.",
@@ -81,6 +88,8 @@ const TR = {
     durum: "Durum",
     oncelik: "Önem",
     atanan_id: "Atanan",
+    talep_eden_id: "Talep eden",
+    kanal: "Geliş yolu",
     hedef_surum: "Hedef sürüm",
     admin_notu: "Yönetici notu",
   } as Record<string, string>,
@@ -104,6 +113,11 @@ const EN: typeof TR = {
   kabulIpucu: "E.g. the staff filter works in the list",
   ekran: "Related screen",
   seciniz: "— Select —",
+  talepEden: "Requested by",
+  kendim: "Myself",
+  gelisYolu: "Received via",
+  kanal_: { panel: "Panel", eposta: "E-mail" },
+  giren: (ad: string) => `Entered by: ${ad}`,
   gonder: "Send request",
   gonderiliyor: "Sending…",
   eksik: "Title, “What happens now?” and “What should happen?” are required.",
@@ -156,6 +170,8 @@ const EN: typeof TR = {
     durum: "Status",
     oncelik: "Priority",
     atanan_id: "Assignee",
+    talep_eden_id: "Requested by",
+    kanal: "Received via",
     hedef_surum: "Target version",
     admin_notu: "Manager note",
   },

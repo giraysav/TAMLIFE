@@ -4,8 +4,7 @@ Uretim karsiliklari: kutucuklar/rapor/aylik.py (taslak, gonderim, geri alma), ra
 durum ozeti), blueprints/customer_bp.py (rapor_alicilari, aylik_rapor_taslak, send_customer_report_email,
 aylik_rapor_geri_al). Iletiyi gonderen her zaman personeldir.
 Gonderim, Outlook taslagini (.eml, rapor/eposta.py) da uretir; panel iletiyi gondermez, Gonder'e personel basar.
-RAPOR_GONDERIM_KIPI=smtp ise (varsayilan kapali) ileti TAMLIFE@ kutusundan sunucudan gider (rapor/smtp_gonderim.py);
-teslim edilemezse gonderim kaydi olusmaz.
+SMTP kipi (TAMLIFE@ kutusundan sunucu gonderimi) 2026-10-31 kullanici karariyla kaldirildi.
 Gonderim kaydi, kilit ve PDF arsivi vardir. Ay UTC'ye gore belirlenir.
 Donem: bir ayda gonderilen rapor ONCEKI ayin raporudur (Ekim'de Eylul); ayda tek rapor kurali o doneme uygulanir.
 Takip: gonderimde formdaki tum alanlar o donemin taslagina yazilir (rapor sonradan da okunur). Yeni donemde taslak yoksa
@@ -36,7 +35,7 @@ from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, R
 from app.musteri.servis import MusteriHata, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
-from app.rapor import ceviri, eposta, sla, sla_analiz, smtp_gonderim
+from app.rapor import ceviri, eposta, sla, sla_analiz
 from app.rapor import metin as rapor_metin
 from app.session import Principal
 
@@ -56,9 +55,21 @@ def simdi() -> datetime:
     return datetime.now(UTC)
 
 
-def donem() -> tuple[int, int]:
-    """Bu ay hazirlanan raporun donemi: onceki ay."""
-    return rapor_donemi(simdi())
+def secilebilir_donemler() -> list[tuple[int, int]]:
+    """Rapor hazirlanabilen donemler: onceki ay (varsayilan) ve icinde bulunulan ay (ay sonunda erken hazirlik; 2026-10-31 kullanici).
+    Daha eski aylar kapali kalir; ayda tek gonderim kurali her doneme ayri uygulanir."""
+    an = simdi()
+    return [rapor_donemi(an), (an.year, an.month)]
+
+
+def donem(secim: str | None = None) -> tuple[int, int]:
+    """Hazirlanan raporun donemi: secim yoksa onceki ay; 'YYYY-MM' verilirse secilebilir_donemler()den biri olmali."""
+    if not secim:
+        return rapor_donemi(simdi())
+    for yil, ay in secilebilir_donemler():
+        if secim == f"{yil}-{ay:02d}":
+            return yil, ay
+    raise RaporHata(400, m("Bu dönem için rapor hazırlanamaz.", "A report cannot be prepared for this period."))
 
 
 def rapor_klasoru() -> Path:
@@ -117,6 +128,16 @@ def ayri_rapor_ayarla(db: Session, user: Principal, musteri_id: int, deger: obje
     musteri.separate_report = deger
     db.flush()
     return {"ayri_rapor": deger}
+
+
+def rapor_muaf_ayarla(db: Session, user: Principal, musteri_id: int, deger: object) -> dict:
+    """Kartta 'raporu atilmamaktadir' isareti: isaretli birim durum ozetinde bekleyen sayilmaz, ayri 'muaf' sutununda gorunur."""
+    musteri = musteri_yaz_getir(db, user, musteri_id)
+    if not isinstance(deger, bool):
+        raise RaporHata(400, m("Seçim evet ya da hayır olmalı.", "The choice must be yes or no."))
+    musteri.report_exempt = deger
+    db.flush()
+    return {"rapor_muaf": deger}
 
 
 # --- taslak ----------------------------------------------------------------------------------------
@@ -206,13 +227,13 @@ def _taslak_yaz(db: Session, user: Principal, musteri_id: int, yil: int, ay: int
     return zaman
 
 
-def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
+def taslak_getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None = None) -> dict:
     """Donemin taslagi: kayitli alanlar uzerine hazir baslangic metinleri.
 
     Hazir metinler IKI dilde de doner (`varsayilanlar`): rapor dili degisince ekran, personelin degistirmedigi her alani
     o dilin karsiligiyla degistirir. Kayitli taslak yoksa rapor dili panelin dilidir."""
     musteri = musteri_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     satir = db.get(ReportDraft, (musteri.id, yil, ay))
     kayitli = satir.fields if satir and isinstance(satir.fields, dict) else {}
     devreden, devreden_donem = ({}, None) if satir is not None else _devreden(db, user, musteri, yil, ay)
@@ -224,6 +245,8 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
         "yil": yil,
         "ay": ay,
         "birim": rapor_birimi_mi(musteri),
+        "donemler": [f"{y}-{a:02d}" for y, a in secilebilir_donemler()],
+        "ay_bitmedi": (yil, ay) == (simdi().year, simdi().month),  # icinde bulunulan ay: SLA/alarm verisi eksik olabilir
         "alanlar": {**varsayilanlar[dil], **kayitli, "dil": dil},
         "varsayilanlar": varsayilanlar,
         "sla": sla.ozet(sla.oku(musteri.id, yil, ay)),
@@ -233,15 +256,14 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int) -> dict:
         "zaman": satir.updated_at.isoformat() if satir and satir.updated_at else None,
         "alicilar": alicilar_getir(db, musteri.id),
         "gonderim": gonderim_ozeti(gonderim) if gonderim else None,
-        "gonderim_kipi": smtp_gonderim.kip(),
         # profil imzasi varsa ileti onu tasir; formdaki imza alani yalniz yedektir (arayuz bilgi gosterir)
         "profil_imza": bool(kisi_imzasi(db.scalar(select(AppUser).where(AppUser.username == user.username)))),
     }
 
 
-def taslak_kaydet(db: Session, user: Principal, musteri_id: int, alanlar: object) -> dict:
+def taslak_kaydet(db: Session, user: Principal, musteri_id: int, alanlar: object, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     onceki = aktif_gonderim(db, musteri.id, yil, ay)
     if onceki:
         raise RaporHata(409, m("Bu dönemin raporu gönderildi; taslak değiştirilemez.", "The report for this period was sent; the draft cannot be changed."), {"kilitli": True})
@@ -277,12 +299,12 @@ def _pdf_yaz(musteri_id: int, yil: int, ay: int, veri: bytes) -> tuple[str, int,
     return f"{yil}/{ay:02d}/{ad}", len(veri), hashlib.sha256(veri).hexdigest()
 
 
-def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
+def gonder(db: Session, user: Principal, musteri_id: int, govde: dict, donem_kodu: str | None = None) -> dict:
     """ONAYLI aylik rapor gonderimi: ayda TEK rapor. Onay zorunlu, bu ay gonderilmisse 409."""
     musteri = musteri_yaz_getir(db, user, musteri_id)
     if govde.get("onay") is not True:
         raise RaporHata(400, m("Rapor gönderimi için onay gerekli.", "Confirmation is required to send the report."))
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     onceki = aktif_gonderim(db, musteri.id, yil, ay)
     if onceki:
         raise RaporHata(
@@ -303,13 +325,9 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
     konu = " ".join(str(govde.get("subject") or rapor_metin.mail_konusu(musteri.name, ay, yil, dil)).split())[:200]
     pdf = _pdf_coz(govde.get("pdf_base64"))
     sla_ek = sla.excel_dosyasi(musteri.id, yil, ay)
-    smtp = smtp_gonderim.kip() == "smtp"
-    if smtp and not kime:
-        raise RaporHata(400, m("Alıcılar: en az bir 'Kime' adresi gerekli.", "Recipients: at least one 'To' address is required."))
     ileti, ileti_adi, ek_adlari = _ileti(
-        db, user, musteri, yil, ay, govde, konu, kime, bilgi, pdf, sla_ek, sla.ek_dosyalari(musteri.id, yil, ay), taslak=not smtp
+        db, user, musteri, yil, ay, govde, konu, kime, bilgi, pdf, sla_ek, sla.ek_dosyalari(musteri.id, yil, ay)
     )
-    teslim: dict = {}
     kisi = kullanici_kaydi(db, user)
     zaman = simdi()
     dosya: tuple[str, int, str] | None = None
@@ -350,22 +368,18 @@ def gonder(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
             )
             db.execute(update(Customer).where(Customer.id == musteri.id).values(report_count=func.coalesce(Customer.report_count, 0) + 1))
             db.flush()
-            # SMTP: kayit (ve ayda-tek kilidi) flush'ta dogrulandiktan SONRA teslim; hata islemi geri alir, kayit kalmaz.
-            if smtp:
-                try:
-                    teslim = smtp_gonderim.gonder(ileti, kime + bilgi)
-                except smtp_gonderim.EpostaHata:
-                    if dosya is not None:
-                        (rapor_klasoru() / dosya[0]).unlink(missing_ok=True)  # kayit geri alinir, arsiv PDF'i yetim kalmasin
-                    raise
     except IntegrityError as exc:  # esZamanli ikinci gonderim kismi benzersiz indekse takilir
         raise RaporHata(409, m("Bu dönemin raporu az önce gönderildi. Ayda yalnız bir rapor gönderilebilir.", "The report for this period was just sent. Only one report can be sent per month."), {"kilitli": True}) from exc
     gonderim = aktif_gonderim(db, musteri.id, yil, ay)
     assert gonderim is not None
-    sonuc = {"gonderim": gonderim_ozeti(gonderim), "kime": kime, "bilgi": bilgi, "ekler": ek_adlari, "kip": "smtp" if smtp else "eml"}
-    if smtp:
-        return {**sonuc, "reddedilen": teslim.get("reddedilen", [])}
-    return {**sonuc, "eml_adi": ileti_adi, "eml_base64": base64.b64encode(ileti).decode("ascii")}
+    return {
+        "gonderim": gonderim_ozeti(gonderim),
+        "kime": kime,
+        "bilgi": bilgi,
+        "ekler": ek_adlari,
+        "eml_adi": ileti_adi,
+        "eml_base64": base64.b64encode(ileti).decode("ascii"),
+    }
 
 
 GONDERIM_ARIZASI = "TL-RAP-01"
@@ -400,9 +414,8 @@ def _ileti(
     pdf: bytes | None,
     sla_ek: tuple[bytes, str] | None = None,
     ek_dosyalar: list[tuple[bytes, str, str]] | None = None,
-    taslak: bool = True,
 ) -> tuple[bytes, str, list[str]]:
-    """Outlook taslagi (taslak=False: SMTP ile gidecek ileti, Reply-To personel). Metin istekten; yoksa bu ayin kayitli
+    """Outlook taslagi. Metin istekten; yoksa bu ayin kayitli
     taslagindan; o da yoksa hazir metin (taslak_getir ile ayni).
 
     Rapor dili yalniz SABIT metinleri etkiler; personelin yazdigi govde oldugu gibi gider (uretim kurali)."""
@@ -433,13 +446,8 @@ def _ileti(
             govde_metin=eposta.duz_metin(metin, imza),
             kime=kime,
             bilgi=bilgi,
-            gonderen_adres=eposta.gonderen(user.username),
             ekler=ekler,
-            taslak=taslak,
             satir_ici=satir_ici,
-            # 2026-10-26: Reply-To yazilmaz. kisi_adresi() oturum adindan UPN uretir (<ad>@AD_DOMAIN = turkcell.entp.tgc), bu bir
-            # posta kutusu degil; musteri yaniti geri donerdi. Yanit From'a (TAMLIFE@) gider (docs/eposta-gonderimi.md alternatifi).
-            yanit=None,
         )
     except ValueError as exc:  # baslikta CR/LF vb.
         raise RaporHata(400, m("İleti başlığında geçersiz karakter.", "Invalid character in the message header.")) from exc
@@ -452,10 +460,10 @@ def _sla_kilidi(db: Session, musteri_id: int, yil: int, ay: int) -> None:
         raise RaporHata(409, m("Bu dönemin raporu gönderildi; ekler değiştirilemez.", "The report for this period was sent; attachments cannot be changed."), {"kilitli": True})
 
 
-def sla_getir(db: Session, user: Principal, musteri_id: int) -> dict:
+def sla_getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None = None) -> dict:
     """Donemin SLA analizi (grafikler) ve elle eklenen gorseller. Grafik sayisinda sinir yoktur."""
     musteri = musteri_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     kayit = sla.oku(musteri.id, yil, ay)
     return {
         "yil": yil,
@@ -468,9 +476,9 @@ def sla_getir(db: Session, user: Principal, musteri_id: int) -> dict:
     }
 
 
-def sla_yukle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_adi: str) -> dict:
+def sla_yukle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_adi: str, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     _sla_kilidi(db, musteri.id, yil, ay)
     if not veri:
         raise RaporHata(400, m("Excel dosyası seçilmedi.", "No Excel file was selected."))
@@ -480,50 +488,50 @@ def sla_yukle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_
     return sla_getir(db, user, musteri.id)
 
 
-def sla_sil(db: Session, user: Principal, musteri_id: int) -> dict:
+def sla_sil(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.excel_sil(musteri.id, yil, ay)
     return sla_getir(db, user, musteri.id)
 
 
-def gorsel_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, baslik: str) -> dict:
+def gorsel_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, baslik: str, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.gorsel_ekle(musteri.id, yil, ay, veri, baslik, user.username)
     return sla_getir(db, user, musteri.id)
 
 
-def gorsel_sil(db: Session, user: Principal, musteri_id: int, numara: int) -> dict:
+def gorsel_sil(db: Session, user: Principal, musteri_id: int, numara: int, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.gorsel_sil(musteri.id, yil, ay, numara)
     return sla_getir(db, user, musteri.id)
 
 
-def dosya_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_adi: str) -> dict:
+def dosya_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_adi: str, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.dosya_ekle(musteri.id, yil, ay, veri, dosya_adi, user.username)
     return sla_getir(db, user, musteri.id)
 
 
-def dosya_sil(db: Session, user: Principal, musteri_id: int, numara: int) -> dict:
+def dosya_sil(db: Session, user: Principal, musteri_id: int, numara: int, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     _sla_kilidi(db, musteri.id, yil, ay)
     sla.dosya_sil(musteri.id, yil, ay, numara)
     return sla_getir(db, user, musteri.id)
 
 
-def sla_analizi(db: Session, user: Principal, musteri_id: int, govde: dict) -> dict:
+def sla_analizi(db: Session, user: Principal, musteri_id: int, govde: dict, donem_kodu: str | None = None) -> dict:
     """SLA Excel'inin tum verisinin analizi: yerlesik ozet (her zaman) + istenirse YZ yorumu. Rapor diline gore metin."""
     musteri = musteri_yaz_getir(db, user, musteri_id)
-    yil, ay = donem()
+    yil, ay = donem(donem_kodu)
     dosya = sla.excel_dosyasi(musteri.id, yil, ay)
     if dosya is None:
         raise RaporHata(404, m("Önce bu dönemin SLA Excel'ini yükleyin.", "Upload this period's SLA Excel first."))
@@ -590,7 +598,8 @@ def gonderimler(db: Session, user: Principal, musteri_id: int | None = None, yil
 def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
     """TAM basina rapor birimi sayisi ve bu ayin atilan/bekleyen rapor sayisi (uretim _build_rapor_durumu).
     Catisina dahil bir istirak icin hazirlanan rapor CATININ raporu sayilir. Satirlar tek personel kumesidir (app.kullanicilar.personel):
-    yonetici icin raporu olmayan personel de 0 satiridir; sahibi yonetici/admin ya da bos olan birimler tek '-' satirinda toplanir."""
+    yonetici icin raporu olmayan personel de 0 satiridir; sahibi yonetici/admin ya da bos olan birimler tek '-' satirinda toplanir.
+    'Raporu atilmamaktadir' isaretli birimler musteri/atilan/bekleyen'e girmez, yalniz 'muaf' sayilir."""
     tum = {c.id: c for c in db.scalars(select(Customer))}  # 2026-10-20: herkes tum musterileri gorur
     musteriler = list(tum.values())
     atilanlar: set[int] = set()
@@ -602,13 +611,16 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
     satirlar: dict[int | None, dict] = {}
     if yonetici_mi(user):
         for kimlik, ad in kisiler.items():
-            satirlar[kimlik] = {"id": kimlik, "ad": ad, "musteri": 0, "atilan": 0, "bekleyen": 0}
+            satirlar[kimlik] = {"id": kimlik, "ad": ad, "musteri": 0, "atilan": 0, "bekleyen": 0, "muaf": 0}
     for c in musteriler:
         if not rapor_birimi_mi(c):
             continue
         sahip = c.owner_id if c.owner_id in kisiler else None
-        satir = satirlar.setdefault(sahip, {"id": sahip, "ad": kisiler[sahip] if sahip else "-", "musteri": 0, "atilan": 0, "bekleyen": 0})
+        satir = satirlar.setdefault(sahip, {"id": sahip, "ad": kisiler[sahip] if sahip else "-", "musteri": 0, "atilan": 0, "bekleyen": 0, "muaf": 0})
+        if c.report_exempt:  # raporu atilmayan musteri: toplama ve bekleyene girmez (rapor_bekleniyor_mu)
+            satir["muaf"] += 1
+            continue
         satir["musteri"] += 1
         satir["atilan" if c.id in atilanlar else "bekleyen"] += 1
     sirali = sorted(satirlar.values(), key=lambda s: (s["id"] is None, tr_kucuk(s["ad"])))  # "-" satiri hep sonda
-    return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen")}}
+    return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen", "muaf")}}

@@ -41,7 +41,11 @@ const TALEP = {
   kabul_olcutu: "",
   durum: "planlandi",
   acik: true,
+  talep_eden_id: 2,
   talep_eden: "Ayse Test",
+  talep_eden_kullanici: "ayse.test",
+  giren: "",
+  kanal: "panel",
   olusturuldu: "2026-10-01T08:00:00Z",
   guncellendi: null,
   hedef_surum: "3.6.0",
@@ -59,6 +63,8 @@ describe("Gelistirme Talepleri sayfasi", () => {
     expect(screen.getAllByText("Planlandı").some((e) => e.tagName === "SPAN")).toBe(true)  // rozet (secenek degil)
     expect(screen.getAllByText("Müşteri Yönetimi").some((e) => e.tagName === "DIV")).toBe(true)
     expect(screen.queryByRole("columnheader", { name: "Atanan" })).not.toBeInTheDocument()
+    expect(screen.getByText("ayse.test")).toBeInTheDocument()  // talep edenin kullanici adi
+    expect(screen.queryByLabelText("Talep eden")).not.toBeInTheDocument()  // uye baskasi adina giremez
 
     fireEvent.change(screen.getByPlaceholderText("Tek cümleyle ne istiyorsunuz?"), { target: { value: "Yeni rapor" } })
     fireEvent.click(screen.getByRole("button", { name: /Talebi Gönder/ }))
@@ -71,6 +77,7 @@ describe("Gelistirme Talepleri sayfasi", () => {
     expect(await screen.findByText(/Talebiniz alındı/)).toBeInTheDocument()
     const post = cagrilar.find((c) => c.yontem === "POST")
     expect(post?.govde).toMatchObject({ baslik: "Yeni rapor", tur: "ozellik", oncelik: "orta", mevcut_durum: "Yok", beklenen_durum: "Olsun" })
+    expect(post?.govde).not.toHaveProperty("talep_eden_id")
   })
 
   it("yonetici: Is Listesi + acik sayisi, durum degisikligi PATCH ile gider, gecmis acilir, admin silebilir", async () => {
@@ -78,8 +85,8 @@ describe("Gelistirme Talepleri sayfasi", () => {
       yonetebilir: true,
       silebilir: true,
       acik_sayisi: 3,
-      kisiler: [{ id: 2, ad: "Ayse Test" }],
-      talepler: [{ ...TALEP, gecmis: [{ zaman: "2026-10-02T09:00:00Z", yapan: "Mudur", alan: "durum", eski: "yeni", yeni: "planlandi" }] }],
+      kisiler: [{ id: 2, ad: "Ayse Test", kullanici: "ayse.test" }, { id: 3, ad: "Mudur", kullanici: "mudur" }],
+      talepler: [{ ...TALEP, kanal: "eposta", giren: "Mudur", gecmis: [{ zaman: "2026-10-02T09:00:00Z", yapan: "Mudur", alan: "durum", eski: "yeni", yeni: "planlandi" }] }],
     }
     const cagrilar = sahteSunucu(liste)
     vi.stubGlobal("confirm", vi.fn(() => true))
@@ -91,6 +98,19 @@ describe("Gelistirme Talepleri sayfasi", () => {
     await waitFor(() => expect(cagrilar.find((c) => c.yontem === "PATCH")?.govde).toEqual({ durum: "yapiliyor" }))
     expect(cagrilar.find((c) => c.yontem === "PATCH")?.yol).toContain("/api/v1/talep/7")
     expect(await screen.findByText("✓ Kaydedildi")).toBeInTheDocument()
+
+    expect(screen.getByText("Giren: Mudur")).toBeInTheDocument()
+    expect(screen.getAllByText("E-posta").some((e) => e.tagName === "SPAN")).toBe(true)
+    fireEvent.change(screen.getByLabelText("Talep eden: Personel süzgeci"), { target: { value: "3" } })
+    await waitFor(() => expect(cagrilar.filter((c) => c.yontem === "PATCH").at(-1)?.govde).toEqual({ talep_eden_id: 3 }))
+    // e-postayla gelen talep baskasi adina girilir
+    fireEvent.change(screen.getByLabelText("Talep eden"), { target: { value: "2" } })
+    fireEvent.change(screen.getByLabelText("Geliş yolu"), { target: { value: "eposta" } })
+    fireEvent.change(screen.getByPlaceholderText("Tek cümleyle ne istiyorsunuz?"), { target: { value: "Maille gelen" } })
+    fireEvent.change(screen.getByPlaceholderText("Mevcut davranış veya eksiklik"), { target: { value: "Yok" } })
+    fireEvent.change(screen.getByPlaceholderText("Beklediğiniz davranış"), { target: { value: "Olsun" } })
+    fireEvent.click(screen.getByRole("button", { name: /Talebi Gönder/ }))
+    await waitFor(() => expect(cagrilar.find((c) => c.yontem === "POST")?.govde).toMatchObject({ baslik: "Maille gelen", talep_eden_id: 2, kanal: "eposta" }))
 
     fireEvent.click(screen.getByRole("button", { name: "Personel süzgeci: değişiklik geçmişi" }))
     expect(screen.getByRole("listitem").textContent).toMatch(/Mudur · Durum: Yeni → Planlandı/)

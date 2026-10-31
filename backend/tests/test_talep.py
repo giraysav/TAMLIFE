@@ -128,3 +128,65 @@ def test_ek_yetkiyle_uye_de_yonetir(client, monkeypatch):
     assert client.patch(f"/api/v1/talep/{talep_id}", json={"oncelik": "kritik"}, headers=hdr).status_code == 200
     with Session(engine()) as db:
         assert db.scalar(select(AppUser.display_name).where(AppUser.username == "ayse")) == "ayse"
+
+
+def _kimlik(kullanici: str) -> int:
+    with Session(engine()) as db:
+        return db.scalar(select(AppUser.id).where(AppUser.username == kullanici))
+
+
+def test_talep_eden_secilir_eposta_kanali_ve_ad_kullanici_adi(client, monkeypatch):
+    """2026-10-31 kullanici: talep e-postayla da gelebilir; yoneten talep edeni secer, listede ad ve kullanici adi gorunur."""
+    _giris(client, monkeypatch, "ayse", "TeamMember")  # ayse'nin kullanici satiri olussun
+    ayse = _kimlik("ayse")
+    hdr = _giris(client, monkeypatch, "ayse", "TeamMember")
+    assert client.post("/api/v1/talep", json={**TALEP, "talep_eden_id": ayse, "kanal": "eposta"}, headers=hdr).status_code == 403  # uye baskasi adina giremez
+    hdr = _giris(client, monkeypatch, "mudur", "TeamMngr")
+    assert client.post("/api/v1/talep", json={**TALEP, "talep_eden_id": 99999}, headers=hdr).status_code == 400
+    talep_id = _ac(client, hdr, talep_eden_id=ayse, kanal="eposta")
+    satir = next(s for s in _liste(client)["talepler"] if s["id"] == talep_id)
+    assert (satir["talep_eden_id"], satir["talep_eden"], satir["talep_eden_kullanici"], satir["kanal"], satir["giren"]) == (ayse, "ayse", "ayse", "eposta", "mudur")
+    assert {"id": ayse, "ad": "ayse", "kullanici": "ayse"} in _liste(client)["kisiler"]
+    kendi = _ac(client, hdr, baslik="Kendi talebim")
+    satir = next(s for s in _liste(client)["talepler"] if s["id"] == kendi)
+    assert satir["talep_eden_kullanici"] == "mudur" and satir["giren"] == "" and satir["kanal"] == "panel"
+    # sonradan duzeltme: talep eden degisir, gecmise ad yazilir; bos birakilamaz
+    assert client.patch(f"/api/v1/talep/{kendi}", json={"talep_eden_id": ayse}, headers=hdr).json()["data"]["degisen"] == ["talep_eden_id"]
+    assert client.patch(f"/api/v1/talep/{kendi}", json={"talep_eden_id": None}, headers=hdr).status_code == 400
+    gecmis = next(s for s in _liste(client)["talepler"] if s["id"] == kendi)["gecmis"]
+    assert {"alan": "talep_eden_id", "eski": "mudur", "yeni": "ayse"}.items() <= gecmis[-1].items()
+    # uye adina girilen talebi (ve talep eden yapildigi talebi) kendi listesinde gorur
+    _giris(client, monkeypatch, "ayse", "TeamMember")
+    assert {s["id"] for s in _liste(client, "")["talepler"]} == {talep_id, kendi}
+
+
+def test_durum_degisince_talep_sahibine_bildirim(client, monkeypatch):
+    """2026-10-31 kullanici: incelemede / tamamlandi gibi degisiklik talep sahibine ust cubuk bildirimi olarak gider."""
+    hdr = _giris(client, monkeypatch, "ayse", "TeamMember")
+    talep_id = _ac(client, hdr)
+    assert client.get("/api/v1/bildirim").json()["data"] == {"okunmamis": 0, "son": []}
+    hdr = _giris(client, monkeypatch, "mudur", "TeamMngr")
+    assert client.patch(f"/api/v1/talep/{talep_id}", json={"durum": "incelemede"}, headers=hdr).status_code == 200
+    assert client.patch(f"/api/v1/talep/{talep_id}", json={"atanan_id": _kimlik("mudur")}, headers=hdr).status_code == 200  # atama bildirim uretmez
+    assert client.patch(f"/api/v1/talep/{talep_id}", json={"durum": "tamamlandi", "hedef_surum": "3.6"}, headers=hdr).status_code == 200
+    assert client.get("/api/v1/bildirim").json()["data"]["okunmamis"] == 0  # bildirimler talep sahibinindir
+    hdr = _giris(client, monkeypatch, "ayse", "TeamMember")
+    veri = client.get("/api/v1/bildirim").json()["data"]
+    assert veri["okunmamis"] == 2 and [b["adres"] for b in veri["son"]] == ["#/talep", "#/talep"]
+    assert veri["son"][0]["mesaj"].endswith("durum İncelemede → Tamamlandı, hedef sürüm 3.6")
+    assert "durum Yeni → İncelemede" in veri["son"][1]["mesaj"]
+    assert client.post("/api/v1/bildirim/okundu", json={"ids": [veri["son"][1]["id"]]}, headers=hdr).json()["data"] == {"okundu": 1}
+    assert client.get("/api/v1/bildirim").json()["data"]["okunmamis"] == 1
+    assert client.post("/api/v1/bildirim/okundu", json={}, headers=hdr).json()["data"] == {"okundu": 1}
+    assert client.get("/api/v1/bildirim").json()["data"]["okunmamis"] == 0
+    # baskasinin bildirimini okundu yapamaz
+    _giris(client, monkeypatch, "mudur", "TeamMngr")
+    hdr = {"X-CSRF-Token": client.cookies.get("tamlife_csrf") or ""}
+    assert client.post("/api/v1/bildirim/okundu", json={"ids": [veri["son"][0]["id"]]}, headers=hdr).json()["data"] == {"okundu": 0}
+
+
+def test_kendi_degisikligi_bildirim_uretmez(client, monkeypatch):
+    hdr = _giris(client, monkeypatch, "mudur", "TeamMngr")
+    talep_id = _ac(client, hdr)
+    assert client.patch(f"/api/v1/talep/{talep_id}", json={"durum": "yapiliyor"}, headers=hdr).status_code == 200
+    assert client.get("/api/v1/bildirim").json()["data"]["okunmamis"] == 0

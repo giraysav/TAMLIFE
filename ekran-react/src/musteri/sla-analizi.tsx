@@ -33,7 +33,7 @@ export function yzBol(metin: string): AnalizMetni {
 
 /** Uretim ats_analizi: SLA Excel'i ozetlenir ve metin dogrudan Bilgilendirmeler / Devam Eden Calismalar alanlarina yazilir. */
 export function SlaAnalizi({
-  taban,
+  adres,
   t,
   dil,
   slaVar,
@@ -41,7 +41,7 @@ export function SlaAnalizi({
   kilitli,
   onYaz,
 }: {
-  taban: string
+  adres: (yol: string, sorgu?: Record<string, string>) => string
   t: ReturnType<typeof musteriMetin>
   dil: "tr" | "en"
   slaVar: boolean
@@ -56,7 +56,7 @@ export function SlaAnalizi({
     setMesgul(yz ? "yz" : "ozet")
     setMesaj("")
     try {
-      const s = await yaz<AnalizSonucu>("POST", `${taban}/sla/analiz`, { dil, yz })
+      const s = await yaz<AnalizSonucu>("POST", adres("/sla/analiz"), { dil, yz })
       const yzMetni = yz && s.yz.yorum ? yzBol(s.yz.yorum) : null
       onYaz({ bilgi: yzMetni?.bilgi || s.ozet.bilgi, devam: yzMetni?.devam || s.ozet.devam })
       const acik = Object.values(s.analiz.acik_toplam ?? {}).reduce((a, b) => a + b, 0)

@@ -17,6 +17,7 @@ from app.models import (
     ReportDispatch,
     ScoreApprovalRequest,
     ScoringExclusion,
+    UserNotification,
 )
 from app.session import Principal
 from tests.conftest import login_ok
@@ -137,7 +138,7 @@ def test_silme_bagli_kayitlari_devreder_bosaltir_ve_siler(client, monkeypatch):
         baskasinin = Customer(external_key="c2", name="Beta Ltd.", owner_id=diger)
         db.add_all([musteri, baskasinin])
         db.flush()
-        talep = Demand(title="T", current_state="a", expected_state="b", opened_by_id=hedef, assignee_id=hedef, opened_at=SIMDI)
+        talep = Demand(title="T", current_state="a", expected_state="b", opened_by_id=hedef, assignee_id=hedef, requester_id=hedef, opened_at=SIMDI)
         db.add(talep)
         db.flush()
         db.add_all(
@@ -150,6 +151,8 @@ def test_silme_bagli_kayitlari_devreder_bosaltir_ve_siler(client, monkeypatch):
                 ReportDispatch(customer_id=musteri.id, year=2026, month=9, sender_id=hedef, status="sent"),
                 ProjectItem(owner_id=diger, category="proje", title="Baskasinin", created_at=SIMDI, updated_at=SIMDI),
                 ScoringExclusion(user_id=diger),
+                UserNotification(user_id=hedef, kind="talep", message="m", link="", created_at=SIMDI),
+                UserNotification(user_id=diger, kind="talep", message="m", link="", created_at=SIMDI),
             ]
         )
         db.commit()
@@ -158,9 +161,10 @@ def test_silme_bagli_kayitlari_devreder_bosaltir_ve_siler(client, monkeypatch):
     r = client.delete(f"/api/v1/roller/kisiler/{hedef}", headers=hdr)
     assert r.status_code == 200, r.text
     ozet = r.json()["data"]
-    # bos olabilen baglar: customer.owner_id, demand.assignee_id, demand_log.actor_id, score_approval_request.resolved_by, report_dispatch.sender_id
-    # zorunlu baglar (devir): demand.opened_by_id, project_item.owner_id, report.user_id, score_approval_request.requested_by
-    assert (ozet["bosaltilan"], ozet["devredilen"], ozet["silinen"]) == (5, 4, 1)
+    # bos olabilen baglar: customer.owner_id, demand.assignee_id, demand.requester_id, demand_log.actor_id, score_approval_request.resolved_by,
+    # report_dispatch.sender_id; zorunlu baglar (devir): demand.opened_by_id, project_item.owner_id, report.user_id,
+    # score_approval_request.requested_by; silinen: scoring_exclusion, user_notification
+    assert (ozet["bosaltilan"], ozet["devredilen"], ozet["silinen"]) == (6, 4, 2)
     assert kapatilan == ["ayse.demir"]  # acik oturumlari da kapanir
 
     with Session(engine()) as db:
@@ -170,6 +174,9 @@ def test_silme_bagli_kayitlari_devreder_bosaltir_ve_siler(client, monkeypatch):
         assert db.get(Customer, baskasinin_id).owner_id == diger
         t = db.get(Demand, talep_id)
         assert t.opened_by_id == admin_id and t.assignee_id is None  # talep kaydi korunur, silen hesaba devredilir
+        assert t.requester_id is None  # talep eden bosalir (ekranda giren kisi gorunur)
+        assert db.scalar(select(func.count()).select_from(UserNotification).where(UserNotification.user_id == hedef)) == 0  # devredilmez, silinir
+        assert db.scalar(select(func.count()).select_from(UserNotification).where(UserNotification.user_id == diger)) == 1
         assert db.scalar(select(DemandLog.actor_id).where(DemandLog.demand_id == talep_id)) is None
         assert db.scalar(select(ProjectItem.owner_id).where(ProjectItem.title == "P")) == admin_id
         assert db.scalar(select(Report.user_id).where(Report.customer_id == musteri_id)) == admin_id  # gonderim gecmisi (rapor) silinmez
@@ -205,6 +212,8 @@ def test_silme_app_user_baglarinin_hepsini_kapsar():
         ("score_approval_request", "resolved_by"),
         ("report_dispatch", "sender_id"),
         ("revenue_benefit_person", "user_id"),
+        ("demand", "requester_id"),  # bos olabilir: bosaltilir, talep eden giren kisiye duser
+        ("user_notification", "user_id"),  # kisiye ozel: silinir (KISIYE_OZEL_TABLOLAR)
     }, "app_user'a yeni bir baglanti eklendi: kullanicilar.sil ona gore (bosalt / devret / sil) dogru davranmali; sonra bu listeyi guncelleyin"
 
 

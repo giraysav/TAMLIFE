@@ -70,6 +70,7 @@ const TR = {
   ayriRapor: "Ayrı aylık rapor",
   ayriRaporVar: "Kendi aylık raporu var",
   catiRaporunaDahil: "Çatının raporuna dahil",
+  raporMuaf: "Raporu atılmamaktadır",
   satisEkibi: "Satış ekibi",
   satis: "Satış Yöneticisi",
   presales: "Presales",
@@ -86,6 +87,7 @@ const TR = {
   raporAltBasligi: "Rapor bir önceki ayı kapsar. Alanları düzenleyin, taslağı kaydedin; rapor onayınızla ve ayda yalnızca bir kez gönderilir.",
   donem: "Dönem",
   raporDonemi: "Rapor dönemi",
+  ayBitmedi: "Bu ay henüz bitmedi: SLA ve alarm verileri eksik olabilir. Raporu göndermeden önce verileri kontrol edin.",
   aylar: ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
   buAyGonderildi: "Bu dönemin raporu gönderildi.",
   aydaTek: "Ayda yalnız bir rapor gönderilebilir.",
@@ -115,10 +117,6 @@ const TR = {
   alicilarAyrac: "Adresleri ; ile ayırın (en fazla 20).",
   alicilariKaydet: "Alıcıları kaydet",
   emlNot: "Gönderim, Outlook taslağını (.eml) indirir: rapor PDF'i, SLA Excel'i ve ek dosyalar ekindedir. Açıp kontrol edin, Gönder'e Outlook'ta siz basarsınız.",
-  smtpNot: "Rapor, TAMLIFE@turkcell.com.tr adresinden panel tarafından gönderilir; müşterinin yanıtı size gelir (Reply-To). PDF, SLA Excel'i ve ek dosyalar iletiye eklenir.",
-  smtpOnay: "İleti TAMLIFE@turkcell.com.tr adresinden hemen gönderilecek; geri çağrılamaz.",
-  epostaGitti: (reddedilen: string[]) =>
-    reddedilen.length ? `Rapor gönderildi; şu alıcılara iletilemedi: ${reddedilen.join(", ")}` : "Rapor e-posta ile gönderildi.",
   // SLA Excel'i ve ek grafikler
   sla: "SLA Raporu",
   slaAciklama: "OneDesk SLA Excel'i: kapanan alarm, şikayet ve talep adetleri ile süre ortalamaları rapora grafik olarak girer; dosya iletiye eklenir.",
@@ -180,6 +178,8 @@ const TR = {
   atilan: "Atılan",
   bekleyen: "Bekleyen",
   genelToplam: "Toplam",
+  muaf: "Rapor atılmıyor",
+  gonderimOrani: "Gönderilen",
 }
 
 const EN: typeof TR = {
@@ -249,6 +249,7 @@ const EN: typeof TR = {
   ayriRapor: "Separate monthly report",
   ayriRaporVar: "Has its own monthly report",
   catiRaporunaDahil: "Included in parent's report",
+  raporMuaf: "No monthly report sent",
   satisEkibi: "Sales team",
   satis: "Sales Manager",
   presales: "Presales",
@@ -264,6 +265,7 @@ const EN: typeof TR = {
   raporAltBasligi: "The report covers the previous month. Edit the fields and save the draft; the report is sent with your confirmation, once per month.",
   donem: "Period",
   raporDonemi: "Report period",
+  ayBitmedi: "This month is not over yet: SLA and alarm data may be incomplete. Check the data before sending the report.",
   aylar: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
   buAyGonderildi: "The report for this period was sent.",
   aydaTek: "Only one report can be sent per month.",
@@ -293,10 +295,6 @@ const EN: typeof TR = {
   alicilarAyrac: "Separate addresses with ; (max 20).",
   alicilariKaydet: "Save recipients",
   emlNot: "Sending downloads the Outlook draft (.eml) with the report PDF, the SLA Excel and the attachments. Open and review it, then press Send in Outlook.",
-  smtpNot: "The panel sends the report from TAMLIFE@turkcell.com.tr; the customer's reply comes to you (Reply-To). The PDF, the SLA Excel and the attachments are included.",
-  smtpOnay: "The message will be sent immediately from TAMLIFE@turkcell.com.tr; it cannot be recalled.",
-  epostaGitti: (reddedilen: string[]) =>
-    reddedilen.length ? `Report sent; it could not be delivered to: ${reddedilen.join(", ")}` : "The report was sent by e-mail.",
   sla: "SLA Report",
   slaAciklama: "OneDesk SLA Excel: closed alarm, complaint and request counts and time averages go into the report as charts; the file is attached to the message.",
   slaYukle: "Upload SLA Excel",
@@ -354,6 +352,8 @@ const EN: typeof TR = {
   atilan: "Sent",
   bekleyen: "Pending",
   genelToplam: "Total",
+  muaf: "No report",
+  gonderimOrani: "Sent",
 }
 
 export function musteriMetin(dil: Dil) {

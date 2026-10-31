@@ -30,7 +30,7 @@ KODLAR: dict[str, tuple[str, str]] = {
     "TL-YDK-01": ("Yedek alınamadı", "Yedek klasörünün yazma iznini ve boş alanı kontrol edin."),
     "TL-RAP-01": (
         "Aylık rapor gönderilemedi",
-        "Kayıttaki müşteri ve nedene bakın; SMTP ise Kurum Bağlantıları › E-posta testi. Personel raporu yeniden gönderebilir (ay kilitlenmedi).",
+        "Kayıttaki müşteri ve nedene bakın; uygulama günlüğünde kayıt numarasını arayın. Personel raporu yeniden gönderebilir (ay kilitlenmedi).",
     ),
     "TL-SRV-01": ("Beklenmeyen sunucu hatası", "Kayıt numarasıyla uygulama günlüğünde yığın izini arayın."),
     "TL-SNC-01": (

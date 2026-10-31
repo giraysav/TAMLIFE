@@ -56,6 +56,7 @@ TABLE_OWNER = {
     "urun_tutar_ozet": "utilizasyon",
     "demand": "talep",
     "demand_log": "talep",
+    "user_notification": "core",  # kisiye ozel panel bildirimi (ilk ureten: talep)
     "sms_revenue": "tamsms",
     "apn_revenue": "tamapn",
     "apn_work": "tamapn",
@@ -146,6 +147,7 @@ class Customer(Base):
     request_closed_count: Mapped[int] = mapped_column(Integer, default=0)
     report_count: Mapped[int] = mapped_column(Integer, default=0)
     separate_report: Mapped[bool] = mapped_column(Boolean, default=False)  # istirak icin ayri aylik rapor
+    report_exempt: Mapped[bool] = mapped_column(Boolean, default=False)  # aylik raporu atilmayan musteri: bekleyen sayimina girmez
 
 
 class CustomerTeam(Base):
@@ -445,8 +447,11 @@ class Demand(Base):
     current_state: Mapped[str] = mapped_column(Text)
     expected_state: Mapped[str] = mapped_column(Text)
     acceptance: Mapped[str] = mapped_column(Text, default="")
-    opened_by_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"), index=True)
+    opened_by_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"), index=True)  # talebi panele giren
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # 2026-10-31 kullanici: talep e-postayla da gelebilir; talep eden giren kisiden farkli secilebilir (bos = giren kisi).
+    requester_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(20), default="panel")  # gelis yolu: panel / eposta
     status: Mapped[str] = mapped_column(String(20), default="yeni", index=True)
     assignee_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
     target_version: Mapped[str] = mapped_column(String(40), default="")
@@ -465,6 +470,20 @@ class DemandLog(Base):
     new_value: Mapped[str] = mapped_column(String(200), default="")
     actor_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class UserNotification(Base):
+    """Kisiye ozel panel bildirimi (2026-10-31: talep durumu degisince talep sahibine). Ust cubuk zilinde gorunur; okununca read_at dolar."""
+
+    __tablename__ = "user_notification"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30))  # talep
+    ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # ilgili kayit (talep id)
+    message: Mapped[str] = mapped_column(String(400))
+    link: Mapped[str] = mapped_column(String(200), default="")  # panel ici adres (#/talep)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class SmsRevenue(KullaniciBase):

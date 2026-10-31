@@ -1,9 +1,8 @@
 """Aylik rapor iletisi: HTML govde ve Outlook taslagi (.eml).
 
 Uretim karsiliklari: blueprints/customer_bp.py (_rapor_mail_html, _rapor_eml_olustur, _gorunen_adli, _mail_gorselleri)
-ve templates/mail/rapor_mail.html. Varsayilan (RAPOR_GONDERIM_KIPI=eml) panel iletiyi GONDERMEZ: .eml kullanicinin
-bilgisayarina iner, X-Unsent sayesinde Outlook onu gonderilmemis yeni ileti olarak acar; Gonder'e personel basar.
-smtp kipinde ayni ileti taslak=False ile uretilir ve rapor/smtp_gonderim.py sunucudan gonderir.
+ve templates/mail/rapor_mail.html. Panel iletiyi GONDERMEZ: .eml kullanicinin bilgisayarina iner, X-Unsent sayesinde Outlook
+onu gonderilmemis yeni ileti olarak acar; Gonder'e personel kendi hesabindan basar (SMTP kipi 2026-10-31 kullanici karariyla kaldirildi).
 
 Tasarim burada degil: rapor/sablon/rapor_mail.html (+ rapor_mail_imza.html). Personel metni burada kacislanir,
 sablona yalniz kacislanmis HTML gider (jinja2 yok; yeni bagimlilik eklenmedi).
@@ -12,14 +11,12 @@ sablona yalniz kacislanmis HTML gider (jinja2 yok; yeni bagimlilik eklenmedi).
 from __future__ import annotations
 
 import html
-import os
 import re
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formatdate, make_msgid
 from functools import cache
 from pathlib import Path
 from string import Template
@@ -28,7 +25,6 @@ from app.config import get_settings
 
 SABLON = Path(__file__).resolve().parent / "sablon"
 MAIL_YAZI = "font-family:'Segoe UI',Calibri,Arial,sans-serif;"
-VARSAYILAN_GONDEREN = "tam.rapor@turkcell.com.tr"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 # Govdeye GOMULU gorseller: cid -> dosya. Outlook disaridan resim cekmeyi engeller. Kimlikler ALAN ADLI: Outlook'un
 # .eml -> ileti donusturucusu duz 'cid:teknocan' basvurusunu cozemiyordu (uretim kullanici bildirimi 2026-09-20).
@@ -101,20 +97,6 @@ def gorunen_adli(adres: str) -> str:
     return f"{ad} <{adres}>" if ad else adres
 
 
-def kisi_adresi(kullanici: str) -> str | None:
-    """Personelin kurum adresi: kullanici adi (alan yoksa @AD_DOMAIN eklenir); cikarilamazsa None."""
-    kullanici = (kullanici or "").strip()
-    alan = get_settings().ad_domain.strip().lstrip("@")
-    if kullanici and "@" not in kullanici and alan:
-        return f"{kullanici}@{alan}"
-    return kullanici if "@" in kullanici else None
-
-
-def gonderen(kullanici: str) -> str:
-    """SMTP kipinin From'u (taslakta From yazilmaz): SMTP_USER > kullanici adi (alan yoksa @AD_DOMAIN eklenir) > varsayilan kutu."""
-    return os.environ.get("SMTP_USER", "").strip() or kisi_adresi(kullanici) or VARSAYILAN_GONDEREN
-
-
 @cache
 def gorseller() -> dict[str, bytes]:
     """{cid: png}. Dosya yoksa o gorsel atlanir: eksik logo yuzunden ileti hic uretilemesin istenmez."""
@@ -128,27 +110,16 @@ def eml(
     govde_metin: str,
     kime: list[str],
     bilgi: list[str],
-    gonderen_adres: str,
     ekler: list[tuple[bytes, str, str]] | None = None,
-    taslak: bool = True,
-    yanit: str | None = None,
     satir_ici: list[tuple[str, bytes, str]] | None = None,
 ) -> bytes:
     """RFC 822 baytlari. Basliklar email paketiyle kurulur (CR/LF enjeksiyonu istisna atar); alicilar zaten dogrulanmistir.
 
     `ekler`: (bayt, dosya adi, MIME turu) - rapor PDF'i, SLA Excel'i ve personelin ekledigi dosyalar.
-    `taslak=True` (Outlook .eml): From YAZILMAZ (2026-10-26 duzeltme): Outlook taslagi personelin kendi hesabindan acar. Eskiden
-    From = SMTP_USER (TAMLIFE@) yaziliyordu; personelin o kutu icin Send-As yetkisi olmadigindan ileti NDR ile donerdi.
-    `taslak=False` (SMTP kipi, rapor/smtp_gonderim.py): X-Unsent yok; From, Message-ID ve Date eklenir, `yanit` Reply-To olur."""
+    From YAZILMAZ (2026-10-26 duzeltme): Outlook taslagi personelin kendi hesabindan acar. Eskiden From = TAMLIFE@ yaziliyordu;
+    personelin o kutu icin Send-As yetkisi olmadigindan ileti NDR ile donerdi."""
     msg = MIMEMultipart("mixed")
-    if taslak:
-        msg["X-Unsent"] = "1"
-    else:
-        msg["Message-ID"] = make_msgid(domain=gonderen_adres.rsplit("@", 1)[-1])
-        msg["Date"] = formatdate(localtime=True)
-        if yanit and yanit.lower() != gonderen_adres.lower():
-            msg["Reply-To"] = gorunen_adli(yanit)
-        msg["From"] = gonderen_adres
+    msg["X-Unsent"] = "1"
     if kime:
         msg["To"] = ", ".join(gorunen_adli(a) for a in kime)
     if bilgi:

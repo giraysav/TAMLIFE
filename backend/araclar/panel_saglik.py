@@ -6,8 +6,8 @@ Her denetim tek satir: DURUM|baslik|ayrinti. DURUM: TAMAM | UYARI (dis sistem / 
 (panelin kendisinde sorun). Cikis kodu: HATA sayisi (0 = sorun yok). Gizli deger (parola, adres) yazilmaz.
 
 Denetimler: veritabani butunlugu (quick_check), sema surumu (alembic head), son 24 saatin ve acik ariza kayitlari, aylik rapor
-gonderim hatalari (TL-RAP-01), ReportDB iscisinin son basarili calismasi, dis baglantilar (AD/LDAPS, ReportDB, ONEDESKDB, ONENTDB,
-SMTP; yalniz erisim adimlari: DNS -> TCP -> oturum, veri okunmaz).
+gonderim hatalari (TL-RAP-01), ReportDB iscisinin son basarili calismasi, dis baglantilar (AD/LDAPS, ReportDB, ONEDESKDB, ONENTDB;
+yalniz erisim adimlari: DNS -> TCP -> oturum, veri okunmaz).
 """
 
 from __future__ import annotations
@@ -114,7 +114,6 @@ def _adimlar(baslik: str, adimlar: list[dict], dis: bool = True) -> None:
 
 def baglantilar() -> None:
     from app import ad
-    from app.rapor import smtp_gonderim
     from app.tampon import oracle, postgres
 
     denetimler = (
@@ -122,7 +121,6 @@ def baglantilar() -> None:
         ("Baglanti: ReportDB (Oracle)", lambda: oracle.erisim_adimlari("oracle_reportdb"), True),
         ("Baglanti: ONEDESKDB (PostgreSQL)", lambda: postgres.erisim_adimlari("pg_onedesk"), True),
         ("Baglanti: ONENTDB (PostgreSQL)", lambda: postgres.erisim_adimlari("pg_onent"), True),
-        ("Baglanti: E-posta (SMTP)", lambda: smtp_gonderim.erisim_adimlari(), True),
     )
     for baslik, cagri, dis in denetimler:
         try:

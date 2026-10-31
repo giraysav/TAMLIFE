@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
-import { ApiHata, hataMesaji, oku, yaz } from "@/lib/sorgu"
+import { ApiHata, hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import { Bos, DUGME, DUGME_ANA, DUGME_SARI, GIRDI, Rozet } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
@@ -26,10 +26,12 @@ type Taslak = {
   zaman: string | null
   alicilar: { kime: string; bilgi: string }
   gonderim: Gonderim | null
+  /** Secilebilir donemler ('YYYY-MM'): onceki ay ve icinde bulunulan ay (2026-10-31). */
+  donemler?: string[]
+  /** Secilen donem icinde bulunulan ay: SLA / alarm verisi henuz eksik olabilir. */
+  ay_bitmedi?: boolean
   /** Bu donemin taslagi yokken onceki ayin gonderilmis raporundan tasinan takip alanlari. */
   devreden?: { donem: string; alanlar: string[] } | null
-  /** eml: Outlook taslagi iner (varsayilan); smtp: ileti sunucudan TAMLIFE@ kutusundan gider (rapor/smtp_gonderim.py). */
-  gonderim_kipi?: "eml" | "smtp"
   /** 2026-10-26: profil e-posta imzasi var mi (varsa ileti onu tasir; buradaki imza yalniz PDF'tedir) */
   profil_imza?: boolean
 }
@@ -59,7 +61,7 @@ function Baslik({ baslik, alt }: { baslik: string; alt?: string }) {
   )
 }
 
-type GonderSonuc = { kip?: "eml" | "smtp"; eml_adi?: string; eml_base64?: string; reddedilen?: string[] }
+type GonderSonuc = { eml_adi?: string; eml_base64?: string }
 type RaporDili = "tr" | "en"
 
 /** Sunucunun urettigi Outlook taslagini indirir; tarayici ayarliysa Outlook dogrudan acar (X-Unsent: gonderilmemis ileti). */
@@ -119,11 +121,14 @@ const LEJANT = {
 export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { musteriId: number; musteriAdi: string; dil: Dil; geriAlabilir: boolean }) {
   const t = musteriMetin(dil)
   const taban = `/api/v1/musteri/${musteriId}/rapor`
+  // Rapor donemi: bos = onceki ay (sunucu varsayilani); secilirse donem baglantili tum istekler ?donem= tasir.
+  const [secim, setSecim] = useState("")
+  const adres = (yol: string, sorgu: Record<string, string> = {}) => `${taban}${yol}${sorguMetni({ ...sorgu, donem: secim })}`
   const istemci = useQueryClient()
-  const slaAnahtari = ["musteri", "rapor", musteriId, "sla"]
-  const taslakQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "taslak"], queryFn: () => oku<Taslak>(`${taban}/taslak`) })
+  const slaAnahtari = ["musteri", "rapor", musteriId, "sla", secim]
+  const taslakQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "taslak", secim], queryFn: () => oku<Taslak>(adres("/taslak")) })
   const gecmisQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "gecmis"], queryFn: () => oku<Gonderim[]>(`${taban}/gecmis`) })
-  const slaQ = useQuery({ queryKey: slaAnahtari, queryFn: () => oku<SlaVeri>(`${taban}/sla`) })
+  const slaQ = useQuery({ queryKey: slaAnahtari, queryFn: () => oku<SlaVeri>(adres("/sla")) })
   const taslak = taslakQ.data
   const gecmis = gecmisQ.data ?? []
   const sla = slaQ.data
@@ -189,7 +194,6 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
     )
   }
   const ingilizce = raporDili === "en"
-  const smtpKipi = taslak.gonderim_kipi === "smtp"
   const varsayilanlar = taslak.varsayilanlar
   const donemAdi = (d: Dil) => `${musteriMetin(d).aylar[taslak.ay - 1]} ${taslak.yil}`
   const donemYaz = (donem: string, d: Dil) => `${musteriMetin(d).aylar[Number(donem.slice(5, 7)) - 1] ?? ""} ${donem.slice(0, 4)}`
@@ -213,7 +217,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
 
   async function taslagiKaydet(olay?: FormEvent) {
     olay?.preventDefault()
-    if (await dene("taslak", () => yaz("PUT", `${taban}/taslak`, { alanlar }), t.kaydedildi, true)) await yukle()
+    if (await dene("taslak", () => yaz("PUT", adres("/taslak"), { alanlar }), t.kaydedildi, true)) await yukle()
   }
 
   async function alicilariKaydet(olay: FormEvent) {
@@ -224,7 +228,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   /** Rapor PDF'i panelde uretilir ve SLA Excel'iyle birlikte iletiye eklenir (SLA ekini sunucu koyar). */
   async function gonder() {
     const onay = t.gonderOnay(donemAdi(dil), !!sla?.ozet?.dosya, sla?.dosyalar.length ?? 0)
-    if (!window.confirm(smtpKipi ? `${onay}\n\n${t.smtpOnay}` : onay)) return
+    if (!window.confirm(onay)) return
     setPdfMesgul(true)
     let pdfVeri: string
     try {
@@ -235,12 +239,10 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
       return
     }
     const govde = { onay: true, subject: alanlar.konu, body_text: alanlar.govde, signature: alanlar.imza, lang: raporDili, pdf_base64: pdfVeri, alanlar }
-    let sonuc: GonderSonuc = {}
-    const tamam = await dene("gonder", async () => {
-      sonuc = await yaz<GonderSonuc>("POST", `${taban}/gonder`, govde)
+    await dene("gonder", async () => {
+      const sonuc = await yaz<GonderSonuc>("POST", adres("/gonder"), govde)
       if (sonuc.eml_base64 && sonuc.eml_adi) emlIndir(sonuc.eml_base64, sonuc.eml_adi)
     }, t.emlIndi, true)
-    if (tamam && sonuc.kip === "smtp") bildir("gonder", t.epostaGitti(sonuc.reddedilen ?? []))
     setPdfMesgul(false)
     await yukle()
   }
@@ -288,7 +290,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
     sonOzet.current = { bilgi: metin.bilgi.trim(), devam: metin.devam.trim() }
   }
   const g = taslak.gonderim
-  const slaOrtak = { taban, t, veri: sla, kilitli: !!g, onDegisti: (v: SlaVeri) => istemci.setQueryData(slaAnahtari, v) }
+  const slaOrtak = { adres, t, veri: sla, kilitli: !!g, onDegisti: (v: SlaVeri) => istemci.setQueryData(slaAnahtari, v) }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -310,15 +312,38 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
                 {t.devreden(donemYaz(taslak.devreden.donem, dil))}
               </p>
             ) : null}
+            {taslak.ay_bitmedi && !g ? (
+              <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                {t.ayBitmedi}
+              </p>
+            ) : null}
             {!taslak.birim ? <p className="rounded-xl border bg-slate-50 p-3 text-xs text-slate-600">{t.rapordaBirimDegil}</p> : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <label className="flex cursor-pointer select-none items-center gap-2">
                 <input type="checkbox" className="size-4 accent-tl-navy" disabled={!!g} checked={ingilizce} onChange={(ev) => setAlanlar((a) => dilUygula(a, taslak.varsayilanlar, ev.target.checked ? "en" : "tr"))} />
                 <span className="text-xs font-black text-tl-navy">{t.ingilizceRapor}</span>
               </label>
-              <span className="rounded-lg bg-tl-yellow/30 px-2 py-1 text-xs font-black text-tl-navy">
-                {t.raporDonemi}: {donemAdi(dil)}
-              </span>
+              {(taslak.donemler?.length ?? 0) > 1 ? (
+                <label className="flex items-center gap-1.5 rounded-lg bg-tl-yellow/30 px-2 py-1 text-xs font-black text-tl-navy">
+                  {t.raporDonemi}:
+                  <select
+                    aria-label={t.raporDonemi}
+                    className="cursor-pointer bg-transparent font-black outline-none"
+                    value={`${taslak.yil}-${String(taslak.ay).padStart(2, "0")}`}
+                    onChange={(ev) => setSecim(ev.target.value)}
+                  >
+                    {taslak.donemler?.map((d) => (
+                      <option key={d} value={d}>
+                        {donemYaz(d, dil)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <span className="rounded-lg bg-tl-yellow/30 px-2 py-1 text-xs font-black text-tl-navy">
+                  {t.raporDonemi}: {donemAdi(dil)}
+                </span>
+              )}
               {ingilizce && !g ? (
                 <button type="button" className={`${DUGME} px-2 py-1 text-[0.6875rem]`} disabled={ceviriMesgul} onClick={() => void metinleriCevir()}>
                   {ceviriMesgul ? t.ceviriyor : t.cevir}
@@ -337,7 +362,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
               <span role="status" className="min-h-[14px] text-[0.625rem] font-bold text-slate-400">
                 {(pdfMesgul ? t.pdfHazirlaniyor : "") || mesaj.taslak || mesaj.gonder || (taslak.kayitli ? `${t.taslakBilgi}: ${(taslak.zaman ?? "").slice(0, 16).replace("T", " ")} · ${taslak.guncelleyen ?? ""}` : "")}
               </span>
-              <p className="text-[0.625rem] font-bold text-slate-400 sm:max-w-[60%] sm:text-right">{smtpKipi ? t.smtpNot : t.emlNot}</p>
+              <p className="text-[0.625rem] font-bold text-slate-400 sm:max-w-[60%] sm:text-right">{t.emlNot}</p>
             </div>
           </div>
 
@@ -475,7 +500,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
         </Kart>
 
         <SlaKarti {...slaOrtak} />
-        <SlaAnalizi taban={taban} t={t} dil={raporDili} slaVar={!!sla?.ozet?.dosya} yzHazir={!!sla?.araclar?.yz} kilitli={!!g} onYaz={ozetiYaz} />
+        <SlaAnalizi adres={adres} t={t} dil={raporDili} slaVar={!!sla?.ozet?.dosya} yzHazir={!!sla?.araclar?.yz} kilitli={!!g} onYaz={ozetiYaz} />
         <GalapagosKarti {...slaOrtak} />
         <EkDosyaKarti {...slaOrtak} />
       </div>

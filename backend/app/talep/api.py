@@ -1,8 +1,8 @@
 """Gelistirme Talepleri HTTP katmani. Gorme/acma: 'talep' modulu (herkese acik). Yonetme: admin, TeamMngr ya da rolgorunum.TALEP_YETKISI.
 
   GET    /talep             -> is listesi (yonetebilen herkesinkini, digerleri kendi taleplerini gorur); ?durum=acik|<durum>|bos
-  POST   /talep             -> yeni talep
-  PATCH  /talep/{id}        -> durum / oncelik / atanan_id / hedef_surum / admin_notu (yonetebilen)
+  POST   /talep             -> yeni talep (yonetebilen talep_eden_id + kanal ile baskasi adina girebilir)
+  PATCH  /talep/{id}        -> durum / oncelik / atanan_id / hedef_surum / admin_notu / talep_eden_id / kanal (yonetebilen)
   DELETE /talep/{id}        -> sil (yalniz admin; gecmis de silinir)
 """
 
@@ -29,6 +29,7 @@ talep_erisim = modul_erisim("talep")
 Tur = Literal["ozellik", "iyilestirme", "hata"]
 Oncelik = Literal["dusuk", "orta", "yuksek", "kritik"]
 Durum = Literal["yeni", "incelemede", "planlandi", "yapiliyor", "tamamlandi", "reddedildi"]
+Kanal = Literal["panel", "eposta"]
 
 
 class TalepGovde(BaseModel):
@@ -39,6 +40,8 @@ class TalepGovde(BaseModel):
     mevcut_durum: str = Field(max_length=4000)
     beklenen_durum: str = Field(max_length=4000)
     kabul_olcutu: str = Field(default="", max_length=2000)
+    talep_eden_id: KimlikTipi | None = None
+    kanal: Kanal = "panel"
 
 
 class GuncelleGovde(BaseModel):
@@ -47,6 +50,8 @@ class GuncelleGovde(BaseModel):
     atanan_id: KimlikTipi | None = None
     hedef_surum: str | None = Field(default=None, max_length=40)
     admin_notu: str | None = Field(default=None, max_length=4000)
+    talep_eden_id: KimlikTipi | None = None
+    kanal: Kanal | None = None
 
 
 def yonetebilir_mi(e: Erisim) -> bool:
@@ -62,7 +67,7 @@ def liste(durum: str = Query(default="acik", max_length=20), e: Erisim = Depends
 
 @router.post("")
 def olustur(body: TalepGovde, e: Erisim = Depends(talep_erisim), db: Session = Depends(get_db)):
-    talep_id = servis.olustur(db, e.user, body.model_dump())
+    talep_id = servis.olustur(db, e.user, body.model_dump(), yonetebilir_mi(e))
     db.commit()
     audit_log.remember(actor=e.user.username, action="talep.olustur", outcome="allow", module_key="talep", detail=f"talep={talep_id}")
     return ok({"id": talep_id})
@@ -74,7 +79,7 @@ def guncelle(talep_id: KimlikTipi, body: GuncelleGovde, e: Erisim = Depends(tale
         raise TalepHata(403, "Talepleri yönetme yetkiniz yok; yönetici Rol Yönetimi'nden verir.")
     # Yalniz gonderilen alanlar; atanan_id icin null "atamayi kaldir" demektir.
     degisiklik = body.model_dump(exclude_unset=True)
-    degisiklik = {k: v for k, v in degisiklik.items() if v is not None or k == "atanan_id"}
+    degisiklik = {k: v for k, v in degisiklik.items() if v is not None or k in ("atanan_id", "talep_eden_id")}
     degisen = servis.guncelle(db, e.user, talep_id, degisiklik)
     db.commit()
     if degisen:

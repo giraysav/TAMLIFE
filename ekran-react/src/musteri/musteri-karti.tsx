@@ -29,6 +29,7 @@ export type Kart = {
     tam: string | null
     tam_id: number | null
     ayri_rapor: boolean | null
+    rapor_muaf: boolean
     cati: { id: number; unvan: string } | null
     istirakler: { id: number; unvan: string; ncst: string; tam: string | null }[]
   }
@@ -36,7 +37,7 @@ export type Kart = {
   iletisim: Record<string, string>
   kritik_ci: Matris
   raporlar?: { toplam: number; son: { donem: string; gonderildi: boolean; duzenleyen: string | null; tarih: string | null; bayrak: number }[] }
-  erisim: { rapor: boolean; gelir: boolean; kimlik_duzenle: boolean; iletisim_duzenle: boolean; sil: boolean; tam_degistir: boolean; rapor_geri_al: boolean; ayri_rapor_sec: boolean; istirak_ekle: boolean }
+  erisim: { rapor: boolean; gelir: boolean; kimlik_duzenle: boolean; iletisim_duzenle: boolean; sil: boolean; tam_degistir: boolean; rapor_geri_al: boolean; ayri_rapor_sec: boolean; rapor_muaf_sec: boolean; istirak_ekle: boolean }
   tam_secenekleri?: { id: number; ad: string }[]
   cati_secenekleri?: { id: number; ad: string }[]
 }
@@ -269,6 +270,10 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
     if (await dene("ayri", () => yaz("PUT", `/api/v1/musteri/${id}/ayri-rapor`, { ayri_rapor: deger }))) await q.refetch()
   }
 
+  async function raporMuaf(deger: boolean) {
+    if (await dene("ayri", () => yaz("PUT", `/api/v1/musteri/${id}/rapor-muaf`, { rapor_muaf: deger }))) await q.refetch()
+  }
+
   async function sil() {
     if (!window.confirm(t.silOnay)) return
     if (await dene("sil", () => yaz("DELETE", `/api/v1/musteri/${id}`))) sorguAyarla(yol, {})
@@ -367,6 +372,14 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
                 ) : (
                   <span className="text-[0.625rem] font-bold text-white/70">{k.ayri_rapor ? t.ayriRaporVar : t.catiRaporunaDahil}</span>
                 )
+              ) : null}
+              {e.rapor_muaf_sec ? (
+                <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-2.5 py-1.5">
+                  <input type="checkbox" className="size-4 accent-tl-yellow" checked={k.rapor_muaf} onChange={(ev) => void raporMuaf(ev.target.checked)} />
+                  <span className="text-[0.625rem] font-black">{t.raporMuaf}</span>
+                </label>
+              ) : k.rapor_muaf ? (
+                <span className="text-[0.625rem] font-black text-white/70">{t.raporMuaf}</span>
               ) : null}
             </div>
           </div>

@@ -21,6 +21,7 @@ YOL_UCLARI = [
     ("PUT", "/api/v1/musteri/{i}/sorumlu", {"owner_id": 1}),
     ("DELETE", "/api/v1/musteri/{i}", None),
     ("PUT", "/api/v1/musteri/{i}/ayri-rapor", {"ayri_rapor": True}),
+    ("PUT", "/api/v1/musteri/{i}/rapor-muaf", {"rapor_muaf": True}),
     ("GET", "/api/v1/musteri/{i}/rapor/taslak", None),
     ("PUT", "/api/v1/musteri/{i}/rapor/taslak", {"alanlar": {}}),
     ("PUT", "/api/v1/musteri/{i}/rapor/alicilar", {}),

@@ -286,10 +286,14 @@ def silebilir_mi(user: Principal) -> bool:
     return bool(ad) and user.is_admin and user.username.strip().lower() == ad
 
 
+# Satiri yalniz o kisiyi ilgilendiren tablolar: silmede devredilmez, silinir (bildirimler silen hesaba gecmesin).
+KISIYE_OZEL_TABLOLAR = frozenset({"user_notification"})
+
+
 def sil(db: Session, yapan: Principal, kullanici_id: int, devret: AppUser | None = None) -> dict:
     """Panel kullanicisini siler (yalniz `silebilir_mi` hesabi). Kisiye bagli kayitlar metadata'dan bulunur, hicbiri yetim kalmaz:
     bos olabilen baglar bosaltilir (musteri sorumlusu, talep atananı vb.), zorunlu baglar (rapor, talep, proje kalemi, skor talebi)
-    silen hesaba DEVREDILIR, kisiye ozel dislama satiri silinir. Kisinin kendi SQLite dosyasi (takvim/izin) dokunulmaz.
+    silen hesaba DEVREDILIR, kisiye ozel satirlar (dislama, panel bildirimi) silinir. Kisinin kendi SQLite dosyasi (takvim/izin) dokunulmaz.
     `devret` verilirse (komut satiri temizligi: ayni kisinin AD hesabi) bos olabilenler dahil TUM baglar o kisiye gecer, hicbiri bosalmaz.
     Donus: ozet (username, display_name, devredilen, bosaltilan, silinen)."""
     if not silebilir_mi(yapan):
@@ -308,7 +312,7 @@ def sil(db: Session, yapan: Principal, kullanici_id: int, devret: AppUser | None
             if not any(fk.column.table.name == AppUser.__tablename__ for fk in sutun.foreign_keys):
                 continue
             kosul = sutun == hedef.id
-            if sutun.primary_key:
+            if sutun.primary_key or tablo.name in KISIYE_OZEL_TABLOLAR:
                 silinen += db.execute(delete(tablo).where(kosul)).rowcount
             elif sutun.nullable and devret is None:
                 bosaltilan += db.execute(update(tablo).where(kosul).values({sutun.name: None})).rowcount

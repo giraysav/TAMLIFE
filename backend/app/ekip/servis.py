@@ -30,7 +30,7 @@ from app.dil import ingilizce, m
 from app.ekip.moduller import modul_ozetleri
 from app.kullanicilar import kullanici_kaydi, personel
 from app.models import AppUser, CalendarDay, Customer, ProjectItem, Report, ScoringExclusion
-from app.musteri.servis import rapor_birimi_mi
+from app.musteri.servis import rapor_bekleniyor_mu, rapor_birimi_mi
 from app.ortak import rapor_donemi, tr_kucuk
 from app.session import Principal
 from app.skor.servis import tam_skor_ozeti
@@ -226,7 +226,7 @@ def ozet(db: Session, user: Principal) -> dict:
     for u in uyeler:
         hepsi = sahip.get(u.id, [])
         catilar = [c for c in hepsi if c.parent_id is None]
-        birimler = [c.id for c in hepsi if rapor_birimi_mi(c)]
+        birimler = [c.id for c in hepsi if rapor_bekleniyor_mu(c)]
         gonderilen = sum(1 for b in birimler for ay in range(1, rapor_ay_sayisi + 1) if (b, ay) in atilan)
         beklenen = len(birimler) * rapor_ay_sayisi
         skor = tam_skor_ozeti([] if u.id in disi else catilar)

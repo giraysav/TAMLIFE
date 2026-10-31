@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
-import { hataMesaji, sorguMetni, yaz, yukle } from "@/lib/sorgu"
+import { hataMesaji, yaz, yukle } from "@/lib/sorgu"
 import { DUGME, DUGME_ANA, Rozet } from "@/components/sayfa-ui"
 import type { musteriMetin } from "@/musteri/musteri-metin"
 
@@ -24,7 +24,7 @@ export type SlaVeri = {
   araclar: { ceviri: { hazir: boolean; kaynak: string | null }; yz: boolean }
 }
 
-type Ortak = { taban: string; t: ReturnType<typeof musteriMetin>; veri: SlaVeri | undefined; kilitli: boolean; onDegisti: (v: SlaVeri) => void }
+type Ortak = { adres: (yol: string, sorgu?: Record<string, string>) => string; t: ReturnType<typeof musteriMetin>; veri: SlaVeri | undefined; kilitli: boolean; onDegisti: (v: SlaVeri) => void }
 
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -98,7 +98,7 @@ function boyutYaz(bayt: number): string {
 }
 
 /** SLA Excel'i: grafikler (kapanan adet + sure ortalamalari) ve ileti eki. Rapor gonderilmisse salt okunur. */
-export function SlaKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
+export function SlaKarti({ adres, t, veri, kilitli, onDegisti }: Ortak) {
   const { mesaj, mesgul, calistir } = useIslem({ t, onDegisti })
   const ozet = veri?.ozet
   const analiz = veri?.analiz
@@ -145,10 +145,10 @@ export function SlaKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
             etiket={ozet?.dosya ? t.slaDegistir : t.slaYukle}
             kabul={`.xlsx,${XLSX}`}
             mesgul={mesgul}
-            onSec={([d]) => void calistir([() => yukle<SlaVeri>(`${taban}/sla${sorguMetni({ dosya: d.name })}`, d, XLSX)], () => t.slaYuklendi)}
+            onSec={([d]) => void calistir([() => yukle<SlaVeri>(adres("/sla", { dosya: d.name }), d, XLSX)], () => t.slaYuklendi)}
           />
           {ozet?.dosya ? (
-            <button type="button" className={DUGME} disabled={mesgul} onClick={() => window.confirm(t.slaSilOnay) && void calistir([() => yaz<SlaVeri>("DELETE", `${taban}/sla`)])}>
+            <button type="button" className={DUGME} disabled={mesgul} onClick={() => window.confirm(t.slaSilOnay) && void calistir([() => yaz<SlaVeri>("DELETE", adres("/sla"))])}>
               {t.slaSil}
             </button>
           ) : null}
@@ -159,12 +159,12 @@ export function SlaKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
 }
 
 /** GALAPAGOS grafikleri (MRTG vb.; GALAPAGOS DB baglanana kadar elle). Birden cok gorsel; baslik dosya adindan. */
-export function GalapagosKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
+export function GalapagosKarti({ adres, t, veri, kilitli, onDegisti }: Ortak) {
   const { mesaj, mesgul, calistir } = useIslem({ t, onDegisti })
   const ekler = veri?.ekler ?? []
   function sec(dosyalar: File[]) {
     void calistir(
-      dosyalar.map((d) => () => yukle<SlaVeri>(`${taban}/gorsel${sorguMetni({ baslik: d.name.replace(/\.[^.]+$/, "") })}`, d, d.type || "application/octet-stream", "POST")),
+      dosyalar.map((d) => () => yukle<SlaVeri>(adres("/gorsel", { baslik: d.name.replace(/\.[^.]+$/, "") }), d, d.type || "application/octet-stream", "POST")),
       t.gorselYuklendi,
     )
   }
@@ -180,7 +180,7 @@ export function GalapagosKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
                   {e.baslik || "—"}
                 </span>
                 {!kilitli ? (
-                  <button type="button" className="text-[0.6875rem] font-bold text-rose-600 hover:underline" disabled={mesgul} onClick={() => void calistir([() => yaz<SlaVeri>("DELETE", `${taban}/gorsel/${e.no}`)])}>
+                  <button type="button" className="text-[0.6875rem] font-bold text-rose-600 hover:underline" disabled={mesgul} onClick={() => void calistir([() => yaz<SlaVeri>("DELETE", adres(`/gorsel/${e.no}`))])}>
                     {t.gorselSil}
                   </button>
                 ) : null}
@@ -197,12 +197,12 @@ export function GalapagosKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
 }
 
 /** Rapor iletisine eklenecek diger dosyalar. */
-export function EkDosyaKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
+export function EkDosyaKarti({ adres, t, veri, kilitli, onDegisti }: Ortak) {
   const { mesaj, mesgul, calistir } = useIslem({ t, onDegisti })
   const dosyalar = veri?.dosyalar ?? []
   function sec(secilen: File[]) {
     void calistir(
-      secilen.map((d) => () => yukle<SlaVeri>(`${taban}/dosya${sorguMetni({ ad: d.name })}`, d, "application/octet-stream", "POST")),
+      secilen.map((d) => () => yukle<SlaVeri>(adres("/dosya", { ad: d.name }), d, "application/octet-stream", "POST")),
       t.dosyaYuklendi,
     )
   }
@@ -217,7 +217,7 @@ export function EkDosyaKarti({ taban, t, veri, kilitli, onDegisti }: Ortak) {
               </span>
               <span className="shrink-0 text-slate-400">{boyutYaz(d.boyut)}</span>
               {!kilitli ? (
-                <button type="button" className="shrink-0 font-bold text-rose-600 hover:underline" disabled={mesgul} onClick={() => void calistir([() => yaz<SlaVeri>("DELETE", `${taban}/dosya/${d.no}`)])}>
+                <button type="button" className="shrink-0 font-bold text-rose-600 hover:underline" disabled={mesgul} onClick={() => void calistir([() => yaz<SlaVeri>("DELETE", adres(`/dosya/${d.no}`))])}>
                   {t.dosyaSil}
                 </button>
               ) : null}

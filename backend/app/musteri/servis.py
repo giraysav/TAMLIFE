@@ -355,6 +355,12 @@ def rapor_birimi_mi(musteri: Customer) -> bool:
     return musteri.parent_id is None or ayri_rapor_mu(musteri)
 
 
+def rapor_bekleniyor_mu(musteri: Customer) -> bool:
+    """Bu ay raporu beklenen birim: rapor birimi ve kartinda 'raporu atilmamaktadir' isaretli degil (2026-10-31 kullanici).
+    Raporun hangi birime sayilacagi rapor_birimi_mi ile kalir; muafiyet yalniz beklenen/bekleyen sayimini etkiler."""
+    return rapor_birimi_mi(musteri) and not musteri.report_exempt
+
+
 def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] | None) -> dict:
     musteri = musteri_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id).order_by(func.lower(Customer.name))))
@@ -380,6 +386,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
             "tam": _ad(tam),
             "tam_id": musteri.owner_id,
             "ayri_rapor": ayri_rapor_mu(musteri) if musteri.parent_id else None,
+            "rapor_muaf": bool(musteri.report_exempt),
             "cati": {"id": ust.id, "unvan": ust.name} if ust else None,
             "istirakler": [{"id": c.id, "unvan": c.name, "ncst": c.ncst or "", "tam": _ad(sahipler.get(c.owner_id))} for c in istirakler],
         },
@@ -447,6 +454,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "tam_degistir": yonetici,  # sorumlu devri yalniz yonetici (tam_degistir)
         "rapor_geri_al": is_admin(user),
         "ayri_rapor_sec": yazma and musteri.parent_id is not None,
+        "rapor_muaf_sec": yazma and rapor_birimi_mi(musteri),
     }
     if yazma:
         kart["cati_secenekleri"] = [

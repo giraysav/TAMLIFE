@@ -6,7 +6,7 @@ import { Alan, Bildirim, BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Panel, Roz
 import { tarih, zaman } from "@/lib/bicim"
 import { hataMesaji, oku, yaz } from "@/lib/sorgu"
 import type { Dil } from "@/shell/metin"
-import { DURUMLAR, EKRANLAR, ONCELIKLER, TURLER, talepMetin } from "@/talep/talep-metin"
+import { DURUMLAR, EKRANLAR, KANALLAR, ONCELIKLER, TURLER, talepMetin } from "@/talep/talep-metin"
 import type { Durum, Oncelik, Tur } from "@/talep/talep-metin"
 
 type Gecmis = { zaman: string | null; yapan: string; alan: string; eski: string; yeni: string }
@@ -21,7 +21,12 @@ type Talep = {
   kabul_olcutu: string
   durum: Durum
   acik: boolean
+  talep_eden_id: number
   talep_eden: string
+  talep_eden_kullanici: string
+  /** Talebi baskasi adina giren (bos = talep edenin kendisi). */
+  giren: string
+  kanal: Kanal
   olusturuldu: string | null
   guncellendi: string | null
   hedef_surum: string
@@ -30,8 +35,11 @@ type Talep = {
   atanan: string
   gecmis?: Gecmis[]
 }
-type Liste = { yonetebilir: boolean; silebilir: boolean; talepler: Talep[]; acik_sayisi?: number; kisiler?: { id: number; ad: string }[] }
-type Degisiklik = Partial<{ durum: Durum; oncelik: Oncelik; atanan_id: number | null; hedef_surum: string; admin_notu: string }>
+type Kisi = { id: number; ad: string; kullanici?: string }
+type Liste = { yonetebilir: boolean; silebilir: boolean; talepler: Talep[]; acik_sayisi?: number; kisiler?: Kisi[] }
+type Degisiklik = Partial<{ durum: Durum; oncelik: Oncelik; atanan_id: number | null; hedef_surum: string; admin_notu: string; talep_eden_id: number }>
+type Kanal = (typeof KANALLAR)[number]
+const kisiEtiketi = (k: Kisi) => (k.kullanici && k.kullanici !== k.ad ? `${k.ad} (${k.kullanici})` : k.ad)
 
 /** Uretimdeki renkler: durum ve onem rozetleri (Tailwind siniflari sabit yazilir, derleyici ayiklamasin). */
 const DURUM_RENK: Record<Durum, string> = {
@@ -48,17 +56,21 @@ const ONCELIK_RENK: Record<Oncelik, string> = {
   yuksek: "bg-amber-500/10 text-amber-700",
   kritik: "bg-rose-500/10 text-rose-700",
 }
-const BOS_FORM = { baslik: "", tur: "ozellik" as Tur, oncelik: "orta" as Oncelik, modul: "", mevcut_durum: "", beklenen_durum: "", kabul_olcutu: "" }
+const BOS_FORM = { baslik: "", tur: "ozellik" as Tur, oncelik: "orta" as Oncelik, modul: "", mevcut_durum: "", beklenen_durum: "", kabul_olcutu: "", talep_eden_id: "", kanal: "panel" as Kanal }
 const ANAHTAR = ["talep"] as const
 
-/** Talep formu: mevcut ve beklenen durum ayri ayri zorunlu (tek kutuda "sunu duzeltin" yazan talepler yorum farkina donusuyordu). */
-function TalepFormu({ dil }: { dil: Dil }) {
+/** Talep formu: mevcut ve beklenen durum ayri ayri zorunlu (tek kutuda "sunu duzeltin" yazan talepler yorum farkina donusuyordu).
+ *  `kisiler` yalniz yonetene gelir: e-postayla gelen talebi baskasi adina girebilir (2026-10-31). */
+function TalepFormu({ dil, kisiler }: { dil: Dil; kisiler?: Kisi[] }) {
   const t = talepMetin(dil)
   const qc = useQueryClient()
   const [form, setForm] = useState(BOS_FORM)
   const [uyari, setUyari] = useState("")
   const gonder = useMutation({
-    mutationFn: () => yaz<{ id: number }>("POST", "/api/v1/talep", form),
+    mutationFn: () => {
+      const { talep_eden_id, kanal, ...temel } = form
+      return yaz<{ id: number }>("POST", "/api/v1/talep", kisiler ? { ...temel, kanal, talep_eden_id: talep_eden_id ? Number(talep_eden_id) : null } : temel)
+    },
     onSuccess: () => {
       setForm(BOS_FORM)
       void qc.invalidateQueries({ queryKey: ANAHTAR })
@@ -125,6 +137,29 @@ function TalepFormu({ dil }: { dil: Dil }) {
             </select>
           </Alan>
         </div>
+        {kisiler ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            <Alan etiket={t.talepEden}>
+              <select className={GIRDI} value={form.talep_eden_id} onChange={(e) => alan("talep_eden_id", e.target.value)}>
+                <option value="">{t.kendim}</option>
+                {kisiler.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {kisiEtiketi(k)}
+                  </option>
+                ))}
+              </select>
+            </Alan>
+            <Alan etiket={t.gelisYolu}>
+              <select className={GIRDI} value={form.kanal} onChange={(e) => alan("kanal", e.target.value as Kanal)}>
+                {KANALLAR.map((k) => (
+                  <option key={k} value={k}>
+                    {t.kanal_[k]}
+                  </option>
+                ))}
+              </select>
+            </Alan>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" className={DUGME_SARI} disabled={gonder.isPending}>
             <Send aria-hidden className="size-4" />
@@ -195,8 +230,30 @@ function TalepSatiri({ talep, v, dil }: { talep: Talep; v: Liste; dil: Dil }) {
           <span className={`mt-1 inline-block rounded-md px-2 py-0.5 text-[0.625rem] font-black ${ONCELIK_RENK[talep.oncelik]}`}>{t.oncelik_[talep.oncelik] ?? talep.oncelik}</span>
         </td>
         <td className="whitespace-nowrap px-3 py-2">
-          <div className="text-slate-700">{talep.talep_eden || "—"}</div>
-          <div className="font-mono text-[0.625rem] text-slate-400">{tarih(talep.olusturuldu)}</div>
+          {v.yonetebilir ? (
+            <select
+              aria-label={`${t.kolTalepEden}: ${talep.baslik}`}
+              className={`${GIRDI} max-w-[180px] cursor-pointer !py-1.5`}
+              value={talep.talep_eden_id}
+              disabled={kaydet.isPending}
+              onChange={(e) => kaydet.mutate({ talep_eden_id: Number(e.target.value) })}
+            >
+              {(v.kisiler ?? []).some((k) => k.id === talep.talep_eden_id) ? null : <option value={talep.talep_eden_id}>{talep.talep_eden || "—"}</option>}
+              {(v.kisiler ?? []).map((k) => (
+                <option key={k.id} value={k.id}>
+                  {kisiEtiketi(k)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-slate-700">{talep.talep_eden || "—"}</div>
+          )}
+          {talep.talep_eden_kullanici ? <div className="font-mono text-[0.625rem] text-slate-500">{talep.talep_eden_kullanici}</div> : null}
+          <div className="flex flex-wrap items-center gap-1 font-mono text-[0.625rem] text-slate-400">
+            {tarih(talep.olusturuldu)}
+            {talep.kanal === "eposta" ? <span className="rounded bg-sky-500/10 px-1.5 font-sans font-black text-sky-700">{t.kanal_.eposta}</span> : null}
+          </div>
+          {talep.giren ? <div className="text-[0.625rem] text-slate-400">{t.giren(talep.giren)}</div> : null}
         </td>
         <td className="whitespace-nowrap px-3 py-2">
           {v.yonetebilir ? (
@@ -330,6 +387,7 @@ function gecmisDegeri(alan: string, deger: string, dil: Dil): string {
   const t = talepMetin(dil)
   if (alan === "durum") return t.durum_[deger as Durum] ?? deger
   if (alan === "oncelik") return t.oncelik_[deger as Oncelik] ?? deger
+  if (alan === "kanal") return t.kanal_[deger as Kanal] ?? deger
   return deger
 }
 
@@ -359,7 +417,7 @@ export function TalepSayfasi({ dil }: { dil: Dil }) {
   return (
     <div className="grid grid-cols-1 gap-4">
       <SayfaKabi ikon={Lightbulb} baslik={t.baslik} aciklama={t.aciklama} />
-      <TalepFormu dil={dil} />
+      <TalepFormu dil={dil} kisiler={v?.yonetebilir ? v.kisiler : undefined} />
       <Panel baslik={baslik} sag={sag}>
         {v?.yonetebilir && v.acik_sayisi ? (
           <div className="-mt-1 mb-2">

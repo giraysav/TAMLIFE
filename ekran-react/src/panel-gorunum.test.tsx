@@ -148,12 +148,12 @@ describe("TAM Utilizasyon > Musteri Listesi: personel filtresi", () => {
 
 describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
   const KART: Kart = {
-    kimlik: { id: 9, unvan: "112 ACIL SERVIS", musteri_no: "M-1", ncst: "N-1", segment: "SA", sektor: "Kamu", envanter: 12, tam: "Ayşe TAM", tam_id: 7, ayri_rapor: null, cati: null, istirakler: [] },
+    kimlik: { id: 9, unvan: "112 ACIL SERVIS", musteri_no: "M-1", ncst: "N-1", segment: "SA", sektor: "Kamu", envanter: 12, tam: "Ayşe TAM", tam_id: 7, ayri_rapor: null, rapor_muaf: false, cati: null, istirakler: [] },
     operasyon: { ft_hacim: "1.5 M", tam_ft: "0.5 M", final_skor: 81.25, skor_talebi_bekliyor: false, kendi: { envanter: 12, alarm: 0, sikayet: 0, talep: 0, alarm_kapanan: 11, sikayet_kapanan: 2, talep_kapanan: 33 }, istirak_dahil: null },
     iletisim: { sales_manager: "Selin Satış", presales_manager: "Pelin Pre", tac_name: "Tolga TAC", tac_gsm: "0532 111 22 33", tac_email: "tac@example.com", sol_kmt_name: "", sol_kmt_gsm: "", sol_kmt_email: "", mobil_kmt_name: "Mehmet Mobil", mobil_kmt_gsm: "", mobil_kmt_email: "", mobil_kmt_detail: "Hafta sonu ulaşılamaz" },
     kritik_ci: { basliklar: ["Müşteri", "CI Adı"], satirlar: [["112 ACIL SERVIS", "Core Router 1"]] },
     raporlar: { toplam: 0, son: [] },
-    erisim: { rapor: true, gelir: true, kimlik_duzenle: true, iletisim_duzenle: true, sil: true, tam_degistir: false, rapor_geri_al: true, ayri_rapor_sec: true, istirak_ekle: true },
+    erisim: { rapor: true, gelir: true, kimlik_duzenle: true, iletisim_duzenle: true, sil: true, tam_degistir: false, rapor_geri_al: true, ayri_rapor_sec: true, rapor_muaf_sec: true, istirak_ekle: true },
   }
 
   it("Ekip (Destech), Gelirler ve Izleme (Cacti, 2026-10-26 tamamen kalkti) yok; ekip ve iletisim musteri bilgileriyle ayni cercevede", async () => {

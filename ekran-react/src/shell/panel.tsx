@@ -20,7 +20,7 @@ import logo from "@/assets/tam_life_logo.png"
 import { OzetOrbit } from "@/components/ui/ozet-orbit"
 import type { Kullanici, MenuOgesi } from "@/lib/oturum"
 import { Arama } from "@/shell/arama"
-import { AdminBildirimi } from "@/shell/bildirim"
+import { AdminBildirimi, KisiselBildirim } from "@/shell/bildirim"
 import { IKON } from "@/shell/ikon"
 import { KullaniciKarti } from "@/shell/kullanici-karti"
 import { metin, yerelMenu } from "@/shell/metin"
@@ -295,6 +295,7 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
           <h1 className="truncate text-lg font-black tracking-tight">{baslik}</h1>
           <div className="ml-auto flex items-center gap-2">
             <Arama ogeler={aramaOgeleri} dil={dil} onGit={sec} dugmeSinifi={UST_BAR_DUGME} />
+            <KisiselBildirim dil={dil} dugmeSinifi={UST_BAR_DUGME} />
             {kullanici.is_admin ? <AdminBildirimi dil={dil} dugmeSinifi={UST_BAR_DUGME} /> : null}
           </div>
         </header>

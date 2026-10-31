@@ -4,7 +4,6 @@ import base64
 import re
 from email import message_from_bytes
 from email.policy import default
-from typing import ClassVar
 
 import pytest
 from sqlalchemy.orm import Session
@@ -207,6 +206,25 @@ def test_alicilar_dogrulama(veri, monkeypatch):
     assert veri.get("/api/v1/musteri/1/rapor/taslak").json()["data"]["alicilar"]["kime"] == "a@example.com"
 
 
+def test_icinde_bulunulan_ayin_raporu_ayri_donem(veri, monkeypatch, tmp_path):
+    """2026-10-31 kullanici: ay sonunda icinde bulunulan ayin raporu da hazirlanabilir; her donemde ayda tek kural ayri, eski aylar kapali."""
+    monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(tmp_path / "raporlar"))
+    hdr = login_ok(veri)
+    url = "/api/v1/musteri/1/rapor"
+    onceki, bu = (f"{y}-{a:02d}" for y, a in rapor_servis.secilebilir_donemler())
+    t = veri.get(f"{url}/taslak").json()["data"]
+    assert (t["yil"], t["ay"]) == AY and t["donemler"] == [onceki, bu] and t["ay_bitmedi"] is False
+    t = veri.get(f"{url}/taslak", params={"donem": bu}).json()["data"]
+    assert f"{t['yil']}-{t['ay']:02d}" == bu and t["ay_bitmedi"] is True
+    eski_yil, eski_ay = rapor_servis._onceki_donem(*AY)
+    assert veri.get(f"{url}/taslak", params={"donem": f"{eski_yil}-{eski_ay:02d}"}).status_code == 400  # eski ay kapali
+    assert veri.get(f"{url}/taslak", params={"donem": "2026-13"}).status_code == 422
+    assert veri.post(f"{url}/gonder", params={"donem": bu}, json={"onay": True}, headers=hdr).status_code == 200
+    assert veri.post(f"{url}/gonder", params={"donem": bu}, json={"onay": True}, headers=hdr).status_code == 409  # o donemde tek
+    assert veri.get(f"{url}/taslak").json()["data"]["gonderim"] is None  # onceki ay hala acik
+    assert veri.post(f"{url}/gonder", json={"onay": True}, headers=hdr).status_code == 200
+
+
 def test_gonderim_onay_ayda_tek_kilit_geri_alma(veri, monkeypatch, tmp_path):
     monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(tmp_path / "raporlar"))
     hdr = login_ok(veri)
@@ -249,7 +267,6 @@ def test_gonderim_outlook_taslagi_eml(veri, monkeypatch, tmp_path):
     """Gonderim .eml taslagi dondurur: X-Unsent, alicilar, konu, kacislanmis HTML govde, gomulu logolar, PDF eki."""
     monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(tmp_path / "raporlar"))
     monkeypatch.setenv("AD_DOMAIN", "turkcell.com.tr")
-    monkeypatch.delenv("SMTP_USER", raising=False)
     hdr = login_ok(veri)
     url = "/api/v1/musteri/1/rapor"
     # kayitli taslak: govde ve imza buradan gelir, istek yalniz dili degistirir
@@ -280,84 +297,6 @@ def test_gonderim_outlook_taslagi_eml(veri, monkeypatch, tmp_path):
     assert msg.get_body(("plain",)).get_content().rstrip().endswith("Ad Soyad\nTAM")
 
 
-class _SahteSmtp:
-    """smtplib.SMTP yerine: gonderilenleri toplar; `hata` verilirse sendmail onu firlatir."""
-
-    gonderilen: ClassVar[list] = []
-    hata: ClassVar[Exception | None] = None
-
-    def __init__(self, sunucu, port, timeout):
-        self.adres, self.esmtp_features = (sunucu, port), {"size": str(50 * 1024 * 1024)}
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-    def ehlo(self):
-        return 250, b"ok"
-
-    def sendmail(self, gonderen, alicilar, veri):
-        if _SahteSmtp.hata:
-            raise _SahteSmtp.hata
-        _SahteSmtp.gonderilen.append((self.adres, gonderen, alicilar, veri))
-        return {}
-
-
-@pytest.fixture
-def smtp_kipi(monkeypatch, tmp_path):
-    from app.rapor import smtp_gonderim
-
-    for ad, deger in {"RAPOR_GONDERIM_KIPI": "smtp", "SMTP_SERVER": "mail.test", "SMTP_USER": "TAMLIFE@turkcell.com.tr",
-                      "SMTP_ARSIV": "arsiv@turkcell.com.tr", "AD_DOMAIN": "turkcell.com.tr", "TAMLIFE_REPORT_DIR": str(tmp_path / "raporlar")}.items():  # fmt: skip
-        monkeypatch.setenv(ad, deger)
-    _SahteSmtp.gonderilen, _SahteSmtp.hata = [], None
-    monkeypatch.setattr(smtp_gonderim.smtplib, "SMTP", _SahteSmtp)
-    return tmp_path / "raporlar"
-
-
-def test_varsayilan_kip_eml(veri, monkeypatch):
-    monkeypatch.delenv("RAPOR_GONDERIM_KIPI", raising=False)
-    login_ok(veri)
-    assert veri.get("/api/v1/musteri/1/rapor/taslak").json()["data"]["gonderim_kipi"] == "eml"
-
-
-def test_smtp_kipi_tek_kutudan_gonderir(veri, smtp_kipi):
-    """2026-10-22: From TAMLIFE@, Reply-To personel, X-Unsent yok; arsiv yalniz zarfta (gizli); .eml donmez."""
-    hdr = login_ok(veri)
-    url = "/api/v1/musteri/1/rapor"
-    assert veri.get(f"{url}/taslak").json()["data"]["gonderim_kipi"] == "smtp"
-    pdf = base64.b64encode(b"%PDF-1.4 test").decode()
-    r = veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com", "cc": "giray.sav@turkcell.com.tr", "subject": "Konu", "pdf_base64": pdf}, headers=hdr)
-    assert r.status_code == 200, r.text
-    d = r.json()["data"]
-    assert d["kip"] == "smtp" and "eml_base64" not in d and d["reddedilen"] == [] and d["gonderim"]["durum"] == "sent"
-    (adres, zarf_gonderen, zarf, ham), = _SahteSmtp.gonderilen
-    assert adres == ("mail.test", 25) and zarf_gonderen == "TAMLIFE@turkcell.com.tr"
-    assert zarf == ["musteri@example.com", "giray.sav@turkcell.com.tr", "arsiv@turkcell.com.tr"]
-    msg = message_from_bytes(ham, policy=default)
-    assert msg["X-Unsent"] is None and msg["From"] == "TAMLIFE@turkcell.com.tr" and msg["Reply-To"] is None  # UPN posta kutusu degil (2026-10-26)
-    assert msg["Message-ID"].endswith("@turkcell.com.tr>") and msg["Date"] and "arsiv" not in str(msg["To"]) + str(msg["Cc"]) and msg["Bcc"] is None
-    assert [e.get_filename() for e in msg.iter_attachments()] == ["TAM_Aylik_Rapor_Alfa_Test_AS.pdf"]
-
-
-def test_smtp_teslim_edilemezse_kayit_ve_pdf_kalmaz(veri, smtp_kipi):
-    """Sunucu kapali: 503, gonderim kaydi yok, arsiv PDF'i silinir, ay kilitlenmez (personel tekrar dener)."""
-    hdr = login_ok(veri)
-    url = "/api/v1/musteri/1/rapor"
-    _SahteSmtp.hata = TimeoutError()
-    pdf = base64.b64encode(b"%PDF-1.4 test").decode()
-    r = veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com", "pdf_base64": pdf}, headers=hdr)
-    assert r.status_code == 503 and "mail.test:25" in r.text
-    with Session(engine()) as db:
-        assert db.query(ReportDispatch).count() == 0 and db.query(Report).count() == 0 and db.get(Customer, 1).report_count in (0, None)
-    assert not [p for p in smtp_kipi.rglob("*.pdf")]
-    assert veri.get(f"{url}/taslak").json()["data"]["gonderim"] is None
-    _SahteSmtp.hata = None
-    assert veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr).status_code == 200
-
-
 def _rapor_arizalari(bekle: int = 0) -> list:
     """TL-RAP-01 kayitlari (ariza kaydi arka planda yazilir: en cok ~2 sn beklenir)."""
     import time
@@ -373,21 +312,27 @@ def _rapor_arizalari(bekle: int = 0) -> list:
     return kayitlar
 
 
-def test_gonderim_hatasi_admin_bildirimi(veri, smtp_kipi):
-    """2026-10-26: teslim edilemeyen gonderim TL-RAP-01 ariza kaydi + admin ust cubuk bildirimi; kullanici hatasi bildirim uretmez."""
+def test_gonderim_hatasi_admin_bildirimi(veri, monkeypatch, tmp_path):
+    """2026-10-26: gonderimde beklenmeyen hata TL-RAP-01 ariza kaydi + admin ust cubuk bildirimi; kullanici hatasi bildirim uretmez."""
+    monkeypatch.setenv("TAMLIFE_REPORT_DIR", str(tmp_path / "raporlar"))
     hdr = login_ok(veri)
     url = "/api/v1/musteri/1/rapor"
     assert veri.post(f"{url}/gonder", json={"onay": False, "to": "musteri@example.com"}, headers=hdr).status_code == 400  # onay yok
-    assert veri.post(f"{url}/gonder", json={"onay": True, "to": ""}, headers=hdr).status_code == 400  # alici yok
-    _SahteSmtp.hata = TimeoutError()
-    assert veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr).status_code == 503
+    assert veri.post(f"{url}/gonder", json={"onay": True, "to": "bozuk"}, headers=hdr).status_code == 400  # gecersiz alici
+
+    def disk_dolu(*_a: object) -> None:
+        raise OSError("disk dolu")
+
+    monkeypatch.setattr(rapor_servis, "_pdf_yaz", disk_dolu)
+    pdf = base64.b64encode(b"%PDF-1.4 test").decode()
+    assert veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com", "pdf_base64": pdf}, headers=hdr).status_code == 500
     (kod, kaynak, mesaj, kisi), = _rapor_arizalari(bekle=1)
-    assert (kod, kaynak, kisi) == ("TL-RAP-01", "rapor.gonder", "admin") and mesaj.startswith("müşteri #1 Alfa Test") and "mail.test:25" in mesaj
+    assert (kod, kaynak, kisi) == ("TL-RAP-01", "rapor.gonder", "admin") and mesaj.startswith("müşteri #1 Alfa Test") and "OSError" in mesaj
     b = veri.get("/api/v1/yonetim/bildirimler").json()["data"]
     assert b["toplam"] == 1 and b["son"][0]["kod"] == "TL-RAP-01"
     a = veri.get("/api/v1/yonetim/arizalar?kod=TL-RAP-01").json()["data"]
     assert a["toplam"] == 1
-    veri.post(f"/api/v1/yonetim/arizalar/{a['satirlar'][0]['id']}/durum", json={"durum": "closed", "notu": "SMTP duzeldi"}, headers=hdr)
+    veri.post(f"/api/v1/yonetim/arizalar/{a['satirlar'][0]['id']}/durum", json={"durum": "closed", "notu": "disk bosaltildi"}, headers=hdr)
     assert veri.get("/api/v1/yonetim/bildirimler").json()["data"]["toplam"] == 0  # kapatilan kayit bildirimden duser
 
 
@@ -401,42 +346,36 @@ def test_gece_senkronu_admin_bildirimi(veri):
     assert b["toplam"] == 1 and b["son"][0]["kod"] == "TL-SNC-01"
 
 
-def test_smtp_kipinde_alici_ve_ayar_zorunlu(veri, smtp_kipi, monkeypatch):
-    hdr = login_ok(veri)
-    url = "/api/v1/musteri/1/rapor"
-    assert veri.post(f"{url}/gonder", json={"onay": True, "to": ""}, headers=hdr).status_code == 400
-    monkeypatch.delenv("SMTP_SERVER")
-    r = veri.post(f"{url}/gonder", json={"onay": True, "to": "musteri@example.com"}, headers=hdr)
-    assert r.status_code == 503 and "SMTP_SERVER" in r.text and not _SahteSmtp.gonderilen
-
-
-def test_eposta_erisim_testi_ileti_gondermez(veri, smtp_kipi, monkeypatch):
-    import socket
-
-    hdr = login_ok(veri)
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(None, None, None, None, ("10.0.0.1", 25))])
-    monkeypatch.setattr(socket, "create_connection", lambda *a, **k: type("B", (), {"close": lambda self: None})())
-    r = veri.post("/api/v1/yonetim/kurum/eposta-testi", headers=hdr)
-    d = r.json()["data"]
-    assert r.status_code == 200 and d["tamam"] and d["kip"] == "smtp" and [a["adim"] for a in d["adimlar"]] == ["ayar", "dns", "tcp", "ehlo"]
-    assert "50 MB" in d["adimlar"][-1]["ayrinti"] and not _SahteSmtp.gonderilen
-
-
 def test_ayri_rapor_ve_durum_ozeti(veri):
     hdr = login_ok(veri)
     assert veri.put("/api/v1/musteri/1/ayri-rapor", json={"ayri_rapor": True}, headers=hdr).status_code == 400  # cati
     assert veri.put("/api/v1/musteri/2/ayri-rapor", json={"ayri_rapor": True}, headers=hdr).json()["data"] == {"ayri_rapor": True}
     yil, ay = AY
     d = veri.get("/api/v1/rapor/durum").json()["data"]
-    assert d["toplam"] == {"musteri": 3, "atilan": 0, "bekleyen": 3}  # A, B ve ayri rapor secilmis istirak
+    assert d["toplam"] == {"musteri": 3, "atilan": 0, "bekleyen": 3, "muaf": 0}  # A, B ve ayri rapor secilmis istirak
     assert veri.post("/api/v1/musteri/1/rapor/gonder", json={"onay": True}, headers=hdr).status_code == 200
     d = veri.get("/api/v1/rapor/durum", params={"yil": yil, "ay": ay}).json()["data"]
-    assert d["toplam"] == {"musteri": 3, "atilan": 1, "bekleyen": 2}
+    assert d["toplam"] == {"musteri": 3, "atilan": 1, "bekleyen": 2, "muaf": 0}
     satirlar = {s["ad"]: s for s in d["satirlar"]}
-    assert satirlar["-"] == {"id": None, "ad": "-", "musteri": 2, "atilan": 1, "bekleyen": 1}  # admin sahipli birimler tek '-' satirinda: yonetici TAM satiri olmaz
-    assert satirlar["Ayse Test"] == {"id": 2, "ad": "Ayse Test", "musteri": 1, "atilan": 0, "bekleyen": 1} and "Admin Kisi" not in satirlar
+    assert satirlar["-"] == {"id": None, "ad": "-", "musteri": 2, "atilan": 1, "bekleyen": 1, "muaf": 0}  # admin sahipli birimler tek '-' satirinda: yonetici TAM satiri olmaz
+    assert satirlar["Ayse Test"] == {"id": 2, "ad": "Ayse Test", "musteri": 1, "atilan": 0, "bekleyen": 1, "muaf": 0} and "Admin Kisi" not in satirlar
     assert veri.put("/api/v1/musteri/2/ayri-rapor", json={"ayri_rapor": False}, headers=hdr).status_code == 200
     assert veri.get("/api/v1/rapor/durum").json()["data"]["toplam"]["musteri"] == 2
+
+
+def test_rapor_muaf_bekleyene_sayilmaz(veri):
+    """2026-10-31 kullanici: kartta 'raporu atilmamaktadir' isaretli musteri durum ozetinde bekleyen degil, muaf sayilir."""
+    hdr = login_ok(veri)
+    once = veri.get("/api/v1/rapor/durum").json()["data"]["toplam"]
+    assert veri.get("/api/v1/musteri/1").json()["data"]["kimlik"]["rapor_muaf"] is False
+    assert veri.put("/api/v1/musteri/1/rapor-muaf", json={"rapor_muaf": True}, headers=hdr).json()["data"] == {"rapor_muaf": True}
+    kart = veri.get("/api/v1/musteri/1").json()["data"]
+    assert kart["kimlik"]["rapor_muaf"] is True and kart["erisim"]["rapor_muaf_sec"] is True
+    sonra = veri.get("/api/v1/rapor/durum").json()["data"]["toplam"]
+    assert sonra == {**once, "musteri": once["musteri"] - 1, "bekleyen": once["bekleyen"] - 1, "muaf": 1}
+    assert veri.put("/api/v1/musteri/1/rapor-muaf", json={"rapor_muaf": "evet"}, headers=hdr).status_code == 422
+    assert veri.put("/api/v1/musteri/1/rapor-muaf", json={"rapor_muaf": False}, headers=hdr).status_code == 200
+    assert veri.get("/api/v1/rapor/durum").json()["data"]["toplam"] == once
 
 
 def test_yetkisiz_ve_csrf(veri, monkeypatch):

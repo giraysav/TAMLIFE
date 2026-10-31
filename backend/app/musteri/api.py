@@ -60,6 +60,14 @@ class AyriRaporGovde(BaseModel):
     ayri_rapor: bool
 
 
+# Rapor donemi secimi (?donem=YYYY-MM): verilmezse onceki ay; gecerli donemleri rs.donem dogrular (2026-10-31 kullanici).
+DonemQ = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+class RaporMuafGovde(BaseModel):
+    rapor_muaf: bool
+
+
 class TaslakGovde(BaseModel):
     alanlar: dict = Field(default_factory=dict)
 
@@ -205,14 +213,24 @@ def ayri_rapor(
     return _yap(db, lambda: rs.ayri_rapor_ayarla(db, e.user, musteri_id, body.ayri_rapor), yaz=True)
 
 
+@router.put("/musteri/{musteri_id:int}/rapor-muaf")
+def rapor_muaf(
+    musteri_id: KimlikTipi,
+    body: RaporMuafGovde,
+    e: Erisim = Depends(musteri_erisim),
+    db: Session = Depends(get_db),
+):
+    return _yap(db, lambda: rs.rapor_muaf_ayarla(db, e.user, musteri_id, body.rapor_muaf), yaz=True)
+
+
 @router.get("/musteri/{musteri_id:int}/rapor/taslak")
-def taslak_oku(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.taslak_getir(db, e.user, musteri_id))
+def taslak_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.taslak_getir(db, e.user, musteri_id, donem_kodu=donem))
 
 
 @router.put("/musteri/{musteri_id:int}/rapor/taslak")
-def taslak_yaz(musteri_id: KimlikTipi, body: TaslakGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.taslak_kaydet(db, e.user, musteri_id, body.alanlar), yaz=True)
+def taslak_yaz(musteri_id: KimlikTipi, body: TaslakGovde, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.taslak_kaydet(db, e.user, musteri_id, body.alanlar, donem_kodu=donem), yaz=True)
 
 
 @router.put("/musteri/{musteri_id:int}/rapor/alicilar")
@@ -221,23 +239,22 @@ def alicilar(musteri_id: KimlikTipi, body: AlicilarGovde, e: Erisim = Depends(mu
 
 
 @router.post("/musteri/{musteri_id:int}/rapor/gonder")
-def gonder(musteri_id: KimlikTipi, body: GonderGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    """Gonderim hatasi admin'e bildirilir (rs.gonderim_hatasi_bildir): teslim hatasi (EpostaHata) ve beklenmeyen hata. Kullanici
+def gonder(musteri_id: KimlikTipi, body: GonderGovde, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Gonderim hatasi admin'e bildirilir (rs.gonderim_hatasi_bildir): sunucu (5xx) ve beklenmeyen hata. Kullanici
     girdisi hatalari (onay yok, ay kilitli, gecersiz alici: RaporHata 4xx) bildirim uretmez."""
     from app import ariza
     from app.ortak import UygulamaHatasi
-    from app.rapor import smtp_gonderim
 
     try:
-        sonuc = _yap(db, lambda: rs.gonder(db, e.user, musteri_id, _govde(body)), yaz=True)
+        sonuc = _yap(db, lambda: rs.gonder(db, e.user, musteri_id, _govde(body), donem_kodu=donem), yaz=True)
     except UygulamaHatasi as exc:
-        if isinstance(exc, smtp_gonderim.EpostaHata) or exc.kod >= 500:
+        if exc.kod >= 500:
             db.rollback()  # istek oturumunun yazma kilidi birakilsin: ariza kaydi ayri oturumla yazilir
             rs.gonderim_hatasi_bildir(e.user, musteri_id, exc.mesaj)
         raise
     except Exception as exc:
-        db.rollback()  # SMTP kipinde ileti teslim edilmis, kayit yazilamamis olabilir: bildirimde belirtilir
-        kayit = rs.gonderim_hatasi_bildir(e.user, musteri_id, f"{type(exc).__name__} (SMTP kipinde ileti alıcıya gitmiş olabilir)", exc=exc)
+        db.rollback()
+        kayit = rs.gonderim_hatasi_bildir(e.user, musteri_id, type(exc).__name__, exc=exc)
         raise UygulamaHatasi(500, ariza.mesaj(rs.GONDERIM_ARIZASI, kayit)) from exc
     if isinstance(sonuc, dict):
         _denetim(e.user, "rapor.gonder", f"musteri={musteri_id}")
@@ -253,61 +270,61 @@ def _ayri_oturumda(islem: Callable[[Session], Any]) -> Any:
 
 
 @router.get("/musteri/{musteri_id:int}/rapor/sla")
-def sla_oku(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.sla_getir(db, e.user, musteri_id))
+def sla_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.sla_getir(db, e.user, musteri_id, donem_kodu=donem))
 
 
 @router.put("/musteri/{musteri_id:int}/rapor/sla")
 async def sla_yukle(
-    musteri_id: KimlikTipi, request: Request, dosya: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
+    musteri_id: KimlikTipi, request: Request, dosya: str = Query(default="", max_length=200), donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim)
 ):
     """SLA Excel'i (.xlsx govdesi). Donemde oncekinin yerine gecer; rapor gonderilirken iletiye otomatik eklenir."""
     veri = await govde_oku(request, min(get_settings().ingest_max_mb, 30) * 1048576)
-    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.sla_yukle(db, e.user, musteri_id, veri, dosya))
+    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.sla_yukle(db, e.user, musteri_id, veri, dosya, donem_kodu=donem))
     _denetim(e.user, "rapor.sla_yukle", f"musteri={musteri_id} boyut={len(veri)}")
     return ok(sonuc)
 
 
 @router.delete("/musteri/{musteri_id:int}/rapor/sla")
-def sla_sil(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.sla_sil(db, e.user, musteri_id))
+def sla_sil(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.sla_sil(db, e.user, musteri_id, donem_kodu=donem))
 
 
 @router.post("/musteri/{musteri_id:int}/rapor/gorsel")
 async def gorsel_ekle(
-    musteri_id: KimlikTipi, request: Request, baslik: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
+    musteri_id: KimlikTipi, request: Request, baslik: str = Query(default="", max_length=200), donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim)
 ):
     """Elle eklenen rapor grafigi (MRTG vb.; GALAPAGOS baglanana kadar). PNG/JPEG/GIF govdesi."""
     veri = await govde_oku(request, 10 * 1048576)
-    return ok(await run_in_threadpool(_ayri_oturumda, lambda db: rs.gorsel_ekle(db, e.user, musteri_id, veri, baslik)))
+    return ok(await run_in_threadpool(_ayri_oturumda, lambda db: rs.gorsel_ekle(db, e.user, musteri_id, veri, baslik, donem_kodu=donem)))
 
 
 @router.delete("/musteri/{musteri_id:int}/rapor/gorsel/{numara:int}")
-def gorsel_sil(musteri_id: KimlikTipi, numara: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.gorsel_sil(db, e.user, musteri_id, numara))
+def gorsel_sil(musteri_id: KimlikTipi, numara: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.gorsel_sil(db, e.user, musteri_id, numara, donem_kodu=donem))
 
 
 @router.post("/musteri/{musteri_id:int}/rapor/dosya")
 async def dosya_ekle(
-    musteri_id: KimlikTipi, request: Request, ad: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim)
+    musteri_id: KimlikTipi, request: Request, ad: str = Query(default="", max_length=200), donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim)
 ):
     """Rapor iletisine eklenecek dosya (ham govde). Gonderimde iletiye otomatik girer."""
     veri = await govde_oku(request, 20 * 1048576)
-    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.dosya_ekle(db, e.user, musteri_id, veri, ad))
+    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.dosya_ekle(db, e.user, musteri_id, veri, ad, donem_kodu=donem))
     _denetim(e.user, "rapor.dosya_ekle", f"musteri={musteri_id} boyut={len(veri)}")
     return ok(sonuc)
 
 
 @router.delete("/musteri/{musteri_id:int}/rapor/dosya/{numara:int}")
-def dosya_sil(musteri_id: KimlikTipi, numara: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.dosya_sil(db, e.user, musteri_id, numara))
+def dosya_sil(musteri_id: KimlikTipi, numara: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    return _yap(db, lambda: rs.dosya_sil(db, e.user, musteri_id, numara, donem_kodu=donem))
 
 
 @router.post("/musteri/{musteri_id:int}/rapor/sla/analiz")
-async def sla_analizi(musteri_id: KimlikTipi, body: Serbest, e: Erisim = Depends(musteri_erisim)):
+async def sla_analizi(musteri_id: KimlikTipi, body: Serbest, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim)):
     """SLA Excel'inin tum verisinin ozeti; `yz: true` ise (ve YZ aciksa) dil modeli yorumu da. Excel okumasi threadpool'da."""
     govde = body.model_dump()
-    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.sla_analizi(db, e.user, musteri_id, govde))
+    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.sla_analizi(db, e.user, musteri_id, govde, donem_kodu=donem))
     if govde.get("yz") is True:
         _denetim(e.user, "rapor.sla_yz", f"musteri={musteri_id}")
     return ok(sonuc)
