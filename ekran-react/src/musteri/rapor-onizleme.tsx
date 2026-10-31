@@ -65,12 +65,17 @@ type Props = {
 
 export const RaporOnizleme = forwardRef<HTMLDivElement, Props>(function RaporOnizleme({ musteriAdi, donem, dil, alanlar, grafikler, ekler }, ref) {
   const m = METIN[dil]
+  // Basliklar dil kurallariyla buyutulur: CSS text-transform'u html2canvas dil bilmeden uygular ("Gelişmeler" -> "GELIŞMELER")
+  const buyuk = (s: string) => s.toLocaleUpperCase(dil === "en" ? "en-US" : "tr-TR")
   const imza = (alanlar.imza ?? "").split("\n").map((s) => s.trim()).filter(Boolean)
   const bant: CSSProperties = { background: LACIVERT, color: "#ffffff", padding: 18, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }
   return (
     <div
       ref={ref}
       lang={dil}
+      // data-harf-koru: rapor bir belge; ekrandaki BUYUK HARF / Turkce karaktersiz gosterim kurali (lib/buyuk-harf) uygulanmaz,
+      // metin taslaktaki gibi imla kurallarina uygun ve Turkce harflerle cikar (2026-10-31 kullanici)
+      data-harf-koru
       data-testid="rapor-pdf"
       style={{ width: "210mm", minHeight: "297mm", padding: "15mm", boxSizing: "border-box", background: "#ffffff", color: LACIVERT, fontFamily: YAZI, display: "flex", flexDirection: "column", justifyContent: "space-between", flexShrink: 0 }}
     >
@@ -78,15 +83,15 @@ export const RaporOnizleme = forwardRef<HTMLDivElement, Props>(function RaporOni
         <div data-pdf-blok style={{ ...bant, marginBottom: 22 }}>
           <div style={{ minWidth: 0 }}>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, lineHeight: 1.25, color: "#ffffff" }}>{musteriAdi}</h1>
-            <p style={{ margin: "4px 0 0", fontSize: 11.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: SARI }}>
-              {m.rapor} - {donem}
+            <p style={{ margin: "4px 0 0", fontSize: 11.5, fontWeight: 700, letterSpacing: 1, color: SARI }}>
+              {buyuk(`${m.rapor} - ${donem}`)}
             </p>
           </div>
           <img src={apiYolu("/rapor-teknocan.png")} alt="Teknocan" width={96} height={96} style={{ width: 96, height: 96, borderRadius: 48, flexShrink: 0 }} />
         </div>
         {BOLUMLER.map((b) => (
           <div key={b.alan} style={{ ...kutu, borderColor: b.kenar, background: b.zemin }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: 11.5, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase", color: b.baslik }}>{m[b.alan]}</h3>
+            <h3 style={{ margin: "0 0 6px", fontSize: 11.5, fontWeight: 900, letterSpacing: 1, color: b.baslik }}>{buyuk(m[b.alan])}</h3>
             <p style={paragraf}>{alanlar[b.alan] ?? ""}</p>
             {b.alan === "bilgi" && grafikler.length > 0 ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
@@ -114,7 +119,7 @@ export const RaporOnizleme = forwardRef<HTMLDivElement, Props>(function RaporOni
           </div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <span style={{ display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "#94a3b8" }}>Turkcell Superonline</span>
+          <span style={{ display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 2, color: "#94a3b8" }}>{buyuk("Turkcell Superonline")}</span>
           <span style={{ fontSize: 11.5, fontWeight: 900, color: SARI }}>www.superonline.net</span>
         </div>
       </div>

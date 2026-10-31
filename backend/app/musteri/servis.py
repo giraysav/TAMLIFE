@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app import gorunurluk, musteri_alani
 from app.authz import is_admin, yonetici_mi
+from app.bildirim import servis as bildirim
 from app.gelir.servis import tum_gelirler, unvan_tasi
 from app.kullanicilar import kullanici_kaydi, modul_yoneticisi_mi, musteri_personeli, musteri_personeli_mi
 from app.models import (
@@ -30,6 +31,7 @@ from app.models import (
     Report,
     ScoreApprovalRequest,
     SmsRevenue,
+    UserNotification,
 )
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
@@ -114,14 +116,8 @@ def duzenleyebilir_mi(db: Session, user: Principal, musteri: Customer) -> bool:
 
 
 def silinebilir_mi(db: Session, user: Principal, musteri: Customer) -> bool:
-    """Alan yoneticisi her karti; personel yalniz sorumlusu oldugu karti siler. Silme istirakleri de goturur: baskasinin istiraki
-    altindaysa personel silemez."""
-    if alan_yoneticisi_mi(db, user, musteri.modul):
-        return True
-    uid = kullanici_id(db, user)
-    if musteri.modul != musteri_alani.VARSAYILAN or uid is None or musteri.owner_id != uid:
-        return False
-    return db.scalar(select(Customer.id).where(Customer.parent_id == musteri.id, or_(Customer.owner_id.is_(None), Customer.owner_id != uid)).limit(1)) is None
+    """Musteri kartini (istirakleriyle) YALNIZ admin siler (2026-10-31 kullanici). Digerleri silme talebi gonderir (silme_talebi)."""
+    return is_admin(user)
 
 
 def kullanici_id(db: Session, user: Principal) -> int | None:
@@ -451,6 +447,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "iletisim_duzenle": yazma,
         "istirak_ekle": yazma and eylem_yetkisi(user, "add"),
         "sil": silinebilir_mi(db, user, musteri),
+        "sil_talebi": not is_admin(user),  # 2026-10-31: dugme herkese gorunur; admin olmayan silme onayina gonderir
         "tam_degistir": yonetici,  # sorumlu devri yalniz yonetici (tam_degistir)
         "rapor_geri_al": is_admin(user),
         "ayri_rapor_sec": yazma and musteri.parent_id is not None,
@@ -775,9 +772,32 @@ def agaci_sil(db: Session, kokler: list[int]) -> int:
 
 
 def sil(db: Session, user: Principal, musteri_id: int) -> dict:
-    """Musteriyi ve istiraklerini (bagli rapor, taslak, gonderim, skor kayitlariyla) siler. Yonetici her karti, personel yalniz
-    kendi kartini (silinebilir_mi)."""
+    """Musteriyi ve istiraklerini (bagli rapor, taslak, gonderim, skor kayitlariyla) siler. Yalniz admin (silinebilir_mi)."""
     musteri = musteri_getir(db, user, musteri_id)
     if not silinebilir_mi(db, user, musteri):
-        raise MusteriHata(403, "Yalnızca sorumlusu olduğunuz müşteriyi silebilirsiniz.")
+        raise MusteriHata(403, "Müşteriyi yalnız admin silebilir; silme onayına gönderin.")
     return {"silinen": agaci_sil(db, [musteri.id])}
+
+
+SILME_TALEBI = "musteri_silme"
+
+
+def silme_talebi(db: Session, user: Principal, musteri_id: int) -> dict:
+    """Admin olmayan, gorebildigi kart icin silme onayi ister (2026-10-31 kullanici): her etkin admin'e kisisel panel bildirimi
+    (ust cubuk zili, karta baglanti). Ayni kart icin okunmamis talep varsa yenisi yazilmaz (`zaten`)."""
+    musteri = musteri_getir(db, user, musteri_id)
+    if is_admin(user):
+        raise MusteriHata(400, "Admin kartı doğrudan silebilir.")
+    adminler = [k.id for k in db.scalars(select(AppUser).where(AppUser.active.is_(True), or_(AppUser.is_admin.is_(True), AppUser.role == "admin")))]
+    bekleyen = db.scalar(
+        select(UserNotification.id).where(UserNotification.kind == SILME_TALEBI, UserNotification.ref_id == musteri.id, UserNotification.read_at.is_(None)).limit(1)
+    )
+    if bekleyen is not None:
+        return {"zaten": True, "bildirilen": 0}
+    isteyen = kullanici_kaydi(db, user)
+    istirak = db.scalar(select(func.count()).select_from(Customer).where(Customer.parent_id == musteri.id)) or 0
+    ek = f" ({istirak} iştirakiyle)" if istirak else ""
+    mesaj = f"{isteyen.display_name or isteyen.username}, “{musteri.name}”{ek} müşteri kartının silinmesini istiyor."
+    for kimlik in adminler:
+        bildirim.ekle(db, kimlik, SILME_TALEBI, mesaj, f"#/{musteri.modul or musteri_alani.VARSAYILAN}?m={musteri.id}", musteri.id)
+    return {"zaten": False, "bildirilen": len(adminler)}

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import type { FormEvent, ReactNode } from "react"
 import { Activity, Building2, FileText, ListChecks, Mail, Network, Pencil, Phone, Plus, Trash2 } from "lucide-react"
 import { adaGoreSirala, sayi } from "@/lib/bicim"
+import { buyukHarf } from "@/lib/buyuk-harf"
 import { ApiHata, hataMesaji, oku, yaz } from "@/lib/sorgu"
 import { Cekmece } from "@/components/cekmece"
 import { Alan, Bolum, Bos, DUGME, DUGME_ANA, GIRDI, Rozet, Satir, VeriTablosu } from "@/components/sayfa-ui"
@@ -10,6 +11,9 @@ import type { Dil } from "@/shell/metin"
 import { KartKayitlari } from "@/musteri/kayitlar"
 import type { KayitDurumu, KayitTuru } from "@/musteri/kayitlar"
 import { musteriMetin } from "@/musteri/musteri-metin"
+
+/** Kapali kartta gosterilen istirak sayisi; fazlasi "+N" dugmesinde. */
+const ISTIRAK_ONIZLEME = 6
 import { modulYolu, useMusteriYolu } from "@/musteri/musteri-yolu"
 import { sorguAyarla } from "@/shell/rota"
 
@@ -37,7 +41,7 @@ export type Kart = {
   iletisim: Record<string, string>
   kritik_ci: Matris
   raporlar?: { toplam: number; son: { donem: string; gonderildi: boolean; duzenleyen: string | null; tarih: string | null; bayrak: number }[] }
-  erisim: { rapor: boolean; gelir: boolean; kimlik_duzenle: boolean; iletisim_duzenle: boolean; sil: boolean; tam_degistir: boolean; rapor_geri_al: boolean; ayri_rapor_sec: boolean; rapor_muaf_sec: boolean; istirak_ekle: boolean }
+  erisim: { rapor: boolean; gelir: boolean; kimlik_duzenle: boolean; iletisim_duzenle: boolean; sil: boolean; sil_talebi?: boolean; tam_degistir: boolean; rapor_geri_al: boolean; ayri_rapor_sec: boolean; rapor_muaf_sec: boolean; istirak_ekle: boolean }
   tam_secenekleri?: { id: number; ad: string }[]
   cati_secenekleri?: { id: number; ad: string }[]
 }
@@ -203,6 +207,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   const [yeniIstirak, setYeniIstirak] = useState<string | null>(null)
   const [ciAcik, setCiAcik] = useState(false)
   const [istirakAcik, setIstirakAcik] = useState(false)
+  const [istirakAra, setIstirakAra] = useState("")
   const [secim, setSecim] = useState<Secim>(null)
 
   /** Form sunucu verisiyle YALNIZ duzenleme acilirken doldurulur: arka plan yenilemesi yazilani ezmez, Vazgec sonrasi eski deger donmez. */
@@ -279,6 +284,19 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
     if (await dene("sil", () => yaz("DELETE", `/api/v1/musteri/${id}`))) sorguAyarla(yol, {})
   }
 
+  /** 2026-10-31: silme yalniz admin; personel karti silme onayina gonderir (admin'lere panel bildirimi). */
+  async function silmeTalebi() {
+    if (!window.confirm(t.silTalebiOnay)) return
+    let zaten = false
+    const tamam = await dene("sil", async () => {
+      zaten = (await yaz<{ zaten: boolean }>("POST", `/api/v1/musteri/${id}/silme-talebi`)).zaten
+    })
+    if (tamam) {
+      bildir("sil", "")
+      bildir("silTalebi", zaten ? t.silTalebiZaten : t.silTalebiGitti)
+    }
+  }
+
   async function istirakEkle(olay: FormEvent) {
     olay.preventDefault()
     let yeni = 0
@@ -301,6 +319,9 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
   }
   const e = kart.erisim
   const k = kart.kimlik
+  // Arama Turkce harf / buyuk-kucuk farksiz: "izmir" IZMIR'i bulur (tr-TR kucuk harf "ızmır" verirdi)
+  const aranan = buyukHarf(istirakAra.trim())
+  const gorunenIstirakler = aranan ? k.istirakler.filter((i) => buyukHarf(`${i.unvan} ${i.ncst}`).includes(aranan)) : k.istirakler
   const o = kart.operasyon
   const duzenlenebilir = e.kimlik_duzenle || e.iletisim_duzenle
   const mobilNot = (kart.iletisim.mobil_kmt_detail ?? "").trim()
@@ -540,35 +561,69 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
             )}
           </div>
 
-          {/* Istirakler en fazla 2 satir (kart tek ekrana sigsin); "Tumunu goster" acinca sayfa uzar */}
-          <div className="flex items-start gap-2">
-          <div className={`flex min-w-0 flex-1 flex-wrap items-center gap-1 ${istirakAcik ? "" : "max-h-[3.25rem] overflow-hidden"}`}>
-            <span className="mr-1 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
-              {t.istirakler} ({k.istirakler.length})
-            </span>
-            <div className="contents">
+          {/* Istirakler (2026-10-31 kullanici: "cok daginik"): kapaliyken ilk ISTIRAK_ONIZLEME hap + "+N"; acikken arama + duzenli izgara
+              (unvan tek satir, altinda NCST / TAM). Kart kapaliyken tek ekrana sigar. */}
+          <div className="grid gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 inline-flex items-center gap-1.5 text-[0.625rem] font-black uppercase tracking-wide text-white/70">
+                <Building2 aria-hidden className="size-3.5" />
+                {t.istirakler}
+                <span className="rounded bg-white/15 px-1.5 font-mono text-white">{k.istirakler.length}</span>
+              </span>
               {k.istirakler.length === 0 ? <span className="text-white/60">—</span> : null}
-              {k.istirakler.map((i) => (
-                <a
-                  key={i.id}
-                  href={`#/${yol}?m=${i.id}`}
-                  className="rounded-md border border-slate-200 bg-white/90 px-2 py-0.5 text-[0.6875rem] font-bold text-tl-navy transition-colors hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+              {!istirakAcik
+                ? k.istirakler.slice(0, ISTIRAK_ONIZLEME).map((i) => (
+                    <a
+                      key={i.id}
+                      href={`#/${yol}?m=${i.id}`}
+                      title={i.unvan}
+                      className="max-w-[16rem] truncate rounded-md border border-white/20 bg-white/90 px-2 py-0.5 text-[0.6875rem] font-bold text-tl-navy transition-colors hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+                    >
+                      {i.unvan}
+                    </a>
+                  ))
+                : null}
+              {k.istirakler.length > ISTIRAK_ONIZLEME ? (
+                <button
+                  type="button"
+                  aria-expanded={istirakAcik}
+                  onClick={() => {
+                    setIstirakAcik((v) => !v)
+                    setIstirakAra("")
+                  }}
+                  className="ml-auto shrink-0 rounded-md border border-tl-yellow/60 bg-tl-yellow/15 px-2 py-0.5 text-[0.6875rem] font-black text-tl-yellow hover:bg-tl-yellow/25 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
                 >
-                  {i.unvan}
-                </a>
-              ))}
+                  {istirakAcik ? t.istirakDaralt : t.istirakDaha(k.istirakler.length - ISTIRAK_ONIZLEME)}
+                </button>
+              ) : null}
             </div>
-          </div>
-          {k.istirakler.length > 8 ? (
-            <button
-              type="button"
-              aria-expanded={istirakAcik}
-              onClick={() => setIstirakAcik((v) => !v)}
-              className="shrink-0 rounded-md border border-tl-yellow/60 bg-tl-yellow/15 px-2 py-0.5 text-[0.6875rem] font-black text-tl-yellow hover:bg-tl-yellow/25 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
-            >
-              {istirakAcik ? t.istirakDaralt : t.istirakTumu(k.istirakler.length)}
-            </button>
-          ) : null}
+            {istirakAcik ? (
+              <div className="grid gap-2 rounded-xl bg-white p-3 text-tl-navy">
+                <input
+                  type="search"
+                  className={`${GIRDI} sm:max-w-xs`}
+                  placeholder={t.istirakAra}
+                  aria-label={t.istirakAra}
+                  value={istirakAra}
+                  onChange={(ev) => setIstirakAra(ev.target.value)}
+                />
+                <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {gorunenIstirakler.map((i) => (
+                    <li key={i.id}>
+                      <a
+                        href={`#/${yol}?m=${i.id}`}
+                        title={i.unvan}
+                        className="block rounded-lg border border-slate-200 px-2.5 py-1.5 transition-colors hover:border-tl-blue/40 hover:bg-slate-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-yellow"
+                      >
+                        <span className="block truncate text-[0.6875rem] font-black">{i.unvan}</span>
+                        <span className="block truncate text-[0.625rem] font-bold text-slate-400">{[i.ncst, i.tam].filter(Boolean).join(" · ") || "—"}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                {gorunenIstirakler.length === 0 ? <p className="text-xs font-bold text-slate-400">{t.sonucYok}</p> : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -577,6 +632,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
       <div className="flex flex-wrap items-center justify-end gap-2">
         {mesaj.istirak ? <span role="alert" className="text-xs font-bold text-destructive">{mesaj.istirak}</span> : null}
         {mesaj.sil ? <span role="alert" className="text-xs font-bold text-destructive">{mesaj.sil}</span> : null}
+        {mesaj.silTalebi ? <span role="status" className="text-xs font-bold text-emerald-700">{mesaj.silTalebi}</span> : null}
         {!duzenle && mesaj.duzenle ? <span role="status" className="text-xs font-bold text-slate-500">{mesaj.duzenle}</span> : null}
         {duzenlenebilir && !duzenle ? (
           <button type="button" onClick={duzenlemeyiAc} className={DUGME}>
@@ -611,10 +667,10 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
           <Network aria-hidden className="size-3.5" />
           {t.topoMaker}
         </a>
-        {e.sil ? (
-          <button type="button" onClick={() => void sil()} className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-500/10 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-500/20 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-400">
+        {e.sil || e.sil_talebi ? (
+          <button type="button" onClick={() => void (e.sil ? sil() : silmeTalebi())} className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-500/10 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-500/20 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-400">
             <Trash2 aria-hidden className="size-3.5" />
-            {t.sil}
+            {e.sil ? t.sil : t.silTalebi}
           </button>
         ) : null}
       </div>

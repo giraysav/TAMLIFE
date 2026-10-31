@@ -190,6 +190,36 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     expect(within(satir).getByRole("button", { name: /Müşteriyi sil/ })).toBeInTheDocument()
   })
 
+  it("2026-10-31: sil dugmesi personelde 'Musteri silme onayina gonder'; admin'e talep gider", async () => {
+    const cagrilar = sahteSunucu({
+      "/api/v1/musteri/9/silme-talebi": { zaten: false, bildirilen: 1 },
+      "/api/v1/musteri/9": { ...KART, erisim: { ...KART.erisim, sil: false, sil_talebi: true } },
+    })
+    vi.stubGlobal("confirm", vi.fn(() => true))
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    expect(screen.queryByRole("button", { name: /Müşteriyi sil/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: /Müşteri silme onayına gönder/ }))
+    expect(await screen.findByText("Silme talebi admin'e iletildi.")).toBeInTheDocument()
+    expect(cagrilar.some((c) => c.yontem === "POST" && c.yol.endsWith("/api/v1/musteri/9/silme-talebi"))).toBe(true)
+    expect(cagrilar.some((c) => c.yontem === "DELETE")).toBe(false)
+  })
+
+  it("2026-10-31: istirakler kapaliyken ilk 6 + '+N'; acilinca aranabilir izgara (NCST / TAM ile)", async () => {
+    const istirakler = Array.from({ length: 10 }, (_, i) => ({ id: 100 + i, unvan: `AKSA ${["ADANA", "BURSA", "CORUM", "DUZCE", "ELAZIG", "GEBZE", "HATAY", "IZMIR", "KARS", "MUS"][i]} DOGALGAZ`, ncst: `N-${i}`, tam: "Ayşe TAM" }))
+    sahteSunucu({ "/api/v1/musteri/9": { ...KART, kimlik: { ...KART.kimlik, istirakler } } })
+    sarmala(<MusteriKarti id={9} dil="tr" />)
+    await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
+    expect(screen.getByRole("link", { name: "AKSA ADANA DOGALGAZ" })).toHaveAttribute("href", "#/musteri?m=100")
+    expect(screen.queryByRole("link", { name: /AKSA HATAY/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "+4 iştirak" }))
+    expect(screen.getByRole("link", { name: /AKSA HATAY DOGALGAZ/ })).toHaveTextContent("N-6 · Ayşe TAM")
+    fireEvent.change(screen.getByLabelText("İştirak ara…"), { target: { value: "izmir" } })
+    expect(screen.getAllByRole("link", { name: /^AKSA / })).toHaveLength(1)
+    fireEvent.click(screen.getByRole("button", { name: "Daralt" }))
+    expect(screen.queryByLabelText("İştirak ara…")).toBeNull()
+  })
+
   it("Duzenle formu arka plan yenilemesinde yazilani korur; Vazgec sonrasi sunucu degerine doner", async () => {
     sahteSunucu({ "/api/v1/musteri/9": KART })
     const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } })

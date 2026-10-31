@@ -202,6 +202,15 @@ def sil(
     return sonuc
 
 
+@router.post("/musteri/{musteri_id:int}/silme-talebi")
+def silme_talebi(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Admin olmayan icin 'Musteri silme onayina gonder': admin'lere panel bildirimi (ms.silme_talebi)."""
+    sonuc = _yap(db, lambda: ms.silme_talebi(db, e.user, musteri_id), yaz=True)
+    if isinstance(sonuc, dict):
+        _denetim(e.user, "musteri.silme_talebi", f"musteri={musteri_id} bildirilen={sonuc['data']['bildirilen']}")
+    return sonuc
+
+
 # --- aylik rapor -----------------------------------------------------------------------------------
 @router.put("/musteri/{musteri_id:int}/ayri-rapor")
 def ayri_rapor(

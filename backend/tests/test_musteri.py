@@ -95,7 +95,8 @@ def test_rapor_ve_gelir_bolumleri_modul_iznine_baglidir(veri, monkeypatch):
     k = veri.get("/api/v1/musteri/1").json()["data"]
     assert "raporlar" not in k and "gelirler" not in k and k["erisim"]["rapor"] is False
     assert "tam_secenekleri" not in k and k["erisim"]["tam_degistir"] is False  # sorumlu devri yalniz yonetici
-    assert k["erisim"]["sil"] is True and k["erisim"]["kimlik_duzenle"] is True  # kendi karti (2026-10-19: herkes kendi verisinde)
+    assert k["erisim"]["kimlik_duzenle"] is True  # kendi karti (2026-10-19: herkes kendi verisinde)
+    assert k["erisim"]["sil"] is False and k["erisim"]["sil_talebi"] is True  # 2026-10-31: silme yalniz admin, personel onaya gonderir
     assert veri.get("/api/v1/rapor/gonderilenler").status_code == 403  # rapor modulu verilmedi
 
 
@@ -160,10 +161,14 @@ def test_ekle_tam_degistir_sil_kurallari(veri, monkeypatch):
     assert veri.put("/api/v1/musteri/3/rapor/taslak", json={"alanlar": {}}, headers=hdr2).status_code == 404  # aylik rapor da
     assert veri.delete("/api/v1/musteri/3", headers=hdr2).status_code == 404
     kart = veri.get("/api/v1/musteri/2").json()["data"]
-    assert all(kart["erisim"][k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "ayri_rapor_sec"))
+    assert all(kart["erisim"][k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "ayri_rapor_sec", "sil_talebi"))
+    assert kart["erisim"]["sil"] is False
     assert kart["erisim"]["tam_degistir"] is False and "tam_secenekleri" not in kart
     assert {c["id"] for c in kart["cati_secenekleri"]} == {kendi.json()["data"]["id"]}  # yalniz kendi catilari (kart 1 ayse'nin)
-    assert veri.delete(f"/api/v1/musteri/{ist}", headers=hdr2).status_code == 200  # kendi kartini siler
+    assert veri.delete(f"/api/v1/musteri/{ist}", headers=hdr2).status_code == 403  # 2026-10-31: kendi kartini da silemez
+    assert veri.post("/api/v1/musteri/3/silme-talebi", headers=hdr2).status_code == 404  # gormedigi kart
+    t1 = veri.post(f"/api/v1/musteri/{ist}/silme-talebi", headers=hdr2).json()["data"]
+    assert t1 == {"zaten": False, "bildirilen": 0}  # test DB'sinde etkin admin satiri henuz yok
     _cikis(veri, hdr2)
 
     hdr3 = _giris(veri, monkeypatch, "admin")
@@ -172,9 +177,33 @@ def test_ekle_tam_degistir_sil_kurallari(veri, monkeypatch):
         db.commit()
     erisim = veri.get("/api/v1/musteri/2").json()["data"]["erisim"]
     assert all(erisim[k] for k in ("kimlik_duzenle", "iletisim_duzenle", "istirak_ekle", "sil", "tam_degistir", "ayri_rapor_sec"))
+    assert erisim["sil_talebi"] is False and veri.post("/api/v1/musteri/2/silme-talebi", headers=hdr3).status_code == 400
     r = veri.delete("/api/v1/musteri/1", headers=hdr3)
-    assert r.status_code == 200 and r.json()["data"]["silinen"] == 2  # cati + kalan istirak (Gama Alt"i Member sildi)
+    assert r.status_code == 200 and r.json()["data"]["silinen"] == 3  # cati + iki istirak (Gama Alt dahil; Member silemedi)
     assert veri.get("/api/v1/musteri/1").status_code == 404 and veri.get("/api/v1/musteri/2").status_code == 404
+
+
+def test_silme_talebi_admine_panel_bildirimi(veri, monkeypatch):
+    """2026-10-31 kullanici: sil dugmesi herkese acik ama yalniz admin siler; personel "silme onayina gonder" der, admin'e bildirim gider."""
+    from app.models import UserNotification
+
+    with Session(engine()) as db:
+        db.add(AppUser(id=50, username="ikinci.admin", display_name="Ikinci Admin", role="admin", is_admin=True, active=True))
+        db.add(AppUser(id=51, username="pasif.admin", display_name="Pasif", role="admin", is_admin=True, active=False))
+        db.commit()
+    hdr = _giris(veri, monkeypatch, "TeamMember")
+    kart = veri.get("/api/v1/musteri").json()["data"]["items"][0]["id"]
+    assert veri.delete(f"/api/v1/musteri/{kart}", headers=hdr).json()["detail"] == "Müşteriyi yalnız admin silebilir; silme onayına gönderin."
+    assert veri.post(f"/api/v1/musteri/{kart}/silme-talebi", headers=hdr).json()["data"] == {"zaten": False, "bildirilen": 1}
+    assert veri.post(f"/api/v1/musteri/{kart}/silme-talebi", headers=hdr).json()["data"] == {"zaten": True, "bildirilen": 0}  # okunmamis talep varken tekrar yok
+    assert veri.post(f"/api/v1/musteri/{kart}/silme-talebi").status_code == 403  # CSRF'siz
+    with Session(engine()) as db:
+        (b,) = db.query(UserNotification).all()
+        assert (b.user_id, b.kind, b.ref_id, b.link) == (50, "musteri_silme", kart, f"#/musteri?m={kart}")
+        assert "müşteri kartının silinmesini istiyor" in b.message
+    _cikis(veri, hdr)
+    hdr = _giris(veri, monkeypatch, "admin")
+    assert veri.delete(f"/api/v1/musteri/{kart}", headers=hdr).status_code == 200
 
 
 def test_taslak_varsayilanlari_kayit_ve_dil(veri):

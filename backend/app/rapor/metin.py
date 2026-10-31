@@ -40,19 +40,19 @@ VARSAYILAN_METINLER = {
 BASLANGIC_METINLERI = {
     "tr": {
         "bilgi": (
-            "Erişim & Arıza Takibi: İlgili dönem içerisinde iletilen lokasyon erişim kesintileri ve "
+            "Erişim & Arıza Takibi: İlgili dönemde iletilen lokasyon erişim kesintileri ve "
             "arıza kayıtları incelenmiş olup güncel durum çözümleriyle birlikte kayıt altına alınmıştır.\n\n"
             "SLA & Servis Performansı: Aylık arıza detayları, müdahale/çözüm süreleri ve SLA analiz "
-            "özetiniz aşağıda bilgilerinize sunulmuş olup kapsamlı rapor belge ekinde yer almaktadır.\n\n"
+            "özetiniz aşağıda bilgilerinize sunulmuş olup kapsamlı rapor ekte yer almaktadır.\n\n"
             "Trafik & Utilizasyon Analizi: Müşterimize ait kritik devrelerin aylık veri akışı ve bant "
             "genişliği kullanım grafikleri değerlendirilerek rapora işlenmiştir."
         ),
         "oneri": (
             "SD-WAN Dönüşüm Fırsatı: Mevcut MPLS altyapınız SD-WAN mimarisine tam uyumludur. "
-            "Şifreli trafik, merkezi yönetim ve optimize ağ performansı ile verimliliğinizi "
+            "Şifreli trafik, merkezi yönetim ve optimize edilmiş ağ performansı ile verimliliğinizi "
             "artırmak için Kurumsal Satış Yöneticiniz ile SD-WAN geçiş fırsatlarını "
             "değerlendirmenizi öneririz.\n\n"
-            "İş Sürekliliği & SLA Testi: Operasyonel riskleri sıfırlamak adına 6 aylık periyodik "
+            "İş Sürekliliği & SLA Testi: Operasyonel riskleri en aza indirmek için 6 aylık periyodik "
             "yedeklilik testlerinizin planlanması için Müşteri Teknik Yöneticiniz (TAC) ile "
             "iletişime geçebilirsiniz."
         ),
@@ -86,7 +86,7 @@ MAIL_GOVDESI = {
         "Şirketinize sunulan servislerin {donem} dönemine ait operasyonel değerlendirme ve SLA "
         "performans raporu ekte bilginize sunulmuştur.\n\n"
         "Rapor içeriğiyle ilgili ek bilgi talepleriniz veya geliştirilmesini istediğiniz hususlar "
-        "olması halinde tarafımla iletişime geçebilirsiniz.\n\n"
+        "olması hâlinde tarafımla iletişime geçebilirsiniz.\n\n"
         "Saygılarımızla,"
     ),
     "en": (
