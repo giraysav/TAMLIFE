@@ -70,6 +70,7 @@ TABLE_OWNER = {
     "distribution_rule": "ingest",
     "distribution_log": "ingest",
     "customer_import_run": "ingest",
+    "file_import_run": "ingest",
     "source_catalog": "ingest",
     "source_catalog_object": "ingest",
     "fault_event": "yonetim",

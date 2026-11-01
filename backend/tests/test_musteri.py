@@ -370,7 +370,7 @@ def test_gonderim_outlook_taslagi_eml(veri, monkeypatch, tmp_path):
     assert "CORPORATE CUSTOMER" not in html and "Monthly Technical Account Report" not in html  # sade baslik
     assert re.search(r"TAM Monthly Report <span[^>]*>&nbsp;\|&nbsp;</span> \w+ \d{4}</div>\s*<div[^>]*>Alfa Test A.S.</div>", html)  # altinda musteri
     assert html.count("cid:teknocan@tamlife") == 2 and "imzalogo" not in html  # baslik + imza bandi
-    assert html.count('width="144" height="144"') == 2 and 'width="72"' not in html  # logo iki bantta da 144 px
+    assert html.count('width="72" height="72"') == 2 and 'width="144"' not in html  # logo iki bantta da 72 px (2026-11-01 "1x kucult")
     assert re.search(r'align="left"[^>]*text-align:left;">\s*<div[^>]*>TAM Monthly Report', html) and "text-align:center" not in html  # baslik sola yasli
     cidler = {p["Content-ID"] for p in msg.walk() if p.get_content_maintype() == "image"}
     assert cidler == {"<teknocan@tamlife>"}

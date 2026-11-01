@@ -61,7 +61,10 @@ export function IceAktar({ dil, onKapat }: { dil: Dil; onKapat: () => void }) {
   const onizle = useMutation({ mutationFn: (d: File) => yukle<Onizleme>(yol("onizleme", d), d, XLSX, "POST") })
   const uygula = useMutation({
     mutationFn: (d: File) => yukle<UygulaSonucu>(yol("uygula", d), d, XLSX, "POST"),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ANAHTAR }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ANAHTAR })
+      void qc.invalidateQueries({ queryKey: ["tampon", "ice-aktarmalar"] })  // Import > Ice aktarma gecmisi
+    },
   })
 
   function sec(d: File | undefined) {

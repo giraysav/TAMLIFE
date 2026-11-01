@@ -15,6 +15,7 @@ import { gelirUretimMetin } from "@/gelir-uretim/gelir-uretim-metin"
 import { UrunTutarYukleme } from "@/yonetim/utilizasyon/urun-tutar"
 import { Analiz } from "@/yonetim/tampon/analiz"
 import { GenelCsvYukle } from "@/yonetim/tampon/csv-yukle"
+import { IceAktarmaGecmisi } from "@/yonetim/tampon/ice-aktarma-gecmisi"
 import { Dagitim } from "@/yonetim/tampon/dagitim"
 import type { KuralOnerisi } from "@/yonetim/tampon/dagitim"
 import { MusteriEslesmesiPanosu } from "@/yonetim/tampon/eslesme"
@@ -169,6 +170,7 @@ function Import({ dil, onYeniParti }: { dil: Dil; onYeniParti: (id: number) => v
         </button>
       </Panel>
       <UrunTutarYukleme dil={dil} baslik={y.urunTutar} />
+      <IceAktarmaGecmisi dil={dil} />
       {gelirAcik ? <IceAktar dil={dil} onKapat={() => setGelirAcik(false)} /> : null}
       {projeAcik ? <ProjeIceAktar dil={dil} onKapat={() => setProjeAcik(false)} /> : null}
     </div>

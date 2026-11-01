@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import io
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 from openpyxl import Workbook
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import engine
@@ -105,3 +105,21 @@ def test_yetki_ve_hatali_girdi(client, monkeypatch):
     bos = io.BytesIO()
     Workbook().save(bos)
     assert _istek(client, hdr, "onizleme", bos.getvalue()).json()["detail"].startswith("Q1–Q4 sayfalarında")
+
+
+def test_aktarim_geri_alinir_sonradan_aksiyon_girilen_korunur(client, monkeypatch):
+    """2026-11-01: proje Excel aktarimi Import > Ice aktarma gecmisi'nden geri alinir; sonradan guncellenen proje korunur."""
+    _giris(client, monkeypatch, "ayse", "TeamMember")
+    hdr = _giris(client, monkeypatch, "mudur", "admin")
+    assert _istek(client, hdr, "uygula", _excel()).json()["data"]["eklendi"] == 6
+    kayit = client.get("/api/v1/tampon/ice-aktarmalar").json()["data"][0]
+    assert (kayit["tur"], kayit["dosya"], kayit["kullanici"], kayit["ozet"]["eklendi"]) == ("proje", DOSYA, "mudur", 6)
+    with Session(engine()) as db:
+        db.scalars(select(ProjectItem).order_by(ProjectItem.id)).first().updated_at = datetime(2020, 1, 1, tzinfo=UTC)
+        db.commit()
+    assert client.post(f"{"/api/v1/tampon/ice-aktarmalar"}/{kayit['id']}/geri-al", headers=hdr).json()["data"] == {"geri_alinan": 5, "korunan": 1}
+    with Session(engine()) as db:
+        assert db.scalar(select(func.count()).select_from(ProjectItem)) == 1
+        assert db.scalar(select(func.count()).select_from(ProjectAction)) == 2  # yalniz korunan projenin aksiyonlari
+    personel = _giris(client, monkeypatch, "ayse", "TeamMember")
+    assert client.post(f"{"/api/v1/tampon/ice-aktarmalar"}/{kayit['id']}/geri-al", headers=personel).status_code == 403

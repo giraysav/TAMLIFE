@@ -27,6 +27,7 @@ from app.tampon import (
     depo,
     eslesme,
     fark,
+    ice_aktarma_gecmisi,
     katalog,
     kaynak,
     musteri_aktar,
@@ -521,6 +522,20 @@ def ham_geri_al(kayit_id: KimlikTipi, admin: Principal = Depends(require_admin),
     sonuc = musteri_aktar.geri_al(db, kayit_id, admin.username)
     db.commit()
     _denetim(admin, "tampon.musteri_ham_geri_al", f"kayit={kayit_id} geri={sonuc['geri_alinan_alan']} silinen={sonuc['silinen_musteri']}")
+    return ok(sonuc)
+
+
+@router.get("/ice-aktarmalar")
+def ice_aktarmalar(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Elle yuklenen dosya aktarimlari (Urun-Tutar, Gelir Faydasi, Proje), en yeni once."""
+    return ok(ice_aktarma_gecmisi.liste(db))
+
+
+@router.post("/ice-aktarmalar/{kayit_id}/geri-al")
+def ice_aktarma_geri_al(kayit_id: KimlikTipi, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    sonuc = ice_aktarma_gecmisi.geri_al(db, kayit_id, admin.username)
+    db.commit()
+    _denetim(admin, "tampon.ice_aktarma_geri_al", f"kayit={kayit_id} geri={sonuc['geri_alinan']} korunan={sonuc['korunan']}")
     return ok(sonuc)
 
 

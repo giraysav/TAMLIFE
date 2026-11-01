@@ -47,7 +47,7 @@ export function UrunTutarYukleme({ dil, baslik }: { dil: Dil; baslik?: string })
       setHata("")
       setDosya(null)
       if (girdi.current) girdi.current.value = ""
-      for (const anahtar of [ANAHTAR.skorUrunTutar, ANAHTAR.skorAgac, ["skor", "onizleme"]]) void qc.invalidateQueries({ queryKey: anahtar })
+      for (const anahtar of [ANAHTAR.skorUrunTutar, ANAHTAR.skorAgac, ANAHTAR.iceAktarmalar, ["skor", "onizleme"]]) void qc.invalidateQueries({ queryKey: anahtar })
     },
     onError: (e) => {
       setSonuc(null)

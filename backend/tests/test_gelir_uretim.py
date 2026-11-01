@@ -742,3 +742,22 @@ def test_kisi_baglantisi_is_silinince_cascade_ile_gider(client, ekip):
     assert _say(RevenueBenefitPerson) == 1
     client.delete(f"{URL}/{kimlik}", headers=hdr)
     assert _say(RevenueBenefitPerson) == 0
+
+
+def test_ice_al_geri_alinir_sonradan_duzenlenen_korunur(client, ekip):
+    """2026-11-01: elle yuklenen dosya Import > Ice aktarma gecmisi'nden geri alinir; aktarimdan sonra duzenlenen kayit korunur."""
+    hdr = login_ok(client)
+    assert _uygula(client, hdr, _ornek_dosya()).json()["data"]["eklendi"] == 4
+    kayit = client.get("/api/v1/tampon/ice-aktarmalar").json()["data"][0]
+    assert (kayit["tur"], kayit["dosya"], kayit["ozet"]["eklendi"], kayit["geri_alinan"]) == ("gelir_uretim", "gelir.xlsx", 4, None)
+    with Session(engine()) as db:
+        db.scalar(select(RevenueBenefit).where(RevenueBenefit.title == "Beta otomasyon")).updated_at = datetime(2020, 1, 1, tzinfo=UTC)
+        db.commit()
+    r = client.post(f"{"/api/v1/tampon/ice-aktarmalar"}/{kayit['id']}/geri-al", headers=hdr)
+    assert r.json()["data"] == {"geri_alinan": 3, "korunan": 1}
+    with Session(engine()) as db:
+        assert [r.title for r in db.scalars(select(RevenueBenefit))] == ["Beta otomasyon"]
+        kalan = db.scalar(select(RevenueBenefit.id))
+        assert {p.item_id for p in db.scalars(select(RevenueBenefitPerson))} <= {kalan}  # silinenin kisi baglari da gider
+    assert client.post(f"{"/api/v1/tampon/ice-aktarmalar"}/{kayit['id']}/geri-al", headers=hdr).status_code == 409
+    assert client.get("/api/v1/tampon/ice-aktarmalar").json()["data"][0]["geri_alinan"]["kullanici"] == "admin"

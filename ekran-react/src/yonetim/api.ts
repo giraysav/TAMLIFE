@@ -298,6 +298,8 @@ export type HamOnizleme = {
   plan_ozeti: string
 }
 export type HamAktarim = { id: number; parti_id: number; zaman: string | null; kullanici: string; guncellenen: number; olusturulan: number; geri_alinan: { zaman: string; kullanici: string } | null }
+export type DosyaAktarimi = { id: number; tur: string; dosya: string; zaman: string | null; kullanici: string; ozet: Record<string, unknown>; geri_alinan: { zaman: string; kullanici: string } | null }
+export type DosyaAktarimiGeriAl = { geri_alinan: number; korunan: number }
 export type HamGeriAl = { geri_alinan_alan: number; korunan_alan: number; silinen_musteri: number; silinemeyen_musteri: string[] }
 export type Parti = {
   id: number
@@ -565,6 +567,7 @@ export const ANAHTAR = {
   kurallar: ["tampon", "kurallar"] as const,
   uygulamalar: ["tampon", "uygulamalar"] as const,
   hamAktarimlar: ["tampon", "musteri-ham", "aktarimlar"] as const,
+  iceAktarmalar: ["tampon", "ice-aktarmalar"] as const,
   akislar: ["tampon", "akislar"] as const,
   eslesme: ["tampon", "eslesme"] as const,
   fark: ["tampon", "fark"] as const,

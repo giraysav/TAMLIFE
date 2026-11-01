@@ -26,9 +26,10 @@ from app.gelir_uretim.ayristir import baslik_anahtari, katla
 from app.gelir_uretim.ice_al import kisi_dizini
 from app.kullanicilar import personel
 from app.models import AppUser, ProjectItem
-from app.ortak import simdi
+from app.ortak import iso, simdi
 from app.proje import servis
 from app.session import Principal
+from app.tampon import ice_aktarma_gecmisi
 
 AZAMI_BAYT = 5 * 1024 * 1024
 AZAMI_ACIK = 100 * 1024 * 1024  # zip icindeki toplam acik boyut (zip bombasina karsi)
@@ -206,7 +207,7 @@ def onizleme(db: Session, veri: bytes, dosya: str, atamalar: dict[str, int] | No
 def uygula(db: Session, user: Principal, veri: bytes, dosya: str, atamalar: dict[str, int] | None = None) -> dict:
     """Yalniz 'yeni' kayitlari acar (commit cagirana aittir); servis.kalem_ekle ile: sorumlu dogrulamasi ve acilis aksiyonu ayni."""
     plan = plan_hazirla(db, veri, dosya, atamalar)
-    eklenen = 0
+    olusan: list[int] = []
     for k in plan.kayitlar:
         if k.durum != "yeni" or k.sahip_id is None:
             continue
@@ -214,5 +215,10 @@ def uygula(db: Session, user: Principal, veri: bytes, dosya: str, atamalar: dict
         veri_ = {"owner_id": k.sahip_id, "category": k.kategori, "title": k.baslik, "description": aciklama, "start_date": ceyrek_basi(plan.yil, k.ceyrek)}
         kimlik = servis.kalem_ekle(db, user, veri_)
         servis.aksiyon_ekle(db, user, kimlik, f"Excel'den aktarıldı: {plan.dosya or 'dosya'} · Q{k.ceyrek} {plan.yil}")
-        eklenen += 1
-    return {**plan.sayilar(), "eklendi": eklenen}
+        olusan.append(kimlik)
+    sayilar = {**plan.sayilar(), "eklendi": len(olusan)}
+    if olusan:  # 2026-11-01: aktarim Import > Ice aktarma gecmisi'nden geri alinabilir (sonradan aksiyon girilen proje korunur)
+        db.flush()
+        kayitlar = [{"id": i, "zaman": iso(db.get(ProjectItem, i).updated_at)} for i in olusan]
+        ice_aktarma_gecmisi.kaydet(db, "proje", plan.dosya or dosya, user.username, sayilar, {"kayitlar": kayitlar})
+    return sayilar

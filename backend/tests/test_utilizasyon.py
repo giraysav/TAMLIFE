@@ -288,3 +288,29 @@ def test_x_kurali_ve_tam_tablo_ile_toplu_atama(veri, otomatik):
     rapor = next(k for k in m1["kriterler"] if k["tur"] == "auto_rapor")
     assert (rapor["puan"], rapor["kaynak"], rapor["deger"]) == (50, "Sabit puan (X işareti)", "X")
     assert m1["tamam"] and m1["mevcut"] == m1["yeni"] and m1["fark"] == 0.0
+
+
+def test_urun_tutar_yuklemesi_geri_alinir_onceki_ozete_doner(veri, monkeypatch):
+    """2026-11-01 kullanici: "urun-tutar'i eklenen musteri icin geri alma secenegi yok". Geri alma onceki ozeti dondurur, onceki
+    yoksa ozeti siler; sonradan yeniden yuklenen musteri korunur."""
+    saat = iter([datetime(2026, 11, 1, 9, d, tzinfo=UTC) for d in range(10)])
+    monkeypatch.setattr(urun_tutar, "simdi", lambda: next(saat))
+    hdr = login_ok(veri)
+    gecmis = lambda: veri.get("/api/v1/tampon/ice-aktarmalar").json()["data"]
+    geri_al = lambda i: veri.post(f"{"/api/v1/tampon/ice-aktarmalar"}/{i}/geri-al", headers=hdr)
+    assert veri.put("/api/v1/skor/urun-tutar/1?dosya=ilk.xlsx", content=_excel(), headers=hdr).status_code == 200
+    kapali = [_satir("ORNEK Cati", "DEACT_END", "D1", "A", "MPLS", "100", None, 10)]
+    assert veri.put("/api/v1/skor/urun-tutar/1?dosya=ikinci.xlsx", content=_excel(kapali), headers=hdr).status_code == 200
+    ikinci, ilk = gecmis()[:2]
+    assert (ikinci["tur"], ikinci["dosya"], ikinci["ozet"]["musteri"]) == ("urun_tutar", "ikinci.xlsx", "ORNEK Cati")
+    assert geri_al(ikinci["id"]).json()["data"] == {"geri_alinan": 1, "korunan": 0}
+    with Session(engine()) as db:
+        satir = db.get(UrunTutarOzet, 1)
+        assert satir.file_name == "ilk.xlsx" and satir.summary["lokasyon_sayisi"] == 2
+    assert geri_al(ikinci["id"]).status_code == 409
+    # musteri 1 yeniden yuklenir; ilk yukleme geri alininca yalniz dokunulmayan istirak (5) silinir, 1 korunur
+    assert veri.put("/api/v1/skor/urun-tutar/1?dosya=ucuncu.xlsx", content=_excel(kapali), headers=hdr).status_code == 200
+    assert geri_al(ilk["id"]).json()["data"] == {"geri_alinan": 1, "korunan": 1}
+    with Session(engine()) as db:
+        assert db.get(UrunTutarOzet, 5) is None and db.get(UrunTutarOzet, 1).file_name == "ucuncu.xlsx"
+    assert geri_al(999).status_code == 404

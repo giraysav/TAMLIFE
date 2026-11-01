@@ -47,7 +47,10 @@ export function ProjeIceAktar({ dil, onKapat }: { dil: Dil; onKapat: () => void 
   })
   const uygula = useMutation({
     mutationFn: (d: File) => yukle<Sonuc>(yol("uygula", d, atamalar), d, EXCEL, "POST"),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["proje"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["proje"] })
+      void qc.invalidateQueries({ queryKey: ["tampon", "ice-aktarmalar"] })  // Import > Ice aktarma gecmisi
+    },
   })
 
   function sec(d: File | undefined) {

@@ -44,8 +44,9 @@ from app.gelir_uretim.ayristir import (
 from app.gelir_uretim.models import RevenueBenefit
 from app.kullanicilar import ad_soyad, kullanici_kaydi, personel
 from app.models import AppUser
-from app.ortak import simdi
+from app.ortak import iso, simdi
 from app.session import Principal
+from app.tampon import ice_aktarma_gecmisi
 
 AZAMI_BAYT = 5 * 1024 * 1024
 AZAMI_ACIK = 100 * 1024 * 1024  # zip icindeki toplam acik boyut (zip bombasina karsi)
@@ -426,9 +427,11 @@ def uygula(db: Session, user: Principal, veri: bytes, dosya: str) -> dict:
     """Yalniz 'yeni' satirlari ekler (commit etmez: cagiran tek islemde onaylar). Sayilari dondurur."""
     plan = plan_hazirla(db, veri, dosya)
     yapan = servis.kisi_adi(kullanici_kaydi(db, user))
-    eklenen = 0
+    olusan: list[RevenueBenefit] = []
     for s in plan.satirlar:
         if s.durum == "yeni" and s.kayit is not None:
-            servis.ekle(db, yapan, servis.temizle(s.kayit), s.kisi_idleri)
-            eklenen += 1
-    return {**plan.sayilar(), "eklendi": eklenen, "uyarilar": plan.uyarilar}
+            olusan.append(servis.ekle(db, yapan, servis.temizle(s.kayit), s.kisi_idleri))
+    sayilar = {**plan.sayilar(), "eklendi": len(olusan)}
+    if olusan:  # 2026-11-01: aktarim Import > Ice aktarma gecmisi'nden geri alinabilir (sonradan duzenlenen kayit korunur)
+        ice_aktarma_gecmisi.kaydet(db, "gelir_uretim", dosya, yapan, sayilar, {"kayitlar": [{"id": r.id, "zaman": iso(r.updated_at)} for r in olusan]})
+    return {**sayilar, "uyarilar": plan.uyarilar}

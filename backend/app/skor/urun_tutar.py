@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Customer, UrunTutarOzet
 from app.ortak import UygulamaHatasi, iso, simdi
+from app.tampon import ice_aktarma_gecmisi
 from app.tampon.eslestirme import musteri_anahtarlari
 
 HEADER_ESLERI = {
@@ -245,8 +246,8 @@ def ice_aktar(db: Session, musteri: Customer, icerik: bytes) -> dict:
 
 
 # --- depo (uretim sla_deposu.urun_tutar_kaydet / urun_tutar_hepsi) ------------------------------------------------------
-def kaydet(db: Session, ozetler: dict[int, dict], dosya: str, yukleyen: str) -> None:
-    """Musteri basina son yukleme degistirir (commit cagiranda)."""
+def kaydet(db: Session, ozetler: dict[int, dict], dosya: str, yukleyen: str) -> str | None:
+    """Musteri basina son yukleme degistirir (commit cagiranda). Donus: yazilan uploaded_at (ISO; geri alma karsilastirmasi)."""
     zaman = simdi()
     mevcut = {s.customer_id: s for s in db.scalars(select(UrunTutarOzet).where(UrunTutarOzet.customer_id.in_([int(c) for c in ozetler])))}
     for cid, ozet in ozetler.items():
@@ -256,6 +257,7 @@ def kaydet(db: Session, ozetler: dict[int, dict], dosya: str, yukleyen: str) -> 
         else:
             satir.summary, satir.file_name, satir.uploaded_by, satir.uploaded_at = ozet, dosya[:200], yukleyen[:120], zaman
     db.flush()
+    return iso(zaman)
 
 
 def hepsi(db: Session, musteri_idleri: list[int] | None = None) -> dict[int, dict]:
@@ -279,8 +281,15 @@ def yukle(db: Session, musteri_id: int, icerik: bytes, dosya: str, yukleyen: str
     if not icerik:
         raise DosyaHatasi('Excel dosyası seçilmedi.')
     sonuc = ice_aktar(db, musteri, icerik)
-    kaydet(db, sonuc['ozetler'], dosya, yukleyen)
+    onceki = hepsi(db, [int(c) for c in sonuc['ozetler']])
+    zaman = kaydet(db, sonuc['ozetler'], dosya, yukleyen)
     ad = dict(db.execute(select(Customer.id, Customer.name).where(Customer.id.in_(list(sonuc['ozetler'])))).all())
+    # 2026-11-01: yukleme geri alinabilir (Import > Ice aktarma gecmisi); onceki ozet varsa ona doner, yoksa ozet silinir.
+    ice_aktarma_gecmisi.kaydet(
+        db, 'urun_tutar', dosya, yukleyen,
+        {'musteri': musteri.name, 'kart': len(sonuc['ozetler']), 'eslesen': sonuc['eslesen']},
+        {'musteriler': [{'id': int(cid), 'zaman': zaman, 'onceki': onceki.get(int(cid))} for cid in sonuc['ozetler']]},
+    )  # fmt: skip
     return {'eslesen': sonuc['eslesen'], 'kart_musterisine': sonuc['kart_musterisine'], 'dosyadaki': sonuc['dosyadaki'],
             'dosyadaki_adet': sonuc['dosyadaki_adet'], 'kart_musteri_no': musteri.customer_no or '',
             'musteriler': [{'id': cid, 'ad': ad.get(cid, ''), **o} for cid, o in sonuc['ozetler'].items()]}

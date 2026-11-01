@@ -74,6 +74,23 @@ class CustomerImportRun(Base):
     reverted_by: Mapped[str] = mapped_column(String(120), default="")
 
 
+class FileImportRun(Base):
+    """Elle yuklenen dosya aktarimi (2026-11-01 kullanici: "importa manuel eklenen dosya olursa geri alma secenegi de olmali"):
+    Urun-Tutar, Gelir Faydasi ve Proje Excel'i. kind: urun_tutar | gelir_uretim | proje. record turune gore geri alma bilgisi
+    (olusturulan kayit id + yazildigi andaki updated_at; Urun-Tutar'da musteri basina onceki ozet). Bkz. app/tampon/ice_aktarma_gecmisi.py."""
+
+    __tablename__ = "file_import_run"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(30))
+    file_name: Mapped[str] = mapped_column(String(200), default="")
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    actor: Mapped[str] = mapped_column(String(120), default="")
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    record: Mapped[dict] = mapped_column(JSON, default=dict)
+    reverted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reverted_by: Mapped[str] = mapped_column(String(120), default="")
+
+
 class SourceCatalog(Base):
     """Kaynak katalogu (ham tampon): bir Oracle kaynaginin semalari / nesneleri / sutunlari ve ornek satirlari, tarama basina tek kayit.
     Isci sureci yazar (python -m app.isci reportdb-katalog); panel yalniz okur. status: receiving | ready | failed."""
