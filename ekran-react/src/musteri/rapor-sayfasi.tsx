@@ -1,15 +1,17 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Ban, FileCheck2, Hourglass, Send, Users } from "lucide-react"
+import { Ban, Download, FileCheck2, Hourglass, Send, Upload, Users } from "lucide-react"
 import { Halka, Lejant } from "@/components/grafik"
-import { BosKutu, GIRDI, HataKutu, Kpi, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
+import { BosKutu, DUGME_SARI, GIRDI, HataKutu, Kpi, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { zaman } from "@/lib/bicim"
+import { apiYolu } from "@/lib/http"
 import { oku, sorguMetni } from "@/lib/sorgu"
 import { yilSecenekleri } from "@/lib/yillar"
 import type { Dil } from "@/shell/metin"
 import { musteriMetin } from "@/musteri/musteri-metin"
+import { RaporIceAktar } from "@/musteri/rapor-ice-aktar"
 
-type Gonderim = { id: number; customer_id: number; musteri: string; yil: number; ay: number; gonderen: string; zaman: string; konu: string; durum: string }
+type Gonderim = { id: number; customer_id: number; musteri: string; yil: number; ay: number; gonderen: string; zaman: string; konu: string; durum: string; kaynak?: string; dosya?: boolean }
 type TamSatiri = { id: number | null; ad: string; musteri: number; atilan: number; bekleyen: number; muaf: number }
 type Durum = { yil: number; ay: number; satirlar: TamSatiri[]; toplam: Omit<TamSatiri, "id" | "ad"> }
 type Donem = { yil: number; ay: number }
@@ -19,6 +21,7 @@ type Donem = { yil: number; ay: number }
 export function RaporSayfasi({ dil }: { dil: Dil }) {
   const t = musteriMetin(dil)
   const [secim, setSecim] = useState<Donem | null>(null)
+  const [iceAcik, setIceAcik] = useState(false)
   const durumQ = useQuery({ queryKey: ["rapor", "durum", secim], queryFn: () => oku<Durum>(`/api/v1/rapor/durum${sorguMetni({ yil: secim?.yil, ay: secim?.ay })}`) })
   const donem: Donem | null = secim ?? (durumQ.data ? { yil: durumQ.data.yil, ay: durumQ.data.ay } : null)
   const listeQ = useQuery({
@@ -61,7 +64,13 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      <SayfaKabi ikon={FileCheck2} baslik={t.raporSayfasi} aciklama={t.raporSayfasiAciklama} />
+      <SayfaKabi ikon={FileCheck2} baslik={t.raporSayfasi} aciklama={t.raporSayfasiAciklama}>
+        <button type="button" className={DUGME_SARI} disabled={!donem} onClick={() => setIceAcik(true)}>
+          <Upload aria-hidden className="size-4" />
+          {t.raporIceAktar}
+        </button>
+      </SayfaKabi>
+      {iceAcik && donem ? <RaporIceAktar dil={dil} yil={donem.yil} ay={donem.ay} onKapat={() => setIceAcik(false)} /> : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi etiket={t.toplamBirim} deger={durum?.toplam.musteri ?? "—"} alt={donemAdi} ikon={Users} ton="mavi" />
         <Kpi etiket={t.atilan} deger={durum?.toplam.atilan ?? "—"} alt={durum ? `%${oran}` : undefined} ikon={Send} ton="yesil" />
@@ -128,7 +137,21 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
               { baslik: t.konuKolon, hucre: (g) => <span className="font-normal text-slate-600">{g.konu}</span> },
               { baslik: t.gonderen, hucre: (g) => g.gonderen },
               { baslik: t.zamanKolon, hucre: (g) => <span className="font-mono text-slate-500">{zaman(g.zaman)}</span>, sinif: "whitespace-nowrap" },
-              { baslik: "", hucre: (g) => (g.durum === "reverted" ? <Rozet>{t.geriAlindi}</Rozet> : null) },
+              {
+                baslik: "",
+                sinif: "whitespace-nowrap text-right",
+                hucre: (g) => (
+                  <span className="inline-flex items-center gap-1.5">
+                    {g.kaynak === "ice_aktarma" ? <Rozet ton="sari">{t.iceAktarildiRozet}</Rozet> : null}
+                    {g.durum === "reverted" ? <Rozet>{t.geriAlindi}</Rozet> : null}
+                    {g.dosya ? (
+                      <a href={apiYolu(`/api/v1/rapor/gonderim/${g.id}/dosya`)} className="inline-flex text-tl-blue hover:text-tl-navy" title={t.dosyaIndir} aria-label={`${t.dosyaIndir}: ${g.musteri}`}>
+                        <Download aria-hidden className="size-4" />
+                      </a>
+                    ) : null}
+                  </span>
+                ),
+              },
             ]}
           />
         )}

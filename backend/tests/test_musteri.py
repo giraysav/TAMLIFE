@@ -206,6 +206,46 @@ def test_silme_talebi_admine_panel_bildirimi(veri, monkeypatch):
     assert veri.delete(f"/api/v1/musteri/{kart}", headers=hdr).status_code == 200
 
 
+ESKI_RAPOR_EML = b"Subject: Alfa Ocak 2026 TAM Raporu\r\nDate: Mon, 02 Feb 2026 10:00:00 +0300\r\nTo: a@example.com\r\n\r\nRapor ekte.\r\n"
+OUTLOOK_MSG = b"\xd0\xcf\x11\xe0" + bytes(64)  # Outlook .msg (OLE) imzasi
+
+
+def test_gecmis_rapor_ice_aktarma(veri, monkeypatch):
+    """2026-10-31 kullanici: Gonderilen Aylik Rapor'a gecmis rapor ice aktarma: ay + yil + (yalniz yazilabilen) musteri + Outlook dosyasi."""
+    hdr = login_ok(veri)
+    url = "/api/v1/rapor/ice-al"
+
+    def ice(musteri: int, yil: int, ay: int, dosya: str, govde: bytes = ESKI_RAPOR_EML, h: dict | None = None):
+        return veri.post(url, params={"musteri_id": musteri, "yil": yil, "ay": ay, "dosya": dosya}, content=govde, headers=h if h is not None else hdr)
+
+    liste = veri.get(f"{url}/musteriler", params={"yil": 2026, "ay": 1}).json()["data"]
+    assert [m["ad"] for m in liste] == ["Alfa Test A.S.", "Beta Test Ltd"] and not any(m["gonderildi"] for m in liste)  # istirak catiya dahil
+    r = ice(1, 2026, 1, "Alfa Ocak.eml")
+    assert r.status_code == 200, r.text
+    g = r.json()["data"]
+    assert (g["kaynak"], g["konu"], g["dosya"], g["yil"], g["ay"], g["zaman"][:10]) == ("ice_aktarma", "Alfa Ocak 2026 TAM Raporu", True, 2026, 1, "2026-02-02")
+    assert veri.get("/api/v1/rapor/durum", params={"yil": 2026, "ay": 1}).json()["data"]["toplam"]["atilan"] == 1
+    assert [m["gonderildi"] for m in veri.get(f"{url}/musteriler", params={"yil": 2026, "ay": 1}).json()["data"]] == [True, False]
+    assert ice(1, 2026, 1, "Alfa Ocak.eml").status_code == 409  # ayda tek
+    d = veri.get(f"/api/v1/rapor/gonderim/{g['id']}/dosya")
+    assert d.status_code == 200 and d.content == ESKI_RAPOR_EML and "Alfa" in d.headers["content-disposition"]
+    # hatali girdi: gelecek donem, desteklenmeyen uzanti, imzasi tutmayan .msg
+    assert ice(3, 2099, 1, "x.eml").status_code == 400
+    assert ice(3, 2026, 1, "x.docx").status_code == 400
+    assert ice(3, 2026, 1, "x.msg", b"degil").status_code == 400
+    msg = ice(3, 2026, 2, "Beta Subat.msg", OUTLOOK_MSG)
+    assert msg.status_code == 200 and msg.json()["data"]["konu"].endswith("(içe aktarıldı)")
+    assert ice(3, 2026, 3, "x.eml", h={}).status_code == 403  # CSRF'siz
+    _cikis(veri, hdr)
+    # personel yalniz kendi musterilerini gorur ve yalniz onlara aktarir
+    hdr = _giris(veri, monkeypatch, "TeamMember")
+    kendi = {m["id"] for m in veri.get(f"{url}/musteriler", params={"yil": 2026, "ay": 3}).json()["data"]}
+    gorunen = {i["id"] for i in veri.get("/api/v1/musteri").json()["data"]["items"]}
+    assert kendi and kendi <= gorunen and 3 not in kendi
+    assert ice(3, 2026, 3, "x.eml", h=hdr).status_code in (403, 404)
+    assert veri.get(f"/api/v1/rapor/gonderim/{msg.json()['data']['id']}/dosya").status_code == 404  # gormedigi kartin dosyasi
+
+
 def test_taslak_varsayilanlari_kayit_ve_dil(veri):
     hdr = login_ok(veri)
     t = veri.get("/api/v1/musteri/1/rapor/taslak").json()["data"]

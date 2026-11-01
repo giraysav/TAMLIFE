@@ -245,6 +245,10 @@ class ReportDispatch(Base):
     status: Mapped[str] = mapped_column(String(20), default="sent")
     reverted_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     reverted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 2026-10-31: gecmis rapor ice aktarma (Gonderilen Aylik Rapor > Rapor ice aktar): panel disinda gonderilmis raporun dosyasi
+    source: Mapped[str] = mapped_column(String(20), default="panel")  # panel | ice_aktarma
+    archive_file: Mapped[str | None] = mapped_column(String(300), nullable=True)  # rapor_klasoru() altinda goreli yol
+    archive_name: Mapped[str | None] = mapped_column(String(200), nullable=True)  # yuklenen dosyanin asil adi
 
 class ReportRecipient(Base):
     """Musterinin aylik rapor iletisi alicilari (uretim rapor_alicilari). Adresler ';' ile ayrilir.

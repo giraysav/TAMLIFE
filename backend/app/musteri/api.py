@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -379,3 +380,38 @@ def durum(
 ):
     simdi_yil, simdi_ay = rs.donem()
     return _yap(db, lambda: rs.durum_ozeti(db, e.user, ay or simdi_ay, yil or simdi_yil))
+
+
+# --- gecmis rapor ice aktarma (2026-10-31; Gonderilen Aylik Rapor > Rapor ice aktar) -------------------------------------
+@router.get("/rapor/ice-al/musteriler")
+def ice_al_musterileri(
+    yil: int = Query(ge=2000, le=2100),
+    ay: int = Query(ge=1, le=12),
+    e: Erisim = Depends(rapor_erisim),
+    db: Session = Depends(get_db),
+):
+    """Secilen donem icin kullanicinin rapor yazabildigi rapor birimleri (personel: yalniz kendi musterileri) ve raporu var mi."""
+    return _yap(db, lambda: rs.ice_aktarma_musterileri(db, e.user, yil, ay))
+
+
+@router.post("/rapor/ice-al")
+async def gecmis_rapor_ice_al(
+    request: Request,
+    musteri_id: KimlikTipi,  # sorgu parametresi
+    yil: int = Query(ge=2000, le=2100),
+    ay: int = Query(ge=1, le=12),
+    dosya: str = Query(default="", max_length=200),
+    e: Erisim = Depends(rapor_erisim),
+):
+    """Panel disinda gonderilmis gecmis raporu dosyasiyla (.msg / .eml / .pdf ham govdesi) o donemin gonderimi olarak kaydeder."""
+    veri = await govde_oku(request, rs.AZAMI_ICE_AKTARMA)
+    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.gecmis_ice_al(db, e.user, musteri_id, yil, ay, veri, dosya))
+    _denetim(e.user, "rapor.ice_al", f"musteri={musteri_id} donem={yil}-{ay:02d} boyut={len(veri)}")
+    return ok(sonuc)
+
+
+@router.get("/rapor/gonderim/{gonderim_id:int}/dosya")
+def gonderim_dosyasi(gonderim_id: KimlikTipi, e: Erisim = Depends(rapor_erisim), db: Session = Depends(get_db)) -> FileResponse:
+    """Gonderimin arsiv dosyasi: ice aktarilan ileti ya da panelin urettigi PDF (kart gorunmuyorsa 404)."""
+    yol, ad = rs.gonderim_dosyasi(db, e.user, gonderim_id)
+    return FileResponse(yol, filename=ad, media_type="application/octet-stream")

@@ -32,7 +32,7 @@ from app.authz import yonetici_mi
 from app.dil import m, secili
 from app.kullanicilar import kisi_imzasi, kullanici_kaydi, personel
 from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
-from app.musteri.servis import MusteriHata, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
+from app.musteri.servis import MusteriHata, duzenleyebilir_mi, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
 from app.rapor import ceviri, eposta, sla, sla_analiz
@@ -170,6 +170,8 @@ def gonderim_ozeti(g: ReportDispatch, musteri_adlari: dict[int, str] | None = No
         "konu": g.subject,
         "durum": g.status,
         "pdf": bool(g.pdf_file),
+        "kaynak": g.source or "panel",  # panel | ice_aktarma
+        "dosya": bool(g.archive_file or g.pdf_file),
         "geri_alan": g.reverted_by,
         "geri_alma_zamani": g.reverted_at.isoformat() if g.reverted_at else None,
     }
@@ -624,3 +626,91 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
         satir["atilan" if c.id in atilanlar else "bekleyen"] += 1
     sirali = sorted(satirlar.values(), key=lambda s: (s["id"] is None, tr_kucuk(s["ad"])))  # "-" satiri hep sonda
     return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen", "muaf")}}
+
+
+# --- gecmis rapor ice aktarma (2026-10-31) ----------------------------------------------------------------
+# Kullanici: "gonderilen aylik raporlar penceresine gecmis raporlarin import edilecegi alan; ay ve yil secilip yalniz personele ait
+# musteriler listelensin, gecmis rapor dosya olarak alinsin; dosya genelde Outlook dosyasi". Panel disinda gonderilmis rapor normal
+# gonderim gibi kaydedilir (Report + ReportDispatch, source=ice_aktarma): o donem 'atilan' sayilir, ayda tek kurali gecerlidir.
+ICE_AKTARMA_UZANTILARI = {".msg": b"\xd0\xcf\x11\xe0", ".eml": None, ".pdf": b"%PDF"}  # uzanti -> dosya imzasi (eml duz metin)
+AZAMI_ICE_AKTARMA = 25 * 1024 * 1024
+
+
+def ice_aktarma_musterileri(db: Session, user: Principal, yil: int, ay: int) -> list[dict]:
+    """Kullanicinin rapor yazabildigi rapor birimleri (personel: yalniz kendi kartlari; yonetici: hepsi) ve o donem raporu var mi."""
+    gonderilen = set(db.scalars(select(ReportDispatch.customer_id).where(ReportDispatch.year == yil, ReportDispatch.month == ay, ReportDispatch.status == "sent")))
+    musteriler = [c for c in db.scalars(select(Customer)) if rapor_birimi_mi(c) and duzenleyebilir_mi(db, user, c)]
+    return [{"id": c.id, "ad": c.name, "gonderildi": c.id in gonderilen} for c in sorted(musteriler, key=lambda c: tr_kucuk(c.name or ""))]
+
+
+def _ileti_bilgisi(veri: bytes, uzanti: str) -> tuple[str, datetime | None]:
+    """.eml'den konu ve tarih (yoksa bos / None). .msg (Outlook ikili bicimi) ve .pdf icin konu dosya adindan uretilir."""
+    if uzanti != ".eml":
+        return "", None
+    from email import message_from_bytes
+    from email.policy import default
+    from email.utils import parsedate_to_datetime
+
+    try:
+        ileti = message_from_bytes(veri, policy=default)
+        konu = " ".join(str(ileti.get("Subject") or "").split())
+        tarih = parsedate_to_datetime(str(ileti["Date"])) if ileti.get("Date") else None
+    except (TypeError, ValueError, IndexError):
+        return "", None
+    return konu, (tarih.astimezone(UTC) if tarih and tarih.tzinfo else tarih)
+
+
+def gecmis_ice_al(db: Session, user: Principal, musteri_id: int, yil: int, ay: int, veri: bytes, dosya_adi: str) -> dict:
+    """Gecmis donemin raporunu dosyasiyla kaydeder. Gelecek donem, yazilamayan kart, desteklenmeyen dosya 4xx; donemde rapor varsa 409."""
+    musteri = musteri_yaz_getir(db, user, musteri_id)
+    an = simdi()
+    if not (1 <= ay <= 12) or yil < 2000 or (yil, ay) > (an.year, an.month):
+        raise RaporHata(400, m("Gelecek bir dönemin raporu içe aktarılamaz.", "A report for a future period cannot be imported."))
+    ad = Path(dosya_adi or "").name.strip()[:200]
+    uzanti = Path(ad).suffix.lower()
+    if uzanti not in ICE_AKTARMA_UZANTILARI:
+        raise RaporHata(400, m("Yalnız Outlook iletisi (.msg / .eml) ya da PDF içe aktarılabilir.", "Only Outlook messages (.msg / .eml) or PDF can be imported."))
+    imza = ICE_AKTARMA_UZANTILARI[uzanti]
+    if not veri or (imza is not None and not veri.startswith(imza)):
+        raise RaporHata(400, m("Dosya içeriği uzantısıyla uyuşmuyor ya da boş.", "The file content does not match its extension or is empty."))
+    if aktif_gonderim(db, musteri.id, yil, ay):
+        raise RaporHata(409, m("Bu dönemin raporu zaten kayıtlı. Ayda yalnız bir rapor olabilir.", "The report for this period is already recorded. Only one report per month."), {"kilitli": True})
+    konu, tarih = _ileti_bilgisi(veri, uzanti)
+    konu = (konu or f"{rapor_metin.mail_konusu(musteri.name, ay, yil, 'tr')} (içe aktarıldı)")[:300]
+    kisi = kullanici_kaydi(db, user)
+    klasor = rapor_klasoru() / str(yil) / f"{ay:02d}"
+    klasor.mkdir(parents=True, exist_ok=True)
+    arsiv = f"musteri{musteri.id}_{an:%Y%m%d%H%M%S%f}_ice{uzanti}"
+    (klasor / arsiv).write_bytes(veri)
+    try:
+        with db.begin_nested():
+            rapor = Report(customer_id=musteri.id, user_id=kisi.id, report_month=ay, report_year=yil, is_submitted=True, created_at=an, last_edited_by=user.username[:100], last_edited_at=an)
+            db.add(rapor)
+            db.flush()
+            db.add(
+                ReportDispatch(
+                    customer_id=musteri.id, year=yil, month=ay, sender_id=kisi.id, sender=user.username[:120], at=tarih or an, subject=konu,
+                    report_id=rapor.id, status="sent", source="ice_aktarma", archive_file=f"{yil}/{ay:02d}/{arsiv}", archive_name=ad,
+                )
+            )
+            db.execute(update(Customer).where(Customer.id == musteri.id).values(report_count=func.coalesce(Customer.report_count, 0) + 1))
+            db.flush()
+    except IntegrityError as exc:  # esZamanli ikinci kayit kismi benzersiz indekse takilir
+        (klasor / arsiv).unlink(missing_ok=True)
+        raise RaporHata(409, m("Bu dönemin raporu az önce kaydedildi.", "The report for this period was just recorded."), {"kilitli": True}) from exc
+    gonderim = aktif_gonderim(db, musteri.id, yil, ay)
+    assert gonderim is not None
+    return gonderim_ozeti(gonderim, {musteri.id: musteri.name})
+
+
+def gonderim_dosyasi(db: Session, user: Principal, gonderim_id: int) -> tuple[Path, str]:
+    """Gonderimin arsiv dosyasi (ice aktarilan ileti ya da panelin PDF'i) ve indirme adi; kart gorunmuyorsa 404."""
+    g = db.get(ReportDispatch, gonderim_id)
+    if g is None:
+        raise RaporHata(404, m("Gönderim bulunamadı.", "Dispatch not found."))
+    musteri = musteri_getir(db, user, g.customer_id)
+    goreli = g.archive_file or g.pdf_file
+    yol = (rapor_klasoru() / goreli).resolve() if goreli else None
+    if yol is None or not yol.is_file() or rapor_klasoru().resolve() not in yol.parents:
+        raise RaporHata(404, m("Bu gönderimin dosyası yok.", "This dispatch has no file."))
+    return yol, g.archive_name or f"{eposta.dosya_adi(musteri.name)}_{g.year}-{g.month:02d}{yol.suffix}"

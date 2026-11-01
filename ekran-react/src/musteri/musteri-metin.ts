@@ -193,6 +193,24 @@ const TR = {
   musteriKolon: "Müşteri",
   konuKolon: "Konu",
   zamanKolon: "Gönderim zamanı",
+  // gecmis rapor ice aktarma (2026-10-31)
+  raporIceAktar: "Rapor içe aktar",
+  iceBaslik: "Geçmiş rapor içe aktar",
+  iceAciklama: "Panel dışında gönderilmiş aylık raporu dönemi ve müşterisiyle kaydeder; o dönem raporu atılmış sayılır.",
+  iceMusteriIpucu: "Yalnız raporunu hazırlayabildiğiniz müşteriler listelenir; bu dönemin raporu olanlar seçilemez.",
+  musteriSec: "— Müşteri seçin —",
+  iceMusteriYok: "Listelenecek müşteri yok",
+  raporuVar: "raporu var",
+  iceDosyaSec: "Rapor dosyası seç (.msg / .eml / .pdf)",
+  iceKural: "Outlook'tan sürükleyip kaydettiğiniz ileti (.msg) ya da .eml / PDF; en fazla 25 MB. Ayda tek rapor kuralı geçerlidir.",
+  iceDosyaBuyuk: "Dosya 25 MB'tan büyük olamaz.",
+  iceDosyaTuru: "Yalnız .msg, .eml ya da .pdf dosyası seçilebilir.",
+  iceAktar: "İçe aktar",
+  iceAktariliyor: "Aktarılıyor…",
+  iceHata: "Rapor içe aktarılamadı.",
+  iceAktarildi: (musteri: string, donem: string) => `${musteri} · ${donem} raporu kaydedildi.`,
+  iceAktarildiRozet: "İçe aktarıldı",
+  dosyaIndir: "Dosyayı indir",
 }
 
 const EN: typeof TR = {
@@ -380,6 +398,23 @@ const EN: typeof TR = {
   musteriKolon: "Customer",
   konuKolon: "Subject",
   zamanKolon: "Sent at",
+  raporIceAktar: "Import report",
+  iceBaslik: "Import past report",
+  iceAciklama: "Records a monthly report sent outside the panel with its period and customer; the period counts as sent.",
+  iceMusteriIpucu: "Only customers whose report you can prepare are listed; those with a report for this period cannot be chosen.",
+  musteriSec: "— Choose customer —",
+  iceMusteriYok: "No customers to list",
+  raporuVar: "report exists",
+  iceDosyaSec: "Choose report file (.msg / .eml / .pdf)",
+  iceKural: "A message saved from Outlook (.msg) or an .eml / PDF; at most 25 MB. One report per month applies.",
+  iceDosyaBuyuk: "The file cannot be larger than 25 MB.",
+  iceDosyaTuru: "Only .msg, .eml or .pdf files can be chosen.",
+  iceAktar: "Import",
+  iceAktariliyor: "Importing…",
+  iceHata: "The report could not be imported.",
+  iceAktarildi: (musteri: string, donem: string) => `${musteri} · ${donem} report recorded.`,
+  iceAktarildiRozet: "Imported",
+  dosyaIndir: "Download file",
 }
 
 export function musteriMetin(dil: Dil) {

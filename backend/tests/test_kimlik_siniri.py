@@ -29,6 +29,7 @@ YOL_UCLARI = [
     ("POST", "/api/v1/musteri/{i}/rapor/gonder", {}),
     ("GET", "/api/v1/musteri/{i}/rapor/gecmis", None),
     ("POST", "/api/v1/rapor/gonderim/{i}/geri-al", None),
+    ("GET", "/api/v1/rapor/gonderim/{i}/dosya", None),
     ("PUT", "/api/v1/skor/musteri/{i}", {"tam_id": 1, "score": 50}),
     ("POST", "/api/v1/skor/talepler/{i}/karar", {"action": "approve"}),
     ("PUT", "/api/v1/skor/istirak/{i}/final-dahil", {"dahil": True}),
