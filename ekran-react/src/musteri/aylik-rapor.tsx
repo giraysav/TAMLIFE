@@ -481,13 +481,13 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
               <label htmlFor="r-kime" className="block text-xs font-extrabold text-slate-600">
                 {t.kime}
               </label>
-              <input id="r-kime" value={alici.kime} maxLength={5000} onChange={(ev) => setAlici({ ...alici, kime: ev.target.value })} className={GIRDI} />
+              <textarea id="r-kime" rows={3} value={alici.kime} maxLength={50000} onChange={(ev) => setAlici({ ...alici, kime: ev.target.value })} className={`${GIRDI} resize-y`} />
             </div>
             <div className="grid gap-1.5">
               <label htmlFor="r-cc" className="block text-xs font-extrabold text-slate-600">
                 {t.bilgiCc}
               </label>
-              <input id="r-cc" value={alici.bilgi} maxLength={5000} onChange={(ev) => setAlici({ ...alici, bilgi: ev.target.value })} className={GIRDI} />
+              <textarea id="r-cc" rows={3} value={alici.bilgi} maxLength={50000} onChange={(ev) => setAlici({ ...alici, bilgi: ev.target.value })} className={`${GIRDI} resize-y`} />
             </div>
             <p className="text-[0.625rem] text-slate-400">{t.alicilarAyrac}</p>
             <div className="flex items-center gap-3">

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.db import engine
 from app.models import AppUser, Customer
 from app.onedesk import yz
-from app.ortak import rapor_donemi
+from app.ortak import MONTH_LABELS_TR, rapor_donemi
 from app.rapor import ceviri
 from app.rapor import metin as rapor_metin
 from app.rapor import servis as rapor_servis
@@ -222,7 +222,7 @@ def test_sla_analizi_yerlesik_ozet_ve_yz(veri, monkeypatch):
     assert "Hattın fiziksel katmanını" in a["ciler"][0]["tekrarlar"][0]["oneriler"][0]  # fiber kurali
     assert a["availability"]["devre_sayisi"] == 2 and a["availability"]["en_dusuk_devre"] == "D-1"
     b = d["ozet"]["bilgi"]
-    assert "• Alarm (SLA raporu, Eylül 2026): 7 kayıt kapatılmış, ortalama ilk müdahale süresi 12 dk." in b  # Excel pivotu
+    assert f"• Alarm (SLA raporu, {MONTH_LABELS_TR[ay]} {yil}): 7 kayıt kapatılmış, ortalama ilk müdahale süresi 12 dk." in b  # Excel pivotu
     assert "2 alarm kaydı kapatılmıştır" in b and ".\n\n• " in b  # maddeler arasinda bos satir
     dv = d["ozet"]["devam"]
     assert "• 4 numaralı alarm kaydı (ACIK-KAYIT, Hat Down) açık durumdadır; çalışmalar devam etmektedir." in dv

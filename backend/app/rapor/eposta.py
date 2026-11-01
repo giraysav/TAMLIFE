@@ -17,6 +17,7 @@ from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 from functools import cache
 from pathlib import Path
 from string import Template
@@ -86,10 +87,17 @@ def duz_metin(govde: str, imza: str) -> str:
     return f"{govde.rstrip()}\n\n{imza.strip()}" if imza.strip() else govde
 
 
+_ADLI = re.compile(r'\s*"?([^<>"\r\n]*?)"?\s*<([^<>\s]+)>\s*')
+
+
 def gorunen_adli(adres: str) -> str:
     """Kurum alanindaki adresi "GIRAY SAV <giray.sav@...>" bicimine cevirir (Outlook adsiz adresi ham gosterir).
 
-    Ad yalniz AD_DOMAIN alanindaki adreslerden uretilir (ad.soyad duzeni bilinir); musteri adresinde ad uydurulmaz."""
+    Ad yalniz AD_DOMAIN alanindaki adreslerden uretilir (ad.soyad duzeni bilinir); musteri adresinde ad uydurulmaz.
+    Personelin yazdigi "AD SOYAD <adres>" korunur; formataddr Turkce karakterli adi RFC 2047 ile kodlar, virgullu adi tirnaklar."""
+    adli = _ADLI.fullmatch(adres)  # parseaddr tirnaksiz virgullu adi ("OZ, AHMET <..>") reddeder
+    if adli:
+        return formataddr((adli.group(1), adli.group(2)), charset="utf-8")
     alan = get_settings().ad_domain.strip().lower().lstrip("@")
     if not alan or "@" not in adres or adres.rsplit("@", 1)[1].lower() != alan:
         return adres

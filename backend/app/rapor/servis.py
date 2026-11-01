@@ -40,9 +40,11 @@ from app.rapor import metin as rapor_metin
 from app.session import Principal
 
 AZAMI_PDF = 30 * 1024 * 1024
-EN_FAZLA_ALICI = 20
-_EPOSTA = re.compile(r"[^@\s]+@([^@\s]+\.[^@\s]+)")
-_AYRAC = re.compile(r"[;,\s]+")
+# Alici sayisi sinirsiz (2026-11-01 kullanici: Outlook taslaginda Ctrl+K alicilari sunucudan cozer; onemli olan ';' ayrimi).
+_EPOSTA = re.compile(r"[^@\s<>\"]+@([^@\s<>\"]+\.[^@\s<>\"]+)")
+_AYRAC = re.compile(r"[;\r\n]+")
+_ADSIZ_AYRAC = re.compile(r"[,\s]+")
+_ADLI_ADRES = re.compile(r"([^<>\r\n]*)<\s*([^<>\s]+)\s*>")
 
 
 class RaporHata(MusteriHata):
@@ -86,16 +88,29 @@ def alicilari_ayikla(ham: object) -> list[str]:
         ham = _AYRAC.split(ham)
     if not isinstance(ham, list):
         raise RaporHata(400, m("Alıcı listesi geçersiz.", "Recipient list is invalid."))
-    alicilar = [str(a).strip() for a in ham if str(a).strip()]
-    if len(alicilar) > EN_FAZLA_ALICI:
-        raise RaporHata(400, m(f"En fazla {EN_FAZLA_ALICI} alıcı girilebilir.", f"At most {EN_FAZLA_ALICI} recipients can be entered."))
+    parcalar: list[str] = []
+    for oge in ham:
+        for parca in _AYRAC.split(str(oge)):
+            parca = parca.strip()
+            if not parca:
+                continue
+            # "AD SOYAD <adres>" (Outlook'tan kopyalanan bicim) tek alicidir; adsiz parcada eski alisilmis virgul/bosluk ayrimi surer.
+            parcalar.extend([parca] if "<" in parca else [p for p in _ADSIZ_AYRAC.split(parca) if p])
     izinli = {a.strip().lower() for a in os.environ.get("RAPOR_MAIL_IZINLI_ALANLAR", "").split(",") if a.strip()}
-    for adres in alicilar:
+    alicilar: list[str] = []
+    gorulen: set[str] = set()
+    for parca in parcalar:
+        adli = _ADLI_ADRES.fullmatch(parca)
+        ad, adres = (" ".join(adli.group(1).strip().strip('"').split()), adli.group(2)) if adli else ("", parca)
         eslesme = _EPOSTA.fullmatch(adres)  # fullmatch: sondaki satir sonu baslik enjeksiyonuna yol acmasin
         if not eslesme:
-            raise RaporHata(400, m("Geçersiz e-posta adresi: ", "Invalid e-mail address: ") + adres[:80])
+            raise RaporHata(400, m("Geçersiz e-posta adresi: ", "Invalid e-mail address: ") + parca[:80])
         if izinli and eslesme.group(1).lower() not in izinli:
             raise RaporHata(400, m("Bu alana rapor gönderimi izinli değil: ", "Sending reports to this domain is not allowed: ") + eslesme.group(1)[:80])
+        if adres.lower() in gorulen:
+            continue
+        gorulen.add(adres.lower())
+        alicilar.append(f"{ad} <{adres}>" if ad else adres)
     return alicilar
 
 

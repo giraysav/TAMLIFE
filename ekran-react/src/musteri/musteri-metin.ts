@@ -119,7 +119,7 @@ const TR = {
   alicilar: "Rapor Alıcıları",
   kime: "Kime",
   bilgiCc: "Bilgi (CC)",
-  alicilarAyrac: "Adresleri ; ile ayırın (en fazla 20).",
+  alicilarAyrac: "Alıcıları ; ile ayırın; Outlook'tan kopyalanan AD SOYAD <adres> biçimi de olur. Sayı sınırı yok.",
   alicilariKaydet: "Alıcıları kaydet",
   emlNot: "Gönderim, Outlook taslağını (.eml) indirir: rapor PDF'i, SLA Excel'i ve ek dosyalar ekindedir. Açıp kontrol edin, Gönder'e Outlook'ta siz basarsınız.",
   // SLA Excel'i ve ek grafikler
@@ -328,7 +328,7 @@ const EN: typeof TR = {
   alicilar: "Report Recipients",
   kime: "To",
   bilgiCc: "CC",
-  alicilarAyrac: "Separate addresses with ; (max 20).",
+  alicilarAyrac: "Separate recipients with ; — the Outlook NAME <address> format also works. No limit.",
   alicilariKaydet: "Save recipients",
   emlNot: "Sending downloads the Outlook draft (.eml) with the report PDF, the SLA Excel and the attachments. Open and review it, then press Send in Outlook.",
   sla: "SLA Report",

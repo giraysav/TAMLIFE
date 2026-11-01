@@ -266,9 +266,22 @@ def test_alicilar_dogrulama(veri, monkeypatch):
     hdr = login_ok(veri)
     put = lambda **g: veri.put("/api/v1/musteri/1/rapor/alicilar", json=g, headers=hdr)
     assert put(kime="gecersiz").status_code == 400
-    assert put(kime=[f"u{i}@example.com" for i in range(21)]).status_code == 400
+    assert put(kime="AD SOYAD <gecersiz>").status_code == 400
     r = put(kime="a@example.com; b@example.com", bilgi=["c@example.com"])
     assert r.json()["data"] == {"kime": "a@example.com; b@example.com", "bilgi": "c@example.com"}
+    # 2026-11-01: Outlook'tan kopyalanan "AD SOYAD <adres>" tek alicidir; sayi siniri yok; ayni adres bir kez yazilir.
+    outlook = "; ".join(f"KİŞİ {i} ÖZ <u{i}@example.com>" for i in range(30)) + "; OZ, AHMET <oz@example.com>; u3@example.com"
+    r = put(kime="a@example.com", bilgi=outlook)
+    assert r.status_code == 200
+    bilgi = r.json()["data"]["bilgi"].split("; ")
+    assert len(bilgi) == 31 and bilgi[0] == "KİŞİ 0 ÖZ <u0@example.com>" and bilgi[-1] == "OZ, AHMET <oz@example.com>"
+    from email.header import decode_header, make_header
+    from email.utils import parseaddr
+
+    from app.rapor.eposta import gorunen_adli
+    assert parseaddr(gorunen_adli(bilgi[-1])) == ("OZ, AHMET", "oz@example.com")
+    ad, adres = parseaddr(gorunen_adli(bilgi[0]))
+    assert (str(make_header(decode_header(ad))), adres) == ("KİŞİ 0 ÖZ", "u0@example.com")
     monkeypatch.setenv("RAPOR_MAIL_IZINLI_ALANLAR", "example.com")
     assert put(kime="a@baska.org").status_code == 400
     assert put(kime="a@example.com").status_code == 200
