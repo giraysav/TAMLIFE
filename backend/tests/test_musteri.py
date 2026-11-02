@@ -332,17 +332,29 @@ def test_gonderim_onay_ayda_tek_kilit_geri_alma(veri, monkeypatch, tmp_path):
     assert [x["id"] for x in veri.get(f"{url}/gecmis").json()["data"]] == [g["id"]]
     _cikis(veri, hdr)
 
-    hdr2 = _giris(veri, monkeypatch, "TeamMngr")  # yonetici geri alamaz, yalniz admin
-    assert veri.post(f"/api/v1/rapor/gonderim/{g['id']}/geri-al", headers=hdr2).status_code == 403
-    _cikis(veri, hdr2)
-    hdr3 = _giris(veri, monkeypatch, "admin")
-    r3 = veri.post(f"/api/v1/rapor/gonderim/{g['id']}/geri-al", headers=hdr3)
+    # 2026-11-02: geri alma raporu yazabilen herkese (onceden yalniz admin). Giris kullanicisi (id 1) kart 1'in sorumlusu.
+    def sorumlu(kisi_id: int) -> None:
+        with Session(engine()) as db:
+            db.get(Customer, 1).owner_id = kisi_id
+            db.commit()
+
+    hdr1 = _giris(veri, monkeypatch, "TeamMember")
+    sorumlu(2)  # kart baskasinin: personel geri alamaz (karti goremez)
+    assert veri.post(f"/api/v1/rapor/gonderim/{g['id']}/geri-al", headers=hdr1).status_code in (403, 404)
+    sorumlu(1)  # kartin sorumlusu personel: admin beklemeden geri alir
+    assert veri.get("/api/v1/musteri/1", headers=hdr1).json()["data"]["erisim"]["rapor_geri_al"] is True
+    r3 = veri.post(f"/api/v1/rapor/gonderim/{g['id']}/geri-al", headers=hdr1)
     assert r3.status_code == 200 and r3.json()["data"]["durum"] == "reverted" and r3.json()["data"]["geri_alan"] == "admin"
-    assert veri.post(f"/api/v1/rapor/gonderim/{g['id']}/geri-al", headers=hdr3).status_code == 404
+    assert veri.post(f"/api/v1/rapor/gonderim/{g['id']}/geri-al", headers=hdr1).status_code == 404
     with Session(engine()) as db:
         assert db.get(Customer, 1).report_count == 0 and db.query(Report).filter_by(customer_id=1).count() == 0
         assert db.get(ReportDispatch, g["id"]).status == "reverted"  # arsivde kalir
-    assert veri.post(f"{url}/gonder", json={"onay": True}, headers=hdr3).status_code == 200  # ay yeniden acildi
+    assert veri.post(f"{url}/gonder", json={"onay": True}, headers=hdr1).status_code == 200  # ay yeniden acildi
+    _cikis(veri, hdr1)
+    hdr3 = _giris(veri, monkeypatch, "TeamMngr")  # yonetici de geri alir
+    yeni = veri.get(f"{url}/gecmis", headers=hdr3).json()["data"][0]
+    assert veri.post(f"/api/v1/rapor/gonderim/{yeni['id']}/geri-al", headers=hdr3).json()["data"]["durum"] == "reverted"
+    assert veri.post(f"{url}/gonder", json={"onay": True}, headers=hdr3).status_code == 200
 
 
 def test_gonderim_outlook_taslagi_eml(veri, monkeypatch, tmp_path):

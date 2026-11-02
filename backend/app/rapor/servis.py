@@ -578,12 +578,13 @@ def metin_cevir(db: Session, user: Principal, musteri_id: int, govde: dict) -> d
 
 
 def geri_al(db: Session, user: Principal, gonderim_id: int) -> dict:
-    """Yalniz admin: yanlis gonderilen ayin kilidini acar. Rapor kaydi silinir, sayac azalir; gonderim 'reverted' kalir."""
-    if not (user.is_admin or user.role == "admin"):
-        raise RaporHata(403, m("Yetki yok.", "Not authorized."))
+    """Yanlis gonderilen ayin kilidini acar. Rapor kaydi silinir, sayac azalir; gonderim 'reverted' kalir.
+    Yetki raporu yazabilenle ayni (musteri_yaz_getir: admin, yonetici, kartin sorumlusu). 2026-11-02 kullanici: "panel yeni oldugu icin
+    hatalar olabilir, surekli admin geri al yapmakla ugrasmasin" (onceden yalniz admin)."""
     g = db.get(ReportDispatch, gonderim_id)
     if g is None or g.status != "sent":
         raise RaporHata(404, m("Geri alınacak gönderim bulunamadı.", "No dispatch to revert was found."))
+    musteri_yaz_getir(db, user, g.customer_id)
     rapor_id = g.report_id
     g.status, g.reverted_by, g.reverted_at, g.report_id = "reverted", user.username[:120], simdi(), None
     db.flush()

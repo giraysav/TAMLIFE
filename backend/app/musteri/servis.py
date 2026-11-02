@@ -449,7 +449,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "sil": silinebilir_mi(db, user, musteri),
         "sil_talebi": not is_admin(user),  # 2026-10-31: dugme herkese gorunur; admin olmayan silme onayina gonderir
         "tam_degistir": yonetici,  # sorumlu devri yalniz yonetici (tam_degistir)
-        "rapor_geri_al": is_admin(user),
+        "rapor_geri_al": yazma,  # 2026-11-02: gonderimi geri alma raporu yazabilen herkese (onceden yalniz admin)
         "ayri_rapor_sec": yazma and musteri.parent_id is not None,
         "rapor_muaf_sec": yazma and rapor_birimi_mi(musteri),
     }
