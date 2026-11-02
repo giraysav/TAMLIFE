@@ -301,15 +301,15 @@ def test_gonderilen_metin_saklanir_ve_takip_alanlari_sonraki_aya_gecer(veri, mon
     assert t["devreden"] is None and t["alanlar"]["devam"] == "Güncellendi."
 
 
-def test_sla_dosyasi_yalniz_kartin_musterisine_ait_olabilir(veri):
-    """2026-10-26 kullanici: "SLA exceli yalniz o musteriye ozel yuklenmeli". Dosyadaki 'Musteri Adi' karta (sirket eki / noktalama
-    farki gozetilmez) ya da ayni rapora giren istirakine uymali; baskasinin dosyasi yazilmaz."""
+def test_sla_dosyasi_musteri_unvani_denetlenmez(veri):
+    """2026-11-02 kullanici: "musteri eslesmesi kuralini kaldir, isteyen istedigi SLA excelini yuklesin" (2026-10-26 unvan kurali
+    kalkti). Baska unvanli dosya da yuklenir; grafik ve sayilar her zamanki gibi cikar."""
     hdr = login_ok(veri)
     yil, ay = rapor_servis.donem()
     donem = f"{yil}-{ay:02d}"
     r = veri.put(f"{URL}/sla", params={"dosya": "Beta.xlsx"}, content=_sla_excel(donem, "BETA LOJİSTİK LİMİTED ŞİRKETİ"), headers=hdr)
-    assert r.status_code == 400 and "başka bir müşteriye ait" in r.text and "BETA" in r.text
-    assert veri.get(f"{URL}/sla").json()["data"]["ozet"] is None  # hicbir sey yazilmadi
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["analiz"]["musteriler"] == ["BETA LOJİSTİK LİMİTED ŞİRKETİ"] and r.json()["data"]["analiz"]["grafikler"]
     r = veri.put(f"{URL}/sla", params={"dosya": "Alfa.xlsx"}, content=_sla_excel(donem, "ALFA TEST ANONİM ŞİRKETİ"), headers=hdr)
     assert r.status_code == 200, r.text
     assert r.json()["data"]["analiz"]["musteriler"] == ["ALFA TEST ANONİM ŞİRKETİ"]

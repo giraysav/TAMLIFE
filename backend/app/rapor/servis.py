@@ -499,9 +499,7 @@ def sla_yukle(db: Session, user: Principal, musteri_id: int, veri: bytes, dosya_
     _sla_kilidi(db, musteri.id, yil, ay)
     if not veri:
         raise RaporHata(400, m("Excel dosyası seçilmedi.", "No Excel file was selected."))
-    # Dosya yalniz bu rapor biriminin olabilir: kartin ve (ayri raporu olmayan) istiraklerinin unvanlari (2026-10-26).
-    istirakler = db.scalars(select(Customer.name).where(Customer.parent_id == musteri.id, Customer.separate_report.is_not(True))).all()
-    sla.excel_yukle(musteri.id, yil, ay, veri, dosya_adi, user.username, unvanlar=[musteri.name or "", *istirakler])
+    sla.excel_yukle(musteri.id, yil, ay, veri, dosya_adi, user.username)  # 2026-11-02: musteri unvani denetimi kalkti
     return sla_getir(db, user, musteri.id)
 
 
