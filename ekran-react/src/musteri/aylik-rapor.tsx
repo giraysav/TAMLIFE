@@ -12,6 +12,7 @@ import { EkDosyaKarti, GalapagosKarti, SlaKarti } from "@/musteri/sla-paneli"
 import type { SlaVeri } from "@/musteri/sla-paneli"
 import { SlaAnalizi } from "@/musteri/sla-analizi"
 import type { AnalizMetni } from "@/musteri/sla-analizi"
+import { useTaslakOtomatikKayit, yedekAnahtari, yedektenGeriYukle } from "@/musteri/taslak-otomatik"
 
 type Gonderim = { id: number; yil: number; ay: number; gonderen: string; zaman: string; konu: string; durum: string; pdf: boolean; geri_alan: string | null }
 type Taslak = {
@@ -126,7 +127,8 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const adres = (yol: string, sorgu: Record<string, string> = {}) => `${taban}${yol}${sorguMetni({ ...sorgu, donem: secim })}`
   const istemci = useQueryClient()
   const slaAnahtari = ["musteri", "rapor", musteriId, "sla", secim]
-  const taslakQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "taslak", secim], queryFn: () => oku<Taslak>(adres("/taslak")) })
+  const taslakAnahtari = ["musteri", "rapor", musteriId, "taslak", secim]
+  const taslakQ = useQuery({ queryKey: taslakAnahtari, queryFn: () => oku<Taslak>(adres("/taslak")) })
   const gecmisQ = useQuery({ queryKey: ["musteri", "rapor", musteriId, "gecmis"], queryFn: () => oku<Gonderim[]>(`${taban}/gecmis`) })
   const slaQ = useQuery({ queryKey: slaAnahtari, queryFn: () => oku<SlaVeri>(adres("/sla")) })
   const taslak = taslakQ.data
@@ -142,16 +144,46 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const yuklenen = useRef("")
   const oncekiDil = useRef(dil)
   const sonOzet = useRef<Partial<AnalizMetni>>({})
+  // Otomatik kayit: form hangi donemin taslagiyla dolu (null: henuz degil), sunucudaki hal ve zamani.
+  const [formDonemi, setFormDonemi] = useState<string | null>(null)
+  const [geriYuklendi, setGeriYuklendi] = useState(false)
+  const kaydedilen = useRef("")
+  const sunucuZamani = useRef("")
 
   // Sunucudaki taslak yalniz yeni bir surum geldiginde forma yazilir: panel dili degisince sorgu yenilenir, yazilan metin kaybolmasin.
+  // Tarayicida sunucuya ulasamamis degisiklik varsa (ag / oturum gitti, sayfa kapandi) o geri yuklenir.
   useEffect(() => {
     if (!taslak) return
     const surum = `${taslak.yil}-${taslak.ay}|${taslak.zaman ?? ""}|${taslak.gonderim?.id ?? ""}`
     if (yuklenen.current === surum) return
     yuklenen.current = surum
-    setAlanlar(taslak.alanlar)
+    const anahtar = yedekAnahtari(musteriId, taslak.yil, taslak.ay)
+    kaydedilen.current = JSON.stringify(taslak.alanlar)
+    sunucuZamani.current = taslak.zaman ?? ""
+    const geri = yedektenGeriYukle(anahtar, { alanlar: taslak.alanlar, zaman: taslak.zaman, gonderildi: !!taslak.gonderim })
+    setAlanlar(geri ?? taslak.alanlar)
+    setGeriYuklendi(!!geri)
+    setFormDonemi(anahtar)
     setAlici({ kime: taslak.alicilar.kime, bilgi: taslak.alicilar.bilgi })
-  }, [taslak])
+  }, [taslak, musteriId])
+
+  const kayitDonemi = taslak && formDonemi === yedekAnahtari(musteriId, taslak.yil, taslak.ay) ? formDonemi : null
+  const kayit = useTaslakOtomatikKayit({
+    anahtar: kayitDonemi,
+    adres: adres("/taslak"),
+    alanlar,
+    etkin: !!taslak && !taslak.gonderim,
+    kaydedilen,
+    taban: sunucuZamani,
+    // Onbellekteki taslak yeni zamanla guncellenir; ayni surum oldugu icin forma yeniden yazilmaz (yazim surerken metin kaybolmaz).
+    onKaydedildi: (kayitli, zaman) => {
+      if (!taslak) return
+      const donem = `${taslak.yil}-${taslak.ay}|`
+      if (yuklenen.current.startsWith(donem)) yuklenen.current = `${donem}${zaman}|`
+      istemci.setQueryData<Taslak>(taslakAnahtari, (o) => (o ? { ...o, alanlar: kayitli, zaman, kayitli: true } : o))
+      setGeriYuklendi(false)
+    },
+  })
 
   // Panel Ingilizceye (ya da Turkceye) alininca rapor da o dile gecer; hazir metinler karsiliklariyla degisir.
   useEffect(() => {
@@ -217,7 +249,8 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
 
   async function taslagiKaydet(olay?: FormEvent) {
     olay?.preventDefault()
-    if (await dene("taslak", () => yaz("PUT", adres("/taslak"), { alanlar }), t.kaydedildi, true)) await yukle()
+    bildir("taslak", "")
+    await kayit.simdi()
   }
 
   async function alicilariKaydet(olay: FormEvent) {
@@ -277,7 +310,14 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
     }
   }
 
-  const alanYaz = (anahtar: string, deger: string) => setAlanlar((a) => ({ ...a, [anahtar]: deger }))
+  const alanYaz = (anahtar: string, deger: string) => {
+    if (mesaj.taslak) bildir("taslak", "")
+    setAlanlar((a) => ({ ...a, [anahtar]: deger }))
+  }
+  // Durum satiri: kayit sorunu her seyin onunde; ardindan islem mesaji (ceviri vb.), geri yukleme, son kayit.
+  const kd = kayit.durum
+  const kayitSorunu = kd.tur === "bekliyor" ? t.otoBekliyor : kd.tur === "kilitli" ? t.gonderimKilitli : kd.tur === "hata" ? kd.mesaj || t.kaydedilemedi : ""
+  const kayitBilgisi = geriYuklendi ? t.otoGeriYuklendi : kd.tur === "kaydediliyor" ? t.otoKaydediliyor : kd.tur === "kaydedildi" ? t.otoKaydedildi(kd.saat) : ""
   function ozetiYaz(metin: AnalizMetni) {
     setAlanlar((a) => {
       const sonuc = { ...a }
@@ -350,7 +390,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
                 </button>
               ) : null}
               <div className="ml-auto flex items-center gap-2">
-                <button type="button" className={`${DUGME} border-tl-navy/30 font-black`} disabled={!!g} onClick={() => void taslagiKaydet()}>
+                <button type="button" className={`${DUGME} border-tl-navy/30 font-black`} disabled={!!g} title={t.otoIpucu} onClick={() => void taslagiKaydet()}>
                   {t.taslagiKaydet}
                 </button>
                 <button type="button" className={DUGME_SARI} disabled={!!g || pdfMesgul} onClick={() => void gonder()}>
@@ -360,7 +400,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
             </div>
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <span role="status" className="min-h-[14px] text-[0.625rem] font-bold text-slate-400">
-                {(pdfMesgul ? t.pdfHazirlaniyor : "") || mesaj.taslak || mesaj.gonder || (taslak.kayitli ? `${t.taslakBilgi}: ${(taslak.zaman ?? "").slice(0, 16).replace("T", " ")} · ${taslak.guncelleyen ?? ""}` : "")}
+                {(pdfMesgul ? t.pdfHazirlaniyor : "") || mesaj.gonder || kayitSorunu || mesaj.taslak || kayitBilgisi || (taslak.kayitli ? `${t.taslakBilgi}: ${(taslak.zaman ?? "").slice(0, 16).replace("T", " ")} · ${taslak.guncelleyen ?? ""}` : "")}
               </span>
               <p className="text-[0.625rem] font-bold text-slate-400 sm:max-w-[60%] sm:text-right">{t.emlNot}</p>
             </div>

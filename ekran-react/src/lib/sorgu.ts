@@ -10,10 +10,10 @@ export class ApiHata extends Error {
 }
 
 /** Tek API cagrisi: 401 oturumu kapatir; basari govdesi {data}, hata govdesi {detail}. */
-async function gonder<T>(yontem: string, yol: string, basliklar?: Record<string, string>, govde?: BodyInit): Promise<T> {
+async function gonder<T>(yontem: string, yol: string, basliklar?: Record<string, string>, govde?: BodyInit, keepalive = false): Promise<T> {
   let cevap: Response
   try {
-    cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: { ...dilBasligi(), ...hareketBasligi(), ...musteriAlaniBasligi(yol), ...basliklar }, body: govde })
+    cevap = await fetch(apiYolu(yol), { method: yontem, credentials: "same-origin", headers: { ...dilBasligi(), ...hareketBasligi(), ...musteriAlaniBasligi(yol), ...basliklar }, body: govde, keepalive })
   } catch {
     throw new ApiHata(0, "")
   }
@@ -27,9 +27,11 @@ async function gonder<T>(yontem: string, yol: string, basliklar?: Record<string,
 
 export const oku = <T>(yol: string) => gonder<T>("GET", yol)
 
-export function yaz<T>(yontem: "POST" | "PUT" | "PATCH" | "DELETE", yol: string, govde?: unknown): Promise<T> {
+/** `arka`: sayfa kapanirken de tamamlanir (keepalive; tarayici siniri 64 KB, buyuk govde normal istekle gider). */
+export function yaz<T>(yontem: "POST" | "PUT" | "PATCH" | "DELETE", yol: string, govde?: unknown, arka = false): Promise<T> {
   const json = govde !== undefined
-  return gonder<T>(yontem, yol, csrfBasliklari(json ? { "Content-Type": "application/json" } : {}), json ? JSON.stringify(govde) : undefined)
+  const metin = json ? JSON.stringify(govde) : undefined
+  return gonder<T>(yontem, yol, csrfBasliklari(json ? { "Content-Type": "application/json" } : {}), metin, arka && (metin?.length ?? 0) < 60_000)
 }
 
 /** Ham dosya govdesi (cok parcali form degil): sunucu tarafinda yeni bagimlilik gerektirmez. */

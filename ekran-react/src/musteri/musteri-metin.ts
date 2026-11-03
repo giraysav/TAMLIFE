@@ -103,6 +103,11 @@ const TR = {
   gonderOnay: (donem: string, sla: boolean, dosya: number) =>
     `${donem} raporu gönderilecek. Rapor PDF'i${sla ? ", SLA Excel'i" : ""}${dosya ? ` ve ${dosya} ek dosya` : ""} iletiye eklenir. Ayda yalnızca bir rapor gönderilebilir. Onaylıyor musunuz?`,
   taslakBilgi: "Taslak",
+  otoKaydediliyor: "Taslak kaydediliyor…",
+  otoKaydedildi: (saat: string) => `Taslak kaydedildi · ${saat} · değişiklikler otomatik kaydedilir`,
+  otoBekliyor: "Sunucuya ulaşılamadı: değişiklikler bu tarayıcıda saklanıyor, bağlantı gelince otomatik kaydedilecek.",
+  otoGeriYuklendi: "Kaydedilmemiş değişiklikleriniz bu tarayıcıdan geri yüklendi; otomatik kaydediliyor.",
+  otoIpucu: "Taslak her değişiklikte otomatik kaydedilir; bu düğme beklemeden kaydeder.",
   mailBlogu: "E-posta gövde metni",
   konu: "Konu",
   govde: "E-posta gövdesi",
@@ -312,6 +317,11 @@ const EN: typeof TR = {
   gonderOnay: (donem: string, sla: boolean, dosya: number) =>
     `The ${donem} report will be sent. The report PDF${sla ? ", the SLA Excel" : ""}${dosya ? ` and ${dosya} attachment${dosya === 1 ? "" : "s"}` : ""} will be attached. Only one report can be sent per month. Do you confirm?`,
   taslakBilgi: "Draft",
+  otoKaydediliyor: "Saving draft…",
+  otoKaydedildi: (saat: string) => `Draft saved · ${saat} · changes are saved automatically`,
+  otoBekliyor: "Server unreachable: changes are kept in this browser and will be saved automatically when the connection returns.",
+  otoGeriYuklendi: "Your unsaved changes were restored from this browser; saving automatically.",
+  otoIpucu: "The draft is saved automatically on every change; this button saves immediately.",
   mailBlogu: "E-mail body text",
   konu: "Subject",
   govde: "E-mail body",
