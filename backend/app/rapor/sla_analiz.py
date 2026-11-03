@@ -10,8 +10,9 @@ Iki katman:
   2) YZ yorumu (istege bagli): onedesk/yz.py ile AYNI ayar (TAMLIFE_YZ_SAGLAYICI=anthropic, TAMLIFE_YZ_VERI_PAYLASIMI=izinli,
      ANTHROPIC_API_KEY). Modele yalniz OZET gider (en cok 10 CI, kirpilmis metinler); musteri adi gonderilmez.
 Ozet metin rapor dilinde uretilir (tr/en); personel rapora eklemeden once gozden gecirir. Iki parca (kullanici karari
-2026-10-11): 'bilgi' (SLA Excel verileri + donem ozeti; maddeler arasinda bos satir) ve 'devam' (Devam Eden Calismalar:
-acik kayitlar numarasiyla ve tekrar eden sorunlarin takibi). Musteriye ONERI yazilmaz; rapor takip belgesidir.
+2026-10-11): 'bilgi' (SLA Excel verileri + donem ozeti + tekrar eden sorunlar; maddeler arasinda bos satir) ve 'devam'
+(Devam Eden Calismalar: YALNIZ musteri tarafindaki acik kayitlar numarasiyla; acik kayit yoksa bos kalir, alanin varsayilan
+metni durur; 2026-11-03 kullanici). Musteriye ONERI yazilmaz; rapor takip belgesidir.
 """
 
 from __future__ import annotations
@@ -422,7 +423,9 @@ def _sayi_yaz(deger: float, dil: str) -> str:
 
 def ozet_metni(sonuc: dict, donem_adi: str, dil: str = "tr") -> dict[str, str]:
     """Rapor alanlarina eklenebilecek yerlesik ozet (rapor dilinde, madde isaretli, maddeler arasi bos satir):
-    'bilgi' -> Bilgilendirmeler (SLA Excel verileri + donem ozeti), 'devam' -> Devam Eden Calismalar (acik kayitlar, takip)."""
+    'bilgi' -> Bilgilendirmeler (SLA Excel verileri, donem ozeti, tekrar eden sorunlar), 'devam' -> Devam Eden Calismalar
+    (yalniz acik kayitlar; yoksa bos). 2026-11-03 kullanici: "devam eden calisma varsa doldurulmali, yoksa oraya akan veriler
+    bilgilendirme alanina islenmeli"."""
     en = dil == "en"
     ad = TUR_ADI["en" if en else "tr"]
     dt = sonuc.get("donem_toplam") or {}
@@ -480,6 +483,15 @@ def ozet_metni(sonuc: dict, donem_adi: str, dil: str = "tr") -> dict[str, str]:
     if kat:
         liste = ", ".join(f"{k['ad']} ({k['adet']})" for k in kat)
         bilgi.append(f"• Most frequent categories: {liste}." if en else f"• En sık kategoriler: {liste}.")
+    for c in (sonuc.get("ciler") or [])[:3]:
+        if c["adet"] < 2 or not c["tekrarlar"] or c["tekrarlar"][0]["adet"] < 2:
+            continue
+        t = c["tekrarlar"][0]
+        bilgi.append(
+            f'• Recurring issue at {c["ci"]}: "{t["icerik"]}" was recorded {t["adet"]} times in the SLA file.'
+            if en
+            else f'• {c["ci"]} için "{t["icerik"]}" sorunu SLA dosyasında {t["adet"]} kez kaydedilmiştir.'
+        )
     av = sonuc.get("availability")
     if av:
         bilgi.append(
@@ -504,15 +516,6 @@ def ozet_metni(sonuc: dict, donem_adi: str, dil: str = "tr") -> dict[str, str]:
             if en
             else f"• Toplam {acik_toplam} kayıt açıktır; yukarıda ilk {len(sonuc['acik'])} kayıt listelenmiştir."
         )
-    for c in (sonuc.get("ciler") or [])[:3]:
-        if c["adet"] < 2 or not c["tekrarlar"] or c["tekrarlar"][0]["adet"] < 2:
-            continue
-        t = c["tekrarlar"][0]
-        devam.append(
-            f'• {c["ci"]}: "{t["icerik"]}" recurred {t["adet"]} times; the root cause is being followed up.'
-            if en
-            else f'• {c["ci"]}: "{t["icerik"]}" {t["adet"]} kez tekrarlamıştır; kök neden takibi devam etmektedir.'
-        )
     return {"bilgi": "\n\n".join(bilgi), "devam": "\n\n".join(devam)}
 
 
@@ -524,9 +527,9 @@ _YZ_SISTEM = {
         "tür adetleri, Kategori ve Çağrı Servisi kırılımı, en çok tekrar edenlerin kök sebebi ve yapılan çözüm, erişilebilirlik. "
         "Ayrıca dönemin SLA pivot değerleri (kapanan adet, ortalama ilk müdahale ve çözüm süresi, dk) ve AÇIK kayıtlar (kayıt "
         "numarasıyla) verilir. Müşteriye gidecek aylık rapora BİLGİLENDİRME yaz; müşteriye öneri ya da tavsiye YAZMA. İki bölüm: "
-        "'Bilgilendirme:' altında dönemin SLA verileri ve genel değerlendirmesi; 'Devam eden çalışmalar:' altında her açık kayıt "
-        "için '<numara> numaralı kayıt açık durumdadır; çalışmalar devam etmektedir' biçiminde birer madde ve tekrar eden sorunların "
-        "takibi. Yalnızca verideki bilgiye dayan; veride olmayan cihaz modeli, tarih ya da sayı uydurma. Türkçe, kısa maddeler (• ile "
+        "'Bilgilendirme:' altında dönemin SLA verileri, genel değerlendirmesi ve tekrar eden sorunlar; 'Devam eden çalışmalar:' "
+        "altında YALNIZ açık kayıtlar, her biri için '<numara> numaralı kayıt açık durumdadır; çalışmalar devam etmektedir' biçiminde "
+        "birer madde. Açık kayıt yoksa 'Devam eden çalışmalar:' bölümünü hiç yazma. Yalnızca verideki bilgiye dayan; veride olmayan cihaz modeli, tarih ya da sayı uydurma. Türkçe, kısa maddeler (• ile "
         "başlayan), maddeler arasında bir boş satır, düz metin; Markdown başlık ya da tablo kullanma."
     ),
     "en": (
@@ -535,9 +538,9 @@ _YZ_SISTEM = {
         "type counts, category and call service breakdown, root cause and resolution of the most recurring ones, and availability. "
         "You also receive the period's SLA pivot values (closed count, average first response and resolution time in minutes) and "
         "the OPEN records (with record numbers). Write INFORMATION for the monthly report sent to the customer; do NOT give the "
-        "customer recommendations or advice. Two sections: under 'Information:' the period's SLA figures and overall assessment; "
-        "under 'Ongoing work:' one bullet per open record in the form 'Record no. <number> is still open; work on it continues', "
-        "plus follow-up of recurring issues. Rely only on the data; do not invent device models, dates or numbers. English, short "
+        "customer recommendations or advice. Two sections: under 'Information:' the period's SLA figures and overall assessment, "
+        "including recurring issues; under 'Ongoing work:' ONLY the open records, one bullet each in the form 'Record no. <number> "
+        "is still open; work on it continues'. If there are no open records, omit the 'Ongoing work:' section entirely. Rely only on the data; do not invent device models, dates or numbers. English, short "
         "bullets starting with •, one blank line between bullets, plain text; no Markdown headings or tables."
     ),
 }

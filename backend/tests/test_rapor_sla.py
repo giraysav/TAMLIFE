@@ -226,7 +226,9 @@ def test_sla_analizi_yerlesik_ozet_ve_yz(veri, monkeypatch):
     assert "2 alarm kaydı kapatılmıştır" in b and ".\n\n• " in b  # maddeler arasinda bos satir
     dv = d["ozet"]["devam"]
     assert "• 4 numaralı alarm kaydı (ACIK-KAYIT, Hat Down) açık durumdadır; çalışmalar devam etmektedir." in dv
-    assert "IST-HAT-1" in dv and "Hattın fiziksel" not in dv  # musteriye oneri yazilmaz
+    # 2026-11-03: Devam Eden Calismalar yalniz acik kayitlar; tekrar eden sorun Bilgilendirme'ye
+    assert "IST-HAT-1" not in dv and "IST-HAT-1 için" in b and "2 kez kaydedilmiştir" in b
+    assert "Hattın fiziksel" not in b + dv  # musteriye oneri yazilmaz
     assert d["yz"] == {"hazir": False, "yorum": None, "neden": ""}
     en = veri.post(f"{URL}/sla/analiz", json={"dil": "en", "yz": True}, headers=hdr).json()["data"]
     assert (
