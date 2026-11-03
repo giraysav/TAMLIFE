@@ -23,6 +23,7 @@ from app.catalog import get as modul
 from app.dil import m
 from app.models import Customer, Demand
 from app.navigation import PRESENTATION, navigation_for
+from app.ortak import ay_adi
 from app.radar.servis import adaylar as radar_adaylari
 from app.rolgorunum import etkin
 from app.session import Principal
@@ -83,7 +84,7 @@ def _ekip_geneli(db: Session, yil: int) -> dict[str, Callable[[], dict]]:
     return {"gelir_uretim": gelir_uretim, "radar": radar, "talep": talep}
 
 
-def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict], yil: int) -> list[dict]:
+def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict], yil: int, rapor_aylari: list[int] | None = None) -> list[dict]:
     """Kullanicinin menusundeki moduller sirasiyla (Yonetim, yalniz-admin ve OZETTE_YOK haric) birer kutu."""
     menude = [
         str(o["id"])
@@ -101,6 +102,14 @@ def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict], yil: int)
     acik_proje = _toplam(satirlar, "proje_acik")
     onemli = sum(len(s["onemli_isler"]) for s in satirlar)
     musteri_alt = m(f"çatı · {istirak} iştirak", f"parent · {istirak} affiliates")
+    # Rapor kutusunun donem etiketi: "Ekim 2026 raporları" ya da "Ekim–Kasım 2026 raporları" (2026-11-03: Ekim'den itibaren sayilir)
+    aylar = rapor_aylari or []
+    if aylar:
+        ad_tr = ay_adi(aylar[0]) + ("" if len(aylar) == 1 else f"–{ay_adi(aylar[-1])}")
+        ad_en = ay_adi(aylar[0], "en") + ("" if len(aylar) == 1 else f"–{ay_adi(aylar[-1], 'en')}")
+        rapor_tr, rapor_en = f"{ad_tr} {yil} raporları", f"{ad_en} {yil} reports"
+    else:
+        rapor_tr, rapor_en = f"{yil} raporları", f"{yil} reports"
 
     yerel: dict[str, Callable[[], dict]] = {
         "musteri": lambda: {"deger": cati, "alt": musteri_alt},
@@ -114,9 +123,7 @@ def modul_ozetleri(db: Session, user: Principal, satirlar: list[dict], yil: int)
         },
         "rapor": lambda: {
             "deger": f"{atilan}/{beklenen}" if beklenen else None,
-            "alt": m(
-                f"{yil} raporları · %{round(100 * atilan / beklenen)} uyum", f"{yil} reports · {round(100 * atilan / beklenen)}% compliance"
-            )
+            "alt": m(f"{rapor_tr} · %{round(100 * atilan / beklenen)} uyum", f"{rapor_en} · {round(100 * atilan / beklenen)}% compliance")
             if beklenen
             else m("rapor birimi yok", "no report units"),
         },

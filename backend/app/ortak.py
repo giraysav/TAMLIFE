@@ -39,6 +39,21 @@ def rapor_donemi(an: date | datetime) -> tuple[int, int]:
     return (an.year, an.month - 1) if an.month > 1 else (an.year - 1, 12)
 
 
+# Rapor uyumu (Genel Bakis / Ekip Ozeti) bu donemden itibaren sayilir. 2026-11-03 kullanici: "Ekim ayi atilan raporlar itibariyla
+# hesaplanacak, yil basindan bugune olan kisimlari hesaplatma" (panelde ilk rapor donemi Ekim 2026; oncesi panelde yok).
+RAPOR_UYUM_BASLANGICI = (2026, 10)
+
+
+def rapor_uyum_aylari(an: date | datetime) -> list[int]:
+    """Bu yil raporu beklenen aylar: tamamlanmis rapor donemleri (Ocak..son rapor ayi), RAPOR_UYUM_BASLANGICI'ndan oncesi haric.
+    Ocak'ta (son donem onceki yilin Araligi) bos: yeni yilin beklentisi Subat'ta baslar."""
+    yil, ay = rapor_donemi(an)
+    if yil != an.year or (yil, ay) < RAPOR_UYUM_BASLANGICI:
+        return []
+    ilk = RAPOR_UYUM_BASLANGICI[1] if yil == RAPOR_UYUM_BASLANGICI[0] else 1
+    return list(range(ilk, ay + 1))
+
+
 def iso(zaman: datetime | None) -> str | None:
     """SQLite saat dilimi saklamaz: ofsetsiz deger UTC kabul edilir. Cikti 'Z' ekli ISO 8601."""
     if zaman is None:

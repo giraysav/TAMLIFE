@@ -1,7 +1,7 @@
 """Ekip ozeti. Uretim karsiligi: kutucuklar/ekip/servis.py (_build_team_overview, _build_team_ai_summary, _build_team_stats,
 _build_tam_personal_ai_summary). Ayri modul degil, Genel Bakis'ta bolum (2026-10-11 kullanici karari).
 
-Her TAM icin: bugunku takvim durumu, portfoy (cati musteri), yil basindan bugune rapor uyumu (Aylik Rapor ile ayni rapor birimi kurali),
+Her TAM icin: bugunku takvim durumu, portfoy (cati musteri), rapor uyumu (Ekim 2026 doneminden bugune; Aylik Rapor ile ayni rapor birimi kurali),
 risk yuku (tum musterilerinin acik alarm + sikayet), acik talep, kapanan kayit, utilizasyon (puanlama disi personelde bos),
 yilin toplantilari ve projeler. Uretimdeki 'acik gorev' (DailyTask) yeni panelde yok; yerine acik proje sayilir.
 ICT/APN geliri kisi satirlarina girmez; modul ozet karolari ekip/moduller.py (2026-10-14).
@@ -31,7 +31,7 @@ from app.ekip.moduller import modul_ozetleri
 from app.kullanicilar import kullanici_kaydi, personel
 from app.models import AppUser, CalendarDay, Customer, ProjectItem, Report, ScoringExclusion
 from app.musteri.servis import rapor_bekleniyor_mu, rapor_birimi_mi
-from app.ortak import rapor_donemi, tr_kucuk
+from app.ortak import rapor_uyum_aylari, tr_kucuk
 from app.session import Principal
 from app.skor.servis import tam_skor_ozeti
 from app.takvim.kurum_takvimi import kurum_gunu
@@ -111,10 +111,10 @@ def kisi_cumlesi(s: dict) -> str:
         if s["rapor_beklenen"]:
             parcalar.append(
                 m(
-                    f"{s['musteri']} müşteri portföyünü yönetiyor; bu yıl {s['rapor_atilan']}/{s['rapor_beklenen']} rapor gönderdi "
-                    f"(%{s['uyum']} uyum, {_uyum_kelimesi(s['uyum'])}).",
-                    f"Manages a portfolio of {s['musteri']} customers; sent {s['rapor_atilan']}/{s['rapor_beklenen']} reports this "
-                    f"year ({s['uyum']}% compliance, {_uyum_kelimesi(s['uyum'])}).",
+                    f"{s['musteri']} müşteri portföyünü yönetiyor; takip edilen rapor dönemlerinde {s['rapor_atilan']}/{s['rapor_beklenen']} "
+                    f"rapor gönderdi (%{s['uyum']} uyum, {_uyum_kelimesi(s['uyum'])}).",
+                    f"Manages a portfolio of {s['musteri']} customers; sent {s['rapor_atilan']}/{s['rapor_beklenen']} reports in the "
+                    f"tracked report periods ({s['uyum']}% compliance, {_uyum_kelimesi(s['uyum'])}).",
                 )
             )
         else:
@@ -194,9 +194,8 @@ def ekip_cumlesi(satirlar: list[dict], risk_var: bool) -> str | None:
 
 def ozet(db: Session, user: Principal) -> dict:
     bugun = _bugun()
-    rapor_yil, rapor_ay = rapor_donemi(bugun)
-    # Yillik ozet gelecekteki rapor aylariyla uyumu dusurmez: yalniz tamamlanmis rapor donemleri (Ocak..son rapor ayi) beklenir.
-    rapor_ay_sayisi = rapor_ay if rapor_yil == bugun.year else 0
+    # Yalniz tamamlanmis rapor donemleri beklenir; Ekim 2026 oncesi sayilmaz (ortak.RAPOR_UYUM_BASLANGICI, 2026-11-03).
+    rapor_aylari = rapor_uyum_aylari(bugun)
     uyeler = _uyeler(db, user)
     kimlikler = {u.id for u in uyeler}
     musteriler = list(db.scalars(select(Customer)))
@@ -206,7 +205,7 @@ def ozet(db: Session, user: Principal) -> dict:
     atilan: set[tuple[int, int]] = set()
     raporlar = select(Report.customer_id, Report.report_month).where(
         Report.report_year == bugun.year,
-        Report.report_month <= rapor_ay_sayisi,
+        Report.report_month.in_(rapor_aylari),
     )
     for kimlik, ay in db.execute(raporlar).unique():
         c = tum.get(kimlik)
@@ -227,8 +226,8 @@ def ozet(db: Session, user: Principal) -> dict:
         hepsi = sahip.get(u.id, [])
         catilar = [c for c in hepsi if c.parent_id is None]
         birimler = [c.id for c in hepsi if rapor_bekleniyor_mu(c)]
-        gonderilen = sum(1 for b in birimler for ay in range(1, rapor_ay_sayisi + 1) if (b, ay) in atilan)
-        beklenen = len(birimler) * rapor_ay_sayisi
+        gonderilen = sum(1 for b in birimler for ay in rapor_aylari if (b, ay) in atilan)
+        beklenen = len(birimler) * len(rapor_aylari)
         skor = tam_skor_ozeti([] if u.id in disi else catilar)
         durum, online, yuzyuze = takvim.get(u.username, (None, 0, 0))
         pler = projeler.get(u.id, [])
@@ -284,6 +283,7 @@ def ozet(db: Session, user: Principal) -> dict:
             "acik_proje": sum(s["proje_acik"] for s in satirlar),
         },
         "satirlar": satirlar,
-        "moduller": modul_ozetleri(db, user, satirlar, bugun.year),  # menudeki her modulun yillik ozet kutusu (ekip/moduller.py)
+        # menudeki her modulun yillik ozet kutusu (ekip/moduller.py)
+        "moduller": modul_ozetleri(db, user, satirlar, bugun.year, rapor_aylari),
         "esikler": {"kritik_uyum": KRITIK_UYUM, "yuksek_risk": YUKSEK_RISK},  # yuksek_risk ayni zamanda risk oraninin yari doygunluk sabiti (E)
     }

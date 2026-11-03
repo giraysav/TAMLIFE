@@ -8,7 +8,7 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 - İş bitince (testler geçip canlıya alındıktan sonra) **sormadan commit at**. Push yalnız kullanıcı isterse.
 - Commit yalnız o işte **senin** değiştirdiğin dosya/satırları içerir. Başka oturumun commit edilmemiş değişikliği olan dosyayı katma; aynı dosyada karışıksa yalnız kendi parçanı index'e al (`git hash-object -w` + `git update-index --cacheinfo`) ve kullanıcıya hangi dosyanın neden dışarıda kaldığını yaz.
 - Asla: `backend/.env` ve sırlar, `backend/var/`, `backend/data/reports/` (canlı müşteri raporları), derleme çıktıları; `git add -f` yok.
-- Mesaj Türkçe `tür(alan): özet` + madde listesi + `Co-Authored-By`. `--no-verify` / amend yok. Kırmızı testle commit yok (şu an bilinen kırık test YOK: 898/898, arayüz 235/235).
+- Mesaj Türkçe `tür(alan): özet` + madde listesi + `Co-Authored-By`. `--no-verify` / amend yok. Kırmızı testle commit yok (şu an bilinen kırık test YOK: 899/899, arayüz 235/235).
 
 ## Ortam, kimlik, canlı
 
@@ -60,6 +60,6 @@ Bu dosya yalnız GÜNCEL kuralları tutar. Tarihli kararların gerekçesi ve ayr
 | Takvim / TAM Takvim | `takvim/` | `src/takvim/` | kurum günleri `kurum_takvimi.py`; toplantı adedi sınırsız; ekip satırı yalnız online/yüz yüze adetlerini toplar, gün kırılımları (şirket izni, resmi tatil, yarım gün) dönemin takviminden, kişi sayısıyla çarpılmaz (`takvim.servis.ekip`) |
 | Projeler | `proje/` | `src/proje/` | özet müşteri işaretlerini de sayar; Excel içe aktarma (Import, admin): Q1–Q4 sayfalarındaki her Detay hücresi bir kayıt, Açık + çeyrek başı, eşleşmeyen TAM önizlemede seçilen kişiye (açıklamada asıl TAM), sorumlu+kategori+başlık+çeyrek tekrarı eklenmez |
 | Çeyrek Sunum | `sunum/` | `src/sunum/` | onaysız çeyrek modüllerden senkron, dondurma yalnız onay; her modülün `KAYNAKLAR`da alanı olmalı; her teslimde `sunum/test_sayilari.json` gerçek test sayılarıyla; dışa aktarma: Excel `sunum/disa_aktar.py` (`GET /sunum/excel`, ekrandaki öğelerle aynı veri), PDF tarayıcıda ekranın görseli (`rapor-pdf.ts` `ekranGorunumu`: oklch→sRGB, `data-pdf-gizle`/`data-pdf-blok`/`data-pdf-yalniz`); takvim yükünde `yil_toplami` |
-| Ekip Özeti | `ekip/` | `src/ekip/` | Genel Bakış karoları, `OZETTE_YOK` |
+| Ekip Özeti | `ekip/` | `src/ekip/` | Genel Bakış karoları, `OZETTE_YOK`; rapor uyumu Ekim 2026 döneminden itibaren (`ortak.rapor_uyum_aylari`, 2026-11-03), sonraki yıllar Ocak'tan |
 | Talepler, TopoMaker | `talep/`, `topoloji/` | `src/talep/`, `src/topoloji/` | talep eden (`demand.requester_id`, boş = giren) + geliş yolu (panel/eposta) yalnız yöneten seçer; durum/önem/hedef/not değişince talep edene `user_notification` (`app/bildirim`, `GET /bildirim`, üst çubuk kişisel zil; kişiye özel tablo silmede silinir: `kullanicilar.KISIYE_OZEL_TABLOLAR`). Topoloji analizi `musteri` parametresi ister |
 | Yönetim | `yonetim/`, `baglantilar.py` | `src/yonetim/` | 8 bölüm; yeni ekran mevcut bölüme |

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import engine, kullanici_oturumu
 from app.ekip import servis
 from app.models import AppUser, CalendarDay, Customer, ProjectItem, Report, ScoringExclusion
-from app.ortak import rapor_donemi, simdi
+from app.ortak import rapor_donemi, rapor_uyum_aylari, simdi
 
 
 def _giris(client, monkeypatch, kullanici: str, rol: str) -> dict[str, str]:
@@ -78,8 +80,7 @@ def test_ekip_ozeti_yonetici_tum_ekibi_gorur(client, monkeypatch):
     assert veri["satirlar"][0]["ad"] == "ayse"
     a = s["ayse"]
     bugun = servis._bugun()
-    rapor_yil, rapor_ay = rapor_donemi(bugun)
-    donem_sayisi = rapor_ay if rapor_yil == bugun.year else 0
+    donem_sayisi = len(rapor_uyum_aylari(bugun))  # 2026-11-03: Ekim 2026 doneminden itibaren
     assert a["musteri"] == 2 and a["rapor_beklenen"] == 3 * donem_sayisi and a["rapor_atilan"] == 1
     assert a["uyum"] == round(100 / (3 * donem_sayisi))
     assert (a["alarm"], a["sikayet"], a["talep"], a["kapanan"], a["risk"]) == (2, 1, 3, 4, 3)
@@ -140,8 +141,7 @@ def test_ekip_ozeti_her_modulun_kutusu(client, monkeypatch):
     assert (k["musteri"]["deger"], k["musteri"]["alt"]) == (3, "çatı · 2 iştirak")  # ayse 2 + mehmet 1 cati; ayse 2 istirak
     assert k["onedesk"]["deger"] == 2 + 1 + 3 + 10 + 7 and k["onedesk"]["ton"] == "kirmizi"
     bugun = servis._bugun()
-    rapor_yil, rapor_ay = rapor_donemi(bugun)
-    donem_sayisi = rapor_ay if rapor_yil == bugun.year else 0
+    donem_sayisi = len(rapor_uyum_aylari(bugun))
     assert k["rapor"]["deger"] == f"1/{4 * donem_sayisi}" and str(bugun.year) in k["rapor"]["alt"]
     assert k["proje"]["deger"] == 2 and "1 yüksek/kritik" in k["proje"]["alt"]
     assert k["takvim_ozet"]["deger"] == 10  # ayse: yil icinde 6 online + 4 yuz yuze
@@ -202,3 +202,12 @@ def test_ozet_eszamanli_istekte_tek_hesap_paylasilir_sirali_istekte_taze(monkeyp
 
     cagir()
     assert len(hesaplar) == 3 and sonuclar[-1] == 3, "sirali istek eski sonucu almamali"
+
+
+def test_rapor_uyumu_ekim_2026_doneminden_baslar():
+    """2026-11-03 kullanici: "Ekim ayi atilan raporlar itibariyla hesaplanacak, yil basindan bugune olan kisimlari hesaplatma"."""
+    assert rapor_uyum_aylari(date(2026, 10, 15)) == []  # son donem Eylul: baslangictan once
+    assert rapor_uyum_aylari(date(2026, 11, 3)) == [10]
+    assert rapor_uyum_aylari(date(2026, 12, 20)) == [10, 11]
+    assert rapor_uyum_aylari(date(2027, 1, 5)) == []  # son donem onceki yilin Araligi
+    assert rapor_uyum_aylari(date(2027, 4, 2)) == [1, 2, 3]  # sonraki yillar Ocak'tan
