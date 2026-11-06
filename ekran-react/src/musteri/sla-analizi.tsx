@@ -40,6 +40,8 @@ export function SlaAnalizi({
   yzHazir,
   kilitli,
   onYaz,
+  geriAlinabilir,
+  onGeriAl,
 }: {
   adres: (yol: string, sorgu?: Record<string, string>) => string
   t: ReturnType<typeof musteriMetin>
@@ -48,6 +50,8 @@ export function SlaAnalizi({
   yzHazir: boolean
   kilitli: boolean
   onYaz: (metin: AnalizMetni) => void
+  geriAlinabilir: boolean
+  onGeriAl: () => void
 }) {
   const [mesgul, setMesgul] = useState<"" | "ozet" | "yz">("")
   const [mesaj, setMesaj] = useState("")
@@ -78,6 +82,19 @@ export function SlaAnalizi({
           <button type="button" className={DUGME} disabled={!!mesgul || !yzHazir} title={yzHazir ? undefined : t.analizYzKapali} onClick={() => void analizEt(true)}>
             {mesgul === "yz" ? t.analizSuruyor : t.analizYz}
           </button>
+          {geriAlinabilir ? (
+            <button
+              type="button"
+              className={DUGME}
+              disabled={!!mesgul}
+              onClick={() => {
+                onGeriAl()
+                setMesaj(t.analizGeriAlindi)
+              }}
+            >
+              {t.analizGeriAl}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </KucukKart>

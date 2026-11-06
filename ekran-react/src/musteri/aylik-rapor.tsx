@@ -144,6 +144,9 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const yuklenen = useRef("")
   const oncekiDil = useRef(dil)
   const sonOzet = useRef<Partial<AnalizMetni>>({})
+  const [analizOncesi, setAnalizOncesi] = useState<{ bilgi: string | undefined; devam: string | undefined; iz: Partial<AnalizMetni> } | null>(null)
+  const alanlarSon = useRef<Record<string, string | undefined>>({})
+  alanlarSon.current = alanlar
   // Otomatik kayit: form hangi donemin taslagiyla dolu (null: henuz degil), sunucudaki hal ve zamani.
   const [formDonemi, setFormDonemi] = useState<string | null>(null)
   const [geriYuklendi, setGeriYuklendi] = useState(false)
@@ -162,6 +165,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
     sunucuZamani.current = taslak.zaman ?? ""
     const geri = yedektenGeriYukle(anahtar, { alanlar: taslak.alanlar, zaman: taslak.zaman, gonderildi: !!taslak.gonderim })
     setAlanlar(geri ?? taslak.alanlar)
+    setAnalizOncesi(null) // yeni taslak / donem: onceki analizin geri alma kaydi gecersiz
     setGeriYuklendi(!!geri)
     setFormDonemi(anahtar)
     setAlici({ kime: taslak.alicilar.kime, bilgi: taslak.alicilar.bilgi })
@@ -319,6 +323,9 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
   const kayitSorunu = kd.tur === "bekliyor" ? t.otoBekliyor : kd.tur === "kilitli" ? t.gonderimKilitli : kd.tur === "hata" ? kd.mesaj || t.kaydedilemedi : ""
   const kayitBilgisi = geriYuklendi ? t.otoGeriYuklendi : kd.tur === "kaydediliyor" ? t.otoKaydediliyor : kd.tur === "kaydedildi" ? t.otoKaydedildi(kd.saat) : ""
   function ozetiYaz(metin: AnalizMetni) {
+    // Geri alma icin analizden onceki iki alan (ve yerlestirme izi) saklanir; yalniz son analiz geri alinir.
+    const once = alanlarSon.current
+    setAnalizOncesi({ bilgi: once.bilgi, devam: once.devam, iz: { ...sonOzet.current } })
     setAlanlar((a) => {
       const sonuc = { ...a }
       for (const anahtar of ["bilgi", "devam"] as const) {
@@ -328,6 +335,20 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
       return sonuc
     })
     sonOzet.current = { bilgi: metin.bilgi.trim(), devam: metin.devam.trim() }
+  }
+  function analiziGeriAl() {
+    if (!analizOncesi) return
+    const { bilgi, devam, iz } = analizOncesi
+    setAlanlar((a) => {
+      const sonuc = { ...a }
+      for (const [anahtar, deger] of [["bilgi", bilgi], ["devam", devam]] as const) {
+        if (deger === undefined) delete sonuc[anahtar]
+        else sonuc[anahtar] = deger
+      }
+      return sonuc
+    })
+    sonOzet.current = iz
+    setAnalizOncesi(null)
   }
   const g = taslak.gonderim
   const slaOrtak = { adres, t, veri: sla, kilitli: !!g, onDegisti: (v: SlaVeri) => istemci.setQueryData(slaAnahtari, v) }
@@ -540,7 +561,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
         </Kart>
 
         <SlaKarti {...slaOrtak} />
-        <SlaAnalizi adres={adres} t={t} dil={raporDili} slaVar={!!sla?.ozet?.dosya} yzHazir={!!sla?.araclar?.yz} kilitli={!!g} onYaz={ozetiYaz} />
+        <SlaAnalizi adres={adres} t={t} dil={raporDili} slaVar={!!sla?.ozet?.dosya} yzHazir={!!sla?.araclar?.yz} kilitli={!!g} onYaz={ozetiYaz} geriAlinabilir={!!analizOncesi} onGeriAl={analiziGeriAl} />
         <GalapagosKarti {...slaOrtak} />
         <EkDosyaKarti {...slaOrtak} />
       </div>
