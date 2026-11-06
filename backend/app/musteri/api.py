@@ -382,6 +382,19 @@ def durum(
     return _yap(db, lambda: rs.durum_ozeti(db, e.user, ay or simdi_ay, yil or simdi_yil))
 
 
+@router.get("/rapor/durum/liste")
+def durum_liste(
+    tip: str = Query(pattern="^(bekleyen|muaf)$"),
+    yil: int | None = Query(default=None, ge=2000, le=2100),
+    ay: int | None = Query(default=None, ge=1, le=12),
+    tam: int | None = Query(default=None, ge=0),
+    e: Erisim = Depends(rapor_erisim),
+    db: Session = Depends(get_db),
+):
+    simdi_yil, simdi_ay = rs.donem()
+    return _yap(db, lambda: rs.durum_listesi(db, e.user, ay or simdi_ay, yil or simdi_yil, tip, tam))
+
+
 # --- gecmis rapor ice aktarma (2026-10-31; Gonderilen Aylik Rapor > Rapor ice aktar) -------------------------------------
 @router.get("/rapor/ice-al/musteriler")
 def ice_al_musterileri(

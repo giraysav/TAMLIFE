@@ -150,6 +150,8 @@ def rapor_muaf_ayarla(db: Session, user: Principal, musteri_id: int, deger: obje
     musteri = musteri_yaz_getir(db, user, musteri_id)
     if not isinstance(deger, bool):
         raise RaporHata(400, m("Seçim evet ya da hayır olmalı.", "The choice must be yes or no."))
+    if deger and musteri.parent_id is not None:
+        raise RaporHata(400, m("“Raporu atılmıyor” yalnız çatı müşteri için geçerlidir; iştirak için seçilemez.", "“No report” applies to umbrella customers only, not to subsidiaries."))
     musteri.report_exempt = deger
     db.flush()
     return {"rapor_muaf": deger}
@@ -611,6 +613,42 @@ def gonderimler(db: Session, user: Principal, musteri_id: int | None = None, yil
     return [gonderim_ozeti(g, {c.id: c.name}) for g, c in sonuc]
 
 
+def _atilan_birimler(db: Session, tum: dict[int, Customer], ay: int, yil: int) -> set[int]:
+    """Bu ay raporu atilmis rapor birimleri (catisina dahil istirak icin hazirlanan rapor catinin sayilir)."""
+    atilanlar: set[int] = set()
+    for kimlik in db.scalars(select(Report.customer_id).where(Report.report_month == ay, Report.report_year == yil).distinct()):
+        c = tum.get(kimlik)
+        if c is not None:
+            atilanlar.add(c.id if rapor_birimi_mi(c) else (c.parent_id or c.id))
+    return atilanlar
+
+
+def durum_listesi(db: Session, user: Principal, ay: int, yil: int, tip: str, tam: int | None = None) -> dict:
+    """KPI / tablo sayisinin arkasindaki musteri listesi: tip 'bekleyen' (raporu bu ay atilmamis) ya da 'muaf' (raporu atilmiyor, yalniz cati).
+    Her satir: musteri, sorumlu TAM, istirak ise cati. tam: yalniz o personelin birimleri (0 = sahibi olmayan/yonetici '-' satiri)."""
+    if tip not in ("bekleyen", "muaf"):
+        raise RaporHata(400, m("Liste türü geçersiz.", "Invalid list type."))
+    tum = {c.id: c for c in db.scalars(select(Customer))}
+    atilanlar = _atilan_birimler(db, tum, ay, yil)
+    kisiler = {u.id: (u.display_name or u.username) for u in personel(db)}
+    satirlar: list[dict] = []
+    for c in tum.values():
+        if not rapor_birimi_mi(c):
+            continue
+        if c.report_exempt:
+            if tip != "muaf" or c.parent_id is not None:  # muafiyet yalniz cati icin gecerli: istirakte isaret yazilmaz, saymaz
+                continue
+        elif tip == "muaf" or c.id in atilanlar:
+            continue
+        sahip = c.owner_id if c.owner_id in kisiler else None
+        if tam is not None and (sahip or 0) != tam:
+            continue
+        ust = tum.get(c.parent_id) if c.parent_id else None
+        satirlar.append({"id": c.id, "ad": c.name, "tam": kisiler[sahip] if sahip else "-", "tam_id": sahip, "cati": ust.name if ust else None})
+    satirlar.sort(key=lambda r: (r["tam_id"] is None, tr_kucuk(r["tam"]), tr_kucuk(r["ad"] or "")))
+    return {"yil": yil, "ay": ay, "tip": tip, "satirlar": satirlar}
+
+
 def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
     """TAM basina rapor birimi sayisi ve bu ayin atilan/bekleyen rapor sayisi (uretim _build_rapor_durumu).
     Catisina dahil bir istirak icin hazirlanan rapor CATININ raporu sayilir. Satirlar tek personel kumesidir (app.kullanicilar.personel):
@@ -618,11 +656,7 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
     'Raporu atilmamaktadir' isaretli birimler musteri/atilan/bekleyen'e girmez, yalniz 'muaf' sayilir."""
     tum = {c.id: c for c in db.scalars(select(Customer))}  # 2026-10-20: herkes tum musterileri gorur
     musteriler = list(tum.values())
-    atilanlar: set[int] = set()
-    for kimlik in db.scalars(select(Report.customer_id).where(Report.report_month == ay, Report.report_year == yil).distinct()):
-        c = tum.get(kimlik)
-        if c is not None:
-            atilanlar.add(c.id if rapor_birimi_mi(c) else (c.parent_id or c.id))
+    atilanlar = _atilan_birimler(db, tum, ay, yil)
     kisiler = {u.id: (u.display_name or u.username) for u in personel(db)}
     satirlar: dict[int | None, dict] = {}
     if yonetici_mi(user):
@@ -634,7 +668,8 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
         sahip = c.owner_id if c.owner_id in kisiler else None
         satir = satirlar.setdefault(sahip, {"id": sahip, "ad": kisiler[sahip] if sahip else "-", "musteri": 0, "atilan": 0, "bekleyen": 0, "muaf": 0})
         if c.report_exempt:  # raporu atilmayan musteri: toplama ve bekleyene girmez (rapor_bekleniyor_mu)
-            satir["muaf"] += 1
+            if c.parent_id is None:  # muafiyet yalniz cati icin gecerli: istirakteki isaret ne muaf sayilir ne listelenir
+                satir["muaf"] += 1
             continue
         satir["musteri"] += 1
         satir["atilan" if c.id in atilanlar else "bekleyen"] += 1

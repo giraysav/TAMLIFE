@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Ban, Download, FileCheck2, Hourglass, Send, Upload, Users } from "lucide-react"
+import { Cekmece } from "@/components/cekmece"
 import { Halka, Lejant } from "@/components/grafik"
 import { BosKutu, DUGME_SARI, GIRDI, HataKutu, Kpi, Panel, Rozet, SayfaKabi, VeriTablosu, Yukleniyor } from "@/components/sayfa-ui"
 import { zaman } from "@/lib/bicim"
@@ -15,6 +16,9 @@ type Gonderim = { id: number; customer_id: number; musteri: string; yil: number;
 type TamSatiri = { id: number | null; ad: string; musteri: number; atilan: number; bekleyen: number; muaf: number }
 type Durum = { yil: number; ay: number; satirlar: TamSatiri[]; toplam: Omit<TamSatiri, "id" | "ad"> }
 type Donem = { yil: number; ay: number }
+type ListeIstek = { tip: "bekleyen" | "muaf"; tam?: number; tamAdi?: string }
+type ListeSatiri = { id: number; ad: string; tam: string; tam_id: number | null; cati: string | null }
+type Liste = { yil: number; ay: number; tip: string; satirlar: ListeSatiri[] }
 
 /** Gonderilen Aylik Rapor (APN Kurulum duzeni, 2026-10-31): ay + yil secimi, KPI karolari, gonderim orani halkasi, TAM basina
  *  atilan/bekleyen tablosu ve secilen donemin gonderim gecmisi. Secim yokken sunucunun donemi (bu ay hazirlanan rapor = onceki ay). */
@@ -22,6 +26,7 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
   const t = musteriMetin(dil)
   const [secim, setSecim] = useState<Donem | null>(null)
   const [iceAcik, setIceAcik] = useState(false)
+  const [liste, setListe] = useState<ListeIstek | null>(null)
   const durumQ = useQuery({ queryKey: ["rapor", "durum", secim], queryFn: () => oku<Durum>(`/api/v1/rapor/durum${sorguMetni({ yil: secim?.yil, ay: secim?.ay })}`) })
   const donem: Donem | null = secim ?? (durumQ.data ? { yil: durumQ.data.yil, ay: durumQ.data.ay } : null)
   const listeQ = useQuery({
@@ -30,6 +35,11 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
     enabled: donem !== null,
   })
   const durum = durumQ.data
+  const musteriListesiQ = useQuery({
+    queryKey: ["rapor", "durum-liste", donem, liste],
+    queryFn: () => oku<Liste>(`/api/v1/rapor/durum/liste${sorguMetni({ yil: donem?.yil, ay: donem?.ay, tip: liste?.tip, tam: liste?.tam })}`),
+    enabled: donem !== null && liste !== null,
+  })
   const seriler = [
     { anahtar: "atilan", ad: t.atilan, renk: "#16a34a" },
     { anahtar: "bekleyen", ad: t.bekleyen, renk: "#f5c400" },
@@ -70,12 +80,51 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
           {t.raporIceAktar}
         </button>
       </SayfaKabi>
+      {liste && donem ? (
+        <Cekmece
+          acik
+          onKapat={() => setListe(null)}
+          baslik={`${liste.tip === "bekleyen" ? t.listeBekleyenBaslik : t.listeMuafBaslik}${liste.tamAdi ? ` · ${liste.tamAdi}` : ""}`}
+          aciklama={liste.tip === "bekleyen" ? t.listeBekleyenAciklama(donemAdi) : t.listeMuafAciklama(donemAdi)}
+          kapatEtiketi={t.kapat}
+          genis
+        >
+          {musteriListesiQ.isPending ? (
+            <Yukleniyor metin="…" />
+          ) : musteriListesiQ.isError || !musteriListesiQ.data ? (
+            <HataKutu metin={t.yuklenemedi} tekrar={() => void musteriListesiQ.refetch()} />
+          ) : (
+            <VeriTablosu<ListeSatiri>
+              baslik={t.listeSayisi(musteriListesiQ.data.satirlar.length)}
+              satirlar={musteriListesiQ.data.satirlar}
+              anahtar={(r) => r.id}
+              bos={<BosKutu ikon={Users} baslik={t.sonucYok} />}
+              kolonlar={[
+                {
+                  baslik: t.musteriKolon,
+                  hucre: (r) => (
+                    <a className="text-tl-blue underline-offset-4 hover:underline" href={`#/musteri?m=${r.id}`}>
+                      {r.ad}
+                    </a>
+                  ),
+                },
+                { baslik: t.listeCati, hucre: (r) => r.cati ?? "—" },
+                { baslik: t.sorumlu, hucre: (r) => r.tam },
+              ]}
+            />
+          )}
+        </Cekmece>
+      ) : null}
       {iceAcik && donem ? <RaporIceAktar dil={dil} yil={donem.yil} ay={donem.ay} onKapat={() => setIceAcik(false)} /> : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi etiket={t.toplamBirim} deger={durum?.toplam.musteri ?? "—"} alt={donemAdi} ikon={Users} ton="mavi" />
         <Kpi etiket={t.atilan} deger={durum?.toplam.atilan ?? "—"} alt={durum ? `%${oran}` : undefined} ikon={Send} ton="yesil" />
-        <Kpi etiket={t.bekleyen} deger={durum?.toplam.bekleyen ?? "—"} ikon={Hourglass} ton="amber" />
-        <Kpi etiket={t.muaf} deger={durum?.toplam.muaf ?? "—"} ikon={Ban} ton="gri" />
+        <button type="button" className="rounded-2xl text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-blue" aria-label={t.listeAc(t.bekleyen)} disabled={!durum} onClick={() => setListe({ tip: "bekleyen" })}>
+          <Kpi etiket={t.bekleyen} deger={durum?.toplam.bekleyen ?? "—"} ikon={Hourglass} ton="amber" />
+        </button>
+        <button type="button" className="rounded-2xl text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-blue" aria-label={t.listeAc(t.muaf)} disabled={!durum} onClick={() => setListe({ tip: "muaf" })}>
+          <Kpi etiket={t.muaf} deger={durum?.toplam.muaf ?? "—"} ikon={Ban} ton="gri" />
+        </button>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -106,8 +155,30 @@ export function RaporSayfasi({ dil }: { dil: Dil }) {
                 { baslik: t.sorumlu, hucre: (s) => s.ad },
                 { baslik: t.toplamBirim, hucre: (s) => s.musteri, sinif: "text-right tabular-nums" },
                 { baslik: t.atilan, hucre: (s) => s.atilan, sinif: "text-right tabular-nums" },
-                { baslik: t.bekleyen, hucre: (s) => (s.bekleyen ? <Rozet ton="amber">{s.bekleyen}</Rozet> : 0), sinif: "text-right tabular-nums" },
-                { baslik: t.muaf, hucre: (s) => s.muaf, sinif: "text-right tabular-nums text-slate-400" },
+                {
+                  baslik: t.bekleyen,
+                  hucre: (s) =>
+                    s.bekleyen ? (
+                      <button type="button" aria-label={`${t.listeAc(t.bekleyen)}: ${s.ad}`} onClick={() => setListe({ tip: "bekleyen", tam: s.id ?? 0, tamAdi: s.ad })}>
+                        <Rozet ton="amber">{s.bekleyen}</Rozet>
+                      </button>
+                    ) : (
+                      0
+                    ),
+                  sinif: "text-right tabular-nums",
+                },
+                {
+                  baslik: t.muaf,
+                  hucre: (s) =>
+                    s.muaf ? (
+                      <button type="button" className="underline-offset-4 hover:underline" aria-label={`${t.listeAc(t.muaf)}: ${s.ad}`} onClick={() => setListe({ tip: "muaf", tam: s.id ?? 0, tamAdi: s.ad })}>
+                        {s.muaf}
+                      </button>
+                    ) : (
+                      0
+                    ),
+                  sinif: "text-right tabular-nums text-slate-400",
+                },
               ]}
             />
           </div>

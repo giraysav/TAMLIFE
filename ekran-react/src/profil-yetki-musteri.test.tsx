@@ -154,7 +154,7 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
   it("admin kutusu sabit gorunumu anlatir ve roldeki kisiyi gosterir; eski sunucu (users yok) bozulmaz", async () => {
     sahteSunucu({ "/api/v1/roller": { ...ROLLER, users: undefined }, ...SUNUCU })
     sarmala(<RollerSayfasi dil="tr" />)
-    const admin = await screen.findByRole("button", { name: /Admin/ })
+    const admin = await screen.findByRole("button", { name: /^Admin/ })
     fireEvent.click(admin)
     expect(screen.getByText("Admin tüm sayfaları görür, tüm ek yetkilere sahiptir ve bu görünüm değiştirilemez.")).toBeInTheDocument()
     expect(screen.getByText("Bu rolde henüz personel yok. AD ile ilk girişte kişi Member olarak eklenir.")).toBeInTheDocument()
@@ -208,9 +208,9 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
       ...SUNUCU,
     })
     sarmala(<RollerSayfasi dil="tr" />)
-    fireEvent.click(await screen.findByRole("button", { name: /Admin/ }))
+    fireEvent.click(await screen.findByRole("button", { name: /^Admin/ }))
     expect(screen.queryByRole("button", { name: /Kullanıcıyı sil/ })).toBeNull() // kendi hesabi (ladinadmin) silinemez: dugme yok
-    fireEvent.click(screen.getByRole("button", { name: /Admin/ }))
+    fireEvent.click(screen.getByRole("button", { name: /^Admin/ }))
 
     const member = screen.getByRole("button", { name: /Member/ })
     fireEvent.click(member)

@@ -451,7 +451,7 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         "tam_degistir": yonetici,  # sorumlu devri yalniz yonetici (tam_degistir)
         "rapor_geri_al": yazma,  # 2026-11-02: gonderimi geri alma raporu yazabilen herkese (onceden yalniz admin)
         "ayri_rapor_sec": yazma and musteri.parent_id is not None,
-        "rapor_muaf_sec": yazma and rapor_birimi_mi(musteri),
+        "rapor_muaf_sec": yazma and musteri.parent_id is None,  # yalniz cati musteri icin (istirakte secenek yok)
     }
     if yazma:
         kart["cati_secenekleri"] = [

@@ -472,6 +472,29 @@ def test_rapor_muaf_bekleyene_sayilmaz(veri):
     assert veri.get("/api/v1/rapor/durum").json()["data"]["toplam"] == once
 
 
+def test_rapor_durum_listesi_ve_istirakte_muaf_gecersiz(veri):
+    """2026-11-06 kullanici: bekleyen / 'rapor atilmiyor' sayilarinin arkasinda musteri + sorumlu TAM listesi; 'raporu atilmiyor' yalniz cati icin."""
+    hdr = login_ok(veri)
+    assert veri.put("/api/v1/musteri/2/rapor-muaf", json={"rapor_muaf": True}, headers=hdr).status_code == 400  # istirak
+    assert veri.get("/api/v1/musteri/2").json()["data"]["erisim"]["rapor_muaf_sec"] is False
+    assert veri.put("/api/v1/musteri/2/ayri-rapor", json={"ayri_rapor": True}, headers=hdr).status_code == 200
+    bekleyen = veri.get("/api/v1/rapor/durum/liste", params={"tip": "bekleyen"}).json()["data"]
+    adlar = {r["id"]: r for r in bekleyen["satirlar"]}
+    assert set(adlar) == {1, 2, 3} and adlar[2]["cati"] == adlar[1]["ad"] and adlar[1]["cati"] is None  # ayri raporlu istirak kendi satirinda, catisi yazili
+    assert veri.put("/api/v1/musteri/1/rapor-muaf", json={"rapor_muaf": True}, headers=hdr).status_code == 200
+    assert {r["id"] for r in veri.get("/api/v1/rapor/durum/liste", params={"tip": "bekleyen"}).json()["data"]["satirlar"]} == {2, 3}
+    muaf = veri.get("/api/v1/rapor/durum/liste", params={"tip": "muaf"}).json()["data"]["satirlar"]
+    assert [r["id"] for r in muaf] == [1] and "tam" in muaf[0]
+    # eski veri: istirakte kalmis muaf isareti ne bekleyene ne muafa yazilir
+    with Session(engine()) as db:
+        db.get(Customer, 2).report_exempt = True
+        db.commit()
+    assert {r["id"] for r in veri.get("/api/v1/rapor/durum/liste", params={"tip": "bekleyen"}).json()["data"]["satirlar"]} == {3}
+    assert [r["id"] for r in veri.get("/api/v1/rapor/durum/liste", params={"tip": "muaf"}).json()["data"]["satirlar"]] == [1]
+    assert veri.get("/api/v1/rapor/durum").json()["data"]["toplam"]["muaf"] == 1
+    assert veri.get("/api/v1/rapor/durum/liste", params={"tip": "x"}).status_code == 422
+
+
 def test_yetkisiz_ve_csrf(veri, monkeypatch):
     assert veri.get("/api/v1/musteri").status_code == 401
     hdr = login_ok(veri)
