@@ -261,3 +261,24 @@ def test_kaynaklarda_ham_musteri_verisi(ham):
     assert k["musteri_ham"]["ad"] == "Ham Müşteri Verisi" and "csv" not in k
     en = {x["anahtar"]: x for x in client.get("/api/v1/tampon/kaynaklar", headers={"X-Dil": "en"}).json()["data"]}
     assert en["musteri_ham"]["ad"] == "Raw Customer Data"
+
+
+def test_istirak_numarasi_baska_unvanli_karta_dusuyorsa_hata_degil_unvanla_eslesir(ham):
+    client, hdr = ham
+    csv = (
+        "Çatı Müşteri Ünvanı;Çatı Müşteri No;Çatı_to_İştirak;İştirak Müşteri Ünvanı;İştirak Müşteri No;Sorumlu TAM\n"
+        "Delta Holding;66666666;;Alfa Teknoloji A.Ş.;11111111;TC1001\n"
+        "Delta Holding;66666666;;Alfa Bilişim;11111111;TC1001\n"  # numara ilk satirdaki karta ait: hata degil, unvanla yeni kart
+        "Delta Holding;66666666;;Alfa Lojistik;;TC1001\n"  # numarasiz: unvanla atanir
+    ).encode("cp1254")
+    p = _yukle(client, hdr, csv, "cati.csv")
+    o = _onizle(client, hdr, p["id"])
+    assert o["ozet"]["hata"] == 0, o["satirlar"]
+    r = client.post(f"{TABAN}/uygula", json={"parti_id": p["id"], "plan_ozeti": o["plan_ozeti"], "onay": True}, headers=hdr)
+    assert r.status_code == 200, r.text
+    with Session(engine()) as db:
+        ayse = db.scalar(select(AppUser.id).where(AppUser.username == "TC1001"))
+        kartlar = {c.name: c for c in db.scalars(select(Customer))}
+        for ad in ("Alfa Bilişim", "Alfa Lojistik"):
+            assert kartlar[ad].owner_id == ayse and not kartlar[ad].customer_no
+        assert kartlar["Alfa Teknoloji A.Ş."].customer_no == "11111111"  # numara eski kartta kalir

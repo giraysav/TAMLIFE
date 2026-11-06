@@ -376,6 +376,17 @@ def plan_olustur(db: Session, parti_id: int, yeni_olustur: bool = False) -> dict
             )
             continue
         musteri = kartlar[0] if kartlar else None
+        no_atla = False
+        if musteri is not None and eslestirme_anahtari(musteri.name or "") != satir["anahtar"] and eslestirme_anahtari(musteri.name or "") in ilk_gorulen:
+            # Numara, dosyada baska unvanla zaten islenmis karta dusuyor (kartta yanlis/eski numara): hata degil, satir UNVANLA eslesir,
+            # cakisan numara bu karta eklenmez.
+            satir["uyarilar"].append(
+                m(
+                    f'Müşteri No başka bir kartta kayıtlı ("{_kisalt(musteri.name, 50)}"): ünvanla eşleştirildi, numara eklenmedi',
+                    f'Customer No belongs to another card ("{_kisalt(musteri.name, 50)}"): matched by name, number not added',
+                )
+            )
+            musteri, no_atla = None, True
         if musteri is not None:
             if eslestirme_anahtari(musteri.name or "") != satir["anahtar"]:
                 satir["uyarilar"].append(
@@ -411,6 +422,8 @@ def plan_olustur(db: Session, parti_id: int, yeni_olustur: bool = False) -> dict
                 gosterim, nesne = _alan_coz(alan, ham, mevcut["segment"] if mevcut else None, kisiler, kisi_adlari)
             except _Hata as e:
                 satir["hatalar"].append(str(e))
+                continue
+            if alan.anahtar == "customer_no" and no_atla:
                 continue
             if alan.anahtar == "customer_no":
                 eski_metin = (mevcut["customer_no"] if mevcut else "") or ""
