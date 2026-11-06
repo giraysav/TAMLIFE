@@ -456,3 +456,15 @@ def test_kural_guncelle_sil_ve_gecmis_korumasi(veri):
         assert db.scalar(select(func.count()).select_from(DistributionLog)) == 0  # parti silinince gecmisi de gider
     assert veri.delete(f"/api/v1/tampon/kurallar/{kid}", headers=hdr).status_code == 200
     assert veri.delete("/api/v1/tampon/kurallar/999", headers=hdr).status_code == 404
+
+
+def test_ham_musteri_dosyasinda_kucuklme_korumasi_yok(veri):
+    from app.tampon import depo
+
+    basliklar = ["No", "Tur"]
+    with Session(engine()) as db:
+        for kaynak, adet, beklenen in (("musteri_ham", 250, "ready"), ("musteri_ham", 16, "ready"), ("baska_kaynak", 250, "ready"), ("baska_kaynak", 16, "rejected")):
+            parti = depo.parti_olustur(db, kaynak, "t", "test")
+            db.commit()
+            parti = depo.ice_al(db, parti, basliklar, [[str(i), "a"] for i in range(adet)])
+            assert parti.status == beklenen, (kaynak, adet)  # elle yuklenen kismi musteri dosyasi reddedilmez; digerlerinde koruma surer

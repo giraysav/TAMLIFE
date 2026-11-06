@@ -25,6 +25,7 @@ from app.tampon.profil import Profil
 BLOK_SATIR = 2_000
 KORUMA_ESIGI = 200  # onceki parti bunun altindaysa kucuklme korumasi uygulanmaz
 EN_AZ_ORAN = 0.5  # yeni parti oncekinin yarisindan kucukse reddedilir ("yarim sonuc korumasi")
+KORUMASIZ_KAYNAKLAR = frozenset({"musteri_ham"})  # elle yuklenen kisitli dosya (Ham Musteri Verisi): kismi guncelleme normaldir, kucuklme reddedilmez
 DURUMLAR = ("receiving", "ready", "failed", "rejected")
 
 
@@ -132,7 +133,7 @@ def ice_al(db: Session, parti: IngestBatch, basliklar: Sequence[str], satirlar: 
     parti.row_count, parti.columns = toplam, list(basliklar)
     parti.profile = {"sutunlar": profil.sonuc()}
     parti.finished_at = simdi()
-    if onceki is not None and onceki.row_count >= KORUMA_ESIGI and toplam < onceki.row_count * EN_AZ_ORAN:
+    if parti.source_key not in KORUMASIZ_KAYNAKLAR and onceki is not None and onceki.row_count >= KORUMA_ESIGI and toplam < onceki.row_count * EN_AZ_ORAN:
         parti.status = "rejected"
         parti.error = f"Beklenenden çok küçük ({toplam} satır, önceki parti {onceki.row_count}). Doğruysa 'Yine de kabul et' deyin."[:300]
     else:
