@@ -105,9 +105,11 @@ def _giris(client, kullanici, parola):
     return client.post("/api/v1/session/login", json={"username": kullanici, "password": parola})
 
 
-def test_ilk_giriste_ad_kullanicisi_teammember_acilir_rol_db_den(client, sahte_ad):
+def test_ilk_giriste_ad_kullanicisi_rolsuz_acilir_rol_db_den(client, sahte_ad):
     r = _giris(client, "tcakaya", "Dogru-Parola-1")
-    assert r.status_code == 200 and r.json()["data"]["role"] == "TeamMember"
+    assert r.status_code == 200 and r.json()["data"]["role"] == "Pending"
+    me = client.get("/api/v1/session/me").json()["data"]
+    assert me["navigation"] == [] and not me["is_admin"]  # rol verilene kadar hicbir sayfa acilmaz
     with Session(engine()) as db:
         u = kullanicilar.bul(db, "tcakaya")
         assert u.is_ad_user and u.ad_domain == "ornek.local" and u.display_name == "Tcakaya" and not u.is_admin and u.last_login_at is not None

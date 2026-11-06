@@ -279,3 +279,63 @@ def test_hesap_sil_silme_yetkilisi_hesap_yoksa_calismaz(client, monkeypatch, cap
     assert "KULLANICI_SILME_YETKILISI" in capsys.readouterr().out and _var(eski)
     monkeypatch.setenv("KULLANICI_SILME_YETKILISI", "")
     assert hesap.main(["sil", "tolga.avtan", "--evet"]) == 1 and _var(eski)
+
+
+# --- kisi rolu ---------------------------------------------------------------------------------------------------------
+def test_kisi_rolu_admin_atar_oturum_kapanir_kendi_rolu_degismez(client, monkeypatch):
+    hdr = login_ok(client)
+    hedef = _kisi_ekle(username="ayse.demir", display_name="Ayşe Demir", role="TeamMember", is_ad_user=True)
+    adr = f"/api/v1/roller/kisiler/{hedef}/rol"
+
+    assert client.put(adr, json={"role": "TeamMngr"}).status_code == 403  # CSRF'siz
+    assert client.put(adr, json={"role": "root"}, headers=hdr).status_code == 400  # gecersiz rol
+    assert client.put(f"/api/v1/roller/kisiler/{_admin_kimligi()}/rol", json={"role": "TeamMember"}, headers=hdr).status_code == 400  # kendi rolu
+    assert client.put("/api/v1/roller/kisiler/999999/rol", json={"role": "TeamMngr"}, headers=hdr).status_code == 404
+
+    r = client.put(adr, json={"role": "TeamMngr"}, headers=hdr)
+    assert r.status_code == 200 and r.json()["data"]["role"] == "TeamMngr"
+    with Session(engine()) as db:
+        k = db.get(AppUser, hedef)
+        assert (k.role, k.is_admin) == ("TeamMngr", False)
+    kullanici = {u["username"]: u for u in client.get("/api/v1/roller").json()["data"]["users"]}
+    assert kullanici["ayse.demir"]["role"] == "TeamMngr" and kullanici["admin"]["self"] is True
+
+    assert client.put(adr, json={"role": "admin"}, headers=hdr).status_code == 400  # admin rolu panelden verilmez
+    assert client.put(adr, json={"role": "Pending"}, headers=hdr).status_code == 400  # rolsuze geri alinmaz
+    assert client.put(adr, json={"role": "TeamMember"}, headers=hdr).status_code == 200
+    with Session(engine()) as db:
+        assert db.get(AppUser, hedef).is_admin is False
+
+    _cikis(client, hdr)
+    hdr2 = _giris(client, monkeypatch, "ikinci", "TeamMember")  # admin olmayan: rol atayamaz
+    assert client.put(adr, json={"role": "TeamMngr"}, headers=hdr2).status_code == 403
+
+
+def test_ad_ile_acilan_kisi_rolsuz_acilir_admin_rol_verince_acilir(client):
+    with Session(engine()) as db:
+        satir = kullanicilar.ad_kullanicisi_ac(db, "tc12345", "TURKCELL")
+        kimlik, rol, yonetici = satir.id, satir.role, satir.is_admin
+    assert (rol, yonetici) == ("Pending", False)
+    hdr = login_ok(client)
+    d = client.get("/api/v1/roller").json()["data"]
+    assert {u["username"]: u["role"] for u in d["users"]}["tc12345"] == "Pending"
+    assert client.put(f"/api/v1/roller/kisiler/{kimlik}/rol", json={"role": "TeamMember"}, headers=hdr).status_code == 200
+    with Session(engine()) as db:
+        assert db.get(AppUser, kimlik).role == "TeamMember"
+
+
+def test_kisi_onceden_ekle_rolle_acilir_cakisma_ve_gecersiz_reddedilir(client, monkeypatch):
+    hdr = login_ok(client)
+    r = client.post("/api/v1/roller/kisiler", json={"username": r"TURKCELL\TC99999", "role": "TeamMngr", "permissions": ["sunum.gonder"]}, headers=hdr)
+    assert r.status_code == 200, r.text
+    with Session(engine()) as db:
+        k = db.scalar(select(AppUser).where(AppUser.username == "tc99999"))
+        assert (k.role, k.is_admin, k.is_ad_user, k.active, k.permissions) == ("TeamMngr", False, True, True, ["sunum.gonder"])
+    assert client.post("/api/v1/roller/kisiler", json={"username": "TC99999", "role": "TeamMember"}, headers=hdr).status_code == 409
+    assert client.post("/api/v1/roller/kisiler", json={"username": "admin", "role": "TeamMember"}, headers=hdr).status_code == 409
+    for kotu in ({"username": "a", "role": "TeamMember"}, {"username": "x y", "role": "TeamMember"}, {"username": "tc1", "role": "admin"}, {"username": "tc1", "role": "Pending"}, {"username": "tc1", "role": "TeamMember", "permissions": ["x"]}):
+        assert client.post("/api/v1/roller/kisiler", json=kotu, headers=hdr).status_code == 400, kotu
+    assert client.post("/api/v1/roller/kisiler", json={"username": "tc1", "role": "TeamMember"}).status_code == 403  # CSRF'siz
+    _cikis(client, hdr)
+    hdr2 = _giris(client, monkeypatch, "ikinci", "TeamMember")
+    assert client.post("/api/v1/roller/kisiler", json={"username": "tc2", "role": "TeamMember"}, headers=hdr2).status_code == 403

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ReactNode } from "react"
-import { ChevronDown, Presentation, Search, Trash2 } from "lucide-react"
+import { ChevronDown, Presentation, Search, Trash2, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { baslangicHarfleri, zaman } from "@/lib/bicim"
@@ -12,7 +12,7 @@ import { sunumMetin } from "@/sunum/sunum-metin"
 
 type Rol = { role: string; label: string; editable: boolean; modules: string[]; landing: string; permissions: string[]; saved: boolean }
 /** Panelde kaydi olan personel (AD ile giren ya da yoneticinin actigi). `permissions` yalniz kisiye ozel verilenlerdir; rolden gelenler `roles` icindedir. */
-type Kisi = { id: number; username: string; display_name: string; role: string; auth: string; ad_domain: string; last_login_at: string | null; permissions: string[]; deletable?: boolean }
+type Kisi = { id: number; username: string; display_name: string; role: string; auth: string; ad_domain: string; last_login_at: string | null; permissions: string[]; deletable?: boolean; self?: boolean }
 type Etiket = { id: string; label: string; label_en?: string }
 type Katalog = Etiket & { children: Etiket[] }
 /** Eylem yetkisi: duz dilde ne sagladigi ve nerede kullanildigi. Rol kartindaki "Ek yetkiler" kaldirildi (2026-10-11, amaci belirsizdi);
@@ -39,11 +39,33 @@ function YetkiAciklamasi({ yetki, dil }: { yetki: Yetki; dil: Dil }) {
 }
 
 /** Roldeki bir personel: ad soyad, AD kullanici adi, hesap turu ve son giris. `onSil` yalniz silme yetkilisi hesapta gelir (hata metni ya da null doner). */
-function KisiSatiri({ kisi, dil, onSil }: { kisi: Kisi; dil: Dil; onSil?: (k: Kisi) => Promise<string | null> }) {
+function KisiSatiri({
+  kisi,
+  dil,
+  onSil,
+  roller,
+  onRol,
+}: {
+  kisi: Kisi
+  dil: Dil
+  onSil?: (k: Kisi) => Promise<string | null>
+  roller: Rol[]
+  onRol: (k: Kisi, rol: string) => Promise<string | null>
+}) {
   const t = metin(dil)
   const [onay, setOnay] = useState(false)
   const [mesgul, setMesgul] = useState(false)
   const [hata, setHata] = useState("")
+  const [rolHata, setRolHata] = useState("")
+
+  async function rolDegistir(rol: string) {
+    if (rol === kisi.role) return
+    setMesgul(true)
+    setRolHata("")
+    const sonuc = await onRol(kisi, rol)
+    setMesgul(false)
+    if (sonuc) setRolHata(sonuc)
+  }
 
   async function sil() {
     if (!onSil) return
@@ -70,6 +92,27 @@ function KisiSatiri({ kisi, dil, onSil }: { kisi: Kisi; dil: Dil; onSil?: (k: Ki
           <span className="block font-medium">{kisi.auth === "AD" ? t.rolAdHesabi : kisi.auth === "Yerel" ? t.rolYerelHesap : "—"}</span>
           <span className="block">{kisi.last_login_at ? `${t.rolSonGiris}: ${zaman(kisi.last_login_at)}` : t.rolHicGirmedi}</span>
         </span>
+        <select
+          aria-label={t.kisiRolAria(kisi.display_name)}
+          value={kisi.role}
+          disabled={mesgul || kisi.self}
+          title={kisi.self ? t.kisiRolKendi : undefined}
+          onChange={(e) => void rolDegistir(e.target.value)}
+          className="h-8 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+        >
+          {kisi.role !== "TeamMngr" && kisi.role !== "TeamMember" ? (
+            <option value={kisi.role} disabled>
+              {kisi.role === "Pending" ? t.rolSecin : (t.rolEtiket[kisi.role] ?? kisi.role)}
+            </option>
+          ) : null}
+          {roller
+            .filter((r) => r.editable)
+            .map((r) => (
+              <option key={r.role} value={r.role}>
+                {r.label}
+              </option>
+            ))}
+        </select>
         {onSil && kisi.deletable ? (
           <button
             type="button"
@@ -86,6 +129,11 @@ function KisiSatiri({ kisi, dil, onSil }: { kisi: Kisi; dil: Dil; onSil?: (k: Ki
           </button>
         ) : null}
       </div>
+      {rolHata ? (
+        <p role="alert" className="text-xs font-medium text-destructive">
+          {rolHata}
+        </p>
+      ) : null}
       {onay ? (
         <div role="alert" className="grid gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs">
           <p className="text-sm font-semibold text-destructive">{t.kisiSilBaslik(kisi.display_name, kisi.username)}</p>
@@ -273,6 +321,87 @@ function SunumKisiSecici({
 
 const ROLLER = ["roller"] as const
 
+/** Giris yapmasi beklenen kisiyi onceden acar: kullanici adi + rol (+ istenirse Ceyrek Sunum yetkisi). Kisi ilk AD girisinde hazir gelir. */
+function KisiEkle({ roller, sunumYetki, dil, onEklendi }: { roller: Rol[]; sunumYetki?: Yetki; dil: Dil; onEklendi: (k: Kisi) => void }) {
+  const t = metin(dil)
+  const duzenlenebilir = roller.filter((r) => r.editable)
+  const [ad, setAd] = useState("")
+  const [rol, setRol] = useState("TeamMember")
+  const [sunum, setSunum] = useState(false)
+  const [mesgul, setMesgul] = useState(false)
+  const [bilgi, setBilgi] = useState({ hata: false, metin: "" })
+
+  async function ekle(olay: React.FormEvent) {
+    olay.preventDefault()
+    setMesgul(true)
+    setBilgi({ hata: false, metin: "" })
+    try {
+      const yetkiler = sunum && sunumYetki ? [sunumYetki.id] : []
+      const k = await yaz<{ id: number; username: string; display_name: string; role: string; permissions: string[] }>("POST", "/api/v1/roller/kisiler", { username: ad, role: rol, permissions: yetkiler })
+      onEklendi({ ...k, auth: "AD", ad_domain: "", last_login_at: null, deletable: false })
+      setAd("")
+      setSunum(false)
+      setBilgi({ hata: false, metin: t.kisiEklendi(k.display_name, t.rolEtiket[k.role] ?? k.role) })
+    } catch (hata) {
+      setBilgi({ hata: true, metin: hataMesaji(hata, t.kisiEkleHata) })
+    } finally {
+      setMesgul(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UserPlus aria-hidden className="size-4" />
+          {t.kisiEkleBaslik}
+        </CardTitle>
+        <CardDescription>{t.kisiEkleAciklama}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={(e) => void ekle(e)} className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-xs font-medium">
+            {t.kisiEkleKullanici}
+            <input
+              value={ad}
+              onChange={(e) => setAd(e.target.value)}
+              required
+              maxLength={80}
+              autoComplete="off"
+              placeholder="tc12345"
+              className="h-9 w-56 rounded-md border border-input bg-background px-2 font-mono text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-medium">
+            {t.kisiEkleRol}
+            <select value={rol} onChange={(e) => setRol(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+              {duzenlenebilir.map((r) => (
+                <option key={r.role} value={r.role}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {sunumYetki ? (
+            <label className="flex h-9 items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={sunum} onChange={(e) => setSunum(e.target.checked)} />
+              {yerel(dil, sunumYetki.label, sunumYetki.label_en)}
+            </label>
+          ) : null}
+          <Button type="submit" disabled={mesgul || !ad.trim()}>
+            {t.kisiEkleDugme}
+          </Button>
+        </form>
+        {bilgi.metin ? (
+          <p role={bilgi.hata ? "alert" : "status"} className={`mt-3 text-sm font-medium ${bilgi.hata ? "text-destructive" : "text-foreground"}`}>
+            {bilgi.metin}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 /** Rol Yonetimi: Yonetim disindaki her modul herkese acik (2026-10-14); admin yalniz sunum yetkisini verir; giris sayfasi secimi yok (herkes Genel Bakis'la acar). Sunucu da ayni kurali zorlar. */
 export function RollerSayfasi({ dil }: { dil: Dil }) {
   const t = metin(dil)
@@ -294,6 +423,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
   if (veri === null) return <p role="alert" className="text-sm text-destructive">{t.yuklenemedi}</p>
 
   const kisiler = veri.users ?? []
+  const bekleyenler = kisiler.filter((k) => !veri.roles.some((r) => r.role === k.role))
 
   /** Bolumdeki (ornek Ceyrek Sunum) rol yetkisi aninda kaydedilir. Giris sayfasi secimi 2026-10-14'te kalkti: herkes Genel Bakis'la acar. */
   async function alanYetkisiKaydet(r: Rol, yetki: string, secili: boolean) {
@@ -320,6 +450,18 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
       return null
     } catch (hata) {
       return hataMesaji(hata, t.kisiSilHata)
+    }
+  }
+
+  /** Kisinin rolu degisir (yalniz admin; sunucu zorlar). Basarida satir yeni rolun kutusuna tasinir; hata metnini doner, basarida null. */
+  async function kisiRoluKaydet(k: Kisi, rol: string): Promise<string | null> {
+    try {
+      await yaz<{ role: string }>("PUT", `/api/v1/roller/kisiler/${k.id}/rol`, { role: rol })
+      setVeri((v) => v && { ...v, users: (v.users ?? []).map((x) => (x.id === k.id ? { ...x, role: rol } : x)) })
+      setSilBilgi(t.kisiRolBilgi(k.display_name, t.rolEtiket[rol] ?? rol))
+      return null
+    } catch (hata) {
+      return hataMesaji(hata, t.kisiRolHata)
     }
   }
 
@@ -398,11 +540,31 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
   return (
     <div className="grid gap-4">
       <p className="text-sm text-muted-foreground">{t.rolAciklama}</p>
+      <p className="text-xs text-muted-foreground">{t.kisiRolYeni}</p>
       {veri.can_delete_users === false && veri.delete_account ? <p className="text-xs text-muted-foreground">{t.kisiSilSadece(veri.delete_account)}</p> : null}
       {silBilgi ? (
         <p role="status" className="text-sm font-medium text-foreground">
           {silBilgi}
         </p>
+      ) : null}
+      <KisiEkle
+        roller={veri.roles}
+        sunumYetki={sunumYetkisi}
+        dil={dil}
+        onEklendi={(k) => setVeri((v) => v && { ...v, users: [...(v.users ?? []), k] })}
+      />
+      {bekleyenler.length > 0 ? (
+        <section className="grid gap-2 rounded-xl border-2 border-tl-yellow bg-tl-yellow/10 p-4">
+          <h3 className="text-sm font-semibold">
+            {t.rolBekleyenler} ({bekleyenler.length})
+          </h3>
+          <p className="text-xs text-muted-foreground">{t.rolBekleyenAciklama}</p>
+          <ul className="grid items-start gap-2 sm:grid-cols-2">
+            {bekleyenler.map((k) => (
+              <KisiSatiri key={k.id} kisi={k} dil={dil} onSil={veri.can_delete_users ? kisiSil : undefined} roller={veri.roles} onRol={kisiRoluKaydet} />
+            ))}
+          </ul>
+        </section>
       ) : null}
       <div className="grid gap-3">
         {veri.roles.map((r) => {
@@ -486,7 +648,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
                 ) : (
                   <ul className="grid items-start gap-2 sm:grid-cols-2">
                     {rolKisileri.map((k) => (
-                      <KisiSatiri key={k.id} kisi={k} dil={dil} onSil={veri.can_delete_users ? kisiSil : undefined} />
+                      <KisiSatiri key={k.id} kisi={k} dil={dil} onSil={veri.can_delete_users ? kisiSil : undefined} roller={veri.roles} onRol={kisiRoluKaydet} />
                     ))}
                   </ul>
                 )}

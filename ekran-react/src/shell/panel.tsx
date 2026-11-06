@@ -281,6 +281,20 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
     else sec(altId ? ustId : "ozet")
   }
 
+  if (!kullanici.is_admin && kullanici.role !== "TeamMngr" && kullanici.role !== "TeamMember") {
+    return (
+      <main className="grid min-h-svh place-items-center bg-background p-6">
+        <div role="status" className="grid max-w-md gap-3 rounded-xl border-2 border-tl-yellow bg-card p-6 text-center shadow-sm">
+          <h1 className="text-lg font-black">{t.rolBekliyorBaslik}</h1>
+          <p className="text-sm text-muted-foreground">{t.rolBekliyorMetin}</p>
+          <Button type="button" variant="outline" onClick={onCikis}>
+            {t.cikis}
+          </Button>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <SidebarProvider>
       <Menu kullanici={kullanici} dil={dil} secili={aktif} onSec={sec} onDil={onDil} onCikis={onCikis} talepVar={kullanici.navigation.some((o) => o.id === "talep")} />

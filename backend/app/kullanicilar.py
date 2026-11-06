@@ -343,9 +343,12 @@ def onek_izinli(kisa_ad: str) -> bool:
     return kisa_ad.strip().lower().startswith(IZINLI_ONEKLER)
 
 
+BEKLEYEN_ROL = "Pending"  # AD ile yeni acilan kisi: admin Manager/Member atayana kadar hicbir sayfa acilmaz (authz.ROLES disinda)
+
+
 def ad_kullanicisi_ac(db: Session, kisa_ad: str, alan: str) -> AppUser:
-    """AD'de DOGRULANMIS, panelde kaydi olmayan kisi: TeamMember, yonetici degil, yalniz AD ile girer. Ayni anda iki giris olursa mevcut satir doner."""
-    satir = AppUser(username=kisa_ad.lower(), display_name=tam_ad_uret(kisa_ad), role="TeamMember", is_admin=False, active=True, is_ad_user=True, ad_domain=alan.lower())
+    """AD'de DOGRULANMIS, panelde kaydi olmayan kisi: rolsuz (Pending; admin Roller ekranindan Manager/Member atar), yonetici degil, yalniz AD ile girer. Ayni anda iki giris olursa mevcut satir doner."""
+    satir = AppUser(username=kisa_ad.lower(), display_name=tam_ad_uret(kisa_ad), role=BEKLEYEN_ROL, is_admin=False, active=True, is_ad_user=True, ad_domain=alan.lower())
     db.add(satir)
     try:
         db.commit()

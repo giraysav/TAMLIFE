@@ -8,6 +8,7 @@ Veritabani okunamazsa yonetici olmayan kullanici kapali kalir (yalniz genel baki
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.authz import is_admin
 from app.catalog import MODULES
+from app.kullanicilar import tam_ad_uret
 from app.models import AppUser, RoleView
 from app.ortak import UygulamaHatasi, iso
 from app.session import Principal
@@ -187,6 +189,48 @@ def kisi_yetkisi_kaydet(db: Session, kullanici_id: int, yetkiler: object) -> dic
     satir.permissions = sorted(set(yetkiler))
     db.flush()
     return {"id": satir.id, "username": satir.username, "permissions": satir.permissions}
+
+
+ATANABILIR_ROLLER = ("TeamMngr", "TeamMember")  # admin rolu panelden verilmez (yalniz komut satiri: python -m app.hesap rol)
+
+
+def kisi_rolu_kaydet(db: Session, yapan: Principal, kullanici_id: int, rol: object) -> dict:
+    """Kisiye Manager/Member rolu atar (yeni giren kisi rolsuz/Pending acilir, admin buradan verir; admin rolu verilmez). Kendi rolunu degistiremez (yonetimden dusmesin).
+    Rol degisince kisinin acik oturumlari kapanir (yeniden giriste yeni rolle acilir); is_admin rolden turetilir."""
+    if not isinstance(rol, str) or rol not in ATANABILIR_ROLLER:
+        raise RolHata(400, "Rol gecersiz.")
+    satir = db.get(AppUser, kullanici_id)
+    if satir is None or not satir.active:
+        raise RolHata(404, "Personel bulunamadı veya pasif.")
+    if satir.username.strip().lower() == yapan.username.strip().lower():
+        raise RolHata(400, "Kendi rolünüzü değiştiremezsiniz.")
+    onceki = satir.role
+    satir.role, satir.is_admin = rol, rol == "admin"
+    db.flush()
+    return {"id": satir.id, "username": satir.username, "role": rol, "onceki": onceki}
+
+
+_KULLANICI_ADI = re.compile(r"^[a-z0-9][a-z0-9._-]{1,39}$")
+
+
+def kisi_onceden_ekle(db: Session, kullanici_adi: object, rol: object, yetkiler: object = None) -> dict:
+    """Henuz giris yapmamis kisiyi rolu (ve istenirse kisiye ozel yetkileriyle) onceden acar: ilk AD girisinde rolsuz beklemez, hazir gelir.
+    AD kullanicisi olarak acilir (parolayi AD dogrular); kullanici adi tek bicime (kucuk harf) indirilir, ayni ad varsa 409."""
+    ad = kullanici_adi.strip().lower() if isinstance(kullanici_adi, str) else ""
+    if "\\" in ad:
+        ad = ad.rsplit("\\", 1)[1]
+    if not _KULLANICI_ADI.fullmatch(ad):
+        raise RolHata(400, "Kullanıcı adı geçersiz (harf, rakam, nokta, tire, alt çizgi; en az 2 karakter).")
+    if not isinstance(rol, str) or rol not in ATANABILIR_ROLLER:
+        raise RolHata(400, "Rol gecersiz.")
+    if yetkiler is not None and (not isinstance(yetkiler, list) or not all(isinstance(x, str) and x in YETKILER for x in yetkiler)):
+        raise RolHata(400, "Yetki listesi gecersiz.")
+    if db.scalar(select(AppUser.id).where(func.lower(AppUser.username) == ad)) is not None:
+        raise RolHata(409, "Bu kullanıcı zaten kayıtlı.")
+    satir = AppUser(username=ad, display_name=tam_ad_uret(ad), role=rol, is_admin=False, active=True, is_ad_user=True, permissions=sorted(set(yetkiler or [])))
+    db.add(satir)
+    db.flush()
+    return {"id": satir.id, "username": satir.username, "display_name": satir.display_name, "role": rol, "permissions": satir.permissions}
 
 
 def yetki_katalogu() -> list[dict]:
