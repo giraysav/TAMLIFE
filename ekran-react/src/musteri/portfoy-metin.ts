@@ -127,7 +127,6 @@ const EN: typeof TR = {
 export function portfoyMetin(dil: Dil) {
   return dil === "en" ? EN : TR
 }
-export type PortfoyMetin = ReturnType<typeof portfoyMetin>
 
 const YASAL_EKLER = new Set(["as", "a", "s", "anonim", "sirketi", "ltd", "sti", "limited", "ticaret", "sanayi", "san", "tic", "ve", "ic", "dis", "inc", "corp", "co", "gmbh", "ltdsti", "aş"])
 

@@ -107,4 +107,3 @@ const EN: typeof TR = {
 export function gelirMetin(dil: Dil) {
   return dil === "en" ? EN : TR
 }
-export type GelirMetin = ReturnType<typeof gelirMetin>

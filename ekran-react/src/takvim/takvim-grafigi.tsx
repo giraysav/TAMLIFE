@@ -1,16 +1,11 @@
 import { sayi } from "@/lib/bicim"
 import { Halka, Lejant } from "@/components/grafik"
 import type { Seri } from "@/components/grafik"
-import { DURUM_RENK, DURUM_SIRASI } from "@/takvim/takvim-metin"
+import { DURUM_RENK } from "@/takvim/takvim-metin"
 import type { TakvimMetin } from "@/takvim/takvim-metin"
 
 /** kayitli_gun sunucuda kalir (sunum bos/dolu denetimi), ekranda gosterilmez. is_gunu: yapilan is girilen gun sayisi. */
 export type Ozet = { durumlar: Record<string, number>; online: number; yuzyuze: number; kayitli_gun: number; izin_gun: number; toplanti: number; is_gunu?: number }
-
-export function durumSerileri(t: TakvimMetin): Seri[] {
-  // 'calisiyor' yalniz kayitli (varsayilan olmayan) gunleri sayar; grafikte de gorunur
-  return DURUM_SIRASI.map((k) => ({ anahtar: k, ad: t.durumlar[k] ?? k, renk: DURUM_RENK[k] ?? "#64748b" }))
-}
 
 /** TAM Takvim tablo sutunlari ve grafik kalemleri, kullanicinin sirasiyla (2026-10-15: is girilen gun, calisiyor, toplanti ve
  * raporlu kalkti; online / yuz yuze toplanti zaten calisma gunu sayilir). Yarim gun = arife. */

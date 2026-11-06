@@ -1,7 +1,7 @@
 # TAMLIFE v3.5 canli paneli KALICI calistirir: TURKCELL\TAMLIFEADLOG oturumunda otomatik baslayan zamanlanmis gorevler. Saf ASCII (PS 5.1).
 #   TAMLIFE_v35_Panel         -> kurulum\canli_baslat.ps1  (panel, 127.0.0.1:8117, canli mod)        oturum acilinca
 #   TAMLIFE_v35_TLS_Vekil     -> kurulum\tls_vekili.ps1    (https://<VekilAd>:443/ -> panel)          oturum acilinca
-#   TAM_Life_v35_ReportDB_6dk -> python -m app.isci reportdb (reportdb_gorev_kur.ps1 ile ayni eylem)  her 6 dk
+#   TAM_Life_v35_ReportDB_6dk -> python -m app.isci reportdb (bu betik kaydeder)  her 6 dk
 #   TAMLIFE_v35_Gece_Sync     -> kurulum\gece_sync.ps1     (Citrix <-> prod senkronu, panel yeniden baslatma)  her gun 04:00
 # PAROLA YOK (2026-10-25): hesap parolasi kurum PAM'i ile 24 saatte bir donduruluyor; parolali (Password) gorev her donusten sonra
 # 0x8007052E ile baslamiyordu. Gorevler LogonType Interactive + en yuksek yetki: parola saklanmaz/sorulmaz, donus gorevleri bozmaz.
@@ -20,7 +20,7 @@
 #   .\canli_gorev_kur.ps1 -Durum           : gorevleri, panel portunu ve gunluklerin son satirlarini gosterir
 #   .\canli_gorev_kur.ps1 -Durdur          : panel, vekil ve ReportDB iscisini durdurur (gorevler kayitli kalir; prod_uygula.ps1 kod /
 #                                            bagimlilik degistirmeden once kullanir). Baslatmak: -YenidenBaslat
-#   .\canli_gorev_kur.ps1 -Kaldir          : panel ve vekil gorevlerini durdurur ve siler (ReportDB: reportdb_gorev_kur.ps1 -Kaldir)
+#   .\canli_gorev_kur.ps1 -Kaldir          : panel ve vekil gorevlerini durdurur ve siler (ReportDB gorevi icin Unregister-ScheduledTask -TaskName TAM_Life_v35_ReportDB_6dk)
 #   -VekilAd '+'                           : tum adlar (tamlife, FQDN, IP) (varsayilan: +)
 #   -PanelPort 8117 -VekilPort 443         : portlar;  -Istemci : Oracle Instant Client klasoru (ReportDB gorevi)
 param([switch]$Hemen,
@@ -230,7 +230,7 @@ function Gorevleri-Kaydet {
         [void](Register-ScheduledTask -TaskName $g[0] -Action $eylem -Trigger $tetik -Settings $ayar -Principal $kimlik -Description $g[3] -Force)
         Tamam "Gorev kaydedildi: $($g[0]) (oturum acilinca, parolasiz)"
     }
-    # ReportDB iscisi: reportdb_gorev_kur.ps1 ile ayni eylem; "Once + tekrar" tetigi suresizdir, yeniden baslatmadan sonra da surer.
+    # ReportDB iscisi (eski reportdb_gorev_kur.ps1 ile ayni eylem; o betik kaldirildi):"Once + tekrar" tetigi suresizdir, yeniden baslatmadan sonra da surer.
     $Pyw = Join-Path $Kok '.venv\Scripts\pythonw.exe'
     if ((Test-Path $Pyw) -and (Test-Path (Join-Path $Istemci 'oci.dll'))) {
         $eylem = New-ScheduledTaskAction -Execute $Pyw -Argument ('-m app.isci reportdb --client "{0}"' -f $Istemci) -WorkingDirectory (Join-Path $Kok 'backend')

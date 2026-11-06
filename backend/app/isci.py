@@ -3,7 +3,7 @@
   cd backend; ..\\.venv\\Scripts\\python.exe -m app.isci reportdb [--client <Instant Client>] [--kuru]
       ReportDB alarm senkronu: ozet -> tampon partisi; 'Kartlara yaz' (dagitim kurallari) aciksa kartlar; her turda TEMIP alarm
       kayitlari (tampon/temip_kayit: karta ya da TAM Radar'a; gunde bir kez 30 gunluk mutabakat).
-      Zamanlanmis gorev her 6 dk: kurulum\\reportdb_gorev_kur.ps1 (Oracle giris tetikleyicisinin izin verdigi kimlikle).
+      Zamanlanmis gorev her 6 dk: kurulum\\canli_gorev_kur.ps1 (Oracle giris tetikleyicisinin izin verdigi kimlikle).
   ..\\.venv\\Scripts\\python.exe -m app.isci temip-kayit --kip tam|artimli|mutabakat [--kuru] [--csv]
       TEMIP alarm kayitlari elle; 'tam' REPORTDB_KAYIT_BASLANGIC'tan (vars. 2026-01-01) bugune ilk yukleme (dakikalar surer).
       --kuru: ayni sorgular, yazmaz; Musteri No -> unvan -> kart -> sorumlu personel -> acik kayit eslesmesini gosterir.

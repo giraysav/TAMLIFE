@@ -67,7 +67,7 @@ with oturum() as db:
         print(f"  onedesk_record {kaynak or '-'}/{durum}: {n}")
 '@
     $g = Get-ScheduledTask -TaskName $Gorev -ErrorAction SilentlyContinue
-    if ($g) { Adim "Gorev $Gorev : $($g.State)" } else { Uyari "Gorev yok: $Gorev (kurulum\reportdb_gorev_kur.ps1)" }
+    if ($g) { Adim "Gorev $Gorev : $($g.State)" } else { Uyari "Gorev yok: $Gorev (kurulum\canli_gorev_kur.ps1)" }
 }
 
 function Calistir-Yedek {

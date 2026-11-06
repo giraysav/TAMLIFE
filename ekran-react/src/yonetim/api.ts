@@ -185,27 +185,6 @@ export type ParametreTablosu = {
 }
 export type ParametreDali = { domain: string; tablolar: ParametreTablosu[]; isabet: number; satir: number }
 export type KatalogSutunu = { ad: string; tip: string; bos_olabilir: boolean; aciklama: string; doluluk?: number | null; farkli?: number; ornekler?: { deger: string; adet: number }[] }
-export type KatalogNesnesi = {
-  id: number
-  sahip: string
-  ad: string
-  tur: string
-  ust: string
-  satir: number | null
-  analiz: string
-  aciklama: string
-  sutunlar: KatalogSutunu[]
-  ayrinti: {
-    es_ad?: { sahip: string; hedef: string }
-    bolum_anahtari?: string[]
-    bolumler?: { adet: number; son: { ad: string; sira: number; satir: number | null; analiz: string }[] }
-    indeksler?: Record<string, string[]>
-    dayandigi?: string[]
-    arama?: { ara?: string; pencere?: string; domain_sutunu?: string; hata?: string; ornek_degerler?: Record<string, { deger: string; adet: number }[]> }
-  }
-  ornek_satir: number
-  ornek_notu: string
-}
 /** Ham veri okuyucu (GET /tampon/katalog/veri): secili domainlerde arama metnini iceren satirlar, Excel filtresiyle. */
 export type KatalogVerisi = {
   id: number
@@ -224,7 +203,6 @@ export type KatalogVerisi = {
   filtreli: string[]
 }
 export type KatalogDegerleri = { sutun: string; farkli: number; degerler: { deger: string; adet: number }[]; kesildi: boolean }
-export type KatalogOrnegi = { id: number; ad: string; basliklar: string[]; satirlar: unknown[][]; not: string; grup?: string }
 /** TEMIP eslesmesi (GET /tampon/temip/eslesme): Musteri No -> kart -> sorumlu personel -> acik kayit. */
 export type TemipDurumu = "kart" | "kart_personelsiz" | "radar" | "belirsiz"
 export type TemipMusterisi = {

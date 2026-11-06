@@ -12,7 +12,7 @@ import re
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import musteri_alani
@@ -231,10 +231,3 @@ def parti_aktar(db: Session, parti_id: int, varsayilan_tur: str | None = None, *
         "sutunlar": {alan: (parti.columns[i] if i is not None and i < len(parti.columns) else None) for alan, i in s.items()},
     }
 
-
-def kaynak_yenile(db: Session, parti_id: int | None, kaynak: str, tur: str) -> dict:
-    """Kaynagin (source) bu turdeki kayitlarini partiyle DEGISTIRIR (uretim reportdb_acik_kayit / ats_kaydet: her turda liste tamamen
-    yenilenir, eski veri kalmaz). Tek islem, commit cagiranda. parti_id None: liste bosaltilir. Sayaclar yeniden hesaplanmaz."""
-    silinen = db.execute(delete(OnedeskRecord).where(OnedeskRecord.source == kaynak, OnedeskRecord.kind == tur)).rowcount or 0
-    sonuc = parti_aktar(db, parti_id, tur, kaynak=kaynak, sayac_yenile=False) if parti_id else {"eklenen": 0, "guncellenen": 0}
-    return {**sonuc, "silinen": silinen}
