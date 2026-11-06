@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.authz import is_admin
 from app.catalog import MODULES
-from app.kullanicilar import tam_ad_uret
+from app.kullanicilar import _profil_degeri, ad_soyad, tam_ad_uret
 from app.models import AppUser, RoleView
 from app.ortak import UygulamaHatasi, iso
 from app.session import Principal
@@ -167,6 +167,8 @@ def kisiler(db: Session) -> list[dict]:
             "id": k.id,
             "username": k.username,
             "display_name": k.display_name or k.username,
+            "first_name": ad_soyad(k)[0],
+            "last_name": ad_soyad(k)[1],
             "role": k.role,
             "auth": "AD" if k.is_ad_user else ("Yerel" if k.password_hash else "—"),
             "ad_domain": k.ad_domain,
@@ -192,6 +194,23 @@ def kisi_yetkisi_kaydet(db: Session, kullanici_id: int, yetkiler: object) -> dic
 
 
 ATANABILIR_ROLLER = ("TeamMngr", "TeamMember")  # admin rolu panelden verilmez (yalniz komut satiri: python -m app.hesap rol)
+
+
+def kisi_adi_kaydet(db: Session, kullanici_id: int, ad: object, soyad: object) -> dict:
+    """Admin kisinin ad ve soyadini duzeltir; gorunen ad (Takvim, Ekip, sorumlu listeleri) 'Ad Soyad' olur. Ad bos olamaz."""
+    try:
+        yeni_ad, yeni_soyad = _profil_degeri("first_name", ad), _profil_degeri("last_name", soyad)
+    except UygulamaHatasi as hata:
+        raise RolHata(400, hata.mesaj) from hata
+    if not yeni_ad:
+        raise RolHata(400, "Ad boş olamaz.")
+    satir = db.get(AppUser, kullanici_id)
+    if satir is None or not satir.active:
+        raise RolHata(404, "Personel bulunamadı veya pasif.")
+    satir.first_name, satir.last_name = yeni_ad, yeni_soyad
+    satir.display_name = " ".join(p for p in (yeni_ad, yeni_soyad) if p)
+    db.flush()
+    return {"id": satir.id, "username": satir.username, "display_name": satir.display_name, "first_name": yeni_ad, "last_name": yeni_soyad}
 
 
 def kisi_rolu_kaydet(db: Session, yapan: Principal, kullanici_id: int, rol: object) -> dict:
@@ -230,7 +249,7 @@ def kisi_onceden_ekle(db: Session, kullanici_adi: object, rol: object, yetkiler:
     satir = AppUser(username=ad, display_name=tam_ad_uret(ad), role=rol, is_admin=False, active=True, is_ad_user=True, permissions=sorted(set(yetkiler or [])))
     db.add(satir)
     db.flush()
-    return {"id": satir.id, "username": satir.username, "display_name": satir.display_name, "role": rol, "permissions": satir.permissions}
+    return {"id": satir.id, "username": satir.username, "display_name": satir.display_name, "first_name": ad_soyad(satir)[0], "last_name": ad_soyad(satir)[1], "role": rol, "permissions": satir.permissions}
 
 
 def yetki_katalogu() -> list[dict]:

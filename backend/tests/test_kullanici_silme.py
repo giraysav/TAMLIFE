@@ -339,3 +339,19 @@ def test_kisi_onceden_ekle_rolle_acilir_cakisma_ve_gecersiz_reddedilir(client, m
     _cikis(client, hdr)
     hdr2 = _giris(client, monkeypatch, "ikinci", "TeamMember")
     assert client.post("/api/v1/roller/kisiler", json={"username": "tc2", "role": "TeamMember"}, headers=hdr2).status_code == 403
+
+
+def test_kisi_adi_admin_duzeltir_gorunen_ad_guncellenir(client, monkeypatch):
+    hdr = login_ok(client)
+    hedef = _kisi_ekle(username="tc77777", display_name="Tc77777", role="TeamMember", is_ad_user=True)
+    adr = f"/api/v1/roller/kisiler/{hedef}/ad"
+    assert client.put(adr, json={"first_name": "Ayşe", "last_name": "Demir"}).status_code == 403  # CSRF'siz
+    assert client.put(adr, json={"first_name": "  ", "last_name": "Demir"}, headers=hdr).status_code == 400  # ad bos
+    assert client.put("/api/v1/roller/kisiler/999999/ad", json={"first_name": "A"}, headers=hdr).status_code == 404
+    r = client.put(adr, json={"first_name": "Ayşe  Nur", "last_name": "Demir"}, headers=hdr)
+    assert r.status_code == 200 and r.json()["data"]["display_name"] == "Ayşe Nur Demir"
+    k = {u["username"]: u for u in client.get("/api/v1/roller").json()["data"]["users"]}["tc77777"]
+    assert (k["display_name"], k["first_name"], k["last_name"]) == ("Ayşe Nur Demir", "Ayşe Nur", "Demir")
+    _cikis(client, hdr)
+    hdr2 = _giris(client, monkeypatch, "ikinci", "TeamMember")
+    assert client.put(adr, json={"first_name": "X"}, headers=hdr2).status_code == 403

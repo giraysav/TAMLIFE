@@ -10,8 +10,19 @@ from app import kullanicilar
 from app.audit import audit_log
 from app.db import get_db
 from app.deps import require_admin
+from app.models import AppUser
 from app.ortak import KimlikTipi, ok
-from app.rolgorunum import gorunumler, katalog, kaydet, kisi_onceden_ekle, kisi_rolu_kaydet, kisi_yetkisi_kaydet, kisiler, yetki_katalogu
+from app.rolgorunum import (
+    gorunumler,
+    katalog,
+    kaydet,
+    kisi_adi_kaydet,
+    kisi_onceden_ekle,
+    kisi_rolu_kaydet,
+    kisi_yetkisi_kaydet,
+    kisiler,
+    yetki_katalogu,
+)
 from app.session import Principal, kullanici_oturumlarini_kapat
 
 router = APIRouter(prefix="/api/v1/roller", tags=["roller"])
@@ -88,6 +99,21 @@ def kisi_ekle(body: KisiEkleGovde, admin: Principal = Depends(require_admin), db
     sonuc = kisi_onceden_ekle(db, body.username, body.role, body.permissions)
     db.commit()
     audit_log.remember(actor=admin.username, action="roller.kisi_ekle", outcome="allow", module_key="roller", detail=f"kisi={sonuc['username']} rol={sonuc['role']} yetki={','.join(sonuc['permissions']) or '-'}")
+    return ok(sonuc)
+
+
+class KisiAdGovde(BaseModel):
+    first_name: str = Field(max_length=200)
+    last_name: str = Field(default="", max_length=200)
+
+
+@router.put("/kisiler/{kullanici_id}/ad")
+def kisi_adi(kullanici_id: KimlikTipi, body: KisiAdGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    onceki = db.get(AppUser, kullanici_id)
+    eski = (onceki.display_name or onceki.username) if onceki is not None else "-"
+    sonuc = kisi_adi_kaydet(db, kullanici_id, body.first_name, body.last_name)
+    db.commit()
+    audit_log.remember(actor=admin.username, action="roller.kisi_ad", outcome="allow", module_key="roller", detail=f"kisi={sonuc['username']} ad='{eski}'->'{sonuc['display_name']}'")
     return ok(sonuc)
 
 

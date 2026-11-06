@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { ReactNode } from "react"
-import { ChevronDown, Presentation, Search, Trash2, UserPlus } from "lucide-react"
+import { ChevronDown, Pencil, Presentation, Search, Trash2, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { baslangicHarfleri, zaman } from "@/lib/bicim"
@@ -12,7 +12,7 @@ import { sunumMetin } from "@/sunum/sunum-metin"
 
 type Rol = { role: string; label: string; editable: boolean; modules: string[]; landing: string; permissions: string[]; saved: boolean }
 /** Panelde kaydi olan personel (AD ile giren ya da yoneticinin actigi). `permissions` yalniz kisiye ozel verilenlerdir; rolden gelenler `roles` icindedir. */
-type Kisi = { id: number; username: string; display_name: string; role: string; auth: string; ad_domain: string; last_login_at: string | null; permissions: string[]; deletable?: boolean; self?: boolean }
+type Kisi = { id: number; username: string; display_name: string; first_name?: string; last_name?: string; role: string; auth: string; ad_domain: string; last_login_at: string | null; permissions: string[]; deletable?: boolean; self?: boolean }
 type Etiket = { id: string; label: string; label_en?: string }
 type Katalog = Etiket & { children: Etiket[] }
 /** Eylem yetkisi: duz dilde ne sagladigi ve nerede kullanildigi. Rol kartindaki "Ek yetkiler" kaldirildi (2026-10-11, amaci belirsizdi);
@@ -45,18 +45,34 @@ function KisiSatiri({
   onSil,
   roller,
   onRol,
+  onAd,
 }: {
   kisi: Kisi
   dil: Dil
   onSil?: (k: Kisi) => Promise<string | null>
   roller: Rol[]
   onRol: (k: Kisi, rol: string) => Promise<string | null>
+  onAd: (k: Kisi, ad: string, soyad: string) => Promise<string | null>
 }) {
   const t = metin(dil)
   const [onay, setOnay] = useState(false)
   const [mesgul, setMesgul] = useState(false)
   const [hata, setHata] = useState("")
   const [rolHata, setRolHata] = useState("")
+  const [duzen, setDuzen] = useState(false)
+  const [ad, setAd] = useState(kisi.first_name ?? "")
+  const [soyad, setSoyad] = useState(kisi.last_name ?? "")
+  const [adHata, setAdHata] = useState("")
+
+  async function adKaydet(olay: React.FormEvent) {
+    olay.preventDefault()
+    setMesgul(true)
+    setAdHata("")
+    const sonuc = await onAd(kisi, ad, soyad)
+    setMesgul(false)
+    if (sonuc) setAdHata(sonuc)
+    else setDuzen(false)
+  }
 
   async function rolDegistir(rol: string) {
     if (rol === kisi.role) return
@@ -92,6 +108,21 @@ function KisiSatiri({
           <span className="block font-medium">{kisi.auth === "AD" ? t.rolAdHesabi : kisi.auth === "Yerel" ? t.rolYerelHesap : "—"}</span>
           <span className="block">{kisi.last_login_at ? `${t.rolSonGiris}: ${zaman(kisi.last_login_at)}` : t.rolHicGirmedi}</span>
         </span>
+        <button
+          type="button"
+          aria-label={t.kisiAdDuzenleAria(kisi.display_name)}
+          title={t.kisiAdDuzenle}
+          aria-expanded={duzen}
+          onClick={() => {
+            setAd(kisi.first_name ?? "")
+            setSoyad(kisi.last_name ?? "")
+            setAdHata("")
+            setDuzen((a) => !a)
+          }}
+          className="grid size-8 shrink-0 place-items-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-input hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Pencil aria-hidden className="size-4" />
+        </button>
         <select
           aria-label={t.kisiRolAria(kisi.display_name)}
           value={kisi.role}
@@ -129,6 +160,25 @@ function KisiSatiri({
           </button>
         ) : null}
       </div>
+      {duzen ? (
+        <form onSubmit={(e) => void adKaydet(e)} className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/30 p-2">
+          <label className="grid gap-1 text-xs font-medium">
+            {t.kisiAdi}
+            <input value={ad} onChange={(e) => setAd(e.target.value)} required maxLength={100} className="h-8 w-40 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" />
+          </label>
+          <label className="grid gap-1 text-xs font-medium">
+            {t.kisiSoyadi}
+            <input value={soyad} onChange={(e) => setSoyad(e.target.value)} maxLength={100} className="h-8 w-40 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" />
+          </label>
+          <Button type="submit" size="sm" disabled={mesgul || !ad.trim()}>
+            {t.kaydet}
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={mesgul} onClick={() => setDuzen(false)}>
+            {t.vazgec}
+          </Button>
+          {adHata ? <p role="alert" className="w-full text-xs font-medium text-destructive">{adHata}</p> : null}
+        </form>
+      ) : null}
       {rolHata ? (
         <p role="alert" className="text-xs font-medium text-destructive">
           {rolHata}
@@ -453,6 +503,18 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
     }
   }
 
+  /** Admin kisinin ad ve soyadini duzeltir; basarida listedeki gorunen ad guncellenir. */
+  async function kisiAdiKaydet(k: Kisi, ad: string, soyad: string): Promise<string | null> {
+    try {
+      const sonuc = await yaz<{ display_name: string; first_name: string; last_name: string }>("PUT", `/api/v1/roller/kisiler/${k.id}/ad`, { first_name: ad, last_name: soyad })
+      setVeri((v) => v && { ...v, users: (v.users ?? []).map((x) => (x.id === k.id ? { ...x, display_name: sonuc.display_name, first_name: sonuc.first_name, last_name: sonuc.last_name } : x)) })
+      setSilBilgi(t.kisiAdiKaydedildi(sonuc.display_name))
+      return null
+    } catch (hata) {
+      return hataMesaji(hata, t.kisiAdiHata)
+    }
+  }
+
   /** Kisinin rolu degisir (yalniz admin; sunucu zorlar). Basarida satir yeni rolun kutusuna tasinir; hata metnini doner, basarida null. */
   async function kisiRoluKaydet(k: Kisi, rol: string): Promise<string | null> {
     try {
@@ -561,7 +623,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
           <p className="text-xs text-muted-foreground">{t.rolBekleyenAciklama}</p>
           <ul className="grid items-start gap-2 sm:grid-cols-2">
             {bekleyenler.map((k) => (
-              <KisiSatiri key={k.id} kisi={k} dil={dil} onSil={veri.can_delete_users ? kisiSil : undefined} roller={veri.roles} onRol={kisiRoluKaydet} />
+              <KisiSatiri key={k.id} kisi={k} dil={dil} onSil={veri.can_delete_users ? kisiSil : undefined} roller={veri.roles} onRol={kisiRoluKaydet} onAd={kisiAdiKaydet} />
             ))}
           </ul>
         </section>
@@ -648,7 +710,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
                 ) : (
                   <ul className="grid items-start gap-2 sm:grid-cols-2">
                     {rolKisileri.map((k) => (
-                      <KisiSatiri key={k.id} kisi={k} dil={dil} onSil={veri.can_delete_users ? kisiSil : undefined} roller={veri.roles} onRol={kisiRoluKaydet} />
+                      <KisiSatiri key={k.id} kisi={k} dil={dil} onSil={veri.can_delete_users ? kisiSil : undefined} roller={veri.roles} onRol={kisiRoluKaydet} onAd={kisiAdiKaydet} />
                     ))}
                   </ul>
                 )}
