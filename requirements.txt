@@ -6,7 +6,7 @@ psycopg[binary]>=3.2
 SQLAlchemy==2.1.6
 uvicorn==0.54.0
 ldap3==2.9.1  # AD/LDAPS (yalniz AD_ENABLED=true iken yuklenir)
-pyasn1==0.6.4
+pyasn1==0.6.5
 certifi>=2026.10.19  # PYSEC-2026-4320 (2026-10-25 denetimi); dolayli bagimlilik, guvenlik alt siniri
 oracledb==26.0.1  # Oracle (ReportDB/Onent/Urun-Tutar); yalniz isci surecte ve kaynak ENABLED=true iken yuklenir
 cryptography==50.0.2
