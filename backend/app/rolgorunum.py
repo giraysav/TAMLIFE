@@ -202,7 +202,7 @@ def kisi_yetkisi_kaydet(db: Session, kullanici_id: int, yetkiler: object) -> dic
     return {"id": satir.id, "username": satir.username, "permissions": satir.permissions}
 
 
-ATANABILIR_ROLLER = ("TeamMngr", "TeamMember")  # admin rolu panelden verilmez (yalniz komut satiri: python -m app.hesap rol)
+ATANABILIR_ROLLER = ("admin", "TeamMngr", "TeamMember")  # 2026-11-12 kullanici karari: admin rolu de Rol Yonetimi'nden verilebilir (AD girisinde KTS_TEAM_ADMIN eslesmesi yine sart)
 
 
 def kisi_adi_kaydet(db: Session, kullanici_id: int, ad: object, soyad: object) -> dict:
@@ -223,7 +223,7 @@ def kisi_adi_kaydet(db: Session, kullanici_id: int, ad: object, soyad: object) -
 
 
 def kisi_rolu_kaydet(db: Session, yapan: Principal, kullanici_id: int, rol: object) -> dict:
-    """Kisiye Manager/Member rolu atar (yeni giren kisi rolsuz/Pending acilir, admin buradan verir; admin rolu verilmez). Kendi rolunu degistiremez (yonetimden dusmesin).
+    """Kisiye admin/Manager/Member rolu atar (yeni giren kisi rolsuz/Pending acilir, admin buradan verir). Kendi rolunu degistiremez (yonetimden dusmesin).
     Rol degisince kisinin acik oturumlari kapanir (yeniden giriste yeni rolle acilir); is_admin rolden turetilir."""
     if not isinstance(rol, str) or rol not in ATANABILIR_ROLLER:
         raise RolHata(400, "Rol gecersiz.")
@@ -255,7 +255,7 @@ def kisi_onceden_ekle(db: Session, kullanici_adi: object, rol: object, yetkiler:
         raise RolHata(400, "Yetki listesi gecersiz.")
     if db.scalar(select(AppUser.id).where(func.lower(AppUser.username) == ad)) is not None:
         raise RolHata(409, "Bu kullanıcı zaten kayıtlı.")
-    satir = AppUser(username=ad, display_name=tam_ad_uret(ad), role=rol, is_admin=False, active=True, is_ad_user=True, permissions=sorted(set(yetkiler or [])))
+    satir = AppUser(username=ad, display_name=tam_ad_uret(ad), role=rol, is_admin=(rol == "admin"), active=True, is_ad_user=True, permissions=sorted(set(yetkiler or [])))
     db.add(satir)
     db.flush()
     return {"id": satir.id, "username": satir.username, "display_name": satir.display_name, "first_name": ad_soyad(satir)[0], "last_name": ad_soyad(satir)[1], "role": rol, "permissions": satir.permissions}
