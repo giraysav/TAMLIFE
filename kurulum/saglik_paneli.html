@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TAMLIFE Sağlık Paneli</title>
+<style>
+  :root {
+    --bg:#eef1f5; --kart:#ffffff; --kart2:#f6f8fa; --yazi:#16202c; --soluk:#627083; --cizgi:#dfe4ea;
+    --iyi:#16803c; --iyiBg:#e3f5e9; --uyari:#a15c00; --uyariBg:#fff1d0; --kotu:#c0271b; --kotuBg:#fde7e4; --notr:#6b7686; --notrBg:#eceff3;
+    --vurgu:#2563eb; --golge:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --bg:#0f1318; --kart:#181d24; --kart2:#1f252d; --yazi:#e8ecf1; --soluk:#93a0b1; --cizgi:#2a313b;
+    --iyi:#4cc96f; --iyiBg:#12301d; --uyari:#e8b84a; --uyariBg:#3a2f10; --kotu:#ff7b70; --kotuBg:#421a16; --notr:#9aa6b6; --notrBg:#252c36;
+    --vurgu:#6ea8fe; --golge:none; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--yazi); font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:16px; }
+  .ust { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  h1 { font-size:19px; margin:0; letter-spacing:.2px; }
+  h2 { font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--soluk); margin:0 0 10px; font-weight:600; }
+  .soluk { color:var(--soluk); font-size:12px; }
+  .canli { display:inline-flex; align-items:center; gap:6px; color:var(--soluk); font-size:12px; }
+  .nokta { width:9px; height:9px; border-radius:50%; background:var(--notr); display:inline-block; }
+  .nokta.iyi { background:var(--iyi); animation:nabiz 2s infinite; } .nokta.uyari { background:var(--uyari); } .nokta.kotu { background:var(--kotu); }
+  @keyframes nabiz { 0% { box-shadow:0 0 0 0 rgba(22,128,60,.5); } 70% { box-shadow:0 0 0 7px rgba(22,128,60,0); } 100% { box-shadow:0 0 0 0 rgba(22,128,60,0); } }
+
+  .hero { display:flex; gap:14px; align-items:center; border-radius:14px; padding:16px 18px; border:1px solid var(--cizgi); box-shadow:var(--golge); }
+  .hero.iyi { background:var(--iyiBg); border-color:transparent; } .hero.uyari { background:var(--uyariBg); border-color:transparent; } .hero.kotu { background:var(--kotuBg); border-color:transparent; } .hero.notr { background:var(--notrBg); }
+  .hero .ikon { font-size:30px; line-height:1; }
+  .hero.iyi .bas { color:var(--iyi); } .hero.uyari .bas { color:var(--uyari); } .hero.kotu .bas { color:var(--kotu); }
+  .hero .bas { font-size:19px; font-weight:700; }
+  .hero .alt { margin-top:3px; color:var(--yazi); opacity:.85; }
+
+  .araclar { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; align-items:center; }
+  .grup { display:flex; gap:8px; flex-wrap:wrap; padding:6px; background:var(--kart); border:1px solid var(--cizgi); border-radius:12px; box-shadow:var(--golge); }
+  .grup .etiket { align-self:center; padding:0 6px 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--soluk); }
+  button { font:inherit; padding:8px 13px; border-radius:9px; border:1px solid var(--cizgi); background:var(--kart2); color:var(--yazi); cursor:pointer; transition:.12s; }
+  button:hover:not(:disabled) { border-color:var(--vurgu); transform:translateY(-1px); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.birincil { background:var(--vurgu); border-color:var(--vurgu); color:#fff; }
+  button.tehlike { color:var(--kotu); border-color:var(--kotu); background:transparent; }
+
+  .kpi { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:12px; }
+  .kart { background:var(--kart); border:1px solid var(--cizgi); border-radius:12px; padding:13px 15px; box-shadow:var(--golge); }
+  .kpi .kart { position:relative; overflow:hidden; }
+  .kpi .kart::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--notr); }
+  .kpi .kart.iyi::before { background:var(--iyi); } .kpi .kart.uyari::before { background:var(--uyari); } .kpi .kart.kotu::before { background:var(--kotu); }
+  .kpi .deger { font-size:24px; font-weight:700; line-height:1.15; }
+  .kpi .deger.iyi { color:var(--iyi); } .kpi .deger.uyari { color:var(--uyari); } .kpi .deger.kotu { color:var(--kotu); }
+  .kpi .alt { margin-top:2px; }
+  svg.cizgi { width:100%; height:34px; margin-top:6px; display:block; }
+
+  .akis { display:flex; align-items:stretch; gap:6px; flex-wrap:wrap; }
+  .dugum { flex:1 1 130px; min-width:120px; text-align:center; padding:10px 8px; border-radius:11px; background:var(--kart2); border:2px solid var(--cizgi); }
+  .dugum b { display:block; font-size:13px; } .dugum span { font-size:11.5px; color:var(--soluk); }
+  .dugum.iyi { border-color:var(--iyi); } .dugum.uyari { border-color:var(--uyari); } .dugum.kotu { border-color:var(--kotu); background:var(--kotuBg); }
+  .ok { align-self:center; color:var(--soluk); font-size:18px; }
+
+  .izgara { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px,1fr)); gap:12px; margin-top:12px; }
+  .genis { grid-column:1/-1; }
+  .satir { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--cizgi); }
+  .satir:last-child { border-bottom:0; }
+  .sol { display:flex; align-items:center; gap:8px; min-width:0; }
+  .rozet { display:inline-block; padding:2px 9px; border-radius:99px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .rozet.iyi { background:var(--iyiBg); color:var(--iyi); } .rozet.uyari { background:var(--uyariBg); color:var(--uyari); }
+  .rozet.kotu { background:var(--kotuBg); color:var(--kotu); } .rozet.notr { background:var(--notrBg); color:var(--notr); }
+  .sag { text-align:right; }
+
+  .cubuk { height:8px; border-radius:99px; background:var(--notrBg); overflow:hidden; margin-top:4px; }
+  .cubuk i { display:block; height:100%; background:var(--iyi); border-radius:99px; transition:width .4s; }
+  .cubuk i.uyari { background:var(--uyari); } .cubuk i.kotu { background:var(--kotu); }
+  .olcek { margin-bottom:9px; } .olcek .u { display:flex; justify-content:space-between; font-size:12.5px; }
+
+  .kaynak { display:flex; gap:12px; align-items:flex-start; padding:9px 0; border-bottom:1px solid var(--cizgi); }
+  .kaynak:last-child { border-bottom:0; }
+  .kaynak .ad { font-weight:600; } .kaynak .ayrinti { font-size:12px; color:var(--soluk); margin-top:2px; word-break:break-word; }
+
+  .sekmeler { display:flex; gap:6px; margin-bottom:8px; }
+  .sekmeler button { padding:4px 11px; font-size:12px; }
+  .sekmeler button.acik { background:var(--vurgu); color:#fff; border-color:var(--vurgu); }
+  pre { margin:0; padding:10px; background:var(--kart2); border:1px solid var(--cizgi); border-radius:9px; overflow:auto; max-height:240px; font:12px/1.5 Consolas, monospace; white-space:pre-wrap; word-break:break-word; }
+  pre .h { color:var(--kotu); font-weight:600; } pre .o { color:var(--iyi); } pre .a { color:var(--uyari); }
+  .donen { display:inline-block; width:12px; height:12px; border:2px solid var(--cizgi); border-top-color:var(--vurgu); border-radius:50%; animation:don .8s linear infinite; vertical-align:-2px; margin-right:6px; }
+  @keyframes don { to { transform:rotate(360deg); } }
+
+  dialog { border:1px solid var(--cizgi); border-radius:14px; background:var(--kart); color:var(--yazi); padding:20px; max-width:420px; box-shadow:0 12px 40px rgba(0,0,0,.35); }
+  dialog::backdrop { background:rgba(10,14,20,.55); }
+  dialog h3 { margin:0 0 8px; font-size:16px; } dialog p { margin:0 0 16px; }
+  dialog .alt { display:flex; justify-content:flex-end; gap:8px; }
+  @media (max-width:640px) { main { padding:12px; } .izgara { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="ust">
+    <h1>TAMLIFE Sağlık Paneli</h1>
+    <span class="canli"><i class="nokta" id="canli"></i><span id="zaman">bağlanıyor…</span><button id="yenile" style="padding:3px 9px;font-size:12px">↻ Şimdi yenile</button></span>
+  </div>
+
+  <div class="hero notr" id="hero"><div class="ikon" id="h-ikon">…</div><div><div class="bas" id="h-bas">Durum okunuyor</div><div class="alt" id="h-alt"></div></div></div>
+
+  <div class="araclar" id="butonlar">
+    <div class="grup"><span class="etiket">Hızlı</span>
+      <button data-ad="reportdb" data-baslik="ReportDB turu" data-onay="ReportDB senkron turu şimdi başlatılsın mı? Tur 8-9 dk sürer; zaten çalışıyorsa atlanır.">ReportDB’yi şimdi çalıştır</button>
+      <button data-ad="durum">Ayrıntılı durum</button>
+    </div>
+    <div class="grup"><span class="etiket">Servis</span>
+      <button data-ad="yenile" data-baslik="Paneli yenile" data-onay="Yalnız panel yeniden başlatılsın mı? Vekil ve ReportDB işçisi dokunulmaz; 30-120 sn sürer.">Paneli yenile</button>
+      <button class="birincil" data-ad="yeniden" data-baslik="Hepsini yeniden başlat" data-onay="Panel, vekil ve ReportDB işçisi kapanıp yeniden açılacak. Kullanıcılar kısa süre kesinti görür.">Hepsini yeniden başlat</button>
+      <button data-ad="baslat" data-baslik="Başlat" data-onay="Servis başlatılsın mı? (Çalışıyorsa yeniden başlatma ile aynıdır.)">Başlat</button>
+      <button class="tehlike" data-ad="durdur" data-baslik="Durdur" data-onay="DİKKAT: panel, vekil ve ReportDB işçisi DURDURULACAK. Kullanıcılar panele erişemez ve DB kayıtları yazılmaz. Başlatmak için ‘Başlat’ gerekir. Emin misin?">Durdur</button>
+    </div>
+  </div>
+
+  <div class="kpi" id="kpi"></div>
+
+
+  <div class="izgara">
+    <div class="kart"><h2>Süreçler</h2><div id="k-surec"></div></div>
+    <div class="kart"><h2>Veri kaynakları (çekme işleri)</h2><div id="k-kaynak"></div></div>
+    <div class="kart"><h2>Sunucu kaynakları</h2><div id="k-sunucu"></div></div>
+    <div class="kart"><h2>ReportDB senkronu</h2><div id="k-rdb"></div></div>
+    <div class="kart genis" id="kart-is" hidden><h2>Son işlem</h2><pre id="is-cikti"></pre></div>
+    <div class="kart genis">
+      <h2>Günlükler</h2>
+      <div class="sekmeler" id="sekmeler">
+        <button data-g="isci" class="acik">ReportDB</button><button data-g="panel">Panel</button><button data-g="servis">Süpervizör</button>
+      </div>
+      <pre id="gunluk">—</pre>
+    </div>
+  </div>
+  <p class="soluk">Yalnızca bu sunucudan (127.0.0.1) erişilir, panelden bağımsızdır; panel durdurulsa da açık kalır. Otomatik yenileme 10 sn (işlem sırasında 3 sn).</p>
+</main>
+
+<dialog id="onay"><h3 id="o-baslik"></h3><p id="o-metin"></p><div class="alt"><button id="o-iptal">Vazgeç</button><button class="birincil" id="o-tamam">Onayla</button></div></dialog>
+
+<script>
+(function () {
+  var qs = new URLSearchParams(location.search), tok = qs.get('t') || '';
+  try { if (tok) sessionStorage.setItem('tok', tok); else tok = sessionStorage.getItem('tok') || ''; } catch (e) {}
+  if (tok) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  var son = null, gSekme = 'isci', mesgul = false, gecmis = [], oku_zamani = null;
+  var $ = function (i) { return document.getElementById(i); };
+
+  function h(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function rozet(t, d) { return '<span class="rozet ' + d + '">' + h(t) + '</span>'; }
+  function nokta(d) { return '<i class="nokta ' + d + '"></i>'; }
+  function gorece(dk) { if (dk == null) return '—'; if (dk < 1) return 'az önce'; if (dk < 60) return dk + ' dk önce'; if (dk < 1440) return Math.floor(dk / 60) + ' sa ' + (dk % 60) + ' dk önce'; return Math.floor(dk / 1440) + ' gün önce'; }
+  function dkFark(s) { if (!s) return null; var t = new Date(String(s).replace(' ', 'T').replace(/\//g, '-')); if (isNaN(t)) return null; return Math.max(0, Math.round((Date.now() - t.getTime()) / 60000)); }
+  function esik(v, a, b) { return v >= b ? 'kotu' : (v >= a ? 'uyari' : 'iyi'); }
+  function api(yol, yontem) {
+    return fetch(yol, { method: yontem || 'GET', headers: { 'X-Token': tok }, cache: 'no-store' }).then(function (r) {
+      if (r.status === 401) throw new Error('Anahtar geçersiz: sayfayı konsolda yazan adresten (veya masaüstü kısayolundan) aç.');
+      return r.json();
+    });
+  }
+  function cubuk(etiket, v, a, b, ek) {
+    var d = esik(v, a, b);
+    return '<div class="olcek"><div class="u"><span>' + h(etiket) + '</span><span><b>%' + v + '</b> ' + (ek ? '<span class="soluk">' + h(ek) + '</span>' : '') + '</span></div><div class="cubuk"><i class="' + d + '" style="width:' + Math.min(100, v) + '%"></i></div></div>';
+  }
+  function cizgi(dizi) {
+    if (dizi.length < 2) return '';
+    var mx = Math.max.apply(null, dizi.concat([50])), W = 160, H = 34;
+    var p = dizi.map(function (v, i) { return (i * W / (dizi.length - 1)).toFixed(1) + ',' + (H - 3 - (v / mx) * (H - 8)).toFixed(1); }).join(' ');
+    return '<svg class="cizgi" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" points="' + p + '" style="color:var(--vurgu)"/></svg>';
+  }
+
+  function degerlendir(d) {
+    var s = d.surecler, kotu = [], uyari = [];
+    if (!d.panel.ok) kotu.push('Panel yanıt vermiyor');
+    if (!d.https.ok) (d.panel.ok ? uyari : kotu).push('HTTPS (vekil) yanıt vermiyor');
+    if (!d.gorev.var) kotu.push('TAMLIFE_Servis görevi kayıtlı değil'); else if (d.gorev.durum !== 'Running') kotu.push('TAMLIFE_Servis çalışmıyor (' + d.gorev.durum + ')');
+    if (!s.uvicorn.var) kotu.push('Panel süreci (uvicorn) yok');
+    if (!s.vekil_dongu.var) uyari.push('Vekil döngüsü yok');
+    var r = d.reportdb;
+    if (r.son_dk == null) uyari.push('ReportDB günlüğü okunamadı');
+    else if (r.sonuc !== 'OK' && r.sonuc !== 'ATLANDI') uyari.push('Son ReportDB turu başarısız');
+    else if (r.son_dk > 30 && !s.isci.var) uyari.push('ReportDB ' + gorece(r.son_dk));
+    if (d.sunucu.disk_e_yuzde >= 90) kotu.push('E: diski %' + d.sunucu.disk_e_yuzde + ' dolu'); else if (d.sunucu.disk_e_yuzde >= 80) uyari.push('E: diski %' + d.sunucu.disk_e_yuzde);
+    if (d.sunucu.bellek_yuzde >= 92) uyari.push('Bellek %' + d.sunucu.bellek_yuzde);
+    if (d.sunucu.cpu >= 90) uyari.push('CPU %' + d.sunucu.cpu);
+    var ydk = dkFark(d.db.son_yedek); if (ydk == null || ydk > 60 * 24 * 7) uyari.push('Son DB yedeği ' + (ydk == null ? 'yok' : Math.floor(ydk / 1440) + ' gün önce'));
+    return { kotu: kotu, uyari: uyari };
+  }
+
+  function ciz(d) {
+    var r = degerlendir(d), sev = r.kotu.length ? 'kotu' : (r.uyari.length ? 'uyari' : 'iyi');
+    var hero = $('hero'); hero.className = 'hero ' + sev;
+    $('h-ikon').textContent = sev === 'iyi' ? '✔' : (sev === 'kotu' ? '✖' : '⚠');
+    $('h-bas').textContent = sev === 'iyi' ? 'Her şey çalışıyor' : (sev === 'kotu' ? 'Müdahale gerekiyor' : 'Dikkat: küçük sorunlar var');
+    var l = r.kotu.concat(r.uyari);
+    $('h-alt').textContent = l.length ? l.join(' · ') : 'Panel, vekil, ReportDB ve sunucu normal.';
+    $('canli').className = 'nokta ' + (sev === 'kotu' ? 'kotu' : (sev === 'uyari' ? 'uyari' : 'iyi'));
+    $('zaman').textContent = 'Son okuma ' + d.zaman.slice(11);
+
+    gecmis.push(d.panel.ok ? d.panel.ms : 0); if (gecmis.length > 30) gecmis.shift();
+    var s = d.surecler, q = d.reportdb, rs = q.sonuc === 'OK' ? 'iyi' : (q.sonuc === 'ATLANDI' ? 'uyari' : 'kotu'), sv = d.sunucu;
+    function kpi(sev, bas, deger, alt, ek) { return '<div class="kart ' + sev + '"><h2>' + bas + '</h2><div class="deger ' + sev + '">' + deger + '</div><div class="alt soluk">' + alt + '</div>' + (ek || '') + '</div>'; }
+    $('kpi').innerHTML =
+      kpi(d.panel.ok ? 'iyi' : 'kotu', 'Panel', d.panel.ok ? 'Çalışıyor' : 'Yanıt yok', 'yerel ' + d.panel.ms + ' ms', cizgi(gecmis)) +
+      kpi(d.https.ok ? 'iyi' : 'kotu', 'HTTPS erişimi', d.https.ok ? 'Açık' : 'Kapalı', 'tamlife:443 · ' + d.https.ms + ' ms') +
+      kpi(esik(Math.max(sv.cpu, sv.bellek_yuzde), 75, 90), 'Sunucu', 'CPU %' + sv.cpu, 'Bellek %' + sv.bellek_yuzde + ' · açık ' + sv.acik_kalma_saat + ' sa') +
+      kpi(d.db.son_yedek && dkFark(d.db.son_yedek) < 10080 ? 'iyi' : 'uyari', 'Veritabanı', (d.db.mb == null ? '—' : d.db.mb + ' MB'), 'yedek ' + (d.db.son_yedek ? gorece(dkFark(d.db.son_yedek)) : 'YOK'));
+
+    var ad = { servis: 'Süpervizör', panel_dongu: 'Panel döngüsü', vekil_dongu: 'Vekil döngüsü', uvicorn: 'Panel (uvicorn)', isci: 'ReportDB' }, sh = '';
+    Object.keys(ad).forEach(function (k) {
+      var p = s[k], bos = k === 'isci';
+      sh += '<div class="satir"><span class="sol">' + nokta(p.var ? 'iyi' : (bos ? '' : 'kotu')) + h(ad[k]) + '</span><span class="sag">' +
+        rozet(p.var ? 'ÇALIŞIYOR' : 'ÇALIŞMIYOR', p.var ? 'iyi' : (bos ? 'notr' : 'kotu')) + (p.var ? ' <span class="soluk">' + h(p.baslangic.slice(5, 16)) + '</span>' : '') + '</span></div>';
+    });
+    sh += '<div class="satir"><span class="sol">' + nokta(d.gorev.durum === 'Running' ? 'iyi' : 'kotu') + 'Görev TAMLIFE_Servis</span><span class="sag">' + rozet(d.gorev.durum === 'Running' ? 'ÇALIŞIYOR' : d.gorev.durum, d.gorev.durum === 'Running' ? 'iyi' : 'kotu') + '</span></div>';
+    $('k-surec').innerHTML = sh;
+
+    var kh = '', rzR, ayR;
+    if (s.isci.var) { rzR = rozet('ÇALIŞIYOR', 'iyi'); ayR = 'Tur sürüyor (' + h(s.isci.baslangic.slice(11, 16)) + ' başladı); önceki tur ' + (q.sonuc || '—') + ', ' + gorece(q.son_dk) + '.'; }
+    else if (q.sonuc === 'OK') { rzR = rozet('HAZIR', 'iyi'); ayR = 'Son tur OK, ' + gorece(q.son_dk) + '. Her 6 dk’da bir otomatik çalışır.'; }
+    else if (q.sonuc === 'ATLANDI') { rzR = rozet('ATLANDI', 'uyari'); ayR = 'Önceki tur kilit nedeniyle atlandı, ' + gorece(q.son_dk) + '.'; }
+    else if (q.sonuc) { rzR = rozet('HATA', 'kotu'); ayR = h((q.son || '').replace(/^\S+ \S+ reportdb /, '').slice(0, 160)); }
+    else { rzR = rozet('BİLİNMİYOR', 'notr'); ayR = 'Günlükte ReportDB satırı yok.'; }
+    kh += '<div class="kaynak"><div style="flex:1"><div class="ad">ReportDB (Oracle)</div><div class="ayrinti">' + ayR + '</div></div>' + rzR + '</div>';
+    (d.kaynaklar || []).forEach(function (k) {
+      var rz, ay = '';
+      if (!k.acik) { rz = rozet('KAPALI', 'notr'); ay = 'Bağlantı ayarı kapalı (.env *_ENABLED).'; }
+      else if (!k.ayarli) { rz = rozet('AYARSIZ', 'uyari'); ay = 'Bağlantı bilgileri .env’de eksik.'; }
+      else if (k.tcp === false) { rz = rozet('ERİŞİM YOK', 'kotu'); ay = 'Sunucuya ağ bağlantısı kurulamadı.'; }
+      else if (!k.sorgu) { rz = rozet('SORGU YOK', 'uyari'); ay = 'Ağ tamam; çekme sorgusu (*_IMPORT_QUERY) tanımlı değil.'; }
+      else if (k.parti_hata) { rz = rozet('HATA', 'kotu'); ay = k.parti_hata; }
+      else if (k.parti_zaman) { rz = rozet('HAZIR', 'iyi'); ay = 'Son çekme ' + gorece(dkFark(k.parti_zaman)) + ' (' + h(k.parti_durum) + ').'; }
+      else { rz = rozet('ÇEKİLMEDİ', 'uyari'); ay = 'Ağ ve sorgu tamam; henüz veri çekilmedi.'; }
+      kh += '<div class="kaynak"><div style="flex:1"><div class="ad">' + h(k.ad) + '</div><div class="ayrinti">' + h(ay) + '</div></div>' + rz + '</div>';
+    });
+    $('k-kaynak').innerHTML = kh || '<span class="soluk">Kaynak bilgisi yok.</span>';
+
+    $('k-sunucu').innerHTML =
+      cubuk('CPU', sv.cpu, 75, 90) + cubuk('Bellek', sv.bellek_yuzde, 80, 92) + cubuk('E: diski', sv.disk_e_yuzde, 80, 90, sv.disk_e_bos_gb + ' GB boş') +
+      '<div class="soluk">Hesap: ' + h(sv.kullanici) + ' · DB WAL ' + (d.db.wal_mb == null ? '—' : d.db.wal_mb + ' MB') + '</div>';
+
+    var sonraki = '';
+    if (!s.isci.var && q.son_dk != null) { var kalan = Math.max(0, 6 - q.son_dk); sonraki = kalan <= 0 ? 'bir sonraki tur birazdan' : 'sonraki tur ≈ ' + kalan + ' dk'; }
+    $('k-rdb').innerHTML =
+      '<div class="satir"><span>Son sonuç</span><span class="sag">' + (q.sonuc ? rozet(q.sonuc, rs) : '—') + ' <span class="soluk">' + gorece(q.son_dk) + '</span></span></div>' +
+      '<div class="satir"><span>Şu an</span><span class="sag">' + (s.isci.var ? rozet('ÇALIŞIYOR', 'iyi') + ' <span class="soluk">' + h(s.isci.baslangic.slice(11, 16)) + ' başladı</span>' : rozet('beklemede', 'notr') + ' <span class="soluk">' + h(sonraki) + '</span>') + '</span></div>' +
+      '<div class="satir"><span>Kilit yaşı</span><span class="sag">' + (q.kilit_dk == null ? '—' : q.kilit_dk + ' dk') + '</span></div>' +
+      '<div class="soluk" style="margin-top:8px;word-break:break-word">' + h((q.son || '').replace(/^\S+ \S+ reportdb /, '').slice(0, 300)) + '</div>';
+
+    gunluguCiz(d);
+    var ik = $('kart-is');
+    if (d.is) {
+      ik.hidden = false;
+      $('is-cikti').innerHTML = '<b>' + h(d.is.ad) + '</b> · ' + h(d.is.baslangic) + ' · ' + (d.is.calisiyor ? '<span class="donen"></span>çalışıyor…' : 'bitti' + (d.is.cikis != null ? ' (çıkış ' + d.is.cikis + ')' : '')) + '\n' + boya(d.is.cikti || '');
+    }
+    mesgul = !!(d.is && d.is.calisiyor);
+    Array.prototype.forEach.call(document.querySelectorAll('#butonlar button'), function (bt) { bt.disabled = mesgul; });
+  }
+
+  function boya(t) {
+    return h(t).split('\n').map(function (s) {
+      if (/HATA|\[!\]|hata|Dur |basarisiz|YOK/.test(s)) return '<span class="h">' + s + '</span>';
+      if (/\bOK\b|\[\+\]|CALISIYOR|Tamam/.test(s)) return '<span class="o">' + s + '</span>';
+      if (/ATLANDI|\[\*\]|uyari/i.test(s)) return '<span class="a">' + s + '</span>';
+      return s;
+    }).join('\n');
+  }
+  function gunluguCiz(d) { if (d) $('gunluk').innerHTML = boya((d.gunluk[gSekme] || []).join('\n')) || '(boş)'; }
+
+  function oku() {
+    api('/api/durum').then(function (d) { son = d; ciz(d); }).catch(function (e) {
+      $('hero').className = 'hero kotu'; $('h-ikon').textContent = '✖'; $('h-bas').textContent = 'Sağlık servisine ulaşılamıyor';
+      $('h-alt').textContent = e.message + ' (Masaüstündeki TAMLIFE_Saglik_Paneli.bat çalışıyor mu?)'; $('canli').className = 'nokta kotu';
+    }).then(function () { clearTimeout(oku.t); oku.t = setTimeout(oku, mesgul ? 3000 : 10000); });
+  }
+
+  var bekleyen = null;
+  $('butonlar').addEventListener('click', function (e) {
+    var bt = e.target.closest('button'); if (!bt || bt.disabled) return;
+    if (bt.dataset.onay) { bekleyen = bt.dataset.ad; $('o-baslik').textContent = bt.dataset.baslik || 'Onay'; $('o-metin').textContent = bt.dataset.onay; $('onay').showModal(); }
+    else calistir(bt.dataset.ad);
+  });
+  $('o-iptal').onclick = function () { $('onay').close(); };
+  $('o-tamam').onclick = function () { $('onay').close(); if (bekleyen) calistir(bekleyen); };
+  function calistir(ad) {
+    api('/api/islem?ad=' + encodeURIComponent(ad), 'POST').then(function (r) {
+      $('kart-is').hidden = false; $('is-cikti').textContent = r.mesaj; if (!r.ok) alert(r.mesaj);
+      setTimeout(oku, 800);
+    }).catch(function (er) { alert(er.message); });
+  }
+  $('yenile').onclick = oku;
+  $('sekmeler').addEventListener('click', function (e) {
+    var bt = e.target.closest('button'); if (!bt) return; gSekme = bt.dataset.g;
+    Array.prototype.forEach.call(document.querySelectorAll('#sekmeler button'), function (x) { x.classList.toggle('acik', x === bt); });
+    gunluguCiz(son);
+  });
+  oku();
+})();
+</script>
+</body>
+</html>

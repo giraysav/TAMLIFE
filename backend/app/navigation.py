@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.authz import can_open, is_admin
 from app.catalog import MODULES, get
+from app.rolgorunum import UTILIZASYON_YETKISI
 from app.session import Principal
 
 # Sunum bilgisi: (grup, ikon, aciklama, aciklama_en). Uretim application/navigation.py ile ayni.
@@ -42,7 +43,12 @@ YONETIM_BOLUMLERI: tuple[tuple[str, str, str, str, str], ...] = (
 YONETIME_KATLANAN = frozenset({"roller"})
 
 
-def navigation_for(user: Principal, izinli: frozenset[str] | None = None) -> list[dict[str, object]]:
+def utilizasyon_yoneticisi_mi(user: Principal, yetkiler: frozenset[str]) -> bool:
+    """Admin olmayan ama `utilizasyon.yonet` ek yetkisi olan kullanici: Yonetim konsolunda YALNIZ TAM Utilizasyon bolumu acilir (2026-11-11)."""
+    return not is_admin(user) and UTILIZASYON_YETKISI in yetkiler
+
+
+def navigation_for(user: Principal, izinli: frozenset[str] | None = None, yetkiler: frozenset[str] = frozenset()) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for module in MODULES:
         if not module.in_nav or module.key not in PRESENTATION:
@@ -76,20 +82,21 @@ def navigation_for(user: Principal, izinli: frozenset[str] | None = None) -> lis
                 ],
             }
         )
-    if is_admin(user):
+    if is_admin(user) or utilizasyon_yoneticisi_mi(user, yetkiler):
+        bolumler = YONETIM_BOLUMLERI if is_admin(user) else tuple(b for b in YONETIM_BOLUMLERI if b[0] == "utilizasyon")
         rows.append(
             {
                 "id": "yonetim",
                 "label": "Yönetim",
                 "label_en": "Administration",
-                "description": "Veritabanı, roller, arızalar, günlükler ve veri girişi",
-                "description_en": "Database, roles, faults, logs and data intake",
+                "description": "Veritabanı, roller, arızalar, günlükler ve veri girişi" if is_admin(user) else "TAM Utilizasyon",
+                "description_en": "Database, roles, faults, logs and data intake" if is_admin(user) else "TAM Utilization",
                 "group": "admin",
                 "icon": "settings",
                 "ready": True,
                 "children": [
                     {"id": f"yonetim/{key}", "label": label, "label_en": label_en, "description": text, "description_en": text_en, "ready": True}
-                    for key, label, text, label_en, text_en in YONETIM_BOLUMLERI
+                    for key, label, text, label_en, text_en in bolumler
                 ],
             }
         )

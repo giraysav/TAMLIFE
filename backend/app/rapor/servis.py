@@ -521,6 +521,30 @@ def gorsel_ekle(db: Session, user: Principal, musteri_id: int, veri: bytes, basl
     return sla_getir(db, user, musteri.id)
 
 
+def lookouteyes_ekle(db: Session, user: Principal, musteri_id: int, bulunanlar: list[tuple[str, bytes]], donem_kodu: str | None = None) -> dict:
+    """LOOKOUTEYES'ten gelen grafikleri elle eklenenlerle AYNI 'ekler' listesine yazar (onizleme/PDF yerlesimi degismez).
+    Ayni baslikli grafik zaten varsa atlanir; en cok sinir dolarsa kalan atlanir. Sonuca 'lookouteyes' = {eklenen, atlanan} eklenir."""
+    musteri = musteri_yaz_getir(db, user, musteri_id)
+    yil, ay = donem(donem_kodu)
+    _sla_kilidi(db, musteri.id, yil, ay)
+    mevcut = {" ".join(str(e.get("baslik") or "").split()) for e in ((sla.oku(musteri.id, yil, ay) or {}).get("ekler") or [])}
+    eklenen = atlanan = 0
+    for baslik, veri in bulunanlar:
+        if baslik in mevcut:
+            atlanan += 1
+            continue
+        try:
+            sla.gorsel_ekle(musteri.id, yil, ay, veri, baslik, user.username)
+        except sla.SlaHata:
+            atlanan += 1
+            continue
+        mevcut.add(baslik)
+        eklenen += 1
+    sonuc = sla_getir(db, user, musteri.id)
+    sonuc["lookouteyes"] = {"eklenen": eklenen, "atlanan": atlanan}
+    return sonuc
+
+
 def gorsel_sil(db: Session, user: Principal, musteri_id: int, numara: int, donem_kodu: str | None = None) -> dict:
     musteri = musteri_yaz_getir(db, user, musteri_id)
     yil, ay = donem(donem_kodu)

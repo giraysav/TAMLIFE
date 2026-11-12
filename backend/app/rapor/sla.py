@@ -6,8 +6,8 @@ Farklar:
   (kullanici karari 2026-10-11). Dosyaya gomulu gorseller (pasta grafikler vb.) KULLANILMAZ; grafik 'Kapanis Ayi'
   pivotlarinin serisinden tarayicida cizilir (matplotlib yok).
 - Dosya saklanir: rapor gonderilirken ileti ekine otomatik girer. Yer: TAMLIFE_REPORT_DIR/sla/<musteri>/<yil>-<ay>.*
-  Ayni donemde yeniden yukleme oncekinin yerine gecer. Ayni kayitta: GALAPAGOS grafikleri ('ekler', MRTG vb. gorsel;
-  GALAPAGOS DB baglanana kadar elle) ve iletiye eklenecek ek dosyalar ('dosyalar', <yil>-<ay>-ekler/ klasorunde).
+  Ayni donemde yeniden yukleme oncekinin yerine gecer. Ayni kayitta: LOOKOUTEYES grafikleri ('ekler', MRTG vb. gorsel;
+  elle yuklenir ya da LOOKOUTEYES DB'sinden serbest metinle gelir: rapor/lookouteyes.py) ve iletiye eklenecek ek dosyalar ('dosyalar', <yil>-<ay>-ekler/ klasorunde).
 Ham satir saklanmaz; yalniz dosyanin kendisi (ek olarak gidecek) ve ozet. Tum verinin analizi: rapor/sla_analiz.py.
 """
 
@@ -348,7 +348,7 @@ def excel_dosyasi(musteri_id: int, yil: int, ay: int) -> tuple[bytes, str] | Non
 
 
 def excel_sil(musteri_id: int, yil: int, ay: int) -> dict:
-    """SLA dosyasi silinir; GALAPAGOS grafikleri ve ek dosyalar korunur."""
+    """SLA dosyasi silinir; LOOKOUTEYES grafikleri ve ek dosyalar korunur."""
     xlsx, js = _yollar(musteri_id, yil, ay)
     kayit = oku(musteri_id, yil, ay) or _bos_kayit()
     xlsx.unlink(missing_ok=True)
@@ -357,7 +357,7 @@ def excel_sil(musteri_id: int, yil: int, ay: int) -> dict:
 
 
 def gorsel_ekle(musteri_id: int, yil: int, ay: int, veri: bytes, baslik: str, ekleyen: str) -> dict:
-    """Elle eklenen grafik (MRTG vb.; GALAPAGOS baglanana kadar). PNG/JPEG/GIF."""
+    """Elle eklenen grafik (MRTG vb.; LOOKOUTEYES grafikleri de ayni listeye yazilir). PNG/JPEG/GIF."""
     if len(veri) > AZAMI_GORSEL:
         raise SlaHata(400, m("Görsel çok büyük (en fazla 10 MB).", "Image too large (max 10 MB)."))
     tur = gorsel_turu(veri)

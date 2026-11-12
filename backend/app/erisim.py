@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.authz import can_open
+from app.authz import can_open, is_admin
 from app.catalog import get
 from app.db import get_db
 from app.deps import require_user
-from app.rolgorunum import etkin
+from app.rolgorunum import UTILIZASYON_YETKISI, etkin
 from app.session import Principal
 
 
@@ -49,3 +49,10 @@ def musteri_alani_erisim() -> Callable[..., Erisim]:
         return Erisim(user, gorunum.izinli, gorunum.yetkiler)
 
     return bagimlilik
+
+
+def utilizasyon_yetkisi(user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> Principal:
+    """TAM Utilizasyon uclari: admin ya da rolden / kisiden `utilizasyon.yonet` ek yetkisi alan kullanici. Sunucuda zorlanir (2026-11-11)."""
+    if is_admin(user) or UTILIZASYON_YETKISI in etkin(db, user).yetkiler:
+        return user
+    raise HTTPException(status_code=403, detail="Yetki yok")

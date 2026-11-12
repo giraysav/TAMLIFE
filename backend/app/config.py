@@ -78,6 +78,10 @@ class Settings(BaseSettings):
     ad_kimlik_kontrolu: str = Field(default="izle", validation_alias="AD_KIMLIK_KONTROLU")  # izle | zorunlu (Who-Am-I eslesmesi)
     ad_izinli_gruplar: str = Field(default="", validation_alias="AD_IZINLI_GRUPLAR")  # noktali virgulle ayrilmis grup DN; doluysa AD_ARAMA_KOKU zorunlu
     ad_arama_koku: str = Field(default="", validation_alias="AD_ARAMA_KOKU")
+    # AD grubu -> panel rolu karsilastirmasi (2026-11-12). kapali (vars.) | izle (yalniz denetim kaydi) | zorunlu (TeamMngr/TeamMember AD'den esitlenir)
+    ad_rol_kontrolu: str = Field(default="kapali", validation_alias="AD_ROL_KONTROLU")
+    ad_rol_gruplari: str = Field(default="", validation_alias="AD_ROL_GRUPLARI")  # noktali virgul: admin=<CN>;TeamMngr=<CN>;TeamMember=<CN> (grup CN adi, buyuk/kucuk harf fark etmez)
+    ad_rol_ou: str = Field(default="", validation_alias="AD_ROL_OU")  # istege bagli: grup DN'inde bulunmasi gereken parca, orn. ",OU=TAMLIFE,"
     ad_otomatik_ac: str = Field(default="true", validation_alias="AD_OTOMATIK_AC")  # AD'de dogrulanan, panelde olmayan kisi TeamMember acilir
     # Panel kullanicisini SILEBILEN tek hesap (kullanici adi). Admin rolu verilmis baska kisi bile silemez. Sir degildir.
     kullanici_silme_yetkilisi: str = Field(default="admin", validation_alias="KULLANICI_SILME_YETKILISI")

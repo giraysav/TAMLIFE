@@ -42,6 +42,7 @@ class Yetki:
 
 SUNUM_YETKISI = "sunum.gonder"
 TALEP_YETKISI = "talep.yonet"
+UTILIZASYON_YETKISI = "utilizasyon.yonet"
 YETKILER: dict[str, Yetki] = {
     SUNUM_YETKISI: Yetki(
         "Çeyrek sunumu yönet",
@@ -50,7 +51,6 @@ YETKILER: dict[str, Yetki] = {
         "Can send, pin or remove presentation items and choose which modules and reports flow into the presentation automatically.",
         "TAM Takvim › grafik › “Çeyrek sunuma gönder”; Çeyrek Sunum sayfası; Rol Yönetimi › Çeyrek Sunum",
         "TAM Calendar › chart › “Send to quarterly presentation”; Quarterly Presentation page; Role Management › Quarterly Presentation",
-        alan="sunum",
     ),
     TALEP_YETKISI: Yetki(
         "Geliştirme taleplerini yönet",
@@ -60,9 +60,18 @@ YETKILER: dict[str, Yetki] = {
         "Hesap menüsü › Geliştirme Talepleri › İş Listesi",
         "Account menu › Development Requests › Work list",
     ),
+    UTILIZASYON_YETKISI: Yetki(
+        "TAM Utilizasyon'u yönet",
+        "Manage TAM Utilization",
+        "Yönetim konsolunda YALNIZ TAM Utilizasyon bölümü açılır: final skor kriterleri, toplu atama, skor ağacı, ürün tutarları, skor talep kararları ve müşteri listesi (toplu ekleme / silme). Diğer yönetim bölümleri (veritabanı, roller, günlükler vb.) açılmaz.",
+        "Opens ONLY the TAM Utilization section of the admin console: final score criteria, bulk assignment, score tree, product amounts, score request decisions and the customer list (bulk add / delete). Other admin sections (database, roles, logs, etc.) stay closed.",
+        "Hesap menüsü › Yönetim konsolu › TAM Utilizasyon",
+        "Account menu › Admin console › TAM Utilization",
+        alan="utilizasyon",
+    ),
 }
 ESKI_YETKILER = {"takvim.sunuma_gonder": SUNUM_YETKISI}  # 0004 tasir; tasinmamis kayit da okunur
-ROL_ETIKET = {"admin": "Admin", "TeamMngr": "Manager", "TeamMember": "Member"}
+ROL_ETIKET = {"admin": "Sistem Yöneticisi", "TeamMngr": "MANAGER", "TeamMember": "MEMBER"}  # 2026-11-12: KTS_TEAM_ADMIN / _MNGR / _MEMBER adlari
 GIRIS_VARSAYILAN = "ozet"
 
 

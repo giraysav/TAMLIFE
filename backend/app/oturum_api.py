@@ -54,8 +54,11 @@ def _kimlik_dogrula(db: Session, girdi: str, parola: str) -> tuple[Principal | N
     if satir is not None and not satir.active:
         return None, "kullanici_pasif"
     if satir is not None and satir.is_ad_user:
-        tamam, sebep = ad.dogrula(girdi, parola)
-        return (_kisi(satir) if tamam else None), sebep
+        tamam, sebep, ad_rolu = ad.dogrula_rolle(girdi, parola)
+        if not tamam:
+            return None, sebep
+        izin, rol_sebep = _rol_karsilastir(db, satir, ad_rolu)
+        return (_kisi(satir) if izin else None), rol_sebep or sebep
     if satir is not None and satir.password_hash:
         tamam = kullanicilar.parola_dogru(parola, satir.password_hash)
         return (_kisi(satir) if tamam else None), "yerel_parola" if tamam else "yerel_parola_hatali"
@@ -64,7 +67,7 @@ def _kimlik_dogrula(db: Session, girdi: str, parola: str) -> tuple[Principal | N
         return Principal(yerel.username, yerel.role, yerel.is_admin), "dev_yerel"
     if satir is not None or not ad.etkin():
         return None, "kullanici_yok" if satir is None else "kimlik_yok"
-    tamam, sebep = ad.dogrula(girdi, parola)
+    tamam, sebep, ad_rolu = ad.dogrula_rolle(girdi, parola)
     if not tamam:
         return None, sebep
     if get_settings().ad_otomatik_ac.strip().lower() != "true":
@@ -72,10 +75,30 @@ def _kimlik_dogrula(db: Session, girdi: str, parola: str) -> tuple[Principal | N
     if not kullanicilar.onek_izinli(kisa):
         return None, "ad_onayladi_onek_izinsiz"  # yalniz tc/ng/te ile baslayan kullanici adlarina hesap acilir
     try:
-        return _kisi(kullanicilar.ad_kullanicisi_ac(db, kisa, alan)), "ad_kullanici_acildi"
+        yeni = kullanicilar.ad_kullanicisi_ac(db, kisa, alan)
+        izin, rol_sebep = _rol_karsilastir(db, yeni, ad_rolu)
+        return (_kisi(yeni) if izin else None), rol_sebep or "ad_kullanici_acildi"
     except SQLAlchemyError:
         db.rollback()
         return None, "ad_onayladi_kayit_acilamadi"
+
+
+def _rol_karsilastir(db: Session, satir: AppUser, ad_rolu: str | None) -> tuple[bool, str | None]:
+    """AD'deki KTS_ rol grubu (Keyflow'dan verilen yetki) ile panel rolunu karsilastirir (AD_ROL_KONTROLU). (giris serbest mi, denetim sebebi).
+    kapali: karismaz. izle: uyusmazlik yalniz denetim kaydina yazilir, giris serbest.
+    zorunlu (2026-11-12, guvenlik ve butunluk): admin DAHIL herkeste panel rolu ile KTS_ rolu BIREBIR ayni olmali
+      (admin<->KTS_TEAM_ADMIN, TeamMngr<->KTS_TEAM_MNGR, TeamMember<->KTS_TEAM_MEMBER); KTS_ grubu yoksa ya da farkliysa giris reddedilir.
+      Panel rolu AD'den degistirilmez (rol yalniz Rol Yonetimi'nden verilir). Yerel acil hesap AD'den gecmez, etkilenmez."""
+    mod = ad.rol_kontrolu()
+    if mod == "kapali":
+        return True, None
+    zorunlu = mod == "zorunlu"
+    if ad_rolu is None:
+        return (not zorunlu), "ad_rol_grubu_yok"
+    if ad_rolu == satir.role:
+        return True, None
+    sebep = f"ad_rol_uyusmuyor: panel={satir.role} ad={ad_rolu}"
+    return (not zorunlu), sebep
 
 
 def _kisi(satir: AppUser) -> Principal:
@@ -122,7 +145,7 @@ def close_session(request: Request, response: Response) -> dict:
 @router.get("/me")
 def whoami(user: Principal = Depends(require_user), db: Session = Depends(get_db)) -> dict:
     gorunum = etkin(db, user)
-    nav = navigation_for(user, gorunum.izinli)
+    nav = navigation_for(user, gorunum.izinli, gorunum.yetkiler)
     try:
         satir = kullanicilar.bul(db, user.username)
     except SQLAlchemyError:

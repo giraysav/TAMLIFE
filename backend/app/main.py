@@ -40,6 +40,7 @@ from app.topoloji.api import router as topoloji_router
 from app.yonetim import dosya_gunlugu
 from app.yonetim.gunlukler import kalici_yaz
 from app.yonetim.router import router as yonetim_router
+from app.yonetim.router import utilizasyon_router
 from app.yonetim.yakalayici import genel_istisna
 
 # Senkron uclarin is parcacigi havuzu (anyio varsayilani 40). SQLite yazma kilidinde 40 yazici busy_timeout (30 sn) beklerken
@@ -91,7 +92,7 @@ def create_app() -> FastAPI:
     audit_log.sink = kalici_yaz  # denetim olaylari audit_event'e KALICI yazilir
     if settings.env != "test":
         dosya_gunlugu.kur()
-    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, onedesk_router, gelir_router, gelir_uretim_router, takvim_router, sunum_router, talep_router, bildirim_router, radar_router, proje_router, topoloji_router, ekip_router, yonetim_router, tampon_router):
+    for router in (oturum_router, katalog_router, rol_router, musteri_router, skor_router, onedesk_router, gelir_router, gelir_uretim_router, takvim_router, sunum_router, talep_router, bildirim_router, radar_router, proje_router, topoloji_router, ekip_router, yonetim_router, utilizasyon_router, tampon_router):
         app.include_router(router)
 
     @app.get("/api/v1/health")

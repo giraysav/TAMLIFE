@@ -12,6 +12,7 @@ Tani: `python -m app.ad` (DNS -> TCP -> TLS/sertifika; --bind ile tek seferlik b
 from __future__ import annotations
 
 import hmac
+import re
 import ssl
 import sys
 import threading
@@ -136,21 +137,69 @@ def _grup_uyeligi(lib: SimpleNamespace, conn, kisa_ad: str, a: Settings) -> tupl
     return False, "ad_grup_izinsiz"
 
 
+ROL_ONCELIGI = ("admin", "TeamMngr", "TeamMember")
+
+
+def rol_kontrolu() -> str:
+    """kapali | izle | zorunlu (taninmayan deger = kapali)."""
+    d = get_settings().ad_rol_kontrolu.strip().lower()
+    return d if d in {"izle", "zorunlu"} else "kapali"
+
+
+def rol_haritasi(a: Settings) -> dict[str, str]:
+    """AD_ROL_GRUPLARI -> {grup CN (kucuk harf): panel rolu}. Gecersiz rol adi yok sayilir."""
+    harita: dict[str, str] = {}
+    for parca in a.ad_rol_gruplari.split(";"):
+        rol, _, cn = parca.partition("=")
+        rol, cn = rol.strip(), cn.strip().lower()
+        if cn and rol in ROL_ONCELIGI:
+            harita[cn] = rol
+    return harita
+
+
+def _ad_rolu(lib: SimpleNamespace, conn, kisa_ad: str, a: Settings) -> str | None:
+    """Bind edilen kullanicinin memberOf grup DN'lerinden panel rolu (en yuksek oncelik); eslesen grup yoksa None.
+    Servis hesabi GEREKMEZ: kullanicinin kendi baglantisi okur. Yalniz dogrudan uyelik (ic ice gruplar taranmaz)."""
+    harita = rol_haritasi(a)
+    kok = a.ad_arama_koku.strip() or ",".join(f"DC={p}" for p in a.ad_domain.strip().split(".") if p)  # bos: alan kokunden alt agac
+    if not harita or not kok:
+        return None
+    filtre = f"(&(objectClass=user)(sAMAccountName={lib.kacis(kisa_ad)}))"
+    if not conn.search(kok, filtre, attributes=["memberOf"], size_limit=1) or not conn.entries:
+        return None
+    degerler = conn.entries[0].memberOf.values if "memberOf" in conn.entries[0] else []
+    ou = a.ad_rol_ou.strip().lower()
+    bulunan: set[str] = set()
+    for dn in degerler:
+        eslesme = re.match(r"CN=((?:\\.|[^,\\])+)", str(dn), re.IGNORECASE)
+        if eslesme and (not ou or ou in str(dn).lower()):
+            rol = harita.get(eslesme.group(1).replace("\\", "").strip().lower())
+            if rol:
+                bulunan.add(rol)
+    return next((r for r in ROL_ONCELIGI if r in bulunan), None)
+
+
 def dogrula(kullanici: str, parola: str) -> tuple[bool, str]:
     """(dogrulandi mi, sebep kodu). Sebep denetim kaydina gider; kullaniciya hep ayni 'Giris reddedildi' doner."""
+    tamam, sebep, _ = dogrula_rolle(kullanici, parola)
+    return tamam, sebep
+
+
+def dogrula_rolle(kullanici: str, parola: str) -> tuple[bool, str, str | None]:
+    """dogrula + AD grubundan cikan panel rolu (AD_ROL_KONTROLU kapaliyken hic aranmaz; bulunamazsa None)."""
     a = get_settings()
     if not _acik(a.ad_enabled):
-        return False, "ad_kapali"
+        return False, "ad_kapali", None
     kisa_ad, alan = domain_ayristir(kullanici)
     if not kisa_ad or not parola:
-        return False, "eksik_bilgi"
+        return False, "eksik_bilgi", None
     alan = alan.lower()
     izinli = izinli_alanlar(a)
     alan_disi = bool(alan and izinli and alan not in izinli)
     if alan_disi and a.ad_alan_kontrolu.strip().lower() == "zorunlu":
-        return False, f"alan_izinsiz: {alan}"
+        return False, f"alan_izinsiz: {alan}", None
     if not _bind_sirasi.acquire(timeout=SIRA_BEKLEME):
-        return False, "ad_mesgul"
+        return False, "ad_mesgul", None
     try:
         lib = _ldap()
         conn = lib.Connection(_sunucu(lib, a), user=_oturum_adi(kullanici), password=parola, authentication=lib.SIMPLE, receive_timeout=YANIT_SURESI)
@@ -159,21 +208,22 @@ def dogrula(kullanici: str, parola: str) -> tuple[bool, str]:
                 conn.unbind()  # basarisiz bind soketi acik birakmasin
             except Exception:  # noqa: BLE001, S110 - kapatma hatasi girisi etkilemez
                 pass
-            return False, "ad_reddetti"
+            return False, "ad_reddetti", None
         try:
             gercek = _gercek_kisa_ad(conn)
             grup_ok, grup_sebep = _grup_uyeligi(lib, conn, kisa_ad, a)
+            ad_rolu = _ad_rolu(lib, conn, kisa_ad, a) if rol_kontrolu() != "kapali" else None
         finally:
             conn.unbind()
         if gercek and gercek != kisa_ad.lower() and a.ad_kimlik_kontrolu.strip().lower() == "zorunlu":
-            return False, f"ad_kimlik_uyusmuyor: {gercek}"
+            return False, f"ad_kimlik_uyusmuyor: {gercek}", None
         if not grup_ok:
-            return False, grup_sebep or "ad_grup_izinsiz"
+            return False, grup_sebep or "ad_grup_izinsiz", None
         if alan_disi:
-            return False, f"ad_onayladi_alan_disi:{alan}"
-        return True, "ad_onayladi" if not gercek or gercek == kisa_ad.lower() else f"ad_onayladi_kimlik_farkli:{gercek}"
+            return False, f"ad_onayladi_alan_disi:{alan}", None
+        return True, "ad_onayladi" if not gercek or gercek == kisa_ad.lower() else f"ad_onayladi_kimlik_farkli:{gercek}", ad_rolu
     except Exception as exc:  # noqa: BLE001 - ag/sertifika/kutuphane: giris reddedilir, sebep kaydedilir
-        return False, f"ad_ulasilamadi: {type(exc).__name__}"
+        return False, f"ad_ulasilamadi: {type(exc).__name__}", None
     finally:
         _bind_sirasi.release()
 

@@ -1,7 +1,7 @@
 """Final skor / TAM Utilizasyon HTTP katmani (/api/v1/skor). Is kurali servis.py, motor.py, kaynaklar.py'dedir.
 
 Yetki (uretim moduller.py: utilizasyon yalniz_admin; uclar @modul_gerekli('utilizasyon') / @admin_required): yonetim uclarinin
-hepsi YALNIZ admin. Tek istisna TAM tarafindaki "skor atamasi iste" (POST /talepler): oturum + kendi musterisi.
+hepsi admin ya da `utilizasyon.yonet` yetkisi (rolgorunum; 2026-11-11). Tek istisna TAM tarafindaki "skor atamasi iste" (POST /talepler): oturum + kendi musterisi.
 """
 
 from __future__ import annotations
@@ -14,7 +14,8 @@ from starlette.concurrency import run_in_threadpool
 from app.audit import audit_log
 from app.config import get_settings
 from app.db import get_db, oturum
-from app.deps import require_admin, require_user
+from app.deps import require_user
+from app.erisim import utilizasyon_yetkisi
 from app.kullanicilar import kullanici_kaydi
 from app.ortak import KimlikTipi, govde_oku, ok
 from app.session import Principal
@@ -75,12 +76,12 @@ class OnizleGovde(BaseModel):
 
 
 @router.get("/kriterler/{scope}")
-def kriterleri_oku(scope: str, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def kriterleri_oku(scope: str, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     return ok(servis.kriter_tablosu(db, scope))
 
 
 @router.put("/kriterler/{scope}")
-def kriterleri_kaydet(scope: str, body: KriterGovde, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def kriterleri_kaydet(scope: str, body: KriterGovde, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     sonuc = servis.kriterler_kaydet(db, scope, body.criteria, user.username, _kimlik(db, user))
     db.commit()
     u = sonuc["uygulama"]
@@ -90,22 +91,22 @@ def kriterleri_kaydet(scope: str, body: KriterGovde, user: Principal = Depends(r
 
 
 @router.get("/meta")
-def meta(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def meta(user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     return ok(servis.meta(db))
 
 
 @router.post("/kaynak-onizle")
-def kaynak_onizle(body: OnizleGovde, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def kaynak_onizle(body: OnizleGovde, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     return ok(kaynak_secimi.onizle(db, body.satir))
 
 
 @router.post("/toplu/onizleme")
-def toplu_onizleme(body: TopluOnizleme, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def toplu_onizleme(body: TopluOnizleme, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     return ok(servis.onizleme(db, body.tam_id))
 
 
 @router.post("/toplu/uygula")
-def toplu_uygula(body: TopluUygula, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def toplu_uygula(body: TopluUygula, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     sonuc = servis.toplu_uygula(db, body.customer_ids, user.username, _kimlik(db, user))
     db.commit()
     _denetim(user, "skor.toplu_uygula", f"uygulanan={len(sonuc['uygulanan'])} atlanan={len(sonuc['atlanan'])}")
@@ -113,7 +114,7 @@ def toplu_uygula(body: TopluUygula, user: Principal = Depends(require_admin), db
 
 
 @router.put("/toplu/manuel/{musteri_id}")
-def toplu_manuel(musteri_id: KimlikTipi, body: ManuelSecim, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def toplu_manuel(musteri_id: KimlikTipi, body: ManuelSecim, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     sonuc = servis.manuel_ata(db, musteri_id, body.secimler, user.username, _kimlik(db, user), body.servis_puanlari)
     db.commit()
     ek = f" kriter_surumu={sonuc['kriter_surumu']}" if sonuc["kriter_surumu"] else ""
@@ -122,17 +123,17 @@ def toplu_manuel(musteri_id: KimlikTipi, body: ManuelSecim, user: Principal = De
 
 
 @router.get("/agac")
-def agac(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def agac(user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     return ok(servis.agac(db))
 
 
 @router.get("/siralama")
-def siralama(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def siralama(user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     return ok(servis.siralama(db))
 
 
 @router.put("/musteri/{musteri_id}")
-def musteri_skoru(musteri_id: KimlikTipi, body: MusteriSkoru, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def musteri_skoru(musteri_id: KimlikTipi, body: MusteriSkoru, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     servis.musteri_skoru_ata(db, musteri_id, body.tam_id, body.score, body.detay, user.username, _kimlik(db, user))
     db.commit()
     _denetim(user, "skor.musteri", f"musteri={musteri_id}")
@@ -148,13 +149,13 @@ def talep_ac(body: TalepGovde, user: Principal = Depends(require_user), db: Sess
 
 
 @router.get("/talepler")
-def talepleri_listele(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def talepleri_listele(user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     satirlar = servis.talepler(db)
     return ok({"count": len(satirlar), "requests": satirlar})
 
 
 @router.post("/talepler/{talep_id}/karar")
-def talep_karar(talep_id: KimlikTipi, body: KararGovde, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def talep_karar(talep_id: KimlikTipi, body: KararGovde, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     servis.talep_karar(db, talep_id, body.action, _kimlik(db, user))
     db.commit()
     _denetim(user, "skor.talep_karar", f"talep={talep_id} islem={body.action}")
@@ -162,7 +163,7 @@ def talep_karar(talep_id: KimlikTipi, body: KararGovde, user: Principal = Depend
 
 
 @router.put("/puanlama-disi")
-def puanlama_disi(body: PuanlamaDisi, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def puanlama_disi(body: PuanlamaDisi, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     kimlikler = servis.puanlama_disi_ayarla(db, body.disi, user.username)
     db.commit()
     _denetim(user, "skor.puanlama_disi", f"adet={len(kimlikler)}")
@@ -170,7 +171,7 @@ def puanlama_disi(body: PuanlamaDisi, user: Principal = Depends(require_admin), 
 
 
 @router.put("/istirak/{musteri_id}/final-dahil")
-def istirak_final_dahil(musteri_id: KimlikTipi, body: IstirakGovde, user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def istirak_final_dahil(musteri_id: KimlikTipi, body: IstirakGovde, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     dahil = servis.final_dahil_ayarla(db, musteri_id, body.dahil)
     db.commit()
     _denetim(user, "skor.istirak_dahil", f"musteri={musteri_id} dahil={dahil}")
@@ -178,7 +179,7 @@ def istirak_final_dahil(musteri_id: KimlikTipi, body: IstirakGovde, user: Princi
 
 
 @router.get("/urun-tutar")
-def urun_tutar_listesi(user: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def urun_tutar_listesi(user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
     return ok(servis.urun_tutar_listesi(db))
 
 
@@ -195,7 +196,7 @@ async def urun_tutar_yukle(
     musteri_id: KimlikTipi,
     request: Request,
     dosya: str = Query(default="", max_length=200),
-    user: Principal = Depends(require_admin),
+    user: Principal = Depends(utilizasyon_yetkisi),
 ) -> dict:
     """Ham .xlsx govdesi (tampon yuklemesiyle ayni kalip: cok parcali form yok). Ozet musteri basina son yuklemeyle degisir."""
     veri = await govde_oku(request, get_settings().ingest_max_mb * 1048576)

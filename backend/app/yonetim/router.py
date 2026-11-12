@@ -13,12 +13,15 @@ from app import session as oturum
 from app.audit import audit_log
 from app.db import engine, get_db
 from app.deps import require_admin, require_veri_yazma
+from app.erisim import utilizasyon_yetkisi
 from app.ortak import KimlikTipi, ok
 from app.session import Principal
 from app.tampon import oracle
 from app.yonetim import arizalar, dosya_gunlugu, gunlukler, musteri_listesi, ozet, veritabani
 
 router = APIRouter(prefix="/api/v1/yonetim", tags=["yonetim"], dependencies=[Depends(require_admin)])  # yeni uc eklense de admin disi giremez
+# TAM Utilizasyon > Musteri Listesi OKUMA: admin ya da `utilizasyon.yonet` yetkisi (2026-11-11). Silme ve toplu ekleme (yazma) yalniz admin; diger yonetim uclari yalniz admin
+utilizasyon_router = APIRouter(prefix="/api/v1/yonetim", tags=["yonetim"], dependencies=[Depends(utilizasyon_yetkisi)])
 
 
 
@@ -203,12 +206,12 @@ class MusteriTopluEkleGovde(BaseModel):
     owner_id: KimlikTipi | None = None
 
 
-@router.get("/musteriler")
-def musteri_listesi_oku(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+@utilizasyon_router.get("/musteriler")
+def musteri_listesi_oku(admin: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict[str, Any]:
     return ok(musteri_listesi.liste(db))
 
 
-@router.post("/musteriler/sil")
+@utilizasyon_router.post("/musteriler/sil")
 def musteri_sil(body: MusteriSilGovde, admin: Principal = Depends(require_veri_yazma), db: Session = Depends(get_db)) -> dict[str, Any]:
     sonuc = musteri_listesi.sil(db, body.ids, body.hepsi, body.onay)
     db.commit()
@@ -216,7 +219,7 @@ def musteri_sil(body: MusteriSilGovde, admin: Principal = Depends(require_veri_y
     return ok(sonuc)
 
 
-@router.post("/musteriler/toplu-ekle")
+@utilizasyon_router.post("/musteriler/toplu-ekle")
 def musteri_toplu_ekle(body: MusteriTopluEkleGovde, admin: Principal = Depends(require_veri_yazma), db: Session = Depends(get_db)) -> dict[str, Any]:
     sonuc = musteri_listesi.toplu_ekle(db, admin, [s.model_dump() for s in body.satirlar], body.parent_id, body.owner_id)
     db.commit()
