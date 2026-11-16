@@ -17,8 +17,9 @@ from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formataddr
+from email.utils import formataddr, formatdate, make_msgid
 from functools import cache
+import unicodedata
 from pathlib import Path
 from string import Template
 
@@ -111,6 +112,21 @@ def gorseller() -> dict[str, bytes]:
     return {cid: (SABLON / ad).read_bytes() for cid, ad in MAIL_GORSELLERI.items() if (SABLON / ad).is_file()}
 
 
+def _ascii_ad(ad: str) -> str:
+    """Eski/Mac istemcileri icin ASCII yedek dosya adi (Turkce harfler sadelesir)."""
+    ad = ad.translate(str.maketrans("ığüşöçİĞÜŞÖÇ", "igusocIGUSOC"))
+    return unicodedata.normalize("NFKD", ad).encode("ascii", "ignore").decode("ascii") or "ek"
+
+
+def _ek_adi(parca, ad: str, tur: str = "attachment") -> None:
+    """Content-Disposition: ASCII yedek (filename) + UTF-8 (filename*). Apple Mail yalniz filename*'i her zaman cozemez."""
+    parca.add_header("Content-Disposition", tur, filename=_ascii_ad(ad))
+    if _ascii_ad(ad) != ad:
+        yeni = parca["Content-Disposition"] + "; " + "filename*=utf-8''" + __import__("urllib.parse").parse.quote(ad)
+        del parca["Content-Disposition"]
+        parca["Content-Disposition"] = yeni
+
+
 def eml(
     *,
     konu: str,
@@ -127,7 +143,10 @@ def eml(
     From YAZILMAZ (2026-10-26 duzeltme): Outlook taslagi personelin kendi hesabindan acar. Eskiden From = TAMLIFE@ yaziliyordu;
     personelin o kutu icin Send-As yetkisi olmadigindan ileti NDR ile donerdi."""
     msg = MIMEMultipart("mixed")
-    msg["X-Unsent"] = "1"
+    msg["X-Unsent"] = "1"  # Windows Outlook: gonderilmemis taslak
+    msg["X-Uniform-Type-Identifier"] = "com.apple.mail-draft"  # Apple Mail: duzenlenebilir taslak olarak acilir
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="tamlife.local")
     if kime:
         msg["To"] = ", ".join(gorunen_adli(a) for a in kime)
     if bilgi:
@@ -159,9 +178,11 @@ def eml(
         ek = MIMEBase(ana, alt)
         ek.set_payload(veri)
         encoders.encode_base64(ek)
-        ek.add_header("Content-Disposition", "attachment", filename=ad)
+        _ek_adi(ek, ad)
         msg.attach(ek)
-    return msg.as_bytes()
+    # CRLF satir sonlari (RFC 5322): Mac Mail LF-yalniz iletiyi bozuk sayabiliyor. Govde base64 oldugundan serbest LF yalniz basliklarda/sinirlarda.
+    ham = msg.as_bytes()
+    return bytes((13, 10)).join(ham.splitlines()) + bytes((13, 10))  # CRLF: Mac Mail LF-yalniz iletiyi bozuk sayabiliyor
 
 
 def dosya_adi(musteri_adi: str) -> str:

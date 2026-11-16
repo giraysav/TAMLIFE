@@ -39,6 +39,9 @@ def main() -> int:
         for g in gruplar:
             uye = len(g.member.values) if "member" in g else 0
             print(f"    {g.cn.value} | {g.description.value if 'description' in g else ''} | uye={uye} | {g.distinguishedName.value}")
+            if "--uyeler" in sys.argv and uye:  # her grubun uyeleri (dogrudan uyelik; CN = gorunen ad)
+                for dn in sorted(str(d) for d in g.member.values):
+                    print("        -", dn.split(",OU=")[0].split(",DC=")[0])
         conn.search(kok, f"(&(objectClass=user)(sAMAccountName={lib.kacis(kisa)}))", attributes=["memberOf"], size_limit=1)
         if conn.entries and "memberOf" in conn.entries[0]:
             benim = [str(d) for d in conn.entries[0].memberOf.values if "CN=KTS_" in str(d).upper()]

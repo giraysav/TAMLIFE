@@ -15,7 +15,6 @@ from fastapi import Request, Response
 
 from app.config import get_settings
 
-CSRF_COOKIE = "tamlife_csrf"
 CSRF_HEADER = "x-csrf-token"
 MAX_SESSIONS = 2000
 HAREKET_BASLIGI = "x-son-hareket-sn"
@@ -75,7 +74,7 @@ def login(request: Request, response: Response, principal: Principal) -> None:
     secure = settings.cookie_secure_effective
     yol = settings.cookie_path
     response.set_cookie(settings.cookie_name, token, httponly=True, samesite="strict", secure=secure, path=yol)
-    response.set_cookie(CSRF_COOKIE, csrf, httponly=False, samesite="strict", secure=secure, path=yol)
+    response.set_cookie(settings.csrf_cookie_name, csrf, httponly=False, samesite="strict", secure=secure, path=yol)
 
 
 def _entry(request: Request, touch: bool) -> _Entry | None:
@@ -127,7 +126,7 @@ def logout(request: Request, response: Response) -> None:
         with _LOCK:
             _STORE.pop(token, None)
     response.delete_cookie(settings.cookie_name, path=settings.cookie_path)
-    response.delete_cookie(CSRF_COOKIE, path=settings.cookie_path)
+    response.delete_cookie(settings.csrf_cookie_name, path=settings.cookie_path)
 
 
 def aktif_oturumlar() -> list[dict[str, object]]:

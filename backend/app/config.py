@@ -38,8 +38,11 @@ class Settings(BaseSettings):
     kullanici_db_dizini: str = ""  # kullanici basina SQLite dosyalari; bos = panel DB'sinin yaninda kullanicilar/
 
     cookie_name: str = "tamlife_session"
+    csrf_cookie_name: str = "tamlife_csrf"  # demo ornegi ayni sunucuda farkli adla calisir (cerez port ayirmaz)
+    demo: bool = False  # TAMLIFE_DEMO=1: ornek (sahte) veri + SALT OKUNUR + parolasiz misafir girisi. Gercek panelde ASLA acik olmaz.
+    demo_kullanici: str = "misafir"
     cookie_secure: bool | None = None  # bos: dev disinda otomatik true
-    session_idle_minutes: int = 30
+    session_idle_minutes: int = 120  # bosta kalinca oturum kapanma suresi (dk); 2026-11-13 kullanici karari: en az 120
     session_max_hours: int = 0  # 0 = mutlak omur siniri yok: oturum yalniz bosta sure (session_idle_minutes) dolunca kapanir
     login_max_attempts: int = 5
     login_window_seconds: int = 300
@@ -81,6 +84,7 @@ class Settings(BaseSettings):
     # AD grubu -> panel rolu karsilastirmasi (2026-11-12). kapali (vars.) | izle (yalniz denetim kaydi) | zorunlu (TeamMngr/TeamMember AD'den esitlenir)
     ad_rol_kontrolu: str = Field(default="kapali", validation_alias="AD_ROL_KONTROLU")
     ad_rol_gruplari: str = Field(default="", validation_alias="AD_ROL_GRUPLARI")  # noktali virgul: admin=<CN>;TeamMngr=<CN>;TeamMember=<CN> (grup CN adi, buyuk/kucuk harf fark etmez)
+    ad_rol_muaf: str = Field(default="", validation_alias="AD_ROL_MUAF")  # virgullu panel rolleri (orn. admin,TeamMngr): bu roldeki AD kullanicisi KTS_ kontrolunden MUAF; bos = muaf rol yok
     ad_rol_ou: str = Field(default="", validation_alias="AD_ROL_OU")  # istege bagli: grup DN'inde bulunmasi gereken parca, orn. ",OU=TAMLIFE,"
     ad_otomatik_ac: str = Field(default="true", validation_alias="AD_OTOMATIK_AC")  # AD'de dogrulanan, panelde olmayan kisi TeamMember acilir
     # Panel kullanicisini SILEBILEN tek hesap (kullanici adi). Admin rolu verilmis baska kisi bile silemez. Sir degildir.

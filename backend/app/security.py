@@ -15,7 +15,8 @@ from app.session import csrf_valid
 
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 LOGIN_PATH = "/api/v1/session/login"
-CSRF_MUAF = {LOGIN_PATH}  # oturum henuz yok; Origin denetimi yine uygulanir
+DEMO_YAZMA_IZNI = {"/api/v1/session/misafir", "/api/v1/session/logout"}
+CSRF_MUAF = {LOGIN_PATH, "/api/v1/session/misafir"}  # oturum henuz yok; Origin denetimi yine uygulanir
 # Derlenmis arayuz (HTML/JS/CSS): ayni kaynaktan yukleme, satir ici betik yok. API cevaplari 'none' kalir.
 UI_CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
@@ -120,6 +121,8 @@ def install(app: FastAPI) -> None:
     @app.middleware("http")
     async def gate(request: Request, call_next):  # type: ignore[no-untyped-def]
         if request.method in UNSAFE:
+            if get_settings().demo and request.url.path not in DEMO_YAZMA_IZNI:  # demo ornegi SALT OKUNUR: hicbir yazma gecmez
+                return JSONResponse({"detail": "Demo ortami salt okunurdur (örnek veriler değiştirilemez)."}, status_code=403)
             if not _same_origin(request):
                 return JSONResponse({"detail": "Kaynak reddedildi"}, status_code=403)
             if request.url.path not in CSRF_MUAF and not csrf_valid(request):

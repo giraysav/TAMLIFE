@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -92,6 +93,9 @@ def _rol_karsilastir(db: Session, satir: AppUser, ad_rolu: str | None) -> tuple[
     mod = ad.rol_kontrolu()
     if mod == "kapali":
         return True, None
+    muaf = {r.strip().lower() for r in get_settings().ad_rol_muaf.split(",") if r.strip()}
+    if satir.role.lower() in muaf:  # AD_ROL_MUAF: bu panel rolleri KTS_ grubu aranmadan girer (AD parolasi yine dogrulanir)
+        return True, None
     zorunlu = mod == "zorunlu"
     if ad_rolu is None:
         return (not zorunlu), "ad_rol_grubu_yok"
@@ -131,6 +135,19 @@ def open_session(body: LoginBody, request: Request, response: Response, db: Sess
     except SecretAuditError:
         pass
     return ok({"username": kisi.username, "role": kisi.role})
+
+
+@router.post("/misafir", response_model=None)
+def misafir_giris(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
+    """Yalniz demo ornegi (TAMLIFE_DEMO=1): parolasiz misafir oturumu. Gercek panelde 404 (yol hic yokmus gibi)."""
+    ayar = get_settings()
+    if not ayar.demo:
+        raise HTTPException(status_code=404, detail="Yok")
+    satir = db.scalar(select(AppUser).where(AppUser.username == ayar.demo_kullanici))
+    if satir is None or not satir.active:
+        raise HTTPException(status_code=503, detail="Demo verisi hazir degil")
+    login(request, response, Principal(satir.username, satir.role, False))
+    return ok({"username": satir.username, "role": satir.role})
 
 
 @router.post("/logout")
