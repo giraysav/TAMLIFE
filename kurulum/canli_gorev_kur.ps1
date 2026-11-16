@@ -30,7 +30,7 @@ param([switch]$Hemen,
       [switch]$YenidenBaslat,
       [switch]$Durdur,
       [switch]$PanelYenile,
-      [ValidateSet('', 'panel', 'vekil', 'servis')]
+      [ValidateSet('', 'panel', 'vekil', 'servis', 'demo')]
       [string]$Calistir = '',
       [string]$VekilAd = '+',
       [int]$PanelPort = 8117,
@@ -87,6 +87,7 @@ if ($Calistir) {
         while ($true) {
             try {
                 if (-not (Dongu-Var 'panel')) { Dongu-Ac 'panel' " -PanelPort $PanelPort" }
+                if (-not (Dongu-Var 'demo')) { Dongu-Ac 'demo' '' }   # 2026-11-16: demo ornegi (127.0.0.1/0.0.0.0:8118) panelle birlikte ayakta kalir
                 if (-not (Dongu-Var 'vekil')) { Dongu-Ac 'vekil' " -VekilAd `"$VekilAd`" -PanelPort $PanelPort -VekilPort $VekilPort" }
                 if ($isci -and $isci.HasExited) { $isci = $null }
                 if ($isci -and ((Get-Date) - $isciBas).TotalMinutes -gt $IsciSinirDk) {
@@ -106,6 +107,9 @@ if ($Calistir) {
     if ($Calistir -eq 'panel') {
         $Hedef = Join-Path $PSScriptRoot 'canli_baslat.ps1'
         $Ek = " -Port $PanelPort"
+    } elseif ($Calistir -eq 'demo') {
+        $Hedef = Join-Path $PSScriptRoot 'demo_baslat.ps1'
+        $Ek = ''
     } else {
         $Hedef = Join-Path $PSScriptRoot 'tls_vekili.ps1'
         $Ek = " -Ad `"$VekilAd`" -Port $VekilPort -HedefPort $PanelPort"
@@ -114,6 +118,7 @@ if ($Calistir) {
     # tetiklenir (bekci); yeni dongu calisan sahipsiz sunucu bulursa ikinci kopya acmaz (port cakisirdi): o durana kadar izler, sonra devralir.
     function Sahipsiz-Calisiyor {
         if ($Calistir -eq 'panel') { return [bool](Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue) }
+        if ($Calistir -eq 'demo') { return [bool](Get-NetTCPConnection -LocalPort 8118 -State Listen -ErrorAction SilentlyContinue) }
         return [bool](Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
             Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'tls_vekili\.ps1' })
     }
@@ -212,8 +217,10 @@ function Hepsini-Durdur([string]$Yalniz = '') {
     $surecler = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='python.exe' OR Name='pythonw.exe' OR Name='cmd.exe' OR Name='conhost.exe'" |
         Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (
             ($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir panel') -or $_.CommandLine -match 'canli_baslat\.ps1' -or
-            ($Yalniz -ne 'panel' -and (($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir vekil') -or $_.CommandLine -match 'tls_vekili\.ps1'))) }
-    $portu = Get-NetTCPConnection -LocalPort $PanelPort -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+            ($Yalniz -ne 'panel' -and (($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir vekil') -or $_.CommandLine -match 'tls_vekili\.ps1' -or
+                ($_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir demo') -or $_.CommandLine -match 'demo_baslat\.ps1'))) }
+    $portlar = if ($Yalniz -eq 'panel') { @($PanelPort) } else { @($PanelPort, 8118) }   # tam durdurmada demo portu da bosalir
+    $portu = Get-NetTCPConnection -LocalPort $portlar -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
     foreach ($p in @($surecler.ProcessId) + @($portu) | Where-Object { $_ } | Sort-Object -Unique) {
         & cmd.exe /c "taskkill /PID $p /T /F >nul 2>&1"   # PS 5.1: dogrudan 2>$null, Stop altinda hata kaydina donusur
     }
