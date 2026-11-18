@@ -3,6 +3,8 @@ $TamlifeCalismaHesabi = 'TURKCELL\TAMLIFEADLOG'
 
 function Tamlife-KimlikDogrula {
     $mevcut = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    # 2026-11-18: sunucu acilisinda oturumsuz kalkan TAMLIFE_Servis_Acilis gorevi SYSTEM olarak calisir (S4U kurum politikasiyla reddedilmisti).
+    if ($mevcut -ieq 'NT AUTHORITY\SYSTEM') { return }
     if ($mevcut -ine $TamlifeCalismaHesabi) {
         throw "Bu islem $TamlifeCalismaHesabi ile calismali. Su an: $mevcut"
     }
