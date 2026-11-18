@@ -123,6 +123,8 @@ def open_session(body: LoginBody, request: Request, response: Response, db: Sess
     if kisi is None:
         limiter.failed(ip, name)
         audit_log.remember(actor=name, action="login", outcome="deny", detail=sebep)
+        if str(sebep).startswith(("ad_rol_", "ad_onayladi_")):  # AD parolasi DOGRU, yalniz KTS_ yetkisi/hesap yok: 'parola hatali' algisi olmasin
+            raise HTTPException(status_code=403, detail="Giris yetkiniz yok")
         raise HTTPException(status_code=401, detail="Giris reddedildi")  # sebep kullaniciya donmez (hesap varligi sizmasin)
     limiter.succeeded(ip, name)
     login(request, response, kisi)
