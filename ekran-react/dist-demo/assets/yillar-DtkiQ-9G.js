@@ -1,0 +1,1 @@
+var e=2026,t=`${e}-01-01`;function n(t=2,n=new Date){let r=Math.max(e,n.getFullYear())+t;return Array.from({length:r-e+1},(t,n)=>e+n)}function r(t=new Date){return Math.max(e,t.getFullYear())}export{n as i,e as n,r,t};

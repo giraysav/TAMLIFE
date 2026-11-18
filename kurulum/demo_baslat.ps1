@@ -1,4 +1,4 @@
-#TAMLIFE DEMO ornegi: gercek panelin AYNI kodu + SAHTE veri + SALT OKUNUR + parolasiz misafir girisi. 0.0.0.0:8118 (duz HTTP, sertifika yok; gercek veri yok). Betik saf ASCII (PS 5.1).
+﻿#TAMLIFE DEMO ornegi: gercek panelin AYNI kodu + SAHTE veri + SALT OKUNUR + parolasiz misafir girisi. 0.0.0.0:8118 (duz HTTP, sertifika yok; gercek veri yok). Betik saf ASCII (PS 5.1).
 #   .\demo_baslat.ps1             : demo DB yoksa kurar ve sahte veriyi uretir, sonra demoyu bu pencerede calistirir
 #   .\demo_baslat.ps1 -Sifirla    : demo DB'yi SILIP sahte veriyi bastan uretir (gercek panel DB'sine dokunmaz)
 # Guvenlik: gercek .env OKUNMAZ (TAMLIFE_ENV_DOSYASI = bos demo.env); AD/ReportDB/OneDesk baglantisi YOK; yazma istekleri 403.
@@ -40,7 +40,7 @@ $env:TAMLIFE_COOKIE_NAME = 'tamlife_demo'
 $env:TAMLIFE_CSRF_COOKIE_NAME = 'tamlife_demo_csrf'
 $env:TAMLIFE_STATIC_DIR = $DistDemo
 $env:TAMLIFE_TRUSTED_PROXIES = '127.0.0.1'
-$env:TAMLIFE_ALLOWED_HOSTS = 'tamlife,tamlife.turkcell.entp.tgc,127.0.0.1,localhost'
+$env:TAMLIFE_ALLOWED_HOSTS = 'tamlife,tamlife.turkcell.entp.tgc,172.28.100.7,127.0.0.1,localhost'
 $env:TAMLIFE_LOG_DIR = (Join-Path $Demo 'log') -replace '\\', '/'
 $env:TAMLIFE_BACKUP_DIR = (Join-Path $Demo 'yedek') -replace '\\', '/'
 $env:AD_ENABLED = 'false'
