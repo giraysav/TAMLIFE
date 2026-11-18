@@ -41,6 +41,7 @@ $Betik = $MyInvocation.MyCommand.Path
 $Kok = Split-Path -Parent $PSScriptRoot
 $LogKlasoru = Join-Path $Kok 'var\log'
 $GorevServis = 'TAMLIFE_Servis'
+$GorevAcilis = 'TAMLIFE_Servis_Acilis'   # 2026-11-18: ayni servis, SYSTEM olarak sunucu acilisinda (oturum acilmasini beklemez)
 # Eski ayri gorev adlari: yalniz gecis icin (durdurma ve silme); yeni kayitta bunlar silinir.
 $GorevPanel = 'TAMLIFE_v35_Panel'
 $GorevVekil = 'TAMLIFE_v35_TLS_Vekil'
@@ -80,7 +81,16 @@ if ($Calistir) {
             return [bool](Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe'" -ErrorAction SilentlyContinue |
                 Where-Object { $_.CommandLine -match 'app\.isci reportdb' -and $_.CommandLine -notmatch 'reportdb-katalog' })
         }
-        Servis-Gunluk "servis basladi (PID $PID)"
+        $baskasi = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'canli_gorev_kur\.ps1' -and $_.CommandLine -match '-Calistir servis' }
+        # 2026-11-18: iki servis kopyasi bir arada olabilir (SYSTEM acilis gorevi + TAMLIFEADLOG oturum gorevi). Panel / vekil donguleri Dongu-Var ve
+        # sahipsiz-sunucu bekcisiyle tekil kalir. ReportDB iscisi YALNIZ TAMLIFEADLOG kimliginde calisir: Oracle giris tetikleyicisi (DB_LOGIN_TR)
+        # SYSTEM / makine hesabini reddeder (ORA-04088). SYSTEM acilisinda panel+vekil kalkar, isci TAMLIFEADLOG oturumu acilinca baslar.
+        $Kimlik = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $IsciKimligiUygun = ($Kimlik -ieq $TamlifeCalismaHesabi)
+        if ($baskasi) { Servis-Gunluk "baska servis kopyasi var (PID $(@($baskasi)[0].ProcessId)); donguler tekil kalir" }
+        if (-not $IsciKimligiUygun) { Servis-Gunluk "ReportDB iscisi bu kimlikte (SYSTEM) calistirilmaz; TAMLIFEADLOG servis kopyasi calistirir" }
+        Servis-Gunluk "servis basladi (PID $PID, kimlik $([Security.Principal.WindowsIdentity]::GetCurrent().Name))"
         $isci = $null
         $isciBas = [datetime]::MinValue
         $isciSon = [datetime]::MinValue
@@ -94,7 +104,7 @@ if ($Calistir) {
                     Servis-Gunluk "ReportDB turu $IsciSinirDk dk'yi asti; sonlandirildi"
                     $isci = $null
                 }
-                if (-not $isci -and ((Get-Date) - $isciSon).TotalMinutes -ge $IsciAralikDk -and (Test-Path $Pyw) -and (Test-Path (Join-Path $Istemci 'oci.dll')) -and -not (Isci-Calisiyor)) {
+                if ($IsciKimligiUygun -and -not $isci -and ((Get-Date) - $isciSon).TotalMinutes -ge $IsciAralikDk -and (Test-Path $Pyw) -and (Test-Path (Join-Path $Istemci 'oci.dll')) -and -not (Isci-Calisiyor)) {
                     $isciSon = Get-Date
                     $isciBas = $isciSon
                     $isci = Start-Process -FilePath $Pyw -ArgumentList ('-m app.isci reportdb --client "{0}"' -f $Istemci) -WorkingDirectory $Backend -WindowStyle Hidden -PassThru
@@ -202,7 +212,7 @@ function Gorev-Baslat($ad) {
 # Bu betigin kendisi haric. -Yalniz 'panel': vekile dokunulmaz.
 function Hepsini-Durdur([string]$Yalniz = '') {
     # Tek gorev (2026-11-09): -Yalniz 'panel' servise dokunmaz (servis panel dongusunu 15 sn icinde yeniden acar); tam durdurmada once servis oldurulur.
-    $gorevler = if ($Yalniz -eq 'panel') { @() } else { @($GorevServis, $GorevVekil, $GorevPanel) }
+    $gorevler = if ($Yalniz -eq 'panel') { @() } else { @($GorevServis, $GorevAcilis, $GorevVekil, $GorevPanel) }
     foreach ($ad in $gorevler) { Stop-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue }
     if ($Yalniz -ne 'panel') {
         $servis = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='cmd.exe' OR Name='conhost.exe'" |
@@ -251,6 +261,19 @@ function Dogrudan-Baslat($kip, $ekArg) {
     if ($r.ReturnValue -eq 0) { Uyari "$kip dogrudan surec olarak acildi (PID $($r.ProcessId))." } else { Uyari "$kip acilamadi (WMI $($r.ReturnValue))." }
 }
 
+# Servis zaten calisiyorsa (SYSTEM acilis gorevi ya da oturum gorevi) dokunmaz; degilse once SYSTEM gorevini (oturum gerekmez), olmazsa oturum gorevini baslatir.
+function Servis-Baslat {
+    $tamam = $false
+    foreach ($ad in $GorevAcilis, $GorevServis) {
+        if ((Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue).State -eq 'Running') { Tamam "$ad zaten calisiyor."; $tamam = $true }
+    }
+    if (-not $tamam) { $tamam = (Gorev-Baslat $GorevAcilis) }
+    if (-not $tamam) { $tamam = (Gorev-Baslat $GorevServis) }
+    # ReportDB iscisi yalniz TAMLIFEADLOG kimliginde calisir: oturum gorevi de (oturum aciksa) kalkar; oturum yoksa sessizce atlanir.
+    if ((Get-ScheduledTask -TaskName $GorevServis -ErrorAction SilentlyContinue).State -ne 'Running') { Start-ScheduledTask -TaskName $GorevServis -ErrorAction SilentlyContinue }
+    return $tamam
+}
+
 $PanelEk = " -PanelPort $PanelPort"
 $VekilEk = " -VekilAd `"$VekilAd`" -PanelPort $PanelPort -VekilPort $VekilPort"
 $ServisEk = " -PanelPort $PanelPort -VekilAd `"$VekilAd`" -VekilPort $VekilPort"
@@ -280,6 +303,13 @@ function Gorevleri-Kaydet {
     $eylem = Gizli-Eylem $arg $Kok
     [void](Register-ScheduledTask -TaskName $GorevServis -Action $eylem -Trigger $tetik -Settings $ayar -Principal $kimlik -Description 'TAMLIFE paneli + TLS vekili + ReportDB iscisi (tek gorev)' -Force)
     Tamam "Gorev kaydedildi: $GorevServis (oturum acilinca, parolasiz)"
+    # 2026-11-18 SYSTEM acilis gorevi: sunucu gece yeniden baslayinca kimse oturum acmadan panel + vekil + isci kalkar.
+    $sistem = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    $acilis = New-ScheduledTaskTrigger -AtStartup
+    $acilis.Delay = 'PT1M'
+    $bekci2 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 5)
+    [void](Register-ScheduledTask -TaskName $GorevAcilis -Action $eylem -Trigger @($acilis, $bekci2) -Settings $ayar -Principal $sistem -Description 'TAMLIFE servisi (SYSTEM, sunucu acilisinda oturumsuz): panel + TLS vekili + ReportDB iscisi' -Force)
+    Tamam "Gorev kaydedildi: $GorevAcilis (SYSTEM, sunucu acilisinda)"
     # Eski ayri gorevler (panel / vekil / ReportDB / gece senkronu) artik gereksiz: varsa silinir.
     foreach ($eski in $GorevPanel, $GorevVekil, $GorevRapor, $GorevGece) {
         if (Get-ScheduledTask -TaskName $eski -ErrorAction SilentlyContinue) { Gorev-Sil $eski }
@@ -287,9 +317,9 @@ function Gorevleri-Kaydet {
 }
 
 if ($Durum) {
-    foreach ($ad in $GorevServis, $GorevPanel, $GorevVekil, $GorevRapor) {
+    foreach ($ad in $GorevAcilis, $GorevServis, $GorevPanel, $GorevVekil, $GorevRapor) {
         $g = Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue
-        if (-not $g -and $ad -ne $GorevServis) { continue }   # eski ayri gorevler yoksa gurultu yapma
+        if (-not $g -and $ad -ne $GorevServis -and $ad -ne $GorevAcilis) { continue }   # eski ayri gorevler yoksa gurultu yapma
         if ($g) {
             $b = Get-ScheduledTaskInfo -TaskName $ad
             Write-Host "$ad : durum=$($g.State) kip=$($g.Principal.LogonType) son sonuc=0x$('{0:X}' -f $b.LastTaskResult) son calisma=$($b.LastRunTime) sonraki=$($b.NextRunTime)"
@@ -310,7 +340,7 @@ if ($Kaldir) {
     Adim 'Gorevler durdurulup siliniyor'
     Hepsini-Durdur
     Isci-Durdur
-    foreach ($ad in $GorevServis, $GorevVekil, $GorevPanel, $GorevRapor) { if (Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue) { Gorev-Sil $ad } }
+    foreach ($ad in $GorevServis, $GorevAcilis, $GorevVekil, $GorevPanel, $GorevRapor) { if (Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue) { Gorev-Sil $ad } }
     Uyari "Gorev durunca panel ve vekil de kapanmis olmali. Denetim: Get-NetTCPConnection -LocalPort $PanelPort -State Listen"
     exit 0
 }
@@ -328,7 +358,7 @@ if ($PanelYenile) {
     # gece_sync.ps1: isciler bittikten sonra olagan yeniden baslatma. Basarisizsa cagiran full_reboot.bat'i calistirir.
     Adim 'Panel yeniden baslatiliyor (vekil ve isci dokunulmaz)'
     Hepsini-Durdur 'panel'
-    $panelOk = Gorev-Baslat $GorevServis   # servis calisiyorsa dokunmaz; panel dongusunu 15 sn icinde kendisi yeniden acar, calismiyorsa baslatir
+    $panelOk = Servis-Baslat   # servis calisiyorsa dokunmaz; panel dongusunu 15 sn icinde kendisi yeniden acar, calismiyorsa baslatir
     $saglik = $panelOk -and (Panel-Saglik 120)
     $https = $saglik -and (Https-Saglik)
     Write-Host "    Panel gorevi: $panelOk  127.0.0.1:$PanelPort : $(if ($saglik) { 'CALISIYOR' } else { 'YANIT YOK' })  https: $(if ($https) { 'CALISIYOR' } else { 'YANIT YOK' })"
@@ -344,7 +374,7 @@ if ($YenidenBaslat) {
     Adim 'Gorevler koddaki tanimla yeniden kaydediliyor (silinmis / bozulmus gorev onarilir)'
     try { Gorevleri-Kaydet } catch { Uyari "Gorevler yeniden kaydedilemedi ($($_.Exception.Message)); mevcut kayitlarla devam ediliyor." }
     Adim 'Gorevler baslatiliyor'
-    $panelOk = Gorev-Baslat $GorevServis
+    $panelOk = Servis-Baslat
     $vekilOk = $panelOk   # tek gorev: panel, vekil ve ReportDB ayni servisten kalkar
     $raporOk = $panelOk
     if ($panelOk -and -not (Panel-Saglik 120)) { Uyari 'Servis basladi ama panel 120 sn icinde yanit vermedi.' }
@@ -359,7 +389,7 @@ if ($YenidenBaslat) {
     Write-Host "    Panel (127.0.0.1:$PanelPort) : $(if ($saglik) { 'CALISIYOR' } else { 'YANIT YOK' })"
     Write-Host "    https://tamlife/        : $(if ($https) { 'CALISIYOR' } else { 'YANIT YOK' })"
     Write-Host "    Gorevler (acilista)     : panel=$panelOk vekil=$vekilOk reportdb=$raporOk"
-    if ($saglik -and $https -and $panelOk -and $vekilOk -and $raporOk) { Tamam 'Tamam: her sey gorevlerle calisiyor; yeniden baslatmadan sonra TAMLIFEADLOG oturumu acilinca kalkar.'; exit 0 }
+    if ($saglik -and $https -and $panelOk -and $vekilOk -and $raporOk) { Tamam 'Tamam: her sey gorevlerle calisiyor; yeniden baslatmadan sonra SYSTEM acilis gorevi ile oturumsuz kalkar.'; exit 0 }
     if ($saglik -and $https) { Uyari 'Panel acik ama gorevlerle degil: sunucu yeniden baslayinca KAPANIR. Gorevleri kaydedin: .\canli_gorev_kur.ps1 -Hemen'; exit 2 }
     Log-Sonu 'canli_panel.log'
     Log-Sonu 'canli_vekil.log'
@@ -379,7 +409,7 @@ if (-not $Hemen) {
 
 Adim 'Gorevler baslatiliyor'
 Hepsini-Durdur
-$panelOk = Gorev-Baslat $GorevServis
+$panelOk = Servis-Baslat
 if ($panelOk -and (Panel-Saglik 60)) { Tamam "Panel yanit veriyor: http://127.0.0.1:$PanelPort/api/v1/health = 200" } else { Uyari 'Panel 60 sn icinde yanit vermedi: var\log\canli_panel.log dosyasina bakin (-Durum).' }
 Start-Sleep -Seconds 5
 Log-Sonu 'canli_vekil.log'
