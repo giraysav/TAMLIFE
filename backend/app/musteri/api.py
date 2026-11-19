@@ -18,7 +18,6 @@ from app.erisim import Erisim, modul_erisim, musteri_alani_erisim
 from app.musteri import kayitlar as mk
 from app.musteri import servis as ms
 from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, govde_oku, ok
-from app.rapor import lookouteyes
 from app.rapor import servis as rs
 from app.session import Principal
 
@@ -299,37 +298,6 @@ async def sla_yukle(
 @router.delete("/musteri/{musteri_id:int}/rapor/sla")
 def sla_sil(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     return _yap(db, lambda: rs.sla_sil(db, e.user, musteri_id, donem_kodu=donem))
-
-
-@router.post("/musteri/{musteri_id:int}/rapor/gorsel")
-async def gorsel_ekle(
-    musteri_id: KimlikTipi, request: Request, baslik: str = Query(default="", max_length=200), donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim)
-):
-    """Elle eklenen rapor grafigi (MRTG vb.; LOOKOUTEYES grafikleri de ayni listeye yazilir). PNG/JPEG/GIF govdesi."""
-    veri = await govde_oku(request, 10 * 1048576)
-    return ok(await run_in_threadpool(_ayri_oturumda, lambda db: rs.gorsel_ekle(db, e.user, musteri_id, veri, baslik, donem_kodu=donem)))
-
-
-@router.get("/musteri/{musteri_id:int}/rapor/lookouteyes")
-def lookouteyes_durum(musteri_id: KimlikTipi, e: Erisim = Depends(musteri_erisim)):
-    """LOOKOUTEYES kaynagi hazir mi (gizli deger yok)."""
-    return ok(lookouteyes.durum())
-
-
-@router.post("/musteri/{musteri_id:int}/rapor/lookouteyes")
-async def lookouteyes_ekle(musteri_id: KimlikTipi, body: Serbest, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim)):
-    """Serbest metin (grafik adi / aciklama / numara parcasi) -> LOOKOUTEYES (MSSQL, salt okunur) -> eslesen grafikler rapora eklenir.
-    Once DB'den okunur (panel DB'si bu sirada kilitlenmez), sonra elle eklenenlerle ayni yola yazilir."""
-    metin = str(body.model_dump().get("metin") or "")
-    bulunanlar = await run_in_threadpool(lookouteyes.ara, metin)
-    sonuc = await run_in_threadpool(_ayri_oturumda, lambda db: rs.lookouteyes_ekle(db, e.user, musteri_id, bulunanlar, donem_kodu=donem))
-    _denetim(e.user, "rapor.lookouteyes", f"musteri={musteri_id} bulunan={len(bulunanlar)} ekle={sonuc['lookouteyes']['eklenen']}")
-    return ok(sonuc)
-
-
-@router.delete("/musteri/{musteri_id:int}/rapor/gorsel/{numara:int}")
-def gorsel_sil(musteri_id: KimlikTipi, numara: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    return _yap(db, lambda: rs.gorsel_sil(db, e.user, musteri_id, numara, donem_kodu=donem))
 
 
 @router.post("/musteri/{musteri_id:int}/rapor/dosya")

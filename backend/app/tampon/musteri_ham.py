@@ -137,7 +137,7 @@ ALANLAR: tuple[Alan, ...] = (
     _sayac("sikayet_closed_count", "Kapanan Şikayet Sayısı", "Operasyon › Şikayet (yıl içi kapanan)", "Yıl içinde kapanan şikayet adedi."),
     _sayac("talep_closed_count", "Kapanan Talep Sayısı", "Operasyon › Talep (yıl içi kapanan)", "Yıl içinde kapanan talep adedi."),
     *(_iletisim_alani(a) for a in ILETISIM_ALANLARI),
-)  # 2026-10-26: "Cacti Adresleri" alani kalkti (aylik rapor grafikleri yalniz elle / GALAPAGOS)
+)  # 2026-10-26: "Cacti Adresleri" alani kalkti (aylik rapor grafikleri yalniz elle)
 ALAN = {a.anahtar: a for a in ALANLAR}
 
 # sablon alani -> Customer sutunu (iletisim alanlari CustomerTeam'de, ayni adla)

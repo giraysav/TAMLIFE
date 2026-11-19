@@ -57,7 +57,7 @@ def ad_erisim_testi(admin: Principal = Depends(require_admin)) -> dict[str, Any]
 
 @router.post("/kurum/{kaynak}/test")
 def oracle_erisim_testi(kaynak: str, admin: Principal = Depends(require_admin)) -> dict[str, Any]:
-    """Oracle kaynagi (oracle_reportdb | oracle_onent | oracle_galapagos): ayar -> DNS -> TCP -> oturum (SELECT 1 FROM DUAL, ayri
+    """Oracle kaynagi (oracle_reportdb | oracle_onent): ayar -> DNS -> TCP -> oturum (SELECT 1 FROM DUAL, ayri
     surecte). Yazmaz, tablo okumaz; yanit adres/parola tasimaz."""
     from app.tampon import postgres
 

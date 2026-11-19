@@ -6,14 +6,14 @@ Farklar:
   (kullanici karari 2026-10-11). Dosyaya gomulu gorseller (pasta grafikler vb.) KULLANILMAZ; grafik 'Kapanis Ayi'
   pivotlarinin serisinden tarayicida cizilir (matplotlib yok).
 - Dosya saklanir: rapor gonderilirken ileti ekine otomatik girer. Yer: TAMLIFE_REPORT_DIR/sla/<musteri>/<yil>-<ay>.*
-  Ayni donemde yeniden yukleme oncekinin yerine gecer. Ayni kayitta: LOOKOUTEYES grafikleri ('ekler', MRTG vb. gorsel;
-  elle yuklenir ya da LOOKOUTEYES DB'sinden serbest metinle gelir: rapor/lookouteyes.py) ve iletiye eklenecek ek dosyalar ('dosyalar', <yil>-<ay>-ekler/ klasorunde).
+  Ayni donemde yeniden yukleme oncekinin yerine gecer. Ayni kayitta iletiye eklenecek ek dosyalar ('dosyalar', <yil>-<ay>-ekler/
+  klasorunde). 'ekler' (eski elle eklenen grafik gorselleri) yalniz okunur: 2026-11-19 kullanici grafik ekleme / ice alma
+  bolumunu kaldirdi; trafik grafikleri ReportDB sayisal verisinden panelde uretilecek.
 Ham satir saklanmaz; yalniz dosyanin kendisi (ek olarak gidecek) ve ozet. Tum verinin analizi: rapor/sla_analiz.py.
 """
 
 from __future__ import annotations
 
-import base64
 import io
 import json
 import math
@@ -30,8 +30,6 @@ from app.ortak import UygulamaHatasi, eslestirme_anahtari
 
 AZAMI_EXCEL = 30 * 1024 * 1024
 AZAMI_ACIK = 400 * 1024 * 1024  # zip icindeki toplam acik boyut (zip bombasina karsi)
-AZAMI_GORSEL = 10 * 1024 * 1024
-AZAMI_EK_GORSEL = 100  # yalniz depolama korumasi; rapor grafiklerine sinir degildir
 AZAMI_EK_DOSYA = 20 * 1024 * 1024
 AZAMI_EK_TOPLAM = 25 * 1024 * 1024  # Exchange ileti siniri altinda kalsin
 EN_FAZLA_EK_DOSYA = 10
@@ -66,7 +64,6 @@ ANALIZ_SATIRI = 5000
 KATEGORILER = (("alarm", "Alarm"), ("sikayet", "Şikayet"), ("talep", "Talep"))
 KATEGORI_EN = {"alarm": "Alarm", "sikayet": "Complaint", "talep": "Request"}
 BEKLENEN_SAYFALAR = ("Alarm Detay", "Şikayet Detay", "Talep Detay", "Alarm Analiz", "Şikayet Analiz", "Talep Analiz")
-_IMZALAR = ((b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"), (b"GIF87a", "image/gif"), (b"GIF89a", "image/gif"))
 
 
 class SlaHata(UygulamaHatasi):
@@ -75,14 +72,6 @@ class SlaHata(UygulamaHatasi):
 
 def _k(metin: object) -> str:
     return eslestirme_anahtari(metin or "")
-
-
-def gorsel_turu(veri: bytes) -> str | None:
-    return next((tur for imza, tur in _IMZALAR if veri.startswith(imza)), None)
-
-
-def _veri_url(veri: bytes, tur: str) -> str:
-    return f"data:{tur};base64,{base64.b64encode(veri).decode('ascii')}"
 
 
 # --- seriler ---------------------------------------------------------------------------------------
@@ -348,51 +337,12 @@ def excel_dosyasi(musteri_id: int, yil: int, ay: int) -> tuple[bytes, str] | Non
 
 
 def excel_sil(musteri_id: int, yil: int, ay: int) -> dict:
-    """SLA dosyasi silinir; LOOKOUTEYES grafikleri ve ek dosyalar korunur."""
+    """SLA dosyasi silinir; ek dosyalar korunur."""
     xlsx, js = _yollar(musteri_id, yil, ay)
     kayit = oku(musteri_id, yil, ay) or _bos_kayit()
     xlsx.unlink(missing_ok=True)
     _kaydet_ya_da_sil(js, {**kayit, "dosya": None, "analiz": None})
     return {"silindi": True}
-
-
-def gorsel_ekle(musteri_id: int, yil: int, ay: int, veri: bytes, baslik: str, ekleyen: str) -> dict:
-    """Elle eklenen grafik (MRTG vb.; LOOKOUTEYES grafikleri de ayni listeye yazilir). PNG/JPEG/GIF."""
-    if len(veri) > AZAMI_GORSEL:
-        raise SlaHata(400, m("Görsel çok büyük (en fazla 10 MB).", "Image too large (max 10 MB)."))
-    tur = gorsel_turu(veri)
-    if tur is None:
-        raise SlaHata(400, m("Görsel PNG, JPEG ya da GIF olmalı.", "Image must be PNG, JPEG or GIF."))
-    _, js = _yollar(musteri_id, yil, ay)
-    kayit = oku(musteri_id, yil, ay) or _bos_kayit()
-    ekler = list(kayit.get("ekler") or [])
-    if len(ekler) >= AZAMI_EK_GORSEL:
-        raise SlaHata(400, m(f"En fazla {AZAMI_EK_GORSEL} görsel eklenebilir.", f"At most {AZAMI_EK_GORSEL} images can be added."))
-    numara = max((int(e.get("no", 0)) for e in ekler), default=0) + 1
-    ekler.append(
-        {
-            "no": numara,
-            "baslik": " ".join((baslik or "").split())[:200],
-            "gorsel": _veri_url(veri, tur),
-            "ekleyen": ekleyen[:120],
-            "zaman": datetime.now(UTC).isoformat(),
-        }
-    )
-    kayit["ekler"] = ekler
-    _yaz_json(js, kayit)
-    return {"no": numara}
-
-
-def gorsel_sil(musteri_id: int, yil: int, ay: int, numara: int) -> dict:
-    _, js = _yollar(musteri_id, yil, ay)
-    kayit = oku(musteri_id, yil, ay)
-    ekler = list((kayit or {}).get("ekler") or [])
-    kalan = [e for e in ekler if int(e.get("no", 0)) != numara]
-    if kayit is None or len(kalan) == len(ekler):
-        raise SlaHata(404, m("Görsel bulunamadı.", "Image not found."))
-    kayit["ekler"] = kalan
-    _kaydet_ya_da_sil(js, kayit)
-    return {"silindi": numara}
 
 
 # --- iletiye eklenecek dosyalar --------------------------------------------------------------------

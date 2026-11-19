@@ -33,7 +33,7 @@ function Istek-Sure($url, $sn) {
 }
 function Uzunluk($yol) { try { if (Test-Path $yol) { return [math]::Round((Get-Item $yol).Length / 1MB, 1) } } catch { } return $null }
 
-# Veri kaynaklari (OneDesk, ONENT, Galapagos): surec degil, cekme isleri; ayar + ag erisimi + son tampon partisi. Gizli deger (parola/adres) disari verilmez.
+# Veri kaynaklari (OneDesk, ONENT): surec degil, cekme isleri; ayar + ag erisimi + son tampon partisi. Gizli deger (parola/adres) disari verilmez.
 function Env-Oku {
     $d = @{}
     try { foreach ($s in (Get-Content (Join-Path $Backend '.env') -Encoding UTF8)) { if ($s -match '^\s*([A-Z0-9_]+)=(.*)$') { $d[$Matches[1]] = $Matches[2].Trim() } } } catch { }
@@ -58,8 +58,7 @@ function Kaynaklar-Al {
     } catch { }
     $liste = @(
         @{ ad = 'OneDesk (PostgreSQL)'; on = 'ONEDESKDB_PG'; anahtar = 'onedesk'; sorgu = 'ONEDESKDB_PG_IMPORT_QUERY'; port = 'ONEDESKDB_PG_PORT'; host = 'ONEDESKDB_PG_HOST' },
-        @{ ad = 'ONENT (PostgreSQL)'; on = 'ONENTDB_PG'; anahtar = 'onent'; sorgu = 'ONENTDB_PG_IMPORT_QUERY'; port = 'ONENTDB_PG_PORT'; host = 'ONENTDB_PG_HOST' },
-        @{ ad = 'Galapagos (Oracle)'; on = 'GALAPAGOSDB_DB'; anahtar = 'galapagos'; sorgu = 'GALAPAGOSDB_DB_IMPORT_QUERY'; port = 'GALAPAGOSDB_DB_PORT'; host = 'GALAPAGOSDB_DB_HOST' }
+        @{ ad = 'ONENT (PostgreSQL)'; on = 'ONENTDB_PG'; anahtar = 'onent'; sorgu = 'ONENTDB_PG_IMPORT_QUERY'; port = 'ONENTDB_PG_PORT'; host = 'ONENTDB_PG_HOST' }
     )
     $sonuc = @()
     foreach ($k in $liste) {

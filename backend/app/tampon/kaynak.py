@@ -1,4 +1,4 @@
-"""Kaynaklar: tampona veri getiren yollar. CSV yukleme, Oracle kaynaklari (REPORTDB, ONENTDB, GALAPAGOSDB) ve PostgreSQL kaynaklari
+"""Kaynaklar: tampona veri getiren yollar. CSV yukleme, Oracle kaynaklari (REPORTDB) ve PostgreSQL kaynaklari
 (ONEDESKDB, ONENTDB; <ON EK>_IMPORT_QUERY -> '<kaynak>_import' partisi, isci 'pg-cek').
 
 Oracle: <ON EK>_ENABLED=true + zorunlu anahtarlar doluyken 'hazir'. Cekimi panel DEGIL isci surec yapar (python -m app.isci; uretimde de

@@ -18,13 +18,12 @@ from app.ortak import iso
 
 
 def connections() -> list[dict[str, object]]:
-    """AD, ORACLE_REPORTDB (REPORTDB), ONENTDB, GALAPAGOSDB. configured = *_ENABLED=true (uretimle ayni kural)."""
+    """AD, ORACLE_REPORTDB (REPORTDB), ONENTDB, ONEDESKDB. configured = *_ENABLED=true (uretimle ayni kural)."""
     return [
         {"id": "ad", "slot": "AD", "tur": "dizin", "configured": directory.configured()},
         {"id": "oracle_reportdb", "slot": "ORACLE_REPORTDB", "tur": "veritabani", "configured": acik_mi("ORACLE_REPORTDB_ENABLED")},
         {"id": "onent", "slot": "ONENTDB", "tur": "veritabani", "configured": acik_mi("ONENTDB_PG_ENABLED")},  # 2026-10-19: PostgreSQL
         {"id": "onedesk", "slot": "ONEDESKDB", "tur": "veritabani", "configured": acik_mi("ONEDESKDB_PG_ENABLED")},
-        {"id": "galapagos", "slot": "GALAPAGOSDB", "tur": "veritabani", "configured": acik_mi("GALAPAGOSDB_DB_ENABLED")},
     ]
 
 
@@ -98,7 +97,7 @@ def _son_parti(db: Session, anahtar: str) -> dict[str, object] | None:
 
 
 def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
-    """Yonetim > Kurum Baglantilari: AD/LDAPS + Oracle kaynaklari (REPORTDB, ONENTDB, GALAPAGOSDB). Gizli deger yok; Oracle'da
+    """Yonetim > Kurum Baglantilari: AD/LDAPS + Oracle (REPORTDB) + PostgreSQL (ONENTDB, ONEDESKDB) kaynaklari. Gizli deger yok; Oracle'da
     adres/servis/kullanici yalniz tanimli mi. Canli baglanti yalniz test ucunda (ayri surec)."""
     from app.tampon import oracle, postgres, reportdb
 

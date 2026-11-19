@@ -1,8 +1,8 @@
-"""Dis kaynaklar (Oracle): REPORTDB (ORACLE_REPORTDB_*), ONENTDB (ONENTDB_DB_*), GALAPAGOSDB (GALAPAGOSDB_DB_*).
+"""Dis kaynaklar (Oracle): REPORTDB (ORACLE_REPORTDB_*), ONENTDB (ONENTDB_DB_*).
 
 Burada yalniz *_ENABLED bayragi okunur (acik_mi); surucu yuklenmez, baglanti acilmaz (baglanti: app.tampon.oracle, isci surecte).
 REPORTDB (Onedesk DB), canli .env'deki adiyla ORACLE_REPORTDB_* on ekini kullanir (eski kodun ONEDESK_DB_* adi artik yok). ONENTDB
-anahtarlari api_services.OracleSourceConfig'ten gelir; GALAPAGOSDB ayni kalibi kullanir (2026-10-10, Urun-Tutar DB'nin yerine).
+anahtarlari api_services.OracleSourceConfig'ten gelir. 2026-11-19 kullanici: GALAPAGOSDB erisimi kaldirildi (yuva, test ucu, saglik paneli).
 """
 
 from __future__ import annotations
@@ -52,13 +52,6 @@ SOURCES: tuple[Source, ...] = (
         "ONENTDB",
         "ONENTDB_DB_ENABLED",
         _oracle("ONENTDB_DB", "ONENT_DB_URL"),
-    ),
-    Source(
-        "oracle_galapagos",
-        "oracle",
-        "GALAPAGOSDB",
-        "GALAPAGOSDB_DB_ENABLED",
-        _oracle("GALAPAGOSDB_DB"),
     ),
     Source(
         "oracle_reportdb_import",
