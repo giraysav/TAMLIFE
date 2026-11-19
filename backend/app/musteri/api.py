@@ -19,6 +19,7 @@ from app.musteri import kayitlar as mk
 from app.musteri import servis as ms
 from app.ortak import EN_BUYUK_KIMLIK, EN_BUYUK_SAYFA_NO, KimlikTipi, govde_oku, ok
 from app.rapor import servis as rs
+from app.rapor import trafik
 from app.session import Principal
 
 router = APIRouter(prefix="/api/v1", tags=["musteri"])
@@ -298,6 +299,12 @@ async def sla_yukle(
 @router.delete("/musteri/{musteri_id:int}/rapor/sla")
 def sla_sil(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     return _yap(db, lambda: rs.sla_sil(db, e.user, musteri_id, donem_kodu=donem))
+
+
+@router.get("/musteri/{musteri_id:int}/rapor/trafik")
+def trafik_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Donemin devre trafik serileri (ReportDB); cizim tarayicida ayri kodla (dist/rapor-trafik.js, Apache ECharts)."""
+    return _yap(db, lambda: trafik.getir(db, e.user, musteri_id, donem_kodu=donem))
 
 
 @router.post("/musteri/{musteri_id:int}/rapor/dosya")
