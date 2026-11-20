@@ -33,14 +33,17 @@ from app.skor import kaynak_secimi, kaynaklar, urun_tutar
 from app.skor import motor as skor
 
 SCOPES = ("parent", "affiliate")
-KAYNAKLAR = ("sayfa", "toplu", "kriter_degisikligi")
+KAYNAKLAR = ("sayfa", "toplu", "kriter_degisikligi", "gunluk")
 IZINLI_ALANLAR = ("title", "type", "metric", "weight", "b30", "b50", "b70", "b100", "servis_puanlari", "servis_dahil", "kaynak_secimi")
 EN_FAZLA_KRITER = 50
 EN_FAZLA_TOPLU = 5000
 # 2026-10-20 kullanici karari: "db kaynaklarindan otomatik veri ile puanlama simdilik manuele cevrilecek; manuel kisim yalniz toplu
 # atama kriter dokumunde". False iken kaynaklar (OneDesk, Urun-Tutar, segment, rapor) okunmaz; her cati musterinin her kriteri dokumde
 # secilir (manuel_ata); kayitli secimler (ScoreDetail dokumu) toplu uygulamada ve kriter degisikliginde yeniden kullanilir.
-OTOMATIK_PUANLAMA = False
+# 2026-11-21 kullanici: "utilizasyon skorunu dinamik hesaplamak icin sabaha karsi bir isci kur (06:00); kapanmis kayitlari baz
+# alacagiz" -> KARMA: veri kaynagi olan kriter otomatik (gunluk ozet, Urun-Tutar, segment, rapor), verisi olmayan kriter dokumdeki
+# kayitli secime duser (motor.kriter_degerlendir). Dokumde secim yalniz verisi olmayan kriterlerde yapilir; gunluk isci skoru yazar.
+OTOMATIK_PUANLAMA = True
 DEGISIM_ESIGI = 0.05  # kriter degisikliginde bundan kucuk fark "degismeyen" sayilir (uretim toplu_atama.uygula)
 ACIL_HESAP = "ladinadmin"  # siralamada gosterilmez (uretim _build_util_ranking)
 
@@ -243,7 +246,7 @@ def onizleme(db: Session, tam_id: int | None) -> dict:
     """Toplu atama onizlemesi (uretim skor_toplu_onizleme): yeni skor HESAPLANIR, hicbir sey yazilmaz."""
     kriterler, sonuc, uyarilar = hesapla(db, cati_musteriler(db, tam_id))
     return {
-        "manuel": not OTOMATIK_PUANLAMA,
+        "manuel": True,  # karma kipte de dokumde secim yapilir (verisi olmayan kriterler)
         "kaynaklar": kaynaklar.kaynak_durumlari(db, kriterler) if OTOMATIK_PUANLAMA else [],
         "uyarilar": uyarilar,
         "kriterler": kriter_ozeti(kriterler),
@@ -378,8 +381,6 @@ def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: 
     """Kriter dokumunde secilen puanlar (baslik -> kriterin secenegindeki 30/50/70/100; Servis Cesitliligi icin alinan servis
     listesi) ile cati musterinin final skoru sunucuda hesaplanip yazilir (kaynak 'toplu'). Her kriter secilmis olmali (X sabit puanli
     satir haric); secimler dokumle saklanir. servis_puanlari verilirse once kriter tablosuna yazilir (tum musteriler icin gecerli)."""
-    if OTOMATIK_PUANLAMA:
-        raise SkorHata(400, "Otomatik puanlama acikken manuel atama yapilmaz.")
     musteri = db.get(Customer, musteri_id)
     if musteri is None or musteri.parent_id is not None:
         raise SkorHata(404, "Cati musteri bulunamadi.")
@@ -407,7 +408,8 @@ def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: 
                 raise SkorHata(400, f'"{k.get("title")}" listesinde olmayan servis: {", ".join(yok)}')
         elif isinstance(secim, list) or secim not in {s["puan"] for s in skor.secenekler(k)}:
             raise SkorHata(400, f'"{k.get("title")}" icin {secim} puanin kriter tablosunda kurali yok.')
-    h = skor.musteri_skoru(kriterler, {}, secimler, otomatik=False)
+    metrikler = kaynaklar.birlesik_metrikler(db, [musteri], kriterler)[0].get(musteri.id, {}) if OTOMATIK_PUANLAMA else {}
+    h = skor.musteri_skoru(kriterler, metrikler, secimler, otomatik=OTOMATIK_PUANLAMA)
     if not h["tamam"]:
         raise SkorHata(400, "Her kriter icin puan secin: " + ", ".join(h["eksik"] or ["kriter yok"]))
     eski = round(musteri.score, 1) if musteri.score is not None else None
@@ -569,7 +571,7 @@ def agac(db: Session) -> dict:
     )
     cati_idler = {c.id for c in catilar}
     return {
-        "manuel": not OTOMATIK_PUANLAMA,
+        "manuel": True,  # karma kip: dokumde verisi olmayan kriterler secilir
         "kaynaklar": kaynaklar.kaynak_durumlari(db, kriterler) if OTOMATIK_PUANLAMA else [],
         "kriterler": kriter_ozeti(kriterler),
         "uyarilar": uyarilar,

@@ -17,7 +17,7 @@ from app.erisim import utilizasyon_yetkisi
 from app.ortak import KimlikTipi, ok
 from app.session import Principal
 from app.tampon import oracle
-from app.yonetim import arizalar, dosya_gunlugu, gunlukler, musteri_listesi, ozet, veritabani
+from app.yonetim import arizalar, dosya_gunlugu, gunlukler, musteri_listesi, ozet, veri_ozeti, veritabani
 
 router = APIRouter(prefix="/api/v1/yonetim", tags=["yonetim"], dependencies=[Depends(require_admin)])  # yeni uc eklense de admin disi giremez
 # TAM Utilizasyon > Musteri Listesi OKUMA: admin ya da `utilizasyon.yonet` yetkisi (2026-11-11). Silme ve toplu ekleme (yazma) yalniz admin; diger yonetim uclari yalniz admin
@@ -73,6 +73,20 @@ def oracle_erisim_testi(kaynak: str, admin: Principal = Depends(require_admin)) 
 
 
 # --- Veritabani -----------------------------------------------------------------------------------------------------
+@router.get("/veri-ozeti")
+def veri_ozeti_oku(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Konsolide veri gorunumu: kaynak durumlari + musteri basina kapanan kayit / envanter / skor."""
+    return ok(veri_ozeti.ozet(db))
+
+
+@router.post("/veri-ozeti/calistir")
+def veri_ozeti_calistir(admin: Principal = Depends(require_veri_yazma), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Gunluk utilizasyon turunu simdi baslatir (06:00 gorevinin aynisi, ayri surec)."""
+    sonuc = veri_ozeti.baslat(db, admin.username)
+    _denetim(admin, "yonetim.utilizasyon_gunluk_baslat")
+    return ok(sonuc)
+
+
 @router.get("/veritabani")
 def veritabani_bilgisi(admin: Principal = Depends(require_admin)) -> dict[str, Any]:
     return ok(veritabani.bilgi(engine()))

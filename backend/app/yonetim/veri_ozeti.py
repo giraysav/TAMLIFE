@@ -1,0 +1,117 @@
+"""Yonetim > Veri Ozeti (2026-11-21 kullanici: "ReportDB, OneDesk, ONENT DB'lerden gelen verileri konsolide edecegimiz sade, kullanimi
+ve anlasilmasi kolay, yonetimi kolay bir gorunum").
+
+Tek ekran: ust satirda uc kaynagin durumu (son basarili cekim, hata, hacim) + gunluk utilizasyon turunun son calismasi; altta musteri
+basina birlesik satir (alarm / sikayet / talep = bu yil KAPANAN; aktif CI / lokasyon; final skor ve son guncelleme). Yalniz admin
+(Yonetim konsolu: kaynak adlari burada gorunebilir). "Simdi calistir" gunluk turu ayri surecte baslatir (06:00 gorevinin aynisi).
+"""
+
+from __future__ import annotations
+
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.models import AppUser, Customer, IngestBatch, OnedeskRecord, ScoreHistory
+from app.ortak import UygulamaHatasi, iso, simdi
+from app.skor import gunluk
+
+CALISIYOR_DK = 20
+BASLAT_ANAHTARI = "utilizasyon.gunluk_baslatildi"
+
+
+def _son_temip(db: Session) -> dict[str, Any]:
+    p = db.scalar(select(IngestBatch).where(IngestBatch.source_key == "oracle_reportdb").order_by(IngestBatch.id.desc()).limit(1))
+    son_ok = db.scalar(select(func.max(IngestBatch.received_at)).where(IngestBatch.source_key == "oracle_reportdb", IngestBatch.status == "ready"))
+    acik = db.scalar(select(func.count()).select_from(OnedeskRecord).where(OnedeskRecord.source == "temip", OnedeskRecord.status == "open")) or 0
+    return {"son_basari": iso(son_ok), "son_hata": p.error if p is not None and p.status == "failed" else "", "acik_alarm": acik, "siklik": "6 dk"}
+
+
+def kaynaklar(db: Session) -> list[dict[str, Any]]:
+    from app.musteri import envanter
+
+    d = gunluk.durum_oku(db)
+    k = d.get("kaynaklar") or {}
+    od, env = k.get("onedesk") or {}, envanter.durum_oku(db)
+    temip = _son_temip(db)
+    return [
+        {"anahtar": "reportdb", "ad": "ReportDB", "icerik": "Alarm kayıtları (TEMIP)", "siklik": temip["siklik"],
+         "son_basari": temip["son_basari"], "hata": temip["son_hata"],
+         "hacim": [["Bu yıl kapanan alarm", (k.get("reportdb") or {}).get("alarm")], ["Şu an açık alarm", temip["acik_alarm"]]]},
+        {"anahtar": "onedesk", "ad": "OneDesk", "icerik": "Kapanan şikayet ve talep", "siklik": "Her gün 06:00",
+         "son_basari": d.get("zaman") if od.get("durum") == "ok" else od.get("son_basari"), "hata": od.get("hata", ""),
+         "hacim": [["Bu yıl kapanan şikayet", od.get("sikayet")], ["Bu yıl kapanan talep", od.get("talep")]]},
+        {"anahtar": "onent", "ad": "ONENT", "icerik": "Müşteri envanteri (CMDB)", "siklik": "4 saatte bir",
+         "son_basari": env.get("son_basari"), "hata": env.get("hata", ""),
+         "hacim": [["Envanterdeki CI", env.get("satir")], ["Aktif CI (panel müşterileri)", (k.get("onent") or {}).get("ci")]]},
+    ]  # fmt: skip
+
+
+def ozet(db: Session) -> dict[str, Any]:
+    o = gunluk.ozetler(db)
+    musteriler = list(db.scalars(select(Customer)))
+    adlar = {u.id: u.display_name or u.username for u in db.scalars(select(AppUser))}
+    catilar = {c.id: c for c in musteriler if c.parent_id is None}
+    istirak: dict[int, list[Customer]] = {}
+    for c in musteriler:
+        if c.parent_id is not None:
+            istirak.setdefault(c.parent_id, []).append(c)
+    son = select(func.max(ScoreHistory.id)).group_by(ScoreHistory.customer_id)
+    skor_zaman = {h.customer_id: (h.at, h.source) for h in db.scalars(select(ScoreHistory).where(ScoreHistory.id.in_(son)))}
+    satirlar = []
+    for c in sorted(catilar.values(), key=lambda x: (x.name or "").lower()):
+        grup = istirak.get(c.id, [])
+        z = skor_zaman.get(c.id)
+        satirlar.append({
+            "id": c.id, "ad": c.name, "tam": adlar.get(c.owner_id, "") if c.owner_id else "", "musteri_no": c.customer_no or "",
+            "istirak": len(grup), "segment": c.segment or "",
+            **{alan: gunluk.grup_toplami(o, c, grup, alan) for alan in ("alarm", "sikayet", "talep", "ci", "lokasyon")},
+            "skor": round(c.score, 1) if c.score else None, "skor_zaman": iso(z[0]) if z else None, "skor_kaynak": z[1] if z else None,
+        })  # fmt: skip
+    d = gunluk.durum_oku(db)
+    return {
+        "tur": {**d, "calisiyor": calisiyor_mu(db)},
+        "kaynaklar": kaynaklar(db),
+        "musteriler": satirlar,
+        "toplam": {alan: sum(s[alan] or 0 for s in satirlar) for alan in ("alarm", "sikayet", "talep", "ci", "lokasyon")},
+    }
+
+
+def calisiyor_mu(db: Session) -> bool:
+    from app.models import AppSetting
+
+    k = db.get(AppSetting, BASLAT_ANAHTARI)
+    if k is None or not isinstance(k.value, dict):
+        return False
+    try:
+        bas = datetime.fromisoformat(str(k.value.get("zaman")))
+    except ValueError:
+        return False
+    son = gunluk.durum_oku(db).get("zaman")
+    bitti = son is not None and datetime.fromisoformat(str(son)) >= bas
+    return not bitti and simdi() - bas < timedelta(minutes=CALISIYOR_DK)
+
+
+def baslat(db: Session, kisi: str) -> dict[str, Any]:
+    from app.models import AppSetting
+    from app.tampon import katalog
+
+    if calisiyor_mu(db):
+        raise UygulamaHatasi(409, "Günlük tur zaten çalışıyor.")
+    an = simdi()
+    k = db.get(AppSetting, BASLAT_ANAHTARI)
+    deger = {"zaman": an.isoformat(), "kisi": kisi[:120]}
+    if k is None:
+        db.add(AppSetting(key=BASLAT_ANAHTARI, value=deger, updated_by=kisi[:120], updated_at=an))
+    else:
+        k.value, k.updated_by, k.updated_at = deger, kisi[:120], an
+    db.commit()
+    backend = Path(__file__).resolve().parents[2]
+    gunluk_dizin = backend / "var" / "logs"
+    gunluk_dizin.mkdir(parents=True, exist_ok=True)
+    katalog._ayri_baslat([sys.executable, "-m", "app.isci", "utilizasyon"], backend, gunluk_dizin / "isci_utilizasyon.log")
+    return {"baslatildi": iso(an)}

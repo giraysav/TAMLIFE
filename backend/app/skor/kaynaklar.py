@@ -2,9 +2,9 @@
 
 Her kaynak musteri basina METRIK uretir; motor metrikleri kriter kurallarina (barem hucreleri) gore puana cevirir. Oncelik (metrik
 basina, ilk hazir olan kullanilir; hata veren kaynak atlanir, siradakine gecilir):
-  Secilen veri kaynagi (kriterdeki kaynak_secimi) > REPORTDB > Urun-Tutar Excel > ONENTDB > Panel
-  sikayet_talep   : REPORTDB  > Panel  (bu yil kapanan + su an acik sikayet ve talep)
-  lokasyon_sayisi : Urun-Tutar Excel > ONENTDB > Panel (Envanter alani - YEDEK, lokasyon degil)
+  Secilen veri kaynagi (kriterdeki kaynak_secimi) > OneDesk > Urun-Tutar Excel > ONENT > Panel
+  sikayet_talep   : OneDesk (gunluk ozet: bu yil KAPANAN sikayet + talep, 2026-11-21) > Panel
+  lokasyon_sayisi : Urun-Tutar Excel > ONENT (gunluk ozet: aktif CI'larin farkli lokasyonu) > Panel (Envanter alani - YEDEK)
   servisler       : Urun-Tutar Excel (musterinin servis/urun adlari)
   segment         : Panel (kartta secilen segment; SEGMENTLER disindaki deger veri sayilmaz)
   baglanti        : Urun-Tutar Excel (baglanti tipleri)
@@ -31,7 +31,6 @@ from app.dil import m as dm
 from app.models import Customer, Report
 from app.ortak import rapor_donemi
 from app.skor import kaynak_secimi, urun_tutar
-from app.tampon import oracle
 
 # musteri.servis.SEGMENTLER ile ayni (paket yonu: skor musteriyi import etmez; esitlik testte kilitli).
 SEGMENTLER = ("SMB", "SA", "MA", "PA", "WHOLESALE", "CONNCAR")
@@ -137,46 +136,65 @@ class PanelKaynagi(Kaynak):
         return sonuc
 
 
-class _DbKaynagi(Kaynak):
-    """Oracle kaynagi (tampon/oracle.py anahtarlari). Panel Oracle'a baglanmaz; metrik sozlesmesi gelene kadar uretimdeki gibi bos."""
+class _GunlukOzetKaynagi(Kaynak):
+    """Gunluk isci ozeti (skor/gunluk.py, her sabah 06:00): util_source_summary. Cati musterinin degeri = cati + istirakleri.
+    Ozet hic yazilmadiysa (isci henuz calismadi) hazir degil; o sutunu okunamamis musteri siradaki kaynaga duser."""
 
-    oracle_anahtari = ""
+    alan = ""
 
     def yapilandirildi(self) -> bool:
-        return bool(oracle.durum(self.oracle_anahtari)["hazir"])
+        return True
 
     def hazir(self, db: Session) -> tuple[bool, str]:
-        if not self.yapilandirildi():
-            anahtar = oracle.KAYNAKLAR[self.oracle_anahtari].enabled_key
-            return False, dm(
-                f"{self.ad}: bağlantı tanımlı değil ({anahtar}). Erişim gelince bağlanacak.",
-                f"{self.ad}: connection not configured ({anahtar}). It will connect once access is available.",
-            )
-        return True, ""
+        from app.models import UtilSourceSummary
+
+        if db.scalar(select(UtilSourceSummary.customer_id).limit(1)) is not None:
+            return True, ""
+        return False, dm(f"{self.ad}: günlük veri turu henüz çalışmadı.", f"{self.ad}: the daily data run has not run yet.")
+
+    def _deger(self, ozet: dict, cati: Customer, istirakler: list[Customer]) -> Any:
+        raise NotImplementedError
 
     def _oku(self, db: Session, musteriler: list[Customer]) -> dict[int, dict]:
-        raise KaynakHazirDegil(
-            dm(
-                f"{self.ad}: bağlantı tanımlı ama sorgu henüz yazılmadı (veri sözleşmesi bekleniyor).",
-                f"{self.ad}: connection configured but the query is not written yet (awaiting the data contract).",
-            )
-        )
+        from app.skor import gunluk
+
+        ozet = gunluk.ozetler(db)
+        kimlikler = [c.id for c in musteriler]
+        istirak: dict[int, list[Customer]] = {}
+        for c in db.scalars(select(Customer).where(Customer.parent_id.in_(kimlikler))) if kimlikler else []:
+            istirak.setdefault(c.parent_id, []).append(c)
+        sonuc = {}
+        for c in musteriler:
+            deger = self._deger(ozet, c, istirak.get(c.id, []))
+            if deger is not None:
+                sonuc[c.id] = {self.metrikler[0]: deger}
+        return sonuc
 
 
-class ReportDbKaynagi(_DbKaynagi):
-    """REPORTDB. Beklenen: musteri (Musteri No) basina YIL BOYU acik + kapanan sikayet + talep (alarm haric) -> 'sikayet_talep'."""
+class OneDeskKaynagi(_GunlukOzetKaynagi):
+    """OneDesk: bu yil KAPANAN sikayet + talep (2026-11-21 kullanici: "durumu closed olmuslarla skor hesabi yapacagiz")."""
 
-    ad = "REPORTDB"
+    ad = "OneDesk (kapanan şikayet + talep)"
     metrikler = ("sikayet_talep",)
-    oracle_anahtari = "oracle_reportdb"
+
+    def _deger(self, ozet: dict, cati: Customer, istirakler: list[Customer]) -> Any:
+        from app.skor.gunluk import grup_toplami
+
+        s, t = grup_toplami(ozet, cati, istirakler, "sikayet"), grup_toplami(ozet, cati, istirakler, "talep")
+        return None if s is None and t is None else (s or 0) + (t or 0)
 
 
-class OnentDbKaynagi(_DbKaynagi):
-    """ONENTDB. Beklenen: musteri basina aktif devre / CI sayisi -> 'lokasyon_sayisi' (Urun-Tutar Excel'den sonra)."""
+class OnentKaynagi(_GunlukOzetKaynagi):
+    """ONENT musteri envanteri: farkli kurumsal lokasyon sayisi (aktif CI'lar); lokasyon bilgisi yoksa aktif CI sayisi."""
 
-    ad = "ONENTDB"
+    ad = "ONENT (aktif CI lokasyonu)"
     metrikler = ("lokasyon_sayisi",)
-    oracle_anahtari = "oracle_onent"
+
+    def _deger(self, ozet: dict, cati: Customer, istirakler: list[Customer]) -> Any:
+        from app.skor.gunluk import grup_toplami
+
+        lok, ci = grup_toplami(ozet, cati, istirakler, "lokasyon"), grup_toplami(ozet, cati, istirakler, "ci")
+        return (lok or ci) or None
 
 
 class UrunTutarExcelKaynagi(Kaynak):
@@ -224,13 +242,15 @@ class KriterSecimKaynagi(Kaynak):
 
 def kaynaklar(kriterler: list[dict] | None) -> list[Kaynak]:
     """Oncelik sirasi: listede ONCE gelen hazir kaynak metrigi saglar."""
-    return [KriterSecimKaynagi(kriterler), ReportDbKaynagi(), UrunTutarExcelKaynagi(), OnentDbKaynagi(), PanelKaynagi()]
+    return [KriterSecimKaynagi(kriterler), OneDeskKaynagi(), UrunTutarExcelKaynagi(), OnentKaynagi(), PanelKaynagi()]
 
 
 AD_EN = {
     "Panel (kart + aylık rapor)": "Panel (card + monthly report)",
     "Ürün-Tutar (Excel)": "Product-Amount (Excel)",
     "Seçilen veri kaynağı": "Selected data source",
+    "OneDesk (kapanan şikayet + talep)": "OneDesk (closed complaints + requests)",
+    "ONENT (aktif CI lokasyonu)": "ONENT (active CI locations)",
 }
 
 

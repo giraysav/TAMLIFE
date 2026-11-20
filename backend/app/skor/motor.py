@@ -57,7 +57,6 @@ KAYNAK_ADLARI = {
     'auto_rapor': 'Aylık Rapor · rapor ayı sayısı', KAYNAKSIZ: 'Kaynak yok (başlıktan anlaşılamadı)',
 }
 # Yalniz Servis Cesitliligi sayfa secimini yedek alir (servisler sayfada secilir).
-SAYFA_YEDEKLI = ('servis_cesitliligi',)
 
 # Hucrelerde gecerli kural yoksa (eski "x" isaretli tablo) kullanilan varsayilanlar;
 # sayfadaki eski sabit esiklerle ayni.
@@ -294,14 +293,11 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
         puan, deger = kural_puani(kriter, metrik['deger'])
         sonuc.update(deger=deger, kaynak=metrik['kaynak'], durum='otomatik', puan=puan,
                      varsayilan_kural=kurallar(kriter)[1])
-    elif tur in SAYFA_YEDEKLI:
-        # Servis Cesitliligi: Urun-Tutar gelene kadar servisler sayfada secilir; musteriye
-        # sayfadan son atanan puan yedektir. Diger kriterlerde veri yoksa 'eksik'.
-        secim = (manuel or {}).get(normal(baslik))
-        if isinstance(secim, (int, float)) and int(secim) in (0,) + PUANLAR:
-            sonuc.update(puan=int(secim), durum='manuel', kaynak='sayfa (son atama)')
-    sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
-    return sonuc
+        sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
+        return sonuc
+    # KARMA (2026-11-21 kullanici: gunluk isci skoru gunceller): verisi olmayan kriter, Kriter dokumunde kayitli secime duser
+    # (manuel kipteki kuralla ayni; dokumde yalniz bu kriterler secilir). Secim de yoksa 'eksik'.
+    return kriter_degerlendir(kriter, metrikler, manuel, otomatik=False)
 
 
 def musteri_skoru(kriterler, metrikler, manuel=None, otomatik=True):

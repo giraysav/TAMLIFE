@@ -3,6 +3,8 @@
 #       panel dongusu   -> kurulum\canli_baslat.ps1  (panel, 127.0.0.1:8117, canli mod)
 #       vekil dongusu   -> kurulum\tls_vekili.ps1    (https://<VekilAd>:443/ -> panel)
 #       ReportDB iscisi -> python -m app.isci reportdb, her 6 dk, tur siniri 20 dk (eski ayri gorevin 5 dk siniri turu yariyda oldurdu)
+#   TAMLIFE_Utilizasyon_0600 (2026-11-21) -> python -m app.isci utilizasyon, HER GUN 06:00, SYSTEM (oturum gerekmez; Oracle'a
+#       baglanmaz: OneDesk/ONENT PostgreSQL + panel DB). Kapanan kayit + envanter ozeti ve final skor. Kacirilirsa ilk firsatta calisir.
 #   Eski ayri gorevler (TAMLIFE_v35_Panel / _TLS_Vekil / TAM_Life_v35_ReportDB_6dk / _Gece_Sync) kayitta silinir.
 # PAROLA YOK (2026-10-25): hesap parolasi kurum PAM'i ile 24 saatte bir donduruluyor; parolali (Password) gorev her donusten sonra
 # 0x8007052E ile baslamiyordu. Gorevler LogonType Interactive + en yuksek yetki: parola saklanmaz/sorulmaz, donus gorevleri bozmaz.
@@ -18,6 +20,7 @@
 #                                            baslatilir; gorev baslamazsa panel ve vekil dogrudan surec olarak acilir (bir sonraki
 #                                            yeniden baslatmaya kadar). Cikis: 0 tamam, 2 panel acik ama gorevsiz, 1 panel acilamadi
 #   .\canli_gorev_kur.ps1 -PanelYenile     : yalniz paneli yeniden baslatir (vekil / isci dokunulmaz); 0 = 120 sn icinde saglikli
+#   .\canli_gorev_kur.ps1 -UtilizasyonGorevi : yalniz 06:00 utilizasyon gorevini kaydeder (panel / vekil / isciye dokunmaz)
 #   .\canli_gorev_kur.ps1 -Durum           : gorevleri, panel portunu ve gunluklerin son satirlarini gosterir
 #   .\canli_gorev_kur.ps1 -Durdur          : panel, vekil ve ReportDB iscisini durdurur (gorevler kayitli kalir; prod_uygula.ps1 kod /
 #                                            bagimlilik degistirmeden once kullanir). Baslatmak: -YenidenBaslat
@@ -30,6 +33,7 @@ param([switch]$Hemen,
       [switch]$YenidenBaslat,
       [switch]$Durdur,
       [switch]$PanelYenile,
+      [switch]$UtilizasyonGorevi,
       [ValidateSet('', 'panel', 'vekil', 'servis')]
       [string]$Calistir = '',
       [string]$VekilAd = '+',
@@ -47,6 +51,7 @@ $GorevPanel = 'TAMLIFE_v35_Panel'
 $GorevVekil = 'TAMLIFE_v35_TLS_Vekil'
 $GorevRapor = 'TAM_Life_v35_ReportDB_6dk'
 $GorevGece = 'TAMLIFE_v35_Gece_Sync'
+$GorevUtil = 'TAMLIFE_Utilizasyon_0600'   # 2026-11-21: gunluk utilizasyon turu (kapanan kayitlar + envanter -> skor)
 $PsExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
 function Adim($m) { Write-Host "[*] $m" -ForegroundColor Cyan }
@@ -285,6 +290,18 @@ function Gizli-Eylem($arg, $dizin) {
     New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\conhost.exe') -Argument "--headless powershell.exe $arg" -WorkingDirectory $dizin
 }
 
+function Util-Gorevi-Kaydet {
+    $pyw = Join-Path $Kok '.venv\Scripts\pythonw.exe'
+    if (-not (Test-Path $pyw)) { throw "Python yok: $pyw" }
+    $eylem = New-ScheduledTaskAction -Execute $pyw -Argument '-m app.isci utilizasyon' -WorkingDirectory (Join-Path $Kok 'backend')
+    $tetik = New-ScheduledTaskTrigger -Daily -At '06:00'
+    $ayar = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew `
+        -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+    $sistem = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    [void](Register-ScheduledTask -TaskName $GorevUtil -Action $eylem -Trigger $tetik -Settings $ayar -Principal $sistem -Description 'TAMLIFE gunluk utilizasyon: kapanan sikayet/talep/alarm + envanter ozeti ve final skor (her gun 06:00)' -Force)
+    Tamam "Gorev kaydedildi: $GorevUtil (her gun 06:00, SYSTEM)"
+}
+
 function Gorevleri-Kaydet {
     foreach ($d in 'kurulum\canli_baslat.ps1', 'kurulum\tls_vekili.ps1') {
         if (-not (Test-Path (Join-Path $Kok $d))) { throw "Dosya yok: $Kok\$d" }
@@ -310,16 +327,24 @@ function Gorevleri-Kaydet {
     $bekci2 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 5)
     [void](Register-ScheduledTask -TaskName $GorevAcilis -Action $eylem -Trigger @($acilis, $bekci2) -Settings $ayar -Principal $sistem -Description 'TAMLIFE servisi (SYSTEM, sunucu acilisinda oturumsuz): panel + TLS vekili + ReportDB iscisi' -Force)
     Tamam "Gorev kaydedildi: $GorevAcilis (SYSTEM, sunucu acilisinda)"
+    Util-Gorevi-Kaydet
     # Eski ayri gorevler (panel / vekil / ReportDB / gece senkronu) artik gereksiz: varsa silinir.
     foreach ($eski in $GorevPanel, $GorevVekil, $GorevRapor, $GorevGece) {
         if (Get-ScheduledTask -TaskName $eski -ErrorAction SilentlyContinue) { Gorev-Sil $eski }
     }
 }
 
+if ($UtilizasyonGorevi) {
+    try { Util-Gorevi-Kaydet } catch { Dur $_.Exception.Message }
+    $b = Get-ScheduledTaskInfo -TaskName $GorevUtil
+    Write-Host "    Sonraki calisma: $($b.NextRunTime)"
+    exit 0
+}
+
 if ($Durum) {
-    foreach ($ad in $GorevAcilis, $GorevServis, $GorevPanel, $GorevVekil, $GorevRapor) {
+    foreach ($ad in $GorevAcilis, $GorevServis, $GorevUtil, $GorevPanel, $GorevVekil, $GorevRapor) {
         $g = Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue
-        if (-not $g -and $ad -ne $GorevServis -and $ad -ne $GorevAcilis) { continue }   # eski ayri gorevler yoksa gurultu yapma
+        if (-not $g -and $ad -ne $GorevServis -and $ad -ne $GorevAcilis -and $ad -ne $GorevUtil) { continue }   # eski ayri gorevler yoksa gurultu yapma
         if ($g) {
             $b = Get-ScheduledTaskInfo -TaskName $ad
             Write-Host "$ad : durum=$($g.State) kip=$($g.Principal.LogonType) son sonuc=0x$('{0:X}' -f $b.LastTaskResult) son calisma=$($b.LastRunTime) sonraki=$($b.NextRunTime)"
@@ -340,7 +365,7 @@ if ($Kaldir) {
     Adim 'Gorevler durdurulup siliniyor'
     Hepsini-Durdur
     Isci-Durdur
-    foreach ($ad in $GorevServis, $GorevAcilis, $GorevVekil, $GorevPanel, $GorevRapor) { if (Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue) { Gorev-Sil $ad } }
+    foreach ($ad in $GorevServis, $GorevAcilis, $GorevUtil, $GorevVekil, $GorevPanel, $GorevRapor) { if (Get-ScheduledTask -TaskName $ad -ErrorAction SilentlyContinue) { Gorev-Sil $ad } }
     Uyari "Gorev durunca panel ve vekil de kapanmis olmali. Denetim: Get-NetTCPConnection -LocalPort $PanelPort -State Listen"
     exit 0
 }

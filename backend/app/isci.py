@@ -25,6 +25,10 @@
   ..\\.venv\\Scripts\\python.exe -m app.isci envanter [--zorla]
       Musteri envanteri / Kritik CI (musteri/envanter.py): ONENT CMDB'den panel Musteri No'larinin CI'lari (4 saatte bir; --zorla:
       hemen). 'reportdb' turu her calismada bunu da (ayri kilitle) cagirir; Oracle istemcisi gerekmez.
+  ..\\.venv\\Scripts\\python.exe -m app.isci utilizasyon [--kuru]
+      Gunluk utilizasyon turu (skor/gunluk.py): bu yil KAPANAN sikayet/talep (OneDesk), kapanan alarm (ReportDB kayitlari), aktif CI /
+      lokasyon (ONENT envanteri) -> util_source_summary; cati skorlari yeniden hesaplanip degisenlere yazilir. Zamanlanmis gorev her
+      sabah 06:00 (kurulum\\canli_gorev_kur.ps1). --kuru: ozeti yazar, skora dokunmaz.
   --kuru: hicbir sey yazmaz; sorguyu calistirip satir sayisini ve ilk satirlari gosterir.
 Kaynak <ON EK>_ENABLED=true degilse Oracle'a baglanilmaz, hicbir sey yazilmaz. Ayarlar backend/.env (panelle ayni: TAMLIFE_DATABASE_URL,
 ORACLE_*). Cikis: 0 basarili | 1 hata (tampon ve kartlar degismez) | 2 baska calisma suruyor (atlandi).
@@ -218,6 +222,35 @@ def envanter_turu(zorla: bool = False) -> int:
             kilit.unlink()
         except OSError:
             pass
+
+
+def utilizasyon_turu(kuru: bool = False) -> int:
+    """Gunluk utilizasyon (06:00). Ayni anda tek calisma; kaynak hatasi ozette gorunur, skor kalan verilerle hesaplanir."""
+    from app.skor import gunluk
+
+    kilit = _klasor() / "isci_utilizasyon.kilit"
+    if not kilit_al(kilit):
+        gunluge_yaz("utilizasyon ATLANDI baska calisma suruyor")
+        return 2
+    try:
+        envanter_turu()  # envanter bayatsa once yenilenir (4 saat kurali)
+        with oturum() as db:
+            d = gunluk.calistir(db, skor_yaz=not kuru)
+    except Exception as e:  # noqa: BLE001
+        return _hata("utilizasyon", f"basarisiz: {type(e).__name__}: {str(e)[:200]}")
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+    k = d["kaynaklar"]
+    parca = [f"{ad} {v.get('durum')}" + (f" ({v['hata'][:120]})" if v.get("hata") else "") for ad, v in k.items()]
+    sk = d.get("skor")
+    satir = (f"utilizasyon {'HATA' if any(v.get('durum') == 'hata' for v in k.values()) else 'OK'} {d['sure_sn']} sn; "
+             f"{'; '.join(parca)}" + (f"; skor {sk['uygulanan']} yazildi, {sk['degismeyen']} degismedi, {sk['atlanan']} eksik" if sk else "; skor yazilmadi (kuru)"))  # fmt: skip
+    print(("[OK] " if " OK " in satir else "[!] ") + satir)
+    gunluge_yaz(satir)
+    return 0 if " OK " in satir else 1
 
 
 def oracle_cek(anahtar: str, kuru: bool = False) -> int:
@@ -518,6 +551,8 @@ def main(argv: list[str] | None = None) -> int:
     rd.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
     ev = alt.add_parser("envanter", help="musteri envanteri / Kritik CI (ONENT CMDB)")
     ev.add_argument("--zorla", action="store_true", help="yenileme zamanini bekleme")
+    ut = alt.add_parser("utilizasyon", help="gunluk utilizasyon: kapanan kayitlar + envanter -> ozet ve skor (06:00)")
+    ut.add_argument("--kuru", action="store_true", help="ozeti yaz, skora dokunma")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
     for alt_p in (r, c):
@@ -533,6 +568,8 @@ def main(argv: list[str] | None = None) -> int:
         return pg_cek(a.kaynak, a.kuru, a.kullanici)
     if a.is_ == "envanter":
         return envanter_turu(a.zorla)
+    if a.is_ == "utilizasyon":
+        return utilizasyon_turu(a.kuru)
     hata = _istemci(a.client)
     if hata:
         return _hata(a.is_ if a.is_ != "cek" else a.kaynak, hata)

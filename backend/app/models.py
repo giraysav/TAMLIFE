@@ -44,6 +44,7 @@ TABLE_OWNER = {
     "report_recipient": "rapor",
     "customer_ci": "musteri",
     "customer_ci_flag": "musteri",
+    "util_source_summary": "skor",
     "report_cmdb": "rapor",
     "report_circuit": "rapor",
     "report_circuit_data": "rapor",
@@ -291,6 +292,22 @@ class CustomerCiFlag(Base):
     critical: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_by: Mapped[str] = mapped_column(String(120), default="")
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class UtilSourceSummary(Base):
+    """Utilizasyon veri ozeti (2026-11-21 kullanici: "skor hesabi icin kapanmis kayitlari baz alacagiz; her sabah 06:00'da isci
+    calissin ve skoru guncellesin"): musteri karti basina bu yil KAPANAN alarm (ReportDB) / sikayet / talep (OneDesk) ve aktif CI /
+    lokasyon (ONENT envanteri). Gunluk isci (skor/gunluk.py) bastan yazar; skor ve Yonetim > Veri Ozeti buradan okur."""
+
+    __tablename__ = "util_source_summary"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    year: Mapped[int] = mapped_column(Integer)
+    alarm: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = kaynak okunamadi
+    sikayet: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    talep: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ci: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lokasyon: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # --- Aylik rapor devre grafikleri (2026-11-20; ReportDB LOE sorgusu, app.rapor.loe) ---------------------------------------
