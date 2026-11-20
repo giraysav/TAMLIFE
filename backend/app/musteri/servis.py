@@ -362,7 +362,14 @@ def kritik_ci_listesi(db: Session, user: Principal, musteri_id: int, metin: str 
     """Kartin Kritik CI penceresi: kart ve istiraklerinin envanteri (sunucuda arama, en fazla 500 satir)."""
     musteri = musteri_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
-    return envanter.kritik_ci(db, [musteri, *istirakler], metin)
+    return envanter.kritik_ci(db, [musteri, *istirakler], musteri.id, metin, duzenleyebilir_mi(db, user, musteri))
+
+
+def kritik_ci_isaretle(db: Session, user: Principal, musteri_id: int, ci_no: str, kritik: bool) -> dict:
+    """CI satirindaki Kritik CI secimi (EVET / HAYIR); yalniz karti duzenleyebilen."""
+    musteri = musteri_yaz_getir(db, user, musteri_id)
+    istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
+    return envanter.isaretle(db, musteri, [musteri, *istirakler], ci_no, kritik, user.username)
 
 
 def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] | None) -> dict:

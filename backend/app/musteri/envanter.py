@@ -22,7 +22,7 @@ from sqlalchemy import delete, func, insert, select
 from sqlalchemy.orm import Session
 
 from app.dil import m
-from app.models import AppSetting, Customer, CustomerCi
+from app.models import AppSetting, Customer, CustomerCi, CustomerCiFlag
 from app.ortak import simdi
 from app.tampon.eslestirme import anahtar, musteri_anahtarlari
 
@@ -36,6 +36,7 @@ SORGU_SN = 600
 OZELLIKLER = (
     ("BANDWIDTH", "bw"),
     ("IMT_ID", "imt"),
+    ("DEVRE_NO", "devre"),
     ("KURUMSAL_LOKASYON_ADI", "lokasyon"),
     ("ALTYAPI_TIPI", "altyapi"),
     ("ERISIM_ALTYAPISI", "erisim"),
@@ -165,19 +166,24 @@ def _anahtarlar(musteriler: list[Customer]) -> list[str]:
 
 def _basliklar(coklu: bool) -> list[str]:
     return ([m("Müşteri No", "Customer No")] if coklu else []) + [
-        m("CI adı", "CI name"), m("Servis", "Service"), m("Durum", "Status"), m("Bant genişliği", "Bandwidth"), "IMT ID",
+        m("CI adı", "CI name"), m("Devre No", "Circuit No"), m("Servis", "Service"), m("Durum", "Status"), m("Bant genişliği", "Bandwidth"), "IMT ID",
         m("Lokasyon", "Location"), m("Altyapı", "Infrastructure"), m("Hizmet saati", "Service hours"), m("Kurulum tarihi", "Installed"),
     ]  # fmt: skip
 
 
-def _ozet(db: Session, anahtarlar: list[str]) -> tuple[int, str]:
+def _kritikler(db: Session, musteri_id: int) -> set[str]:
+    return set(db.scalars(select(CustomerCiFlag.ci_no).where(CustomerCiFlag.customer_id == musteri_id, CustomerCiFlag.critical.is_(True))))
+
+
+def _ozet(db: Session, anahtarlar: list[str], kritik: int = 0) -> tuple[int, str]:
     toplam = db.scalar(select(func.count()).select_from(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar))) or 0
     aktif = db.scalar(select(func.count()).select_from(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar), CustomerCi.status == "ACTIVE")) or 0
     son = db.scalar(select(func.max(CustomerCi.refreshed_at)))
     if son is not None:
         son = (son if son.tzinfo else son.replace(tzinfo=UTC)).astimezone(TR)
     tarih = son.strftime("%d.%m.%Y %H:%M") if son else "—"
-    return toplam, m(f"{toplam} CI · {aktif} aktif · güncelleme {tarih}", f"{toplam} CIs · {aktif} active · updated {tarih}")
+    return toplam, m(f"{toplam} CI · {aktif} aktif · {kritik} kritik · güncelleme {tarih}",
+                     f"{toplam} CIs · {aktif} active · {kritik} critical · updated {tarih}")
 
 
 def kart_ozeti(db: Session, musteriler: list[Customer], musteri_id: int) -> dict[str, Any]:
@@ -185,36 +191,57 @@ def kart_ozeti(db: Session, musteriler: list[Customer], musteri_id: int) -> dict
     anahtarlar = _anahtarlar(musteriler)
     if not anahtarlar:
         return {"basliklar": _basliklar(False), "satirlar": [], "toplam": 0, "ozet": m("Kartta Müşteri No yok.", "The card has no Customer No."), "ara": "", "adres": None}
-    toplam, ozet = _ozet(db, anahtarlar)
+    toplam, ozet = _ozet(db, anahtarlar, len(_kritikler(db, musteri_id)))
     return {"basliklar": _basliklar(len(anahtarlar) > 1), "satirlar": [], "toplam": toplam, "ozet": ozet,
             "ara": m("CI adı, servis, IMT ID, lokasyon ara…", "Search CI name, service, IMT ID, location…"),
             "adres": f"/api/v1/musteri/{musteri_id}/kritik-ci"}  # fmt: skip
 
 
-def kritik_ci(db: Session, musteriler: list[Customer], metin: str = "") -> dict[str, Any]:
-    """Kritik CI listesi: kart (ve istirakleri) Musteri No'larinin envanteri; aktif once, sonra servis ve ad. Arama sunucuda
-    (tum sutunlarda parca eslesmesi, kelimeler VE); en fazla EN_COK_SATIR satir doner, `eslesen` toplam eslesmeyi verir."""
+def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: str = "", duzenleyebilir: bool = False) -> dict[str, Any]:
+    """CI listesi: kart (ve istirakleri) Musteri No'larinin envanteri; kritik isaretli once, sonra aktif, servis ve ad. Arama sunucuda
+    (tum sutunlarda parca eslesmesi, kelimeler VE; "evet"/"hayir" kritik durumunu da arar); en fazla EN_COK_SATIR satir."""
     anahtarlar = _anahtarlar(musteriler)
     coklu = len(anahtarlar) > 1
+    etiket = {"kritik_baslik": m("Kritik CI", "Critical CI"), "evet": m("Evet", "Yes"), "hayir": m("Hayır", "No"), "duzenleyebilir": duzenleyebilir}
     if not anahtarlar:
-        return {"basliklar": _basliklar(False), "satirlar": [], "toplam": 0, "eslesen": 0, "ozet": m("Kartta Müşteri No yok.", "The card has no Customer No.")}
+        return {"basliklar": _basliklar(False), "satirlar": [], "kayitlar": [], "toplam": 0, "eslesen": 0,
+                "ozet": m("Kartta Müşteri No yok.", "The card has no Customer No."), **etiket}  # fmt: skip
+    kritik = _kritikler(db, musteri_id)
     kayitlar = db.scalars(select(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar))).all()
-    kayitlar = sorted(kayitlar, key=lambda r: (SIRA.get(r.status.upper(), 9), r.service, r.ci_name))
+    kayitlar = sorted(kayitlar, key=lambda r: (r.ci_no not in kritik, SIRA.get(r.status.upper(), 9), r.service, r.ci_name))
     parcalar = [p for p in " ".join((metin or "").split())[:200].casefold().split(" ") if p]
-    satirlar = []
+    sonuc = []
     eslesen = 0
     for r in kayitlar:
         a = r.attrs or {}
-        satir = ([r.customer_key] if coklu else []) + [
-            r.ci_name, r.service, _durum_adi(r.status), a.get("bw", ""), a.get("imt", ""), a.get("lokasyon", ""), _altyapi(a),
-            a.get("saat", ""), (a.get("kurulum", "") or "")[:10],
+        hucreler = ([r.customer_key] if coklu else []) + [
+            r.ci_name, a.get("devre", ""), r.service, _durum_adi(r.status), a.get("bw", ""), a.get("imt", ""), a.get("lokasyon", ""),
+            _altyapi(a), a.get("saat", ""), (a.get("kurulum", "") or "")[:10],
         ]  # fmt: skip
+        k = r.ci_no in kritik
         if parcalar:
-            metin_ = " ".join(satir).casefold()
+            metin_ = (" ".join(hucreler) + " " + (etiket["evet"] if k else etiket["hayir"])).casefold()
             if not all(p in metin_ for p in parcalar):
                 continue
         eslesen += 1
-        if len(satirlar) < EN_COK_SATIR:
-            satirlar.append(satir)
-    toplam, ozet = _ozet(db, anahtarlar)
-    return {"basliklar": _basliklar(coklu), "satirlar": satirlar, "toplam": toplam, "eslesen": eslesen, "ozet": ozet}
+        if len(sonuc) < EN_COK_SATIR:
+            sonuc.append({"ci": r.ci_no, "kritik": k, "hucreler": hucreler})
+    toplam, ozet = _ozet(db, anahtarlar, len(kritik))
+    return {"basliklar": _basliklar(coklu), "satirlar": [x["hucreler"] for x in sonuc], "kayitlar": sonuc, "toplam": toplam,
+            "eslesen": eslesen, "ozet": ozet, **etiket}  # fmt: skip
+
+
+def isaretle(db: Session, musteri: Customer, musteriler: list[Customer], ci_no: str, kritik: bool, kullanici: str) -> dict[str, Any]:
+    """CI'yi kartta kritik (EVET) / degil (HAYIR) isaretler. CI kartin (ya da istiraklerinin) envanterinde olmali."""
+    from app.musteri.servis import MusteriHata
+
+    ci_no = (ci_no or "").strip()[:40]
+    var = db.scalar(select(CustomerCi.id).where(CustomerCi.ci_no == ci_no, CustomerCi.customer_key.in_(_anahtarlar(musteriler))).limit(1))
+    if not ci_no or var is None:
+        raise MusteriHata(404, m("CI bu müşterinin envanterinde bulunamadı.", "CI not found in this customer's inventory."))
+    k = db.get(CustomerCiFlag, (musteri.id, ci_no))
+    if k is None:
+        k = CustomerCiFlag(customer_id=musteri.id, ci_no=ci_no)
+        db.add(k)
+    k.critical, k.updated_by, k.updated_at = bool(kritik), kullanici, simdi()
+    return {"ci": ci_no, "kritik": bool(kritik)}

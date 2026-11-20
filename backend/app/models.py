@@ -43,6 +43,7 @@ TABLE_OWNER = {
     "report_dispatch": "rapor",
     "report_recipient": "rapor",
     "customer_ci": "musteri",
+    "customer_ci_flag": "musteri",
     "report_cmdb": "rapor",
     "report_circuit": "rapor",
     "report_circuit_data": "rapor",
@@ -279,6 +280,17 @@ class CustomerCi(Base):
     status: Mapped[str] = mapped_column(String(40), default="")
     attrs: Mapped[dict] = mapped_column(JSON, default=dict)  # yalniz izinli ozellikler (envanter.OZELLIKLER)
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CustomerCiFlag(Base):
+    """Kartta kullanicinin isaretledigi kritik CI'lar (EVET/HAYIR). Envanter (customer_ci) yenilense de korunur; anahtar CMDB CI no."""
+
+    __tablename__ = "customer_ci_flag"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
+    ci_no: Mapped[str] = mapped_column(String(40), primary_key=True)
+    critical: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_by: Mapped[str] = mapped_column(String(120), default="")
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # --- Aylik rapor devre grafikleri (2026-11-20; ReportDB LOE sorgusu, app.rapor.loe) ---------------------------------------

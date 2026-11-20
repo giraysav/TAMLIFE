@@ -307,6 +307,18 @@ def kritik_ci(musteri_id: KimlikTipi, q: str = Query(default="", max_length=200)
     return _yap(db, lambda: ms.kritik_ci_listesi(db, e.user, musteri_id, q))
 
 
+class KritikCiGovde(BaseModel):
+    ci: str = Field(min_length=1, max_length=40)
+    kritik: bool
+
+
+@router.put("/musteri/{musteri_id:int}/kritik-ci")
+def kritik_ci_isaretle(musteri_id: KimlikTipi, body: KritikCiGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    sonuc = _yap(db, lambda: ms.kritik_ci_isaretle(db, e.user, musteri_id, body.ci, body.kritik), yaz=True)
+    _denetim(e.user, "musteri.kritik_ci", f"musteri={musteri_id} ci={body.ci} kritik={body.kritik}")
+    return sonuc
+
+
 @router.get("/musteri/{musteri_id:int}/rapor/trafik")
 def trafik_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     """Donemin devre trafik serileri (ReportDB); cizim tarayicida ayri kodla (dist/rapor-trafik.js, Apache ECharts)."""
