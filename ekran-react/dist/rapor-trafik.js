@@ -27,7 +27,7 @@
 
   var METIN = {
     tr: {
-      trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Erişilebilirlik",
+      trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", saatAraligi: "Saat aralığı", veriler: "Grafikte gösterilecek veriler",
       bolum: "Devre grafikleri (ReportDB)", ara: "Açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
       kaldir: "Kaldır", secili: "Seçili devreler", seciliYok: "Henüz devre seçilmedi.", sonucYok: "Eşleşen devre bulunamadı.",
@@ -109,7 +109,7 @@
   // Hafta sonlari hafif gri, kesintiler kirmizi bant. Renkler dataviz dogrulayicisindan gecti (panel ici ciftler, acik zemin).
   var C = {
     giris: "#2a78d6", cikis: "#eb6834", gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948",
-    metin: "#0b1f3a", ikincil: "#52606d", soluk: "#8a96a3", izgara: "#e8edf2", kutu: "#f4f7fa", haftaSonu: "rgba(100,116,139,0.07)",
+    metin: "#0b1f3a", ikincil: "#3b4754", soluk: "#8a96a3", izgara: "#e8edf2", kutu: "#f4f7fa", haftaSonu: "rgba(100,116,139,0.07)",
     kesinti: "rgba(227,73,72,0.14)"
   };
   var BIRIM = [[1e9, "Gbps"], [1e6, "Mbps"], [1e3, "Kbps"], [1, "bps"]];
@@ -230,7 +230,7 @@
     }
 
     // Yerlesim
-    var SOL = 58, SAG = 24, UST_BASLIK = 54, KUTU_Y = UST_BASLIK + 6, KUTU_H = 58, PANEL_BASLIK = 22, ARA = 14;
+    var SOL = 58, SAG = 24, UST_BASLIK = 54, KUTU_Y = UST_BASLIK + 6, KUTU_H = 72, PANEL_BASLIK = 22, ARA = 14;
     var y = KUTU_Y + KUTU_H + 20, grids = [], graphic = [];
     paneller.forEach(function (p, i) {
       graphic.push({ type: "text", left: SOL - 46, top: y, style: { text: p.ad, fill: C.metin, font: "700 12px " + YAZI } });
@@ -257,9 +257,9 @@
     kutular.forEach(function (k, i) {
       var x = 12 + i * (w + bosluk);
       graphic.push({ type: "rect", left: x, top: KUTU_Y, shape: { width: w, height: KUTU_H, r: 6 }, style: { fill: C.kutu } });
-      graphic.push({ type: "text", left: x + 10, top: KUTU_Y + 8, style: { text: k[0], fill: C.ikincil, font: "700 9.5px " + YAZI, width: w - 16, overflow: "truncate" } });
-      graphic.push({ type: "text", left: x + 10, top: KUTU_Y + 21, style: { text: k[1], fill: C.metin, font: "800 17px " + YAZI } });
-      graphic.push({ type: "text", left: x + 10, top: KUTU_Y + 42, style: { text: k[2], fill: C.soluk, font: "600 9.5px " + YAZI, width: w - 16, overflow: "truncate" } });
+      graphic.push({ type: "text", left: x + 10, top: KUTU_Y + 9, style: { text: k[0], fill: C.metin, font: "700 11px " + YAZI, width: w - 16, overflow: "truncate" } });
+      graphic.push({ type: "text", left: x + 10, top: KUTU_Y + 25, style: { text: k[1], fill: C.metin, font: "800 20px " + YAZI } });
+      graphic.push({ type: "text", left: x + 10, top: KUTU_Y + 52, style: { text: k[2], fill: C.ikincil, font: "600 11px " + YAZI, width: w - 16, overflow: "truncate" } });
     });
 
     // Dip notu: tek satir
