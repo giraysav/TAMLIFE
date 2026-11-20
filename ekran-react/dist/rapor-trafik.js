@@ -22,7 +22,7 @@
 
   var RENK = { lacivert: "#002855", sari: "#e8a400", mavi: "#0284c7", mor: "#7c3aed", kirmizi: "#be123c", gri: "#64748b", cizgi: "#e2e8f0" };
   var YAZI = "'Segoe UI', Calibri, Arial, sans-serif";
-  var GENISLIK = 900, YUKSEKLIK = 380, PIKSEL = 2;
+  var GENISLIK = 900, YUKSEKLIK = 380, PIKSEL = 3; // 3x: PDF'te ve buyutmede yazilar keskin kalsin
   var METRIKLER = ["trafik", "kayip", "jitter", "gecikme"];
 
   var METIN = {
@@ -109,7 +109,7 @@
   // Hafta sonlari hafif gri, kesintiler kirmizi bant. Renkler dataviz dogrulayicisindan gecti (panel ici ciftler, acik zemin).
   var C = {
     giris: "#2a78d6", cikis: "#eb6834", gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948",
-    metin: "#0b1f3a", ikincil: "#3b4754", soluk: "#8a96a3", izgara: "#e8edf2", kutu: "#f4f7fa", haftaSonu: "rgba(100,116,139,0.07)",
+    metin: "#0b1f3a", ikincil: "#1f2a37", soluk: "#2f3b48", izgara: "#e3e8ee", kutu: "#f4f7fa", haftaSonu: "rgba(100,116,139,0.07)",
     kesinti: "rgba(227,73,72,0.14)"
   };
   var BIRIM = [[1e9, "Gbps"], [1e6, "Mbps"], [1e3, "Kbps"], [1, "bps"]];
@@ -184,7 +184,7 @@
         seriler.push(Object.assign(sGiris, {
           markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) },
           markLine: sg ? { silent: true, symbol: "none", lineStyle: { type: "dashed", width: 1, color: C.giris },
-            label: { position: "insideEndTop", formatter: m.giris + " " + m.p95 + "  " + bps(sg.p95, dil), color: C.metin, fontSize: 10, fontWeight: 700,
+            label: { position: "insideEndTop", formatter: m.giris + " " + m.p95 + "  " + bps(sg.p95, dil), color: C.metin, fontSize: 11, fontWeight: 700,
               backgroundColor: "rgba(255,255,255,0.9)", padding: [1, 4], borderRadius: 3 },
             data: [{ yAxis: sg.p95 / bol }] } : undefined }));
         seriler.push(alanSerisi(m.cikis, C.cikis, veri(7), p));
@@ -233,7 +233,7 @@
       var ilk = seriler[0], eski = (ilk.markArea && ilk.markArea.data) || [];
       ilk.markArea = { silent: true, data: eski.concat(kes.map(function (a, i) {
         return [{ xAxis: a[0].xAxis, itemStyle: { color: C.kesinti },
-          label: i === 0 ? { show: true, position: "top", distance: 2, formatter: m.kesinti, color: "#b42318", fontSize: 9.5, fontWeight: 700 } : { show: false } }, a[1]];
+          label: i === 0 ? { show: true, position: "top", distance: 2, formatter: m.kesinti, color: "#9f1c14", fontSize: 10.5, fontWeight: 700 } : { show: false } }, a[1]];
       })) };
     }
 
@@ -241,8 +241,8 @@
     var SOL = 58, SAG = 24, UST_BASLIK = 54, KUTU_Y = UST_BASLIK + 6, KUTU_H = 72, PANEL_BASLIK = 22, ARA = 14;
     var y = KUTU_Y + KUTU_H + 20, grids = [], graphic = [];
     paneller.forEach(function (p, i) {
-      graphic.push({ type: "text", left: SOL - 46, top: y, style: { text: p.ad, fill: C.metin, font: "700 12px " + YAZI } });
-      graphic.push({ type: "text", right: SAG, top: y + 1, style: { text: p.birim, fill: C.soluk, font: "600 10.5px " + YAZI, textAlign: "right" } });
+      graphic.push({ type: "text", left: SOL - 46, top: y, style: { text: p.ad, fill: C.metin, font: "800 13px " + YAZI } });
+      graphic.push({ type: "text", right: SAG, top: y + 1, style: { text: p.birim, fill: C.ikincil, font: "700 11.5px " + YAZI, textAlign: "right" } });
       y += PANEL_BASLIK;
       grids.push({ left: SOL, right: SAG, top: y, height: p.boy });
       y += p.boy + (i === paneller.length - 1 ? 0 : ARA + 8);
@@ -257,7 +257,7 @@
     graphic.push({ type: "text", left: 12, top: 12, style: { text: devre.baslik || devre.ci, fill: C.metin, font: "800 15px " + YAZI } });
     graphic.push({ type: "text", left: 12, top: 33, style: {
       text: (devre.baslik ? devre.ci + "   ·   " : "") + ayAdi + " " + yil + "   ·   " + m.saatAraligi + " " + saatMetni(saat),
-      fill: C.ikincil, font: "600 10.5px " + YAZI } });
+      fill: C.ikincil, font: "600 11.5px " + YAZI } });
 
     // Ozet kutucuklari (en fazla 6, esit genislik)
     kutular = kutular.slice(0, 6);
@@ -272,7 +272,7 @@
 
     // Dip notu: tek satir
     graphic.push({ type: "text", left: 12, bottom: 10, style: {
-      text: m.kaynak + (devre.exchours ? "   ·   EXCHOURS " + devre.exchours : ""), fill: C.soluk, font: "600 9.5px " + YAZI } });
+      text: m.kaynak + (devre.exchours ? "   ·   EXCHOURS " + devre.exchours : ""), fill: C.ikincil, font: "600 10.5px " + YAZI } });
 
     var son = paneller.length - 1;
     return {
@@ -281,17 +281,17 @@
       backgroundColor: "#ffffff",
       textStyle: { fontFamily: YAZI, color: C.metin },
       legend: { top: 14, right: SAG, icon: "roundRect", itemWidth: 12, itemHeight: 4, itemGap: 14, data: lejant,
-        textStyle: { fontSize: 10.5, fontWeight: 700, color: C.ikincil } },
+        textStyle: { fontSize: 11.5, fontWeight: 700, color: C.metin } },
       graphic: graphic,
       grid: grids,
       xAxis: paneller.map(function (p, k) {
         return { type: "time", gridIndex: k, min: r[0], max: r[1], boundaryGap: false, axisLine: { lineStyle: { color: "#cfd8e3" } }, axisTick: { show: false },
-          axisLabel: { show: k === son, color: C.ikincil, fontSize: 10, hideOverlap: true, formatter: function (v) { return tarih(v, dil); } },
+          axisLabel: { show: k === son, color: C.metin, fontSize: 11, fontWeight: 600, hideOverlap: true, formatter: function (v) { return tarih(v, dil); } },
           splitLine: { show: false } };
       }),
       yAxis: paneller.map(function (p, k) {
         return { type: "value", gridIndex: k, min: p.olcekli ? undefined : 0, scale: !!p.olcekli, splitNumber: p.boy < 100 ? 2 : 3, axisLine: { show: false }, axisTick: { show: false },
-          axisLabel: { color: C.soluk, fontSize: 9.5, formatter: function (v) { return sayi(v, dil, v && v < 1 ? p.ondalik : v % 1 ? 1 : 0); } },
+          axisLabel: { color: C.ikincil, fontSize: 10.5, fontWeight: 600, formatter: function (v) { return sayi(v, dil, v && v < 1 ? p.ondalik : v % 1 ? 1 : 0); } },
           splitLine: { lineStyle: { color: C.izgara } } };
       }),
       series: seriler
