@@ -27,7 +27,7 @@
 
   var METIN = {
     tr: {
-      trafik: "Trafik", giris: "Giriş", cikis: "Çıkış", gecikme: "Gecikme", jitter: "Jitter", kayip: "Paket kaybı", erisim: "Erişilebilirlik",
+      trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Erişilebilirlik",
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", saatAraligi: "Saat aralığı", veriler: "Grafikte gösterilecek veriler",
       bolum: "Devre grafikleri (ReportDB)", ara: "Açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
       kaldir: "Kaldır", secili: "Seçili devreler", seciliYok: "Henüz devre seçilmedi.", sonucYok: "Eşleşen devre bulunamadı.",
@@ -36,11 +36,11 @@
       noYok: "Kartta Müşteri No olmadığı için devre aranamıyor.", cmdbYok: "ReportDB CMDB verisi henüz alınamadı", olcumHata: "Son ölçüm çekimi başarısız",
       salt: "Bu kartta değişiklik yetkiniz yok; ayarlar ve seçili devreler gösteriliyor.", hata: "İşlem yapılamadı",
       trafikYok: "ReportDB'de trafik sütunu henüz tanımlı değil (tablo yetkisi bekleniyor).", aylikLoe: "LOE aylık", kesinti: "Kesinti",
-      kaynak: "Kaynak: ReportDB · saatlik ölçüm · gecikme, jitter ve paket kaybı günlük ortalama · gri alan hafta sonu",
+      kaynak: "Kaynak: ReportDB · saatlik ölçüm · Delay, Jitter ve Packet Loss günlük ortalama · gri alan hafta sonu",
       ay: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
     },
     en: {
-      trafik: "Traffic", giris: "Inbound", cikis: "Outbound", gecikme: "Delay", jitter: "Jitter", kayip: "Packet loss", erisim: "Availability",
+      trafik: "Traffic", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "avg", enYuksek: "peak", p95: "95th", saatAraligi: "Hour range", veriler: "Data shown on the chart",
       bolum: "Circuit charts (ReportDB)", ara: "Type a description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
       kaldir: "Remove", secili: "Selected circuits", seciliYok: "No circuit selected yet.", sonucYok: "No matching circuit.",
@@ -49,7 +49,7 @@
       noYok: "This card has no Customer No, so circuits cannot be searched.", cmdbYok: "ReportDB CMDB data not received yet", olcumHata: "Last measurement fetch failed",
       salt: "You cannot change this card; settings and selected circuits are shown.", hata: "Action failed",
       trafikYok: "Traffic column is not defined in ReportDB yet (awaiting table access).", aylikLoe: "LOE monthly", kesinti: "Outage",
-      kaynak: "Source: ReportDB · hourly measurement · delay, jitter and packet loss as daily average · grey area weekend",
+      kaynak: "Source: ReportDB · hourly measurement · Delay, Jitter and Packet Loss as daily average · grey area weekend",
       ay: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     }
   };
@@ -177,14 +177,14 @@
           areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(42,120,214,0.30)" }, { offset: 1, color: "rgba(42,120,214,0.02)" }] } },
           markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) },
           markLine: sg ? { silent: true, symbol: "none", lineStyle: { type: "dashed", width: 1, color: C.giris },
-            label: { position: "insideEndTop", formatter: m.p95 + " " + m.giris.toLowerCase() + "  " + bps(sg.p95, dil), color: C.metin, fontSize: 10, fontWeight: 700,
+            label: { position: "insideEndTop", formatter: m.giris + " " + m.p95 + "  " + bps(sg.p95, dil), color: C.metin, fontSize: 10, fontWeight: 700,
               backgroundColor: "rgba(255,255,255,0.9)", padding: [1, 4], borderRadius: 3 },
             data: [{ yAxis: sg.p95 / bol }] } : undefined });
         seriler.push({ name: m.cikis, type: "line", xAxisIndex: p, yAxisIndex: p, data: veri(7), showSymbol: false, connectNulls: false, sampling: "lttb",
           lineStyle: { width: 1.5, color: C.cikis }, itemStyle: { color: C.cikis } });
         lejant.push(m.giris, m.cikis);
-        if (sg) kutular.push([m.trafik + " " + m.giris.toLowerCase() + " " + m.p95, bps(sg.p95, dil), m.ort + " " + bps(sg.ort, dil)]);
-        if (sc) kutular.push([m.trafik + " " + m.cikis.toLowerCase() + " " + m.p95, bps(sc.p95, dil), m.ort + " " + bps(sc.ort, dil)]);
+        if (sg) kutular.push([m.giris + " " + m.p95, bps(sg.p95, dil), m.ort + " " + bps(sg.ort, dil)]);
+        if (sc) kutular.push([m.cikis + " " + m.p95, bps(sc.p95, dil), m.ort + " " + bps(sc.ort, dil)]);
       }
     }
 
@@ -192,7 +192,7 @@
     if (gecikmeVar || jitterVar) {
       var gs = gecikmeVar ? gunlukOrtalama(nk, 2, 1, saat) : [], js = jitterVar ? gunlukOrtalama(nk, 3, 1, saat) : [];
       if (gs.length || js.length) {
-        paneller.push({ olcekli: true, ad: gecikmeVar && jitterVar ? m.gecikme + (dil === "en" ? " and " : " ve ") + m.jitter.toLowerCase() : gecikmeVar ? m.gecikme : m.jitter, birim: "ms", boy: 120, ondalik: 1 });
+        paneller.push({ olcekli: true, ad: gecikmeVar && jitterVar ? m.gecikme + " & " + m.jitter : gecikmeVar ? m.gecikme : m.jitter, birim: "ms", boy: 120, ondalik: 1 });
         var q = paneller.length - 1;
         [[gecikmeVar, gs, m.gecikme, C.gecikme, 2], [jitterVar, js, m.jitter, C.jitter, 3]].forEach(function (t) {
           if (!t[0] || !t[1].length) return;
@@ -331,7 +331,7 @@
               pngOnbellek[k] = s ? ciz(ec, s) : null;
             }
             if (pngOnbellek[k]) {
-              var adlar = METRIKLER.filter(function (x) { return ayar.metrikler.indexOf(x) >= 0; }).map(function (x) { return m[x].toLowerCase(); });
+              var adlar = METRIKLER.filter(function (x) { return ayar.metrikler.indexOf(x) >= 0; }).map(function (x) { return x === "trafik" ? m.giris + " / " + m.cikis : m[x]; });
               cikti.push({ anahtar: "devre-" + d.id, baslik: d.ci + (d.baslik ? " · " + d.baslik : "") + " — " + adlar.join(", "), gorsel: pngOnbellek[k] });
             }
           });
