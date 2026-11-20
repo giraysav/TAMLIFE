@@ -47,7 +47,7 @@ def alan_segmentleri(alan: str | None = None) -> tuple[str, ...]:
     toptan = tuple(s for s, a in musteri_alani.SEGMENT_ALANI.items() if a == alan)
     return toptan or tuple(s for s in SEGMENTLER if s not in musteri_alani.SEGMENT_ALANI)
 VARSAYILAN_TUTAR = "0,00 ₺"
-MATRIS_ANAHTARLARI = ("destech", "ci", "raci")
+MATRIS_ANAHTARLARI = ("destech", "raci")  # 2026-11-20: "ci" cikti; Kritik CI / CI NAME musteri envanterinden (musteri/envanter.py)
 RAPOR_ADEDI = 6
 GELIR_ADEDI = 12
 SAYFA_BASINA = 20

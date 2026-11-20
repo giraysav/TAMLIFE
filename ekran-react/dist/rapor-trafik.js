@@ -117,18 +117,6 @@
   function gunAnahtari(t) { return Math.floor((t + TR_SAAT) / 864e5); }
   function gunOrtasi(g) { return g * 864e5 - TR_SAAT + 432e5; }
 
-  /** Saat araligindaki noktalarin gunluk ortalamasi: [[gun ortasi ms, ortalama], ...] */
-  function gunlukOrtalama(nk, i, carpan, saat) {
-    var gun = {};
-    nk.forEach(function (n) {
-      if (n[i] == null || !saatte(n[0], saat)) return;
-      var k = gunAnahtari(n[0]), g = gun[k] || (gun[k] = [0, 0]);
-      g[0] += n[i] * carpan;
-      g[1] += 1;
-    });
-    return Object.keys(gun).sort().map(function (k) { return [gunOrtasi(Number(k)), gun[k][0] / gun[k][1]]; });
-  }
-
   function haftaSonlari(yil, ay) {
     var r = aralik(yil, ay), alanlar = [];
     for (var t = r[0]; t < r[1]; t += 864e5) {
