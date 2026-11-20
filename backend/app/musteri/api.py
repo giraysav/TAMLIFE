@@ -324,6 +324,18 @@ def devre_ekle(musteri_id: KimlikTipi, body: DevreGovde, e: Erisim = Depends(mus
     return sonuc
 
 
+class DevreAyarGovde(BaseModel):
+    metrikler: list[Literal["trafik", "kayip", "jitter", "gecikme"]] = Field(default_factory=list, max_length=4)
+    bas: int = Field(default=0, ge=0, le=23)
+    bit: int = Field(default=23, ge=0, le=23)
+
+
+@router.put("/musteri/{musteri_id:int}/rapor/devre-ayar")
+def devre_ayar(musteri_id: KimlikTipi, body: DevreAyarGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Devre grafiklerinin metrikleri (trafik, paket kaybi, jitter, gecikme) ve saat araligi; musteri basina kalici."""
+    return _yap(db, lambda: trafik.ayar_yaz(db, e.user, musteri_id, body.model_dump()), yaz=True)
+
+
 @router.delete("/musteri/{musteri_id:int}/rapor/devreler/{devre_id:int}")
 def devre_kaldir(musteri_id: KimlikTipi, devre_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     sonuc = _yap(db, lambda: trafik.kaldir(db, e.user, musteri_id, devre_id), yaz=True)

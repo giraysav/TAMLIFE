@@ -50,6 +50,23 @@ def _nesne(anahtar_: str, varsayilan: str) -> str:
     return deger
 
 
+def trafik_sutunlari() -> tuple[str, str] | None:
+    """Trafik (giris, cikis) sutunlari: LOE sorgusunda trafik yok; BRIX.CORPORATE_HR'de hangi sutunlarda tutuldugu tablo yetkisi
+    gelince belirlenir ve .env'e yazilir: LOE_TRAFIK_SUTUNLARI=GIRIS_SUTUNU,CIKIS_SUTUNU (birim bit/sn; LOE_TRAFIK_CARPAN ile
+    cevrilir). Tanimsizsa trafik cekilmez, arayuzde Trafik secenegi pasif kalir."""
+    parcalar = [p.strip().upper() for p in (os.environ.get("LOE_TRAFIK_SUTUNLARI") or "").split(",") if p.strip()]
+    if len(parcalar) != 2 or not all(re.match(r"^[A-Z][A-Z0-9_$#]*$", p) for p in parcalar):
+        return None
+    return parcalar[0], parcalar[1]
+
+
+def trafik_carpani() -> float:
+    try:
+        return float((os.environ.get("LOE_TRAFIK_CARPAN") or "1").replace(",", "."))
+    except ValueError:
+        return 1.0
+
+
 def cmdb_tablosu() -> str:
     return _nesne("LOE_CMDB_TABLO", "ODS_RPT.CORPORATE_FOR_CMDB")
 
@@ -101,6 +118,7 @@ def olcum_sorgusu(cinames: list[str], bas: datetime, bit: datetime) -> tuple[str
     sorgu = (
         "SELECT DY.CINAME, TO_CHAR(DY.DATETIME, 'YYYY-MM-DD HH24:MI:SS') ZAMAN, DY.AVAIL_TIME, DY.TOTAL_TIME, DY.DELAY_AVG, "
         "DY.JITTER_AVG, DY.PACKET_LOST_AVG, ORG.EXCHOURS, "
+        f"{_trafik_sql()}"
         "CASE WHEN P.EXCHOURS IS NOT NULL "
         "AND TRUNC(DY.DATETIME) - TRUNC(DY.DATETIME, 'IW') + 1 <= P.SON_GUN "
         "AND TO_CHAR(DY.DATETIME, 'HH24MISS') BETWEEN P.BAS AND P.BIT THEN 1 ELSE 0 END PENCERE "
@@ -111,6 +129,11 @@ def olcum_sorgusu(cinames: list[str], bas: datetime, bit: datetime) -> tuple[str
         f"WHERE DY.CINAME IN ({yer}) AND DY.DATETIME >= :bas AND DY.DATETIME < :bit"
     )
     return sorgu, {**binds, "bas": bas, "bit": bit}
+
+
+def _trafik_sql() -> str:
+    t = trafik_sutunlari()
+    return f"DY.{t[0]} TRAFIK_GIRIS, DY.{t[1]} TRAFIK_CIKIS, " if t else "NULL TRAFIK_GIRIS, NULL TRAFIK_CIKIS, "
 
 
 # --- Hesap -------------------------------------------------------------------------------------------------------------------
@@ -146,8 +169,10 @@ def ozet(satirlar: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def noktalar(satirlar: list[dict[str, Any]]) -> list[list[Any]]:
-    """Grafik serisi: [epoch_ms, erisim (0-1), gecikme, jitter, kayip (LOE olcegi), pencere 0/1]; zamana gore sirali."""
+    """Grafik serisi: [epoch_ms, erisim (0-1), gecikme (ms), jitter (ms), kayip (0-1, LOE olcegi), pencere 0/1, giris bps, cikis bps];
+    zamana gore sirali."""
     sonuc = []
+    k = trafik_carpani()
     for s in sorted(satirlar, key=lambda x: x["zaman"]):
         t = s["total"]
         sonuc.append([
@@ -157,6 +182,8 @@ def noktalar(satirlar: list[dict[str, Any]]) -> list[list[Any]]:
             None if s["jitter"] is None else round(s["jitter"] / 1000, 4),
             None if s["loss"] is None else round(s["loss"] / 100, 6),
             1 if s["pencere"] else 0,
+            None if s.get("giris") is None else round(s["giris"] * k, 2),
+            None if s.get("cikis") is None else round(s["cikis"] * k, 2),
         ])  # fmt: skip
     return sonuc
 
@@ -280,6 +307,7 @@ def olcum_cek(db: Session, cinames: list[str], yil: int, ay: int) -> int:
                     "zaman": zaman, "avail": _sayi(s[ix["AVAIL_TIME"]]), "total": _sayi(s[ix["TOTAL_TIME"]]),
                     "delay": _sayi(s[ix["DELAY_AVG"]]), "jitter": _sayi(s[ix["JITTER_AVG"]]), "loss": _sayi(s[ix["PACKET_LOST_AVG"]]),
                     "pencere": bool(_sayi(s[ix["PENCERE"]])),
+                    "giris": _sayi(s[ix["TRAFIK_GIRIS"]]), "cikis": _sayi(s[ix["TRAFIK_CIKIS"]]),
                 })  # fmt: skip
     an = simdi()
     for ci, satirlar in gruplar.items():

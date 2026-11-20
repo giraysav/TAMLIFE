@@ -10,10 +10,15 @@ Veri ReportDB'den (LOE sorgusu, app.rapor.loe) ReportDB iscisiyle gelir; panel s
 Cizim tarayicida, React paketinden AYRI kodla (ekran-react/dist/rapor-trafik.js + Apache ECharts 6.1.0); PNG'ler rapor
 onizlemesindeki grafik listesine katilir, PDF akisi degismez.
 
+2026-11-20 (2): "aciklama metnini kaldir; trafik, ploss, jitter, delay checkbox koy; tiklandiginda o veriyi db'den alip tek grafik
+uzerinde olustursun; grafigi olustururken saat secimi olsun". Grafik ayari (metrikler + saat araligi) musteri basina kalicidir
+(app_setting 'rapor.devre_ayar.<musteri_id>'); her devre icin secili metrikler TEK grafikte cizilir.
+
 GET .../rapor/trafik?donem=YYYY-MM sozlesmesi:
-  {"yil", "ay", "duzenleyebilir": bool, "kaynak": {"cmdb": {...}, "olcum": {...}}, "bekliyor": bool,
+  {"yil", "ay", "duzenleyebilir": bool, "trafik_var": bool, "ayar": {"metrikler": [...], "saat": [bas, bit]}, "kaynak": {"cmdb": {...}, "olcum": {...}}, "bekliyor": bool,
    "devreler": [{"id", "ci", "baslik", "durum": "hazir" | "bekliyor" | "veri_yok", "cekildi", "exchours", "ozet",
-                 "noktalar": [[epoch_ms, erisim 0-1, gecikme, jitter, kayip 0-1, pencere 0/1], ...]}]}
+                 "noktalar": [[epoch_ms, erisim 0-1, gecikme ms, jitter ms, kayip 0-1, pencere 0/1, giris bps, cikis bps], ...]}]}
+PUT .../rapor/devre-ayar {"metrikler": [...], "bas": 0-23, "bit": 0-23}: saat araligi bas:00 - bit:59 (bas > bit: gece yarisini asar).
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.dil import m
-from app.models import ReportCircuit, ReportCircuitData, ReportCmdb
+from app.models import AppSetting, ReportCircuit, ReportCircuitData, ReportCmdb
 from app.musteri.servis import MusteriHata, duzenleyebilir_mi, musteri_getir, musteri_yaz_getir
 from app.ortak import simdi
 from app.rapor import loe
@@ -36,6 +41,40 @@ EN_COK_ARAMA = 200
 EN_COK_SONUC = 100
 # Arama sonucunda CINAME yaninda gosterilecek sutunlar (adinda bu parcalar gecen, dolu olanlar)
 _GOSTER = ("DESC", "ACIKLAMA", "PORT", "ORG_ADI", "SERVICE", "HIZ", "SPEED", "BANDWIDTH", "EXCHOURS", "ADRES", "ADDRESS")
+
+
+METRIKLER = ("trafik", "kayip", "jitter", "gecikme")
+VARSAYILAN_AYAR = {"metrikler": ["kayip", "jitter", "gecikme"], "saat": [0, 23]}
+
+
+def _ayar_anahtari(musteri_id: int) -> str:
+    return f"rapor.devre_ayar.{musteri_id}"
+
+
+def ayar_oku(db: Session, musteri_id: int) -> dict[str, Any]:
+    kayit = db.get(AppSetting, _ayar_anahtari(musteri_id))
+    v = kayit.value if kayit is not None and isinstance(kayit.value, dict) else {}
+    metrikler = [x for x in (v.get("metrikler") or []) if x in METRIKLER] if "metrikler" in v else list(VARSAYILAN_AYAR["metrikler"])
+    saat = v.get("saat") if isinstance(v.get("saat"), list) and len(v["saat"]) == 2 else VARSAYILAN_AYAR["saat"]
+    return {"metrikler": metrikler, "saat": [int(saat[0]) % 24, int(saat[1]) % 24]}
+
+
+def ayar_yaz(db: Session, user: Principal, musteri_id: int, govde: dict[str, Any]) -> dict[str, Any]:
+    musteri_yaz_getir(db, user, musteri_id)
+    metrikler = [x for x in METRIKLER if x in set(govde.get("metrikler") or [])]
+    try:
+        bas, bit = int(govde.get("bas", 0)), int(govde.get("bit", 23))
+    except (TypeError, ValueError):
+        raise MusteriHata(400, m("Saat aralığı geçersiz.", "Invalid hour range.")) from None
+    if not (0 <= bas <= 23 and 0 <= bit <= 23):
+        raise MusteriHata(400, m("Saat aralığı geçersiz.", "Invalid hour range."))
+    deger = {"metrikler": metrikler, "saat": [bas, bit]}
+    kayit = db.get(AppSetting, _ayar_anahtari(musteri_id))
+    if kayit is None:
+        db.add(AppSetting(key=_ayar_anahtari(musteri_id), value=deger, updated_by=user.username, updated_at=simdi()))
+    else:
+        kayit.value, kayit.updated_by, kayit.updated_at = deger, user.username, simdi()
+    return deger
 
 
 def _iso(z: Any) -> str | None:
@@ -133,6 +172,8 @@ def getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None 
         "yil": yil,
         "ay": ay,
         "duzenleyebilir": duzenleyebilir_mi(db, user, musteri),
+        "trafik_var": loe.trafik_sutunlari() is not None,
+        "ayar": ayar_oku(db, musteri.id),
         "kaynak": _kaynak_durumu(db),
         "bekliyor": any(d["durum"] == "bekliyor" for d in devreler),
         "devreler": devreler,
