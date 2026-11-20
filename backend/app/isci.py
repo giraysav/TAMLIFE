@@ -19,6 +19,9 @@
       --csv: backend/var/kesif/temip-eslesme-<zaman>-{musteri,personel}.csv (git disi; musteri unvani icerir).
   ..\\.venv\\Scripts\\python.exe -m app.isci cek <kaynak> [--client <Instant Client>] [--kuru]
       <ON EK>_IMPORT_QUERY sonucu -> tampon partisi '<kaynak>_import' (analiz / dagitim / geri alma Veri Girisi'nde).
+  ..\.venv\Scripts\python.exe -m app.isci rapor-devre [--zorla] [--client <Instant Client>]
+      Aylik rapor devre grafikleri (rapor/loe.py, LOE sorgusu): CMDB kopyasi (gunde bir) + secili devrelerin onceki / bu ay saatlik
+      olcumleri. 'reportdb' turu her calismada bunu da (ayri kilitle, alarm senkronundan bagimsiz) calistirir. --zorla: hepsini yenile.
   --kuru: hicbir sey yazmaz; sorguyu calistirip satir sayisini ve ilk satirlari gosterir.
 Kaynak <ON EK>_ENABLED=true degilse Oracle'a baglanilmaz, hicbir sey yazilmaz. Ayarlar backend/.env (panelle ayni: TAMLIFE_DATABASE_URL,
 ORACLE_*). Cikis: 0 basarili | 1 hata (tampon ve kartlar degismez) | 2 baska calisma suruyor (atlandi).
@@ -148,6 +151,38 @@ def reportdb_senkron(kuru: bool = False) -> int:
         print(f"[OK] parti #{parti_id}: {n} musteri, {time.time() - t0:.1f} sn; {ek}")
         gunluge_yaz(f"reportdb OK parti #{parti_id}: {n} musteri, {time.time() - t0:.1f} sn; {ek}")
         return 0
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+
+
+def rapor_devre(zorla: bool = False) -> int:
+    """Aylik rapor devre grafikleri verisi (rapor/loe.py). Alarm senkronundan bagimsiz kilit; hata durumu panelde gorunur."""
+    from app.rapor import loe
+
+    a = oracle.ayar(loe.KAYNAK)
+    if not a.ENABLED:
+        return _hata("rapor-devre", f"{a.kaynak.enabled_key}=true degil; Oracle'a baglanilmadi.")
+    kilit = _klasor() / "isci_loe.kilit"
+    if not kilit_al(kilit):
+        gunluge_yaz("rapor-devre ATLANDI baska calisma suruyor")
+        return 2
+    t0 = time.time()
+    try:
+        with oturum() as db:
+            sonuc = loe.senkron(db, zorla)
+        parcalar = ([f"cmdb {sonuc['cmdb']}"] if sonuc["cmdb"] else []) + [f"olcum {o}" for o in sonuc["olcum"]]
+        if parcalar:
+            hata = any("HATA" in p for p in parcalar)
+            gunluge_yaz(f"rapor-devre {'HATA' if hata else 'OK'} {'; '.join(parcalar)} ({time.time() - t0:.1f} sn)")
+            print(("[!] " if hata else "[OK] ") + "; ".join(parcalar))
+            return 1 if hata else 0
+        print("[-] rapor-devre: yenilenecek veri yok")
+        return 0
+    except Exception as e:  # noqa: BLE001
+        return _hata("rapor-devre", f"basarisiz: {_mesaj(e, a)}")
     finally:
         try:
             kilit.unlink()
@@ -448,6 +483,9 @@ def main(argv: list[str] | None = None) -> int:
     pc.add_argument("--kaynak", required=True, choices=sorted(postgres.KAYNAKLAR))
     pc.add_argument("--kuru", action="store_true", help="yazmadan dene (ilk 5 satir)")
     pc.add_argument("--kullanici", default="isci", help="partiye yazilan baslatan")
+    rd = alt.add_parser("rapor-devre", help="aylik rapor devre grafikleri: CMDB kopyasi + secili devrelerin olcumleri (LOE)")
+    rd.add_argument("--zorla", action="store_true", help="CMDB ve tum olcumleri yenile")
+    rd.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
     for alt_p in (r, c):
@@ -469,7 +507,14 @@ def main(argv: list[str] | None = None) -> int:
         return katalog_calistir(a.sema, max(1, min(int(a.ornek), 1000)), a.kullanici, parametre)
     if a.is_ == "temip-kayit":
         return temip_kayit_calistir(a.kip, a.kuru, a.csv)
-    return reportdb_senkron(a.kuru) if a.is_ == "reportdb" else oracle_cek(a.kaynak, a.kuru)
+    if a.is_ == "rapor-devre":
+        return rapor_devre(a.zorla)
+    if a.is_ == "reportdb":
+        kod = reportdb_senkron(a.kuru)
+        if not a.kuru:
+            rapor_devre()  # 2026-11-20: ayni 6 dk'lik turda; sonucu alarm senkronunun cikis kodunu degistirmez
+        return kod
+    return oracle_cek(a.kaynak, a.kuru)
 
 
 if __name__ == "__main__":

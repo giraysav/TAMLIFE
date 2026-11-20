@@ -42,6 +42,9 @@ TABLE_OWNER = {
     "report_draft": "rapor",
     "report_dispatch": "rapor",
     "report_recipient": "rapor",
+    "report_cmdb": "rapor",
+    "report_circuit": "rapor",
+    "report_circuit_data": "rapor",
     "calendar_day": "takvim",
     "project_item": "proje",
     "project_action": "proje",
@@ -259,6 +262,46 @@ class ReportRecipient(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
     to_addrs: Mapped[str] = mapped_column(Text, default="")
     cc_addrs: Mapped[str] = mapped_column(Text, default="")
+
+
+# --- Aylik rapor devre grafikleri (2026-11-20; ReportDB LOE sorgusu, app.rapor.loe) ---------------------------------------
+class ReportCmdb(Base):
+    """ReportDB CMDB kopyasi (ODS_RPT.CORPORATE_FOR_CMDB): yalniz paneldeki musteri numaralarinin devreleri. Isci gunde bir yeniler;
+    aylik rapordaki devre aramasi bu kopyada yapilir (panel sureci Oracle'a baglanmaz)."""
+
+    __tablename__ = "report_cmdb"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_key: Mapped[str] = mapped_column(String(40), index=True)  # CUSTOMERNO karsilastirma anahtari (eslestirme.anahtar)
+    ciname: Mapped[str] = mapped_column(String(200), index=True)
+    fields: Mapped[dict] = mapped_column(JSON, default=dict)  # satirin tum sutunlari (ad -> deger)
+    search_text: Mapped[str] = mapped_column(Text, default="")  # kucuk harfli birlesik metin (esnek arama)
+    refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ReportCircuit(Base):
+    """Musterinin aylik rapor devreleri: kullanici aramadan ekler; kaldirilana kadar her ayin raporunda grafigi cizilir."""
+
+    __tablename__ = "report_circuit"
+    __table_args__ = (UniqueConstraint("customer_id", "ciname", name="uq_report_circuit"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), index=True)
+    ciname: Mapped[str] = mapped_column(String(200))
+    label: Mapped[str] = mapped_column(String(300), default="")  # eklendigi andaki aciklama (grafik basligi)
+    added_by: Mapped[str] = mapped_column(String(120), default="")
+    added_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ReportCircuitData(Base):
+    """Devrenin bir aylik saatlik olcumleri (BRIX.CORPORATE_HR) + LOE formuluyle aylik ozet. Isci yazar, rapor okur."""
+
+    __tablename__ = "report_circuit_data"
+    ciname: Mapped[str] = mapped_column(String(200), primary_key=True)
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    month: Mapped[int] = mapped_column(Integer, primary_key=True)
+    points: Mapped[list] = mapped_column(JSON, default=list)  # [[epoch_ms, erisim, gecikme, jitter, kayip, pencere], ...]
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    exchours: Mapped[str] = mapped_column(String(100), default="")
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class CalendarDay(KullaniciBase):
     """Izin&Takvim Yonetimi: gun durumu ve toplanti sayilari (uretim calendar_records). Dosya kisinin kendisidir."""

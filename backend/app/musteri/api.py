@@ -307,6 +307,30 @@ def trafik_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = D
     return _yap(db, lambda: trafik.getir(db, e.user, musteri_id, donem_kodu=donem))
 
 
+class DevreGovde(BaseModel):
+    ci: str = Field(min_length=1, max_length=200)
+
+
+@router.get("/musteri/{musteri_id:int}/rapor/devre-ara")
+def devre_ara(musteri_id: KimlikTipi, q: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Musterinin CMDB devrelerinde esnek arama (ReportDB CMDB kopyasi; CI adi, aciklama, port ...)."""
+    return _yap(db, lambda: trafik.ara(db, e.user, musteri_id, q))
+
+
+@router.post("/musteri/{musteri_id:int}/rapor/devreler")
+def devre_ekle(musteri_id: KimlikTipi, body: DevreGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    sonuc = _yap(db, lambda: trafik.ekle(db, e.user, musteri_id, body.ci), yaz=True)
+    _denetim(e.user, "rapor.devre_ekle", f"musteri={musteri_id} ci={body.ci[:80]}")
+    return sonuc
+
+
+@router.delete("/musteri/{musteri_id:int}/rapor/devreler/{devre_id:int}")
+def devre_kaldir(musteri_id: KimlikTipi, devre_id: KimlikTipi, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    sonuc = _yap(db, lambda: trafik.kaldir(db, e.user, musteri_id, devre_id), yaz=True)
+    _denetim(e.user, "rapor.devre_kaldir", f"musteri={musteri_id} devre={devre_id}")
+    return sonuc
+
+
 @router.post("/musteri/{musteri_id:int}/rapor/dosya")
 async def dosya_ekle(
     musteri_id: KimlikTipi, request: Request, ad: str = Query(default="", max_length=200), donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim)

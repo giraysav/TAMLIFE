@@ -138,8 +138,9 @@ class OracleKaynak:
                 cur.execute("SELECT 1 FROM DUAL")
                 return cur.fetchone()[0]
 
-    def akis(self, sorgu: str, limit: int, blok: int = BLOK) -> Iterator[list[Any]]:
-        """Once sutun adlari, sonra blok blok satirlar (bellekte tum sonuc tutulmaz). CLOB/BLOB metin/bayt gelir. En fazla `limit` satir."""
+    def akis(self, sorgu: str, limit: int, blok: int = BLOK, parametreler: dict[str, Any] | None = None) -> Iterator[list[Any]]:
+        """Once sutun adlari, sonra blok blok satirlar (bellekte tum sonuc tutulmaz). CLOB/BLOB metin/bayt gelir. En fazla `limit` satir.
+        parametreler: koddan gelen sorgunun bind degerleri (:ad); kullanici metni sorguya HIC birlestirilmez."""
         oracledb = _oracledb()
 
         def _tip(cursor: Any, meta: Any) -> Any:
@@ -153,6 +154,7 @@ class OracleKaynak:
         binds: dict[str, Any] = {"kaynak_limit": int(limit)}
         if ":customer_no" in sorgu.lower():
             binds["customer_no"] = None  # tum musteriler (sorgu "(:customer_no IS NULL OR ...)" yazar)
+        binds.update(parametreler or {})
         with self._baglan(oracledb) as conn:
             conn.call_timeout = self.IMPORT_TIMEOUT * 1000
             conn.outputtypehandler = _tip
