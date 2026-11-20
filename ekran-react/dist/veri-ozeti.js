@@ -7,27 +7,27 @@
     amber: "#b45309", amberZ: "#fffbeb", kirmizi: "#b91c1c", kirmiziZ: "#fef2f2", mavi: "#1d4ed8" };
   var M = {
     tr: {
-      tur: "Günlük utilizasyon turu", turAcik: "Her gün 06:00'da çalışır: bu yılın kapanmış kayıtlarını ve envanteri toplar, final skorları yeniden hesaplar.",
+      tur: "Günlük utilizasyon turu", turAcik: "Her gün 06:00'da çalışır: son 12 ayda kapanmış kayıtları ve envanteri toplar, final skorları yeniden hesaplar.",
       sonCalisma: "Son çalışma", sure: "Süre", skor: "Skor", calistir: "Şimdi çalıştır", calisiyor: "Çalışıyor…", hicCalismadi: "Henüz çalışmadı",
       skorOzet: function (s) { return s ? s.uygulanan + " güncellendi · " + s.degismeyen + " değişmedi · " + s.atlanan + " eksik kriterli" : "Skor yazılmadı"; },
       kaynaklar: "Veri kaynakları", siklik: "Sıklık", sonBasari: "Son başarılı", durumOk: "Güncel", durumHata: "Hata", durumBekle: "Bekleniyor", durumEski: "Gecikmiş",
       toplam: "Toplam (çatı müşteriler)", alarm: "Kapanan alarm", sikayet: "Kapanan şikayet", talep: "Kapanan talep", ci: "Aktif CI", lokasyon: "Lokasyon",
       musteriler: "Müşteriler", ara: "Müşteri, TAM ya da müşteri no ara", hepsi: "Tümü", eksik: "Verisi eksik", skorsuz: "Skoru yok",
       musteri: "Müşteri", tam: "TAM", no: "Müşteri No", finalSkor: "Final skor", guncelleme: "Skor güncellemesi", csv: "CSV indir",
-      yil: function (y) { return y + " yılı, kapanan kayıtlar"; }, istirak: function (n) { return "+" + n + " iştirak"; },
+      yil: function (y, d) { return d && d.length === 2 ? "Dönem " + d[0].split("-").reverse().join(".") + " – " + d[1].split("-").reverse().join(".") : "Son 12 ay, kapanan kayıtlar"; }, istirak: function (n) { return "+" + n + " iştirak"; },
       kayit: function (n, t) { return n + " / " + t + " müşteri"; }, yukleniyor: "Yükleniyor…", yuklenemedi: "Veri alınamadı.", tekrar: "Tekrar dene",
       baslatildi: "Tur başlatıldı; birkaç dakika içinde tamamlanır.", kaynakSkor: { gunluk: "Günlük tur", toplu: "Toplu atama", sayfa: "Sayfa", kriter_degisikligi: "Kriter değişikliği" },
       bos: "Eşleşen müşteri yok.", once: function (dk) { return dk < 1 ? "az önce" : dk < 60 ? dk + " dk önce" : dk < 1440 ? Math.floor(dk / 60) + " sa önce" : Math.floor(dk / 1440) + " gün önce"; }
     },
     en: {
-      tur: "Daily utilization run", turAcik: "Runs every day at 06:00: collects this year's closed records and the inventory, recalculates final scores.",
+      tur: "Daily utilization run", turAcik: "Runs every day at 06:00: collects closed records of the last 12 months and the inventory, recalculates final scores.",
       sonCalisma: "Last run", sure: "Duration", skor: "Score", calistir: "Run now", calisiyor: "Running…", hicCalismadi: "Not run yet",
       skorOzet: function (s) { return s ? s.uygulanan + " updated · " + s.degismeyen + " unchanged · " + s.atlanan + " missing criteria" : "No score written"; },
       kaynaklar: "Data sources", siklik: "Frequency", sonBasari: "Last success", durumOk: "Up to date", durumHata: "Error", durumBekle: "Pending", durumEski: "Delayed",
       toplam: "Total (parent customers)", alarm: "Closed alarms", sikayet: "Closed complaints", talep: "Closed requests", ci: "Active CIs", lokasyon: "Locations",
       musteriler: "Customers", ara: "Search customer, TAM or customer no", hepsi: "All", eksik: "Missing data", skorsuz: "No score",
       musteri: "Customer", tam: "TAM", no: "Customer No", finalSkor: "Final score", guncelleme: "Score updated", csv: "Download CSV",
-      yil: function (y) { return "Year " + y + ", closed records"; }, istirak: function (n) { return "+" + n + " affiliates"; },
+      yil: function (y, d) { return d && d.length === 2 ? "Period " + d[0] + " – " + d[1] : "Last 12 months, closed records"; }, istirak: function (n) { return "+" + n + " affiliates"; },
       kayit: function (n, t) { return n + " / " + t + " customers"; }, yukleniyor: "Loading…", yuklenemedi: "Could not load data.", tekrar: "Retry",
       baslatildi: "Run started; it completes in a few minutes.", kaynakSkor: { gunluk: "Daily run", toplu: "Bulk assignment", sayfa: "Page", kriter_degisikligi: "Criteria change" },
       bos: "No matching customers.", once: function (dk) { return dk < 1 ? "just now" : dk < 60 ? dk + " min ago" : dk < 1440 ? Math.floor(dk / 60) + " h ago" : Math.floor(dk / 1440) + " d ago"; }
@@ -94,7 +94,7 @@
       var hataVar = Object.keys(t.kaynaklar || {}).some(function (a) { return (t.kaynaklar[a] || {}).durum === "hata"; });
       bas.appendChild(t.calisiyor ? rozet("bekle", m.calisiyor) : !t.zaman ? rozet("bekle", m.hicCalismadi) : hataVar ? rozet("hata", m.durumHata) : (dakika(t.zaman) > 1560 ? rozet("eski", m.durumEski) : rozet("ok", m.durumOk)));
       sol.appendChild(bas);
-      sol.appendChild(el("p", "margin:4px 0 0;font-size:12px;font-weight:600;color:" + C.ikincil, m.turAcik + (t.yil ? " " + m.yil(t.yil) + "." : "")));
+      sol.appendChild(el("p", "margin:4px 0 0;font-size:12px;font-weight:600;color:" + C.ikincil, m.turAcik + (t.yil ? " " + m.yil(t.yil, t.donem) + "." : "")));
       var dl = el("div", "display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:10px;font-size:12px");
       [[m.sonCalisma, t.zaman ? zaman(t.zaman) + " (" + m.once(dakika(t.zaman)) + ")" : "—"], [m.sure, t.sure_sn != null ? t.sure_sn + " sn" : "—"], [m.skor, t.zaman ? m.skorOzet(t.skor) : "—"]]
         .forEach(function (x) { var d = el("div"); d.appendChild(el("span", "font-weight:700;color:" + C.ikincil, x[0] + ": ")); d.appendChild(el("span", "font-weight:800", x[1])); dl.appendChild(d); });

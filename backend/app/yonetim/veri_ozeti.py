@@ -2,7 +2,7 @@
 ve anlasilmasi kolay, yonetimi kolay bir gorunum").
 
 Tek ekran: ust satirda uc kaynagin durumu (son basarili cekim, hata, hacim) + gunluk utilizasyon turunun son calismasi; altta musteri
-basina birlesik satir (alarm / sikayet / talep = bu yil KAPANAN; aktif CI / lokasyon; final skor ve son guncelleme). Yalniz admin
+basina birlesik satir (alarm / sikayet / talep = son 12 ayda KAPANAN; aktif CI / lokasyon; final skor ve son guncelleme). Yalniz admin
 (Yonetim konsolu: kaynak adlari burada gorunebilir). "Simdi calistir" gunluk turu ayri surecte baslatir (06:00 gorevinin aynisi).
 """
 
@@ -41,10 +41,10 @@ def kaynaklar(db: Session) -> list[dict[str, Any]]:
     return [
         {"anahtar": "reportdb", "ad": "ReportDB", "icerik": "Alarm kayıtları (TEMIP)", "siklik": temip["siklik"],
          "son_basari": temip["son_basari"], "hata": temip["son_hata"],
-         "hacim": [["Bu yıl kapanan alarm", (k.get("reportdb") or {}).get("alarm")], ["Şu an açık alarm", temip["acik_alarm"]]]},
+         "hacim": [["Son 12 ayda kapanan alarm", (k.get("reportdb") or {}).get("alarm")], ["Şu an açık alarm", temip["acik_alarm"]]]},
         {"anahtar": "onedesk", "ad": "OneDesk", "icerik": "Kapanan şikayet ve talep", "siklik": "Her gün 06:00",
          "son_basari": d.get("zaman") if od.get("durum") == "ok" else od.get("son_basari"), "hata": od.get("hata", ""),
-         "hacim": [["Bu yıl kapanan şikayet", od.get("sikayet")], ["Bu yıl kapanan talep", od.get("talep")]]},
+         "hacim": [["Son 12 ayda kapanan şikayet", od.get("sikayet")], ["Son 12 ayda kapanan talep", od.get("talep")]]},
         {"anahtar": "onent", "ad": "ONENT", "icerik": "Müşteri envanteri (CMDB)", "siklik": "4 saatte bir",
          "son_basari": env.get("son_basari"), "hata": env.get("hata", ""),
          "hacim": [["Envanterdeki CI", env.get("satir")], ["Aktif CI (panel müşterileri)", (k.get("onent") or {}).get("ci")]]},

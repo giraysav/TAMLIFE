@@ -3,13 +3,13 @@
 Her kaynak musteri basina METRIK uretir; motor metrikleri kriter kurallarina (barem hucreleri) gore puana cevirir. Oncelik (metrik
 basina, ilk hazir olan kullanilir; hata veren kaynak atlanir, siradakine gecilir):
   Secilen veri kaynagi (kriterdeki kaynak_secimi) > OneDesk > Urun-Tutar Excel > ONENT > Panel
-  sikayet_talep   : OneDesk (gunluk ozet: bu yil KAPANAN sikayet + talep, 2026-11-21) > Panel
+  sikayet_talep   : OneDesk (gunluk ozet: son 12 ayda KAPANAN sikayet + talep, 2026-11-21) > Panel
   lokasyon_sayisi : Urun-Tutar Excel > ONENT (gunluk ozet: aktif CI'larin farkli lokasyonu) > Panel (Envanter alani - YEDEK)
   servisler       : Urun-Tutar Excel (musterinin servis/urun adlari)
   segment         : Panel (kartta secilen segment; SEGMENTLER disindaki deger veri sayilmaz)
   baglanti        : Urun-Tutar Excel (baglanti tipleri)
   fatura_bedeli   : Urun-Tutar Excel > Panel (kart FT Hacim - YEDEK; 0 = veri yok)
-  rapor_sayisi    : Panel (bu yil aylik rapor hazirlanan ay sayisi)
+  rapor_sayisi    : Panel (bu yil aylik rapor hazirlanan ay sayisi; 2026-11-21 itibariyla PUANA YANSIMAZ, Raporlama elle secilir)
 
 Panel verisi DEV veritabanindandir: kart sayaclari (Onedesk kayitlari ve Veri Girisi dagitimi doldurur: REPORTDB / CSV / Oracle
 ice alma), Envanter, FT Hacim, segment ve gonderilmis aylik raporlar (report). DB kaynaklari (REPORTDB / ONENTDB)
@@ -172,7 +172,7 @@ class _GunlukOzetKaynagi(Kaynak):
 
 
 class OneDeskKaynagi(_GunlukOzetKaynagi):
-    """OneDesk: bu yil KAPANAN sikayet + talep (2026-11-21 kullanici: "durumu closed olmuslarla skor hesabi yapacagiz")."""
+    """OneDesk: son 12 ayda KAPANAN sikayet + talep (2026-11-21 kullanici: "durumu closed olmuslarla skor hesabi yapacagiz")."""
 
     ad = "OneDesk (kapanan şikayet + talep)"
     metrikler = ("sikayet_talep",)

@@ -44,6 +44,9 @@ KAYNAKSIZ = 'auto_kaynaksiz'
 # Sozlesme / Raporlama satirinda barem hucrelerinden TEK birine 'X' yazilirsa o hucrenin puani TUM musteriler icin
 # sabit puandir (kullanici karari 2026-10-08); diger hucreler arayuzde kilitlenir, burada yok sayilir.
 SABIT_PUAN_TURLERI = ('auto_sozlesme', 'auto_rapor')
+# Veri olsa da ELLE secilen turler (2026-11-21 kullanici onayi): Raporlama 'Standart / Ozel' olarak dokumden secilir; rapor ayi
+# sayisi puana yansitilmaz (cogu musteride 1 ay -> haksiz 30 puan).
+ELLE_SECILEN_TURLER = ('auto_rapor',)
 OTOMATIK_TURLER = tuple(SAYISAL) + tuple(KATEGORIK) + (KAYNAKSIZ,)
 # Baslik -> tur (normalize baslikta ilk eslesen; sira onemli). Sayfadaki TUR_IPUCLARI ile AYNI.
 TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('sikayet', 'auto_onedesk'), ('talep', 'auto_onedesk'),
@@ -288,7 +291,7 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
         sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
         return sonuc
     anahtar = SAYISAL.get(tur) or KATEGORIK.get(tur)
-    metrik = (metrikler or {}).get(anahtar) if anahtar else None
+    metrik = (metrikler or {}).get(anahtar) if anahtar and tur not in ELLE_SECILEN_TURLER else None
     if metrik is not None:
         puan, deger = kural_puani(kriter, metrik['deger'])
         sonuc.update(deger=deger, kaynak=metrik['kaynak'], durum='otomatik', puan=puan,
