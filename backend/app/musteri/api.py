@@ -344,13 +344,13 @@ def devre_ekle(musteri_id: KimlikTipi, body: DevreGovde, e: Erisim = Depends(mus
 
 class DevreAyarGovde(BaseModel):
     metrikler: list[Literal["trafik", "kayip", "jitter", "gecikme"]] = Field(default_factory=list, max_length=4)
-    bas: int = Field(default=0, ge=0, le=23)
-    bit: int = Field(default=23, ge=0, le=23)
+    bas_zaman: str | None = Field(default=None, max_length=16, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
+    bit_zaman: str | None = Field(default=None, max_length=16, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
 
 
 @router.put("/musteri/{musteri_id:int}/rapor/devre-ayar")
 def devre_ayar(musteri_id: KimlikTipi, body: DevreAyarGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    """Devre grafiklerinin metrikleri (trafik, paket kaybi, jitter, gecikme) ve saat araligi; musteri basina kalici."""
+    """Devre grafiklerinin metrikleri (trafik, paket kaybi, jitter, gecikme) ve tarih-saat araligi; musteri basina kalici."""
     return _yap(db, lambda: trafik.ayar_yaz(db, e.user, musteri_id, body.model_dump()), yaz=True)
 
 

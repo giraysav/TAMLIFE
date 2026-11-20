@@ -339,10 +339,26 @@ def senkron(db: Session, zorla: bool = False) -> dict[str, Any]:
     an = simdi()
     od = durum_oku(db).get("olcum") or {}
     son_hata = _zaman(od.get("son_deneme")) if od.get("hata") else None
-    for yil, ay in gereken_donemler():
+    # Donem -> devreler: raporun donemleri tum secili devreler icin; tarih araligi secilmis musterilerde araligin aylari yalniz o
+    # musterinin devreleri icin (2026-11-21: grafik araligi gun/ay/yil saat:dakika ile secilebilir).
+    from app.rapor.trafik import aylar, ozel_araliklar
+
+    donemler: dict[tuple[int, int], set[str]] = {d: set(secili) for d in gereken_donemler()}
+    musteri_devre: dict[int, set[str]] = {}
+    for mid, ci in db.execute(select(ReportCircuit.customer_id, ReportCircuit.ciname)):
+        musteri_devre.setdefault(mid, set()).add(ci)
+    yerel = an.astimezone(TR)
+    for mid, (bas, bit) in ozel_araliklar(db).items():
+        for d in aylar(bas, bit):
+            if d <= (yerel.year, yerel.month):
+                donemler.setdefault(d, set()).update(musteri_devre.get(mid, set()))
+    for (yil, ay), cis in sorted(donemler.items(), reverse=True):
+        hedef = sorted(cis)
+        if not hedef:
+            continue
         mevcut = {k.ciname: k for k in db.scalars(select(ReportCircuitData).where(
-            ReportCircuitData.year == yil, ReportCircuitData.month == ay, ReportCircuitData.ciname.in_(secili)))}  # fmt: skip
-        gerek = [c for c in secili if zorla or _tazelenmeli(mevcut.get(c), yil, ay, an)]
+            ReportCircuitData.year == yil, ReportCircuitData.month == ay, ReportCircuitData.ciname.in_(hedef)))}  # fmt: skip
+        gerek = [c for c in hedef if zorla or _tazelenmeli(mevcut.get(c), yil, ay, an)]
         if not gerek:
             continue
         yeni_var = any(c not in mevcut for c in gerek)

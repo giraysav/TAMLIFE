@@ -28,27 +28,27 @@
   var METIN = {
     tr: {
       trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
-      ort: "ort.", enYuksek: "en yüksek", p95: "%95", saatAraligi: "Saat aralığı", veriler: "Grafikte gösterilecek veriler",
+      ort: "ort.", enYuksek: "en yüksek", p95: "%95", veriler: "Grafikte gösterilecek veriler",
       bolum: "Devre grafikleri", ara: "Açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
       kaldir: "Kaldır", secili: "Seçili devreler", seciliYok: "Henüz devre seçilmedi.", sonucYok: "Eşleşen devre bulunamadı.",
       fazla: "ilk 100 sonuç gösteriliyor", toplam: "eşleşme", hazir: "Hazır", bekliyor: "Veri hazırlanıyor (birkaç dakika)",
       veriYok: "Bu dönemde ölçüm yok", kaldirOnay: "Bu devre rapordan kaldırılsın mı?", metrikYok: "Grafik için en az bir veri seçin.",
       noYok: "Kartta Müşteri No olmadığı için devre aranamıyor.", cmdbYok: "Devre listesi henüz hazır değil; arama sonuç vermeyebilir.", olcumHata: "Ölçüm verisi şu an güncellenemiyor; son alınan veri gösteriliyor.",
       salt: "Bu kartta değişiklik yetkiniz yok; ayarlar ve seçili devreler gösteriliyor.", hata: "İşlem yapılamadı",
-      trafikYok: "Trafik verisi henüz hazır değil.", aylikLoe: "Aylık", hizmetSaati: "Hizmet saati", kesinti: "Kesinti",
+      trafikYok: "Trafik verisi henüz hazır değil.", aylikLoe: "Dönem", hizmetSaati: "Hizmet saati", tarihAraligi: "Tarih aralığı", raporDonemi: "Rapor dönemi", raporDonemiAcik: "Raporun dönemi kullanılıyor", aralikHata: "Bitiş, başlangıçtan sonra olmalı.", kesinti: "Kesinti",
       kaynak: "Saatlik ölçüm · gri alan hafta sonu",
       ay: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
     },
     en: {
       trafik: "Traffic", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
-      ort: "avg", enYuksek: "peak", p95: "95th", saatAraligi: "Hour range", veriler: "Data shown on the chart",
+      ort: "avg", enYuksek: "peak", p95: "95th", veriler: "Data shown on the chart",
       bolum: "Circuit charts", ara: "Type a description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
       kaldir: "Remove", secili: "Selected circuits", seciliYok: "No circuit selected yet.", sonucYok: "No matching circuit.",
       fazla: "showing first 100 results", toplam: "matches", hazir: "Ready", bekliyor: "Preparing data (a few minutes)",
       veriYok: "No measurement this period", kaldirOnay: "Remove this circuit from the report?", metrikYok: "Select at least one data type for the chart.",
       noYok: "This card has no Customer No, so circuits cannot be searched.", cmdbYok: "Circuit list is not ready yet; search may return no results.", olcumHata: "Measurement data cannot be updated right now; the last received data is shown.",
       salt: "You cannot change this card; settings and selected circuits are shown.", hata: "Action failed",
-      trafikYok: "Traffic data is not ready yet.", aylikLoe: "Monthly", hizmetSaati: "Service hours", kesinti: "Outage",
+      trafikYok: "Traffic data is not ready yet.", aylikLoe: "Period", hizmetSaati: "Service hours", tarihAraligi: "Date range", raporDonemi: "Report period", raporDonemiAcik: "Using the report period", aralikHata: "End must be after start.", kesinti: "Outage",
       kaynak: "Hourly measurement · grey area weekend",
       ay: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     }
@@ -85,8 +85,8 @@
     return serbest(x, dil) + " bps";
   }
   function iki(n) { return (n < 10 ? "0" : "") + n; }
-  function saatMetni(saat) { return iki(saat[0]) + ":00–" + iki(saat[1]) + ":59"; }
   function tarih(v, dil) { var t = new Date(v); return t.getDate() + " " + METIN[dil].ay[t.getMonth()]; }
+  function zamanMetni(v) { var t = new Date(v + TR_SAAT); return iki(t.getUTCDate()) + "." + iki(t.getUTCMonth() + 1) + "." + t.getUTCFullYear() + " " + iki(t.getUTCHours()) + ":" + iki(t.getUTCMinutes()); }
   function aralik(yil, ay) { return [Date.UTC(yil, ay - 1, 1) - TR_SAAT, Date.UTC(ay === 12 ? yil + 1 : yil, ay % 12, 1) - TR_SAAT]; }
 
   function saatte(t, saat) {
@@ -117,13 +117,12 @@
   function gunAnahtari(t) { return Math.floor((t + TR_SAAT) / 864e5); }
   function gunOrtasi(g) { return g * 864e5 - TR_SAAT + 432e5; }
 
-  function haftaSonlari(yil, ay) {
-    var r = aralik(yil, ay), alanlar = [];
-    for (var t = r[0]; t < r[1]; t += 864e5) {
+  function haftaSonlari(r) {
+    var alanlar = [], gun = Math.floor((r[0] + TR_SAAT) / 864e5) * 864e5 - TR_SAAT;
+    for (var t = gun; t < r[1]; t += 864e5) {
       var g = new Date(t + TR_SAAT).getUTCDay();
-      if (g === 6) alanlar.push([{ xAxis: t }, { xAxis: Math.min(t + 2 * 864e5, r[1]) }]);
+      if (g === 6 || g === 0) alanlar.push([{ xAxis: Math.max(t, r[0]) }, { xAxis: Math.min(t + 864e5, r[1]) }]);
     }
-    if (new Date(r[0] + TR_SAAT).getUTCDay() === 0) alanlar.unshift([{ xAxis: r[0] }, { xAxis: r[0] + 864e5 }]);
     return alanlar;
   }
 
@@ -148,13 +147,13 @@
       areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(" + rgb + ",0.32)" }, { offset: 1, color: "rgba(" + rgb + ",0.03)" }] } } };
   }
 
-  function devreSecenek(devre, yil, ay, ayar, dil) {
+  function devreSecenek(devre, ar, ayar, dil) {
     dil = dilSec(dil);
     var m = METIN[dil], nk = devre.noktalar || [], o = devre.ozet || {};
-    var metrikler = (ayar && ayar.metrikler) || [], saat = (ayar && ayar.saat) || [0, 23];
-    var r = aralik(yil, ay);
+    var metrikler = (ayar && ayar.metrikler) || [], saat = [0, 23];
+    var r = [ar.bas_ms, ar.bit_ms], gunler = (r[1] - r[0]) / 864e5;
     var paneller = [], seriler = [], kutular = [], lejant = [];
-    var golge = haftaSonlari(yil, ay), kes = kesintiler(nk);
+    var golge = haftaSonlari(r), kes = kesintiler(nk);
     function deger(i, carpan) { return nk.filter(function (n) { return saatte(n[0], saat); }).map(function (n) { return n[i] == null ? null : n[i] * carpan; }); }
 
     if (o.erisilebilirlik != null) kutular.push([m.erisim, yuzde(o.erisilebilirlik, dil, 3), m.aylikLoe]);
@@ -239,12 +238,9 @@
     var yukseklik = y + EKSEN_ALT + DIP;
 
     // Baslik: devre + donem
-    var ayAdi = (dil === "en"
-      ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-      : ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"])[ay - 1];
     graphic.push({ type: "text", left: 12, top: 12, style: { text: devre.baslik || devre.ci, fill: C.metin, font: "800 15px " + YAZI } });
     graphic.push({ type: "text", left: 12, top: 33, style: {
-      text: (devre.baslik ? devre.ci + "   ·   " : "") + ayAdi + " " + yil + "   ·   " + m.saatAraligi + " " + saatMetni(saat),
+      text: (devre.baslik ? devre.ci + "   ·   " : "") + zamanMetni(r[0]) + "  –  " + zamanMetni(r[1]),
       fill: C.ikincil, font: "600 11.5px " + YAZI } });
 
     // Ozet kutucuklari (en fazla 6, esit genislik)
@@ -274,7 +270,12 @@
       grid: grids,
       xAxis: paneller.map(function (p, k) {
         return { type: "time", gridIndex: k, min: r[0], max: r[1], boundaryGap: false, axisLine: { lineStyle: { color: "#cfd8e3" } }, axisTick: { show: false },
-          axisLabel: { show: k === son, color: C.metin, fontSize: 11, fontWeight: 600, hideOverlap: true, formatter: function (v) { return tarih(v, dil); } },
+          axisLabel: { show: k === son, color: C.metin, fontSize: 11, fontWeight: 600, hideOverlap: true, formatter: function (v) {
+            var t = new Date(v + TR_SAAT);
+            if (gunler <= 3) return tarih(v, dil) + " " + iki(t.getUTCHours()) + ":" + iki(t.getUTCMinutes());
+            if (gunler > 200) return METIN[dil].ay[t.getUTCMonth()] + " " + t.getUTCFullYear();
+            return tarih(v, dil);
+          } },
           splitLine: { show: false } };
       }),
       yAxis: paneller.map(function (p, k) {
@@ -321,9 +322,10 @@
         return echartsYukle().then(function (ec) {
           var cikti = [];
           liste.forEach(function (d) {
-            var k = [d.id, d.cekildi, dil, veri.yil, veri.ay, ayar.metrikler.join(","), ayar.saat.join("-")].join("|");
+            var ar = veri.aralik || { bas_ms: aralik(veri.yil, veri.ay)[0], bit_ms: aralik(veri.yil, veri.ay)[1] };
+            var k = [d.id, d.cekildi, dil, ar.bas_ms, ar.bit_ms, ayar.metrikler.join(","), d.noktalar.length].join("|");
             if (!(k in pngOnbellek)) {
-              var s = devreSecenek(d, veri.yil, veri.ay, ayar, dil);
+              var s = devreSecenek(d, ar, ayar, dil);
               pngOnbellek[k] = s ? ciz(ec, s) : null;
             }
             if (pngOnbellek[k]) {
@@ -397,22 +399,25 @@
       secenekKap.appendChild(l);
     });
     kart.appendChild(secenekKap);
-    var saatSatir = el("div", S.saatSatir);
-    saatSatir.appendChild(el("span", "font-size:11.5px;font-weight:800;color:#334155", m.saatAraligi));
-    function saatSecimi(son) {
-      var s = el("select", S.secim);
-      for (var h = 0; h < 24; h++) {
-        var o = el("option", "", iki(h) + (son ? ":59" : ":00"));
-        o.value = String(h);
-        s.appendChild(o);
-      }
-      s.addEventListener("change", ayarKaydet);
-      return s;
+    var saatSatir = el("div", S.saatSatir + ";flex-wrap:wrap");
+    saatSatir.appendChild(el("span", "font-size:11.5px;font-weight:800;color:#334155", m.tarihAraligi));
+    function zamanGirdisi() {
+      var g = el("input", S.secim);
+      g.type = "datetime-local";
+      g.step = "60";
+      g.addEventListener("change", function () { aralikKaydet(false); });
+      return g;
     }
-    var basSec = saatSecimi(false), bitSec = saatSecimi(true);
+    var basSec = zamanGirdisi(), bitSec = zamanGirdisi();
     saatSatir.appendChild(basSec);
     saatSatir.appendChild(el("span", "color:#64748b", "–"));
     saatSatir.appendChild(bitSec);
+    var donemDugme = el("button", S.dugme2, m.raporDonemi);
+    donemDugme.type = "button";
+    donemDugme.addEventListener("click", function () { aralikKaydet(true); });
+    saatSatir.appendChild(donemDugme);
+    var aralikNot = el("span", S.kucuk + ";margin:0");
+    saatSatir.appendChild(aralikNot);
     kart.appendChild(saatSatir);
     var metrikUyari = el("div", S.kucuk + ";margin:-6px 0 10px;color:#b45309");
     kart.appendChild(metrikUyari);
@@ -447,16 +452,24 @@
       });
     }
 
-    function ayarKaydet() {
+    function ayarGonder(aralik_) {
       var v = durum.veri;
       if (!v || !v.duzenleyebilir) return;
       var yeni = {
         metrikler: METRIKLER.filter(function (ad) { return kutucuklar[ad].kutu.checked; }),
-        bas: Number(basSec.value), bit: Number(bitSec.value)
+        bas_zaman: aralik_ ? aralik_.bas : null, bit_zaman: aralik_ ? aralik_.bit : null
       };
-      v.ayar = { metrikler: yeni.metrikler, saat: [yeni.bas, yeni.bit] }; // ekranda hemen; sunucu yaniti yenile() ile gelir
+      v.ayar = { metrikler: yeni.metrikler, aralik: aralik_ }; // ekranda hemen; sunucu yaniti yenile() ile gelir
       ciz2();
       islem(function () { return durum.p.istek("PUT", durum.p.taban + "/devre-ayar", yeni); });
+    }
+    function ayarKaydet() { var v = durum.veri; ayarGonder(v && v.ayar ? v.ayar.aralik : null); }
+    function aralikKaydet(donem) {
+      if (donem) { ayarGonder(null); return; }
+      var b = basSec.value, t = bitSec.value;
+      if (!b || !t) return;
+      if (t <= b) { durum.mesaj = m.aralikHata; ciz2(); return; }
+      ayarGonder({ bas: b.slice(0, 16), bit: t.slice(0, 16) });
     }
 
     function ciz2() {
@@ -470,7 +483,7 @@
       }
       if (v && !v.duzenleyebilir) uyari.appendChild(el("div", S.uyari, m.salt));
       // ayar denetimleri
-      var ayar = (v && v.ayar) || { metrikler: [], saat: [0, 23] };
+      var ayar = (v && v.ayar) || { metrikler: [], aralik: null };
       METRIKLER.forEach(function (ad) {
         var k = kutucuklar[ad], kapali = !duz || !v || (ad === "trafik" && !v.trafik_var);
         k.kutu.checked = ayar.metrikler.indexOf(ad) >= 0;
@@ -478,9 +491,13 @@
         k.etiket.style.opacity = ad === "trafik" && v && !v.trafik_var ? "0.5" : "1";
         k.etiket.title = ad === "trafik" && v && !v.trafik_var ? m.trafikYok : "";
       });
-      basSec.value = String(ayar.saat[0]);
-      bitSec.value = String(ayar.saat[1]);
+      var etkin = (ayar.aralik) || (v && v.aralik) || null;
+      if (etkin && document.activeElement !== basSec) basSec.value = etkin.bas;
+      if (etkin && document.activeElement !== bitSec) bitSec.value = etkin.bit;
       basSec.disabled = bitSec.disabled = !duz || !v || durum.calisiyor;
+      donemDugme.disabled = !duz || !v || durum.calisiyor || !ayar.aralik;
+      donemDugme.style.opacity = donemDugme.disabled ? "0.5" : "1";
+      aralikNot.textContent = v && !ayar.aralik ? m.raporDonemiAcik : "";
       metrikUyari.textContent = v && !ayar.metrikler.length ? m.metrikYok : v && !v.trafik_var ? m.trafikYok : "";
       aramaKap.style.display = duz ? "" : "none";
       // secili devreler
