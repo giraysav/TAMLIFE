@@ -29,27 +29,27 @@
     tr: {
       trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", saatAraligi: "Saat aralığı", veriler: "Grafikte gösterilecek veriler",
-      bolum: "Devre grafikleri (ReportDB)", ara: "Açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
+      bolum: "Devre grafikleri", ara: "Açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
       kaldir: "Kaldır", secili: "Seçili devreler", seciliYok: "Henüz devre seçilmedi.", sonucYok: "Eşleşen devre bulunamadı.",
       fazla: "ilk 100 sonuç gösteriliyor", toplam: "eşleşme", hazir: "Hazır", bekliyor: "Veri hazırlanıyor (birkaç dakika)",
       veriYok: "Bu dönemde ölçüm yok", kaldirOnay: "Bu devre rapordan kaldırılsın mı?", metrikYok: "Grafik için en az bir veri seçin.",
-      noYok: "Kartta Müşteri No olmadığı için devre aranamıyor.", cmdbYok: "ReportDB CMDB verisi henüz alınamadı", olcumHata: "Son ölçüm çekimi başarısız",
+      noYok: "Kartta Müşteri No olmadığı için devre aranamıyor.", cmdbYok: "Devre listesi henüz hazır değil; arama sonuç vermeyebilir.", olcumHata: "Ölçüm verisi şu an güncellenemiyor; son alınan veri gösteriliyor.",
       salt: "Bu kartta değişiklik yetkiniz yok; ayarlar ve seçili devreler gösteriliyor.", hata: "İşlem yapılamadı",
-      trafikYok: "ReportDB'de trafik sütunu henüz tanımlı değil (tablo yetkisi bekleniyor).", aylikLoe: "LOE aylık", kesinti: "Kesinti",
-      kaynak: "Kaynak: ReportDB · saatlik ölçüm · gri alan hafta sonu",
+      trafikYok: "Trafik verisi henüz hazır değil.", aylikLoe: "Aylık", hizmetSaati: "Hizmet saati", kesinti: "Kesinti",
+      kaynak: "Saatlik ölçüm · gri alan hafta sonu",
       ay: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
     },
     en: {
       trafik: "Traffic", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "avg", enYuksek: "peak", p95: "95th", saatAraligi: "Hour range", veriler: "Data shown on the chart",
-      bolum: "Circuit charts (ReportDB)", ara: "Type a description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
+      bolum: "Circuit charts", ara: "Type a description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
       kaldir: "Remove", secili: "Selected circuits", seciliYok: "No circuit selected yet.", sonucYok: "No matching circuit.",
       fazla: "showing first 100 results", toplam: "matches", hazir: "Ready", bekliyor: "Preparing data (a few minutes)",
       veriYok: "No measurement this period", kaldirOnay: "Remove this circuit from the report?", metrikYok: "Select at least one data type for the chart.",
-      noYok: "This card has no Customer No, so circuits cannot be searched.", cmdbYok: "ReportDB CMDB data not received yet", olcumHata: "Last measurement fetch failed",
+      noYok: "This card has no Customer No, so circuits cannot be searched.", cmdbYok: "Circuit list is not ready yet; search may return no results.", olcumHata: "Measurement data cannot be updated right now; the last received data is shown.",
       salt: "You cannot change this card; settings and selected circuits are shown.", hata: "Action failed",
-      trafikYok: "Traffic column is not defined in ReportDB yet (awaiting table access).", aylikLoe: "LOE monthly", kesinti: "Outage",
-      kaynak: "Source: ReportDB · hourly measurement · grey area weekend",
+      trafikYok: "Traffic data is not ready yet.", aylikLoe: "Monthly", hizmetSaati: "Service hours", kesinti: "Outage",
+      kaynak: "Hourly measurement · grey area weekend",
       ay: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     }
   };
@@ -272,7 +272,7 @@
 
     // Dip notu: tek satir
     graphic.push({ type: "text", left: 12, bottom: 10, style: {
-      text: m.kaynak + (devre.exchours ? "   ·   EXCHOURS " + devre.exchours : ""), fill: C.ikincil, font: "600 10.5px " + YAZI } });
+      text: m.kaynak + (devre.exchours ? "   ·   " + m.hizmetSaati + " " + devre.exchours : ""), fill: C.ikincil, font: "600 10.5px " + YAZI } });
 
     var son = paneller.length - 1;
     return {
@@ -477,8 +477,8 @@
       uyari.textContent = "";
       if (v && v.kaynak) {
         var c = v.kaynak.cmdb || {}, o = v.kaynak.olcum || {};
-        if (!c.son_basari) uyari.appendChild(el("div", S.uyari, m.cmdbYok + (c.hata ? ": " + c.hata : ".")));
-        if (o.hata) uyari.appendChild(el("div", S.uyari, m.olcumHata + ": " + o.hata));
+        if (!c.son_basari) uyari.appendChild(el("div", S.uyari, m.cmdbYok));
+        if (o.hata) uyari.appendChild(el("div", S.uyari, m.olcumHata));
       }
       if (v && !v.duzenleyebilir) uyari.appendChild(el("div", S.uyari, m.salt));
       // ayar denetimleri

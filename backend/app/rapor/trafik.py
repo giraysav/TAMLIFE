@@ -82,8 +82,13 @@ def _iso(z: Any) -> str | None:
 
 
 def _kaynak_durumu(db: Session) -> dict[str, Any]:
+    """Ekran icin yalniz zaman ve hata VAR/YOK: kullaniciya kaynak adi ya da ham veritabani hatasi gitmez (2026-11-20 kullanici:
+    "panelde kullanicilara acilan her noktada veriyi aldigimiz kaynagin adini yazdirma"). Ayrinti isci gunlugunde ve yonetimde."""
     d = loe.durum_oku(db)
-    return {b: {k: (d.get(b) or {}).get(k) for k in ("son_basari", "son_deneme", "hata", "satir")} for b in ("cmdb", "olcum")}
+    return {
+        b: {"son_basari": (d.get(b) or {}).get("son_basari"), "son_deneme": (d.get(b) or {}).get("son_deneme"), "hata": bool((d.get(b) or {}).get("hata"))}
+        for b in ("cmdb", "olcum")
+    }
 
 
 def _etiket(alanlar: dict[str, Any]) -> list[tuple[str, str]]:

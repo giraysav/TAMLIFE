@@ -72,7 +72,7 @@ def _ekip_geneli(db: Session, yil: int) -> dict[str, Callable[[], dict]]:
     def radar() -> dict:
         v = radar_adaylari(db)
         if not v["var"]:
-            return {"deger": None, "alt": m("ReportDB verisi yok", "No ReportDB data")}
+            return {"deger": None, "alt": m("Alarm verisi yok", "No alarm data")}
         alarm = v.get("toplam_kayit", sum(s["toplam"] for s in v["satirlar"]))
         return {"deger": v.get("toplam_musteri", len(v["satirlar"])), "alt": m(f"aday · {alarm} alarm", f"candidates · {alarm} alarms")}
 
