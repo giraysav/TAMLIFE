@@ -287,8 +287,8 @@
 
     function ciz2() {
       var v = durum.veri, duz = !v || v.duzenleyebilir;
-      // Sunucu yeni sozlesmeyi (duzenleyebilir alani) dondurene kadar bolum gizli: panel yeniden baslatilmadan once ya da veri gelmeden
-      kart.style.display = v && typeof v.duzenleyebilir === "boolean" ? "" : "none";
+      // Eski sunucu sozlesmesinde (duzenleyebilir alani yok) bolum gizli; veri henuz gelmediyse gorunur, kutu kendisi ceker
+      kart.style.display = v && typeof v.duzenleyebilir !== "boolean" ? "none" : "";
       uyari.textContent = "";
       if (v && v.kaynak) {
         var c = v.kaynak.cmdb || {}, o = v.kaynak.olcum || {};
@@ -380,6 +380,12 @@
     };
     kap._tl = durum;
     ciz2();
+    if (!durum.veri && p.getir) {
+      // Grafik sorgusu onbellekten geldiyse yayin olmaz: secili devre listesi icin veriyi kutu kendisi ister
+      Promise.resolve().then(function () { return p.getir(p.adres); })
+        .then(function (v) { if (!sonVeri[p.adres]) veriYayinla(p.adres, v); })
+        .catch(function (e) { durum.mesaj = hataMetni(e); ciz2(); });
+    }
   }
 
   window.TamlifeTrafik = {
