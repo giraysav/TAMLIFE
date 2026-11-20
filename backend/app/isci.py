@@ -19,9 +19,12 @@
       --csv: backend/var/kesif/temip-eslesme-<zaman>-{musteri,personel}.csv (git disi; musteri unvani icerir).
   ..\\.venv\\Scripts\\python.exe -m app.isci cek <kaynak> [--client <Instant Client>] [--kuru]
       <ON EK>_IMPORT_QUERY sonucu -> tampon partisi '<kaynak>_import' (analiz / dagitim / geri alma Veri Girisi'nde).
-  ..\.venv\Scripts\python.exe -m app.isci rapor-devre [--zorla] [--client <Instant Client>]
+  ..\\.venv\\Scripts\\python.exe -m app.isci rapor-devre [--zorla] [--client <Instant Client>]
       Aylik rapor devre grafikleri (rapor/loe.py, LOE sorgusu): CMDB kopyasi (gunde bir) + secili devrelerin onceki / bu ay saatlik
       olcumleri. 'reportdb' turu her calismada bunu da (ayri kilitle, alarm senkronundan bagimsiz) calistirir. --zorla: hepsini yenile.
+  ..\\.venv\\Scripts\\python.exe -m app.isci envanter [--zorla]
+      Musteri envanteri / Kritik CI (musteri/envanter.py): ONENT CMDB'den panel Musteri No'larinin CI'lari (4 saatte bir; --zorla:
+      hemen). 'reportdb' turu her calismada bunu da (ayri kilitle) cagirir; Oracle istemcisi gerekmez.
   --kuru: hicbir sey yazmaz; sorguyu calistirip satir sayisini ve ilk satirlari gosterir.
 Kaynak <ON EK>_ENABLED=true degilse Oracle'a baglanilmaz, hicbir sey yazilmaz. Ayarlar backend/.env (panelle ayni: TAMLIFE_DATABASE_URL,
 ORACLE_*). Cikis: 0 basarili | 1 hata (tampon ve kartlar degismez) | 2 baska calisma suruyor (atlandi).
@@ -183,6 +186,33 @@ def rapor_devre(zorla: bool = False) -> int:
         return 0
     except Exception as e:  # noqa: BLE001
         return _hata("rapor-devre", f"basarisiz: {_mesaj(e, a)}")
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+
+
+def envanter_turu(zorla: bool = False) -> int:
+    """Musteri envanteri (Kritik CI). Kaynak kapali ya da yenileme zamani gelmediyse sessizce gecer."""
+    from app.musteri import envanter
+    from app.tampon import postgres
+
+    if not postgres.ayar(envanter.KAYNAK).ENABLED:
+        return 0
+    kilit = _klasor() / "isci_envanter.kilit"
+    if not kilit_al(kilit):
+        return 2
+    try:
+        with oturum() as db:
+            if not zorla and not envanter.gerekli_mi(db):
+                return 0
+            sonuc = envanter.yenile(db)
+        if "hata" in sonuc:
+            return _hata("envanter", f"basarisiz: {sonuc['hata']}")
+        gunluge_yaz(f"envanter OK {sonuc['satir']} CI, {sonuc['sure_sn']} sn")
+        print(f"[OK] envanter: {sonuc['satir']} CI, {sonuc['sure_sn']} sn")
+        return 0
     finally:
         try:
             kilit.unlink()
@@ -486,6 +516,8 @@ def main(argv: list[str] | None = None) -> int:
     rd = alt.add_parser("rapor-devre", help="aylik rapor devre grafikleri: CMDB kopyasi + secili devrelerin olcumleri (LOE)")
     rd.add_argument("--zorla", action="store_true", help="CMDB ve tum olcumleri yenile")
     rd.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
+    ev = alt.add_parser("envanter", help="musteri envanteri / Kritik CI (ONENT CMDB)")
+    ev.add_argument("--zorla", action="store_true", help="yenileme zamanini bekleme")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
     for alt_p in (r, c):
@@ -499,6 +531,8 @@ def main(argv: list[str] | None = None) -> int:
         return pg_katalog_calistir(a.kaynak, max(1, min(int(a.ornek), 200)), a.kullanici)
     if a.is_ == "pg-cek":
         return pg_cek(a.kaynak, a.kuru, a.kullanici)
+    if a.is_ == "envanter":
+        return envanter_turu(a.zorla)
     hata = _istemci(a.client)
     if hata:
         return _hata(a.is_ if a.is_ != "cek" else a.kaynak, hata)
@@ -513,6 +547,7 @@ def main(argv: list[str] | None = None) -> int:
         kod = reportdb_senkron(a.kuru)
         if not a.kuru:
             rapor_devre()  # 2026-11-20: ayni 6 dk'lik turda; sonucu alarm senkronunun cikis kodunu degistirmez
+            envanter_turu()  # 2026-11-20: Kritik CI envanteri (4 saatte bir)
         return kod
     return oracle_cek(a.kaynak, a.kuru)
 

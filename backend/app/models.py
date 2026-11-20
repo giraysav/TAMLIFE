@@ -42,6 +42,7 @@ TABLE_OWNER = {
     "report_draft": "rapor",
     "report_dispatch": "rapor",
     "report_recipient": "rapor",
+    "customer_ci": "musteri",
     "report_cmdb": "rapor",
     "report_circuit": "rapor",
     "report_circuit_data": "rapor",
@@ -262,6 +263,22 @@ class ReportRecipient(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
     to_addrs: Mapped[str] = mapped_column(Text, default="")
     cc_addrs: Mapped[str] = mapped_column(Text, default="")
+
+
+# --- Musteri envanteri / Kritik CI (2026-11-20; ONENT NEMS_CMDB, app.musteri.envanter) --------------------------------------
+class CustomerCi(Base):
+    """Musterinin CMDB envanteri: ONENT'te CRM_MUSTERI_NO ozelligi kartin Musteri No'suna esit CI'lar. Isci birkac saatte bir
+    bastan yazar; kartin Kritik CI alani bunu okur (2026-11-20 kullanici: "kritik ci artik excel ile degil onent db'den dinamik")."""
+
+    __tablename__ = "customer_ci"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_key: Mapped[str] = mapped_column(String(40), index=True)  # CRM_MUSTERI_NO karsilastirma anahtari
+    ci_no: Mapped[str] = mapped_column(String(40), default="")
+    ci_name: Mapped[str] = mapped_column(String(300), default="")
+    service: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(40), default="")
+    attrs: Mapped[dict] = mapped_column(JSON, default=dict)  # yalniz izinli ozellikler (envanter.OZELLIKLER)
+    refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # --- Aylik rapor devre grafikleri (2026-11-20; ReportDB LOE sorgusu, app.rapor.loe) ---------------------------------------

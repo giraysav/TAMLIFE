@@ -17,6 +17,7 @@ from sqlalchemy import Column, Table, delete, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app import gorunurluk, musteri_alani
+from app.musteri import envanter
 from app.authz import is_admin, yonetici_mi
 from app.bildirim import servis as bildirim
 from app.gelir.servis import tum_gelirler, unvan_tasi
@@ -357,6 +358,13 @@ def rapor_bekleniyor_mu(musteri: Customer) -> bool:
     return rapor_birimi_mi(musteri) and not musteri.report_exempt
 
 
+def kritik_ci_listesi(db: Session, user: Principal, musteri_id: int, metin: str = "") -> dict:
+    """Kartin Kritik CI penceresi: kart ve istiraklerinin envanteri (sunucuda arama, en fazla 500 satir)."""
+    musteri = musteri_getir(db, user, musteri_id)
+    istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
+    return envanter.kritik_ci(db, [musteri, *istirakler], metin)
+
+
 def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] | None) -> dict:
     musteri = musteri_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id).order_by(func.lower(Customer.name))))
@@ -404,7 +412,8 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
         },
         "ekip": _matris_satirlari(db, "destech", adlar),
         "iletisim": iletisim_sozlugu(db, musteri.id),
-        "kritik_ci": _matris_satirlari(db, "ci", adlar),
+        # 2026-11-20 kullanici: Kritik CI artik Excel matrisinden degil musterinin CMDB envanterinden (app.musteri.envanter)
+        "kritik_ci": envanter.kart_ozeti(db, [musteri, *istirakler], musteri.id),
     }
 
     rapor_izni = erisim("rapor")

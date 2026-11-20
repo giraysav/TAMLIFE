@@ -301,6 +301,12 @@ def sla_sil(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depe
     return _yap(db, lambda: rs.sla_sil(db, e.user, musteri_id, donem_kodu=donem))
 
 
+@router.get("/musteri/{musteri_id:int}/kritik-ci")
+def kritik_ci(musteri_id: KimlikTipi, q: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Kritik CI (musteri envanteri): sunucuda arama, en fazla 500 satir."""
+    return _yap(db, lambda: ms.kritik_ci_listesi(db, e.user, musteri_id, q))
+
+
 @router.get("/musteri/{musteri_id:int}/rapor/trafik")
 def trafik_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     """Donemin devre trafik serileri (ReportDB); cizim tarayicida ayri kodla (dist/rapor-trafik.js, Apache ECharts)."""

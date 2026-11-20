@@ -1,0 +1,220 @@
+"""Musteri envanteri / Kritik CI: ONENT NEMS_CMDB -> panel (customer_ci) -> musteri kartinin Kritik CI alani.
+
+2026-11-20 kullanici: "onent'ten gelen NEMS_CMDB verilerinde musteri no ile eslesen CI'lari, yani o musteriye ait cmdb verilerini
+musteri karti altindaki KRITIK CI alanina ekle; burada envanteri gorelim" + "kritik ci artik excel ile degil onent db'den dinamik
+beslenecek" (eski Excel matrisi 'ci' artik okunmaz).
+
+Eslesme: ONENT'te CI_CUSTOMER bos; Musteri No her servis sinifinda CRM_MUSTERI_NO ozelligindedir (CI_ATTRIBUTE / okuma yetkili
+MTRL_CI_ATTRIBUTE_INFO). Anahtar = rakamlar, bastaki sifirsiz (tampon.eslestirme.anahtar).
+Cekim (isci; panel sureci ONENT'e baglanmaz): 1) panel Musteri No'larina esit CRM_MUSTERI_NO satirlari -> CI no, ad, servis, durum
+2) bu CI'larin yalniz OZELLIKLER listesindeki ozellikleri (iletisim e-postasi, SNMP, IP gibi alanlar ALINMAZ). ~166 bin CI, ~20 sn.
+Ekranda kaynak adi yazilmaz (2026-11-20 kullanici).
+"""
+
+from __future__ import annotations
+
+import time
+from collections import defaultdict
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
+
+from sqlalchemy import delete, func, insert, select
+from sqlalchemy.orm import Session
+
+from app.dil import m
+from app.models import AppSetting, Customer, CustomerCi
+from app.ortak import simdi
+from app.tampon.eslestirme import anahtar, musteri_anahtarlari
+
+KAYNAK = "pg_onent"
+DURUM_ANAHTARI = "musteri.envanter_durum"
+YENILEME_SAAT = 4
+HATA_BEKLEME_DK = 60
+PARCA = 20_000
+SORGU_SN = 600
+# (ONENT ozellik adi, kisa ad): yalniz bunlar alinir
+OZELLIKLER = (
+    ("BANDWIDTH", "bw"),
+    ("IMT_ID", "imt"),
+    ("KURUMSAL_LOKASYON_ADI", "lokasyon"),
+    ("ALTYAPI_TIPI", "altyapi"),
+    ("ERISIM_ALTYAPISI", "erisim"),
+    ("IZLEME_SAATI", "saat"),
+    ("DEVRE_KURULUM_TARIHI", "kurulum"),
+)
+DURUMLAR = {
+    "ACTIVE": ("Aktif", "Active"), "INACTIVE": ("Pasif", "Inactive"), "CANCELLED": ("İptal", "Cancelled"),
+    "REMOVED": ("Kaldırıldı", "Removed"), "PLANNED": ("Planlandı", "Planned"), "SUSPEND": ("Askıda", "Suspended"),
+}  # fmt: skip
+SIRA = {"ACTIVE": 0, "SUSPEND": 1, "PLANNED": 2, "INACTIVE": 3, "CANCELLED": 4, "REMOVED": 5}
+
+_CI_SORGU = (
+    'SELECT DISTINCT "CI_NO", "CI_NAME", "SERVICE_NAME", "CI_STATUS_NAME", "CLASS_ITEM_VALUE" '
+    'FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" WHERE "CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_NO\' AND "CLASS_ITEM_VALUE" = ANY(%s)'
+)
+_OZELLIK_SORGU = (
+    'SELECT "CI_NO", "CI_CLASS_SPEC_NAME", "CLASS_ITEM_VALUE" FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" '
+    'WHERE "CI_NO" = ANY(%s) AND "CI_CLASS_SPEC_NAME" = ANY(%s)'
+)
+
+
+# --- Durum ---------------------------------------------------------------------------------------------------------------------
+def durum_oku(db: Session) -> dict[str, Any]:
+    k = db.get(AppSetting, DURUM_ANAHTARI)
+    return dict(k.value) if k is not None and isinstance(k.value, dict) else {}
+
+
+def _durum_yaz(db: Session, **alanlar: Any) -> None:
+    k = db.get(AppSetting, DURUM_ANAHTARI)
+    deger = {**(dict(k.value) if k is not None and isinstance(k.value, dict) else {}), **alanlar}
+    if k is None:
+        db.add(AppSetting(key=DURUM_ANAHTARI, value=deger, updated_by="isci", updated_at=simdi()))
+    else:
+        k.value, k.updated_by, k.updated_at = deger, "isci", simdi()
+    db.commit()
+
+
+def _zaman(v: Any) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(v)) if v else None
+    except ValueError:
+        return None
+
+
+def gerekli_mi(db: Session) -> bool:
+    d, an = durum_oku(db), simdi()
+    son_basari, son_deneme = _zaman(d.get("son_basari")), _zaman(d.get("son_deneme"))
+    if d.get("hata") and son_deneme and an - son_deneme < timedelta(minutes=HATA_BEKLEME_DK):
+        return False
+    return son_basari is None or an - son_basari >= timedelta(hours=YENILEME_SAAT)
+
+
+# --- Cekim (isci) ----------------------------------------------------------------------------------------------------------------
+def _panel_numaralari(db: Session) -> list[str]:
+    """Kartlardaki Musteri No'lar: hem yazildigi hali hem bastaki sifirsiz anahtari (ONENT degeri ikisinden biri olabilir)."""
+    sonuc: set[str] = set()
+    for (no,) in db.execute(select(Customer.customer_no).where(Customer.customer_no.is_not(None))):
+        for k in musteri_anahtarlari(no):
+            sonuc.update({k, k.zfill(8)})
+    return sorted(sonuc)
+
+
+def yenile(db: Session) -> dict[str, Any]:
+    """ONENT'ten panel musterilerinin envanterini ceker ve customer_ci'yi bastan yazar. Hata durumu kaydina yazilir."""
+    from app.tampon import postgres
+
+    t0 = time.time()
+    a = postgres.ayar(KAYNAK)
+    try:
+        numaralar = _panel_numaralari(db)
+        with a.baglan(SORGU_SN) as conn, conn.cursor() as cur:
+            cur.execute(_CI_SORGU, (numaralar,))
+            cis: dict[str, dict[str, Any]] = {}
+            for ci_no, ad, servis, durum, mno in cur.fetchall():
+                k = anahtar(mno)
+                if not k or ci_no is None:
+                    continue
+                cis[f"{k}|{ci_no}"] = {"customer_key": k, "ci_no": str(ci_no)[:40], "ci_name": (ad or "")[:300],
+                                       "service": (servis or "")[:200], "status": (durum or "")[:40], "attrs": {}}  # fmt: skip
+            ozellik = defaultdict(dict)
+            adlar = dict(OZELLIKLER)
+            ci_nolar = sorted({v["ci_no"] for v in cis.values()})
+            for i in range(0, len(ci_nolar), PARCA):
+                cur.execute(_OZELLIK_SORGU, (ci_nolar[i : i + PARCA], list(adlar)))
+                for ci_no, ad, deger in cur.fetchall():
+                    if deger not in (None, ""):
+                        ozellik[str(ci_no)][adlar[ad]] = str(deger).strip()[:200]
+        an = simdi()
+        satirlar = [{**v, "attrs": ozellik.get(v["ci_no"], {}), "refreshed_at": an} for v in cis.values()]
+        db.execute(delete(CustomerCi))
+        for i in range(0, len(satirlar), 5000):
+            db.execute(insert(CustomerCi), satirlar[i : i + 5000])
+        db.commit()
+        sure = round(time.time() - t0, 1)
+        _durum_yaz(db, son_deneme=an.isoformat(), son_basari=an.isoformat(), hata="", satir=len(satirlar), sure_sn=sure)
+        return {"satir": len(satirlar), "sure_sn": sure}
+    except Exception as e:  # noqa: BLE001 - durum ekrana (yalniz yonetimde), onceki envanter korunur
+        db.rollback()
+        mesaj = postgres.hata_metni(e, a.gizliler())
+        _durum_yaz(db, son_deneme=simdi().isoformat(), hata=mesaj)
+        return {"hata": mesaj}
+
+
+# --- Kart (panel) ------------------------------------------------------------------------------------------------------------------
+def _durum_adi(kod: str) -> str:
+    tr, en = DURUMLAR.get((kod or "").upper(), (kod or "", kod or ""))
+    return m(tr, en)
+
+
+def _altyapi(a: dict[str, str]) -> str:
+    return " / ".join(x for x in (a.get("altyapi"), a.get("erisim")) if x)
+
+
+TR = timezone(timedelta(hours=3))
+EN_COK_SATIR = 500
+
+
+def _anahtarlar(musteriler: list[Customer]) -> list[str]:
+    sonuc: list[str] = []
+    for c in musteriler:
+        for k in musteri_anahtarlari(c.customer_no):
+            if k not in sonuc:
+                sonuc.append(k)
+    return sonuc
+
+
+def _basliklar(coklu: bool) -> list[str]:
+    return ([m("Müşteri No", "Customer No")] if coklu else []) + [
+        m("CI adı", "CI name"), m("Servis", "Service"), m("Durum", "Status"), m("Bant genişliği", "Bandwidth"), "IMT ID",
+        m("Lokasyon", "Location"), m("Altyapı", "Infrastructure"), m("Hizmet saati", "Service hours"), m("Kurulum tarihi", "Installed"),
+    ]  # fmt: skip
+
+
+def _ozet(db: Session, anahtarlar: list[str]) -> tuple[int, str]:
+    toplam = db.scalar(select(func.count()).select_from(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar))) or 0
+    aktif = db.scalar(select(func.count()).select_from(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar), CustomerCi.status == "ACTIVE")) or 0
+    son = db.scalar(select(func.max(CustomerCi.refreshed_at)))
+    if son is not None:
+        son = (son if son.tzinfo else son.replace(tzinfo=UTC)).astimezone(TR)
+    tarih = son.strftime("%d.%m.%Y %H:%M") if son else "—"
+    return toplam, m(f"{toplam} CI · {aktif} aktif · güncelleme {tarih}", f"{toplam} CIs · {aktif} active · updated {tarih}")
+
+
+def kart_ozeti(db: Session, musteriler: list[Customer], musteri_id: int) -> dict[str, Any]:
+    """Kart verisi icin yalniz sayi ve ozet; satirlar Kritik CI penceresi acilinca ayri istekle gelir (buyuk musteride ~22 bin CI)."""
+    anahtarlar = _anahtarlar(musteriler)
+    if not anahtarlar:
+        return {"basliklar": _basliklar(False), "satirlar": [], "toplam": 0, "ozet": m("Kartta Müşteri No yok.", "The card has no Customer No."), "ara": "", "adres": None}
+    toplam, ozet = _ozet(db, anahtarlar)
+    return {"basliklar": _basliklar(len(anahtarlar) > 1), "satirlar": [], "toplam": toplam, "ozet": ozet,
+            "ara": m("CI adı, servis, IMT ID, lokasyon ara…", "Search CI name, service, IMT ID, location…"),
+            "adres": f"/api/v1/musteri/{musteri_id}/kritik-ci"}  # fmt: skip
+
+
+def kritik_ci(db: Session, musteriler: list[Customer], metin: str = "") -> dict[str, Any]:
+    """Kritik CI listesi: kart (ve istirakleri) Musteri No'larinin envanteri; aktif once, sonra servis ve ad. Arama sunucuda
+    (tum sutunlarda parca eslesmesi, kelimeler VE); en fazla EN_COK_SATIR satir doner, `eslesen` toplam eslesmeyi verir."""
+    anahtarlar = _anahtarlar(musteriler)
+    coklu = len(anahtarlar) > 1
+    if not anahtarlar:
+        return {"basliklar": _basliklar(False), "satirlar": [], "toplam": 0, "eslesen": 0, "ozet": m("Kartta Müşteri No yok.", "The card has no Customer No.")}
+    kayitlar = db.scalars(select(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar))).all()
+    kayitlar = sorted(kayitlar, key=lambda r: (SIRA.get(r.status.upper(), 9), r.service, r.ci_name))
+    parcalar = [p for p in " ".join((metin or "").split())[:200].casefold().split(" ") if p]
+    satirlar = []
+    eslesen = 0
+    for r in kayitlar:
+        a = r.attrs or {}
+        satir = ([r.customer_key] if coklu else []) + [
+            r.ci_name, r.service, _durum_adi(r.status), a.get("bw", ""), a.get("imt", ""), a.get("lokasyon", ""), _altyapi(a),
+            a.get("saat", ""), (a.get("kurulum", "") or "")[:10],
+        ]  # fmt: skip
+        if parcalar:
+            metin_ = " ".join(satir).casefold()
+            if not all(p in metin_ for p in parcalar):
+                continue
+        eslesen += 1
+        if len(satirlar) < EN_COK_SATIR:
+            satirlar.append(satir)
+    toplam, ozet = _ozet(db, anahtarlar)
+    return {"basliklar": _basliklar(coklu), "satirlar": satirlar, "toplam": toplam, "eslesen": eslesen, "ozet": ozet}
