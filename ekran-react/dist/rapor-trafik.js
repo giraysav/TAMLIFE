@@ -36,7 +36,7 @@
       noYok: "Kartta Müşteri No olmadığı için devre aranamıyor.", cmdbYok: "ReportDB CMDB verisi henüz alınamadı", olcumHata: "Son ölçüm çekimi başarısız",
       salt: "Bu kartta değişiklik yetkiniz yok; ayarlar ve seçili devreler gösteriliyor.", hata: "İşlem yapılamadı",
       trafikYok: "ReportDB'de trafik sütunu henüz tanımlı değil (tablo yetkisi bekleniyor).", aylikLoe: "LOE aylık", kesinti: "Kesinti",
-      kaynak: "Kaynak: ReportDB · saatlik ölçüm · Delay, Jitter ve Packet Loss günlük ortalama · gri alan hafta sonu",
+      kaynak: "Kaynak: ReportDB · saatlik ölçüm · gri alan hafta sonu",
       ay: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
     },
     en: {
@@ -49,7 +49,7 @@
       noYok: "This card has no Customer No, so circuits cannot be searched.", cmdbYok: "ReportDB CMDB data not received yet", olcumHata: "Last measurement fetch failed",
       salt: "You cannot change this card; settings and selected circuits are shown.", hata: "Action failed",
       trafikYok: "Traffic column is not defined in ReportDB yet (awaiting table access).", aylikLoe: "LOE monthly", kesinti: "Outage",
-      kaynak: "Source: ReportDB · hourly measurement · Delay, Jitter and Packet Loss as daily average · grey area weekend",
+      kaynak: "Source: ReportDB · hourly measurement · grey area weekend",
       ay: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     }
   };
@@ -152,6 +152,14 @@
     return alanlar;
   }
 
+  /** Tum veriler ayni bicimde: saatlik, ici dolu alan (cizgi + yukaridan asagi solan dolgu). */
+  function alanSerisi(ad, renk, veri, panel) {
+    var rgb = [1, 3, 5].map(function (i) { return parseInt(renk.substr(i, 2), 16); }).join(",");
+    return { name: ad, type: "line", xAxisIndex: panel, yAxisIndex: panel, data: veri, showSymbol: false, connectNulls: false, sampling: "lttb",
+      lineStyle: { width: 1.4, color: renk }, itemStyle: { color: renk },
+      areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(" + rgb + ",0.32)" }, { offset: 1, color: "rgba(" + rgb + ",0.03)" }] } } };
+  }
+
   function devreSecenek(devre, yil, ay, ayar, dil) {
     dil = dilSec(dil);
     var m = METIN[dil], nk = devre.noktalar || [], o = devre.ozet || {};
@@ -172,16 +180,14 @@
         var veri = function (i) { return nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[i] != null ? n[i] / bol : null]; }); };
         paneller.push({ ad: m.trafik, birim: b[1], boy: 150, ondalik: enUst / bol < 10 ? 1 : 0 });
         var p = paneller.length - 1;
-        seriler.push({ name: m.giris, type: "line", xAxisIndex: p, yAxisIndex: p, data: veri(6), showSymbol: false, connectNulls: false, sampling: "lttb",
-          lineStyle: { width: 1.5, color: C.giris }, itemStyle: { color: C.giris },
-          areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(42,120,214,0.30)" }, { offset: 1, color: "rgba(42,120,214,0.02)" }] } },
+        var sGiris = alanSerisi(m.giris, C.giris, veri(6), p);
+        seriler.push(Object.assign(sGiris, {
           markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) },
           markLine: sg ? { silent: true, symbol: "none", lineStyle: { type: "dashed", width: 1, color: C.giris },
             label: { position: "insideEndTop", formatter: m.giris + " " + m.p95 + "  " + bps(sg.p95, dil), color: C.metin, fontSize: 10, fontWeight: 700,
               backgroundColor: "rgba(255,255,255,0.9)", padding: [1, 4], borderRadius: 3 },
-            data: [{ yAxis: sg.p95 / bol }] } : undefined });
-        seriler.push({ name: m.cikis, type: "line", xAxisIndex: p, yAxisIndex: p, data: veri(7), showSymbol: false, connectNulls: false, sampling: "lttb",
-          lineStyle: { width: 1.5, color: C.cikis }, itemStyle: { color: C.cikis } });
+            data: [{ yAxis: sg.p95 / bol }] } : undefined }));
+        seriler.push(alanSerisi(m.cikis, C.cikis, veri(7), p));
         lejant.push(m.giris, m.cikis);
         if (sg) kutular.push([m.giris + " " + m.p95, bps(sg.p95, dil), m.ort + " " + bps(sg.ort, dil)]);
         if (sc) kutular.push([m.cikis + " " + m.p95, bps(sc.p95, dil), m.ort + " " + bps(sc.ort, dil)]);
@@ -190,15 +196,18 @@
 
     var gecikmeVar = metrikler.indexOf("gecikme") >= 0, jitterVar = metrikler.indexOf("jitter") >= 0;
     if (gecikmeVar || jitterVar) {
-      var gs = gecikmeVar ? gunlukOrtalama(nk, 2, 1, saat) : [], js = jitterVar ? gunlukOrtalama(nk, 3, 1, saat) : [];
+      var saatlik = function (i, carpan) {
+        var d = nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[i] != null ? n[i] * carpan : null]; });
+        return d.some(function (x) { return x[1] != null; }) ? d : [];
+      };
+      var gs = gecikmeVar ? saatlik(2, 1) : [], js = jitterVar ? saatlik(3, 1) : [];
       if (gs.length || js.length) {
-        paneller.push({ olcekli: true, ad: gecikmeVar && jitterVar ? m.gecikme + " & " + m.jitter : gecikmeVar ? m.gecikme : m.jitter, birim: "ms", boy: 120, ondalik: 1 });
+        paneller.push({ ad: gecikmeVar && jitterVar ? m.gecikme + " & " + m.jitter : gecikmeVar ? m.gecikme : m.jitter, birim: "ms", boy: 120, ondalik: 1 });
         var q = paneller.length - 1;
         [[gecikmeVar, gs, m.gecikme, C.gecikme, 2], [jitterVar, js, m.jitter, C.jitter, 3]].forEach(function (t) {
           if (!t[0] || !t[1].length) return;
           var st = istatistik(deger(t[4], 1));
-          seriler.push({ name: t[2], type: "line", xAxisIndex: q, yAxisIndex: q, data: t[1], smooth: 0.3, symbol: "circle", symbolSize: 4, showSymbol: true,
-            lineStyle: { width: 2, color: t[3] }, itemStyle: { color: t[3], borderColor: "#fff", borderWidth: 1 } });
+          seriler.push(alanSerisi(t[2], t[3], t[1], q));
           lejant.push(t[2]);
           if (st) kutular.push([m[t[2] === m.gecikme ? "gecikme" : "jitter"] + " " + m.ort, ms(st.ort, dil), m.enYuksek + " " + ms(st.enYuksek, dil)]);
         });
@@ -207,13 +216,12 @@
     }
 
     if (metrikler.indexOf("kayip") >= 0) {
-      var ks = gunlukOrtalama(nk, 4, 100, saat), stk = istatistik(deger(4, 100));
-      if (ks.length) {
-        paneller.push({ ad: m.kayip, birim: "%", boy: 82, ondalik: 2 });
+      var ks = nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[4] != null ? n[4] * 100 : null]; }), stk = istatistik(deger(4, 100));
+      if (stk) {
+        paneller.push({ ad: m.kayip, birim: "%", boy: 90, ondalik: 2 });
         var z = paneller.length - 1;
-        seriler.push({ name: m.kayip, type: "bar", xAxisIndex: z, yAxisIndex: z, data: ks, barWidth: "58%",
-          itemStyle: { color: C.kayip, borderRadius: [3, 3, 0, 0] },
-          markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) } });
+        seriler.push(Object.assign(alanSerisi(m.kayip, C.kayip, ks, z), {
+          markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) } }));
         lejant.push(m.kayip);
         if (stk) kutular.push([m.kayip + " " + m.ort, yuzde(stk.ort / 100, dil, 3), m.enYuksek + " " + yuzde(stk.enYuksek / 100, dil, 2)]);
       }
