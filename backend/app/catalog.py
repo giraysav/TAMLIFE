@@ -74,7 +74,7 @@ MODULES: tuple[Module, ...] = (
         table="calendar_records",
     ),
     Module(
-        "onedesk", "Onedesk", "modul", title_en="Onedesk",
+        "onedesk", "Kayıt Takibi", "modul", title_en="Record Tracking",  # 2026-11-20: ekranda kaynak adi yazilmaz
         i18n="card.ats.title", card_id="dash-card-onedesk",
         box_id="mod_onedesk", permission_group="modules",
         registry_status="aktif", modal_id="atsModal",
