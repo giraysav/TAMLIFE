@@ -27,18 +27,16 @@ PRESENTATION: dict[str, tuple[str, str, str, str]] = {
     "toptan": ("work", "store", "Toptan müşteriler", "Wholesale customers"),
 }
 
-# Yalnız admin: TEK giriş, dokuz bölüm (2026-11-21: Veri Özeti) (kimlik "yonetim/<bolum>"). Eski admin / integrations / veri / roller girişleri buraya indi.
+# Yalnız admin: TEK giriş, altı bölüm (2026-11-21 sadeleştirme: Veri Kaynakları = Veri Özeti + Veri Girişi; Erişim = Kurum + Roller;
+# Kayıtlar = Arızalar + Günlükler; eski yonetim/tampon, roller, gunlukler adresleri ön yüzde birleşik bölüme açılır) (kimlik "yonetim/<bolum>"). Eski admin / integrations / veri / roller girişleri buraya indi.
 # Katalogdaki "utilizasyon" modülü (yalnız admin) arayüzde yonetim/utilizasyon bölümüne açılır.
 YONETIM_BOLUMLERI: tuple[tuple[str, str, str, str, str], ...] = (
     ("durum", "Genel Durum", "Sağlık kontrolleri ve göstergeler", "Overview", "Health checks and indicators"),
-    ("utilizasyon", "TAM Utilizasyon", "Final skor kriterleri, toplu atama, skor ağacı", "TAM Utilization", "Final score criteria, bulk assignment, score tree"),
-    ("tampon", "Veri Girişi", "Dış kaynak verisi: tampon, analiz, dağıtım", "Data intake", "External data: buffer, analysis, distribution"),
-    ("veri", "Veri Özeti", "ReportDB, OneDesk, ONENT birleşik görünüm ve günlük tur", "Data overview", "ReportDB, OneDesk, ONENT combined view and daily run"),
-    ("kurum", "Kurum Bağlantıları", "AD/LDAPS durumu, ayarları ve erişim testi", "Corporate connections", "AD/LDAPS status, settings and reachability test"),
+    ("utilizasyon", "TAM Utilizasyon", "Genel bakış, kriterler, puanlama, talepler", "TAM Utilization", "Overview, criteria, scoring, requests"),
+    ("veri", "Veri Kaynakları", "Kaynak durumu, günlük tur, Ürün-Tutar ve veri girişi", "Data sources", "Source status, daily run, Product-Amount and data intake"),
+    ("kurum", "Erişim", "Kurum bağlantıları (AD/LDAPS) ve roller", "Access", "Corporate connections (AD/LDAPS) and roles"),
     ("veritabani", "Veritabanı", "Sürüm, tablolar, bütünlük ve yedek", "Database", "Version, tables, integrity and backup"),
-    ("roller", "Roller", "Rol görünümleri ve giriş sayfaları", "Roles", "Role views and landing pages"),
-    ("arizalar", "Arızalar", "Hata kayıtları ve çözüm adımları", "Faults", "Fault records and resolution steps"),
-    ("gunlukler", "Günlükler", "Denetim olayları, oturumlar, uygulama günlüğü", "Logs", "Audit events, sessions, application log"),
+    ("arizalar", "Kayıtlar", "Arızalar ve günlükler (denetim, oturum, uygulama)", "Records", "Faults and logs (audit, sessions, application)"),
 )
 # Admin için ayrı menü öğesi olmayan, Yönetim altına katlanan modüller (admin olmayana rol görünümüyle aynen görünür).
 YONETIME_KATLANAN = frozenset({"roller"})
