@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app import musteri_alani
 from app.models import AppSetting, AppUser, Customer, OnedeskRecord
-from app.onedesk.ice_al import sayaclari_yenile
+from app.onedesk.sayac import sayaclari_yenile
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.session import Principal
 from app.tampon import temip_kayit

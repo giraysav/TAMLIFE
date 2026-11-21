@@ -21,7 +21,6 @@ def _oracle(prefix: str, *extra: str) -> tuple[str, ...]:
         "PASSWORD",
         "QUERY",
         "TIMEOUT",
-        "IMPORT_QUERY",
         "IMPORT_TIMEOUT",
     )
     return tuple(f"{prefix}_{suffix}" for suffix in suffixes) + extra
@@ -51,20 +50,6 @@ SOURCES: tuple[Source, ...] = (
         "oracle",
         "ONENTDB",
         "ONENTDB_DB_ENABLED",
-        _oracle("ONENTDB_DB", "ONENT_DB_URL"),
-    ),
-    Source(
-        "oracle_reportdb_import",
-        "oracle",
-        "REPORTDB veri iceri alma",
-        "ORACLE_REPORTDB_IMPORT_QUERY",
-        _oracle("ORACLE_REPORTDB", "ORACLE_REPORTDB_URL"),
-    ),
-    Source(
-        "oracle_onent_import",
-        "oracle",
-        "ONENTDB veri iceri alma",
-        "ONENTDB_DB_IMPORT_QUERY",
         _oracle("ONENTDB_DB", "ONENT_DB_URL"),
     ),
 )

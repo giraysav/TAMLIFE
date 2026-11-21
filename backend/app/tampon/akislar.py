@@ -21,6 +21,9 @@ from app.tampon.models import CustomerImportRun, DistributionLog, DistributionRu
 TEMIP_SURUM = "temip.surum"  # temip_kayit.SURUM_AYARI (temip_kayit oracle zincirini yukler; burada yalniz ayar okunur)
 TEMIP_KAYNAGI = "temip"
 TEMIP_BAYAT_DK = 30  # 6 dk'lik dongunun 5 kacirilmasi
+ONEDESK_DURUM = "onedesk.kayit_durum"  # onedesk/canli.DURUM_ANAHTARI
+ONEDESK_KAYNAGI = "onedesk"
+ONEDESK_PG = "pg_onedesk"
 
 
 def _utc(an: datetime | None) -> datetime | None:
@@ -136,22 +139,18 @@ def akislar(db: Session) -> dict[str, Any]:
         _akis("temip", "TEMIP alarm kayıtları", "işçi (6 dk) + CLI", "yonetim/tampon?sekme=akis", tzaman, tdurum, taciklama, sema=sema, **sayilar)
     )
 
-    # PostgreSQL iceri alma (ONEDESKDB / ONENTDB): yalniz acik kaynaklar; elle / isci 'pg-cek' (tazelik beklentisi yok)
-    for pk, t in postgres.KAYNAKLAR.items():
-        pd = postgres.durum(pk)
-        if not pd["acik"]:
-            continue
-        phazir, pson = _son_parti(db, postgres.parti_anahtari(pk))
-        pzaman = _utc(phazir.received_at) if phazir else None
-        phata = pson is not None and pson.status == "failed" and (phazir is None or pson.id > phazir.id)
-        paciklama = (pson.error or "Son çekim başarısız.") if phata and pson else (pd["sorgu_hata"] or "")
-        liste.append(_akis(postgres.parti_anahtari(pk), f"{t.label} içeri alma", "işçi (pg-cek)", "yonetim/tampon?sekme=akis", pzaman,
-                           _durum(pzaman, None, phata), paciklama, parti=phazir.id if phazir else None))  # fmt: skip
+    # 4. OneDesk sikayet / talep kayitlari (isci her turda; onedesk/canli)
+    od = (db.get(AppSetting, ONEDESK_DURUM) or AppSetting(value={})).value or {}
+    ozaman = _utc(datetime.fromisoformat(od["son_basari"])) if od.get("son_basari") else None
+    ohata = bool(od.get("hata")) and od.get("son_deneme", "") >= od.get("son_basari", "")
+    osayi = {("acik" if d == "open" else "kapali"): n for d, n in db.execute(
+        select(OnedeskRecord.status, func.count()).where(OnedeskRecord.source == ONEDESK_KAYNAGI).group_by(OnedeskRecord.status))}  # fmt: skip
+    liste.append(_akis("onedesk", "OneDesk şikayet / talep kayıtları", "işçi (6 dk)", "onedesk", ozaman,
+                       _durum(ozaman, TEMIP_BAYAT_DK if postgres.ayar(ONEDESK_PG).ENABLED else None, ohata),
+                       od.get("hata", "") if ohata else "", acik=osayi.get("acik", 0), kapali=osayi.get("kapali", 0)))  # fmt: skip
 
-    # 4-6. Baska ekranlardan gelen dosyalar (denetim kaydi / yukleme zamani)
-    denetim = _denetim_son(db, ("onedesk.ice_al", "gelir_uretim.ice_al"))
-    liste.append(_akis("onedesk", "Onedesk kayıt aktarımı", "tampon partisi", "onedesk", denetim.get("onedesk.ice_al"),
-                       _durum(denetim.get("onedesk.ice_al"), None)))  # fmt: skip
+    # 5-6. Baska ekranlardan gelen dosyalar (denetim kaydi / yukleme zamani)
+    denetim = _denetim_son(db, ("gelir_uretim.ice_al",))
     ut = _utc(db.scalar(select(func.max(UrunTutarOzet.uploaded_at))))
     liste.append(_akis("urun_tutar", "Ürün-Tutar Excel", "dosya", "yonetim/tampon?sekme=import", ut, _durum(ut, None)))
     liste.append(_akis("gelir_uretim", "Gelir Faydası Excel", "dosya", "yonetim/tampon?sekme=import", denetim.get("gelir_uretim.ice_al"),

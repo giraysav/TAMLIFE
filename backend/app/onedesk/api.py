@@ -1,30 +1,21 @@
-"""Onedesk HTTP katmani. Okuma: Onedesk modulunu gorenler (kapsam servis katmaninda); kaynak yonetimi ve aktarim: yalniz admin."""
+"""Onedesk HTTP katmani (Kayit Takibi). Okuma: Onedesk modulunu gorenler (kapsam servis katmaninda). Kayitlar yalniz isci aktarimlariyla
+gelir (alarm: tampon/temip_kayit, sikayet / talep: onedesk/canli); elle aktarim yolu 2026-11-21 kaldirildi."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit import audit_log
-from app.baglantilar import connections
 from app.db import get_db
-from app.deps import require_admin
 from app.erisim import Erisim, modul_erisim
-from app.models import IngestBatch
-from app.onedesk import ice_al, servis
-from app.ortak import KimlikTipi, iso, ok
-from app.session import Principal
+from app.onedesk import servis
+from app.ortak import ok
 
 router = APIRouter(prefix="/api/v1/onedesk", tags=["onedesk"])
 erisim = modul_erisim("onedesk")
 
 Yil = Query(default=None, ge=2000, le=2100)
-
-
-class AktarGovde(BaseModel):
-    tur: str | None = Field(default=None, max_length=20)  # kaynakta tur sutunu yoksa: alarm | talep | sikayet
 
 
 @router.get("/durum")
@@ -51,36 +42,4 @@ def oneriler(yil: int | None = Yil, e: Erisim = Depends(erisim), db: Session = D
 def yz_yorum(yil: int | None = Yil, e: Erisim = Depends(erisim), db: Session = Depends(get_db)):
     sonuc = servis.yz_yorumu(db, e.user, yil)
     audit_log.remember(actor=e.user.username, action="onedesk.yz_yorum", outcome="allow", module_key="onedesk", detail=f"yil={sonuc['yil']}")
-    return ok(sonuc)
-
-
-@router.get("/kaynak")
-def kaynak(admin: Principal = Depends(require_admin), db: Session = Depends(get_db)):
-    """Admin: kayit durumu, canli baglanti yuvasi ve aktarilabilir (hazir) Veri Girisi partileri."""
-    partiler = db.scalars(select(IngestBatch).where(IngestBatch.status == "ready").order_by(IngestBatch.id.desc()).limit(20)).all()
-    yuva = next((c for c in connections() if c["id"] == "oracle_reportdb"), {})
-    return ok(
-        {
-            **servis.kaynak_bilgisi(db),
-            "canli_baglanti": {"yuva": yuva.get("slot", "ORACLE_REPORTDB"), "yapilandirildi": bool(yuva.get("configured")), "acik": False},
-            "partiler": [
-                {"id": p.id, "kaynak": p.source_key, "etiket": p.label, "satir": p.row_count, "zaman": iso(p.received_at), "sutunlar": list(p.columns or [])}
-                for p in partiler
-                if ice_al.aktarilabilir_mi(p)
-            ],
-        }
-    )
-
-
-@router.post("/ice-al/{parti_id:int}")
-def ice_al_parti(parti_id: KimlikTipi, body: AktarGovde, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)):
-    sonuc = ice_al.parti_aktar(db, parti_id, body.tur)
-    db.commit()
-    audit_log.remember(
-        actor=admin.username,
-        action="onedesk.ice_al",
-        outcome="allow",
-        module_key="onedesk",
-        detail=f"parti={parti_id} eklenen={sonuc['eklenen']} guncellenen={sonuc['guncellenen']}",
-    )
     return ok(sonuc)

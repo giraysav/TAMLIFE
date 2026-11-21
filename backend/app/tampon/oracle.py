@@ -1,7 +1,7 @@
 """Oracle kaynak katmani: uretim api_services.OracleSourceConfig + kutucuklar/veri/db_kaynak.py uyarlamasi.
 
 - Anahtar adlari uretimle ayni (backend/.env): <ON EK>_ENABLED / _HOST / _PORT / _SERVICE_NAME / _USER / _PASSWORD / _TIMEOUT /
-  _IMPORT_QUERY / _IMPORT_TIMEOUT; ortak ORACLE_CLIENT_DIR (Instant Client -> thick mod; eski 10G parola kaydi DPY-3015'i acar).
+  _IMPORT_TIMEOUT (cagri zaman asimi); ortak ORACLE_CLIENT_DIR (Instant Client -> thick mod; eski 10G parola kaydi DPY-3015'i acar).
 - python-oracledb TEMBEL yuklenir (_oracledb(); ad.py _ldap() kalibi): panel (web) sureci hic yuklemez, isci surec yalniz
   baglanirken yukler. Baglanti YALNIZ <ON EK>_ENABLED=true ve zorunlu anahtarlar doluyken acilir (_baglan zorlar).
 - Sorgu yalniz koddan / .env'den gelir (arayuzden SQL yok); yalniz tek SELECT / WITH (sorgu_temizle). Hata metninde parola, adres,
@@ -108,7 +108,6 @@ class OracleKaynak:
         self.USER = os.environ.get(f"{on}_USER", "").strip()
         self.PASSWORD = os.environ.get(f"{on}_PASSWORD", "")
         self.TIMEOUT = _tam_sayi(f"{on}_TIMEOUT", 10)
-        self.IMPORT_QUERY = os.environ.get(f"{on}_IMPORT_QUERY", "")
         self.IMPORT_TIMEOUT = _tam_sayi(f"{on}_IMPORT_TIMEOUT", 300)
 
     def eksikler(self) -> list[str]:
@@ -179,11 +178,11 @@ def sorgu_temizle(sorgu: str | None) -> str:
     """Yalniz tek SELECT / WITH. Bos ya da gecersizse OracleHata."""
     s = (sorgu or "").strip().rstrip(";").strip()
     if not s:
-        raise OracleHata("İçeri alma sorgusu tanımlı değil (.env: *_IMPORT_QUERY).")
+        raise OracleHata("Sorgu boş.")
     if len(s) > AZAMI_SORGU_UZUNLUGU:
-        raise OracleHata("İçeri alma sorgusu çok uzun.")
+        raise OracleHata("Sorgu çok uzun.")
     if not _SORGU.match(s) or ";" in s:
-        raise OracleHata("İçeri alma sorgusu yalnız tek bir SELECT / WITH ifadesi olabilir.")
+        raise OracleHata("Sorgu yalnız tek bir SELECT / WITH ifadesi olabilir.")
     return s
 
 
@@ -218,20 +217,13 @@ def deger(v: Any) -> Any:
 
 
 def durum(anahtar: str) -> dict[str, Any]:
-    """Ekran icin (DEGER degil, yalniz anahtar adlari): acik mi, eksikler, hazir mi, ice alma sorgusu gecerli mi."""
+    """Ekran icin (DEGER degil, yalniz anahtar adlari): acik mi, eksikler, hazir mi."""
     a = ayar(anahtar)
     eksik = a.eksikler() if a.ENABLED else []
-    try:
-        sorgu_temizle(a.IMPORT_QUERY)
-        sorgu_hata = None
-    except OracleHata as e:
-        sorgu_hata = e.mesaj
     return {
         "acik": a.ENABLED,
         "eksik": eksik,
         "hazir": a.ENABLED and not eksik,
-        "sorgu_tamam": sorgu_hata is None,
-        "sorgu_hata": sorgu_hata,
         "oracle_istemci": bool(os.environ.get("ORACLE_CLIENT_DIR", "").strip()),
     }
 
@@ -270,8 +262,6 @@ def bilgiler(anahtar: str) -> dict[str, Any]:
         "parola": bool(a.PASSWORD),
         "zaman_asimi": a.TIMEOUT,
         "oracle_istemci": d["oracle_istemci"],
-        "sorgu_tamam": d["sorgu_tamam"],
-        "sorgu_hata": d["sorgu_hata"],
     }
 
 

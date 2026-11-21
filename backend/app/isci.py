@@ -12,13 +12,9 @@
       Paneldeki "Yenile" ayni komutu ayri surecte baslatir.
   ..\\.venv\\Scripts\\python.exe -m app.isci pg-katalog --kaynak pg_onent|pg_onedesk [--ornek 20]
       PostgreSQL katalogu (ONENTDB / ONEDESKDB, salt okunur): sema -> tablo -> sutun + ornek satirlar (tampon/postgres).
-  ..\\.venv\\Scripts\\python.exe -m app.isci pg-cek --kaynak pg_onedesk|pg_onent [--kuru]
-      <ON EK>_IMPORT_QUERY (ONEDESKDB_PG_IMPORT_QUERY ...) sonucu -> tampon partisi '<kaynak>_import'. Paneldeki "Simdi cek" ayni komut.
   ..\\.venv\\Scripts\\python.exe -m app.isci temip-eslesme [--csv]
       Oracle'a baglanmaz: paneldeki TEMIP kayitlarinin eslesmesi (kart / TAM Radar / belirsiz / personelsiz kart, personel basina acik).
       --csv: backend/var/kesif/temip-eslesme-<zaman>-{musteri,personel}.csv (git disi; musteri unvani icerir).
-  ..\\.venv\\Scripts\\python.exe -m app.isci cek <kaynak> [--client <Instant Client>] [--kuru]
-      <ON EK>_IMPORT_QUERY sonucu -> tampon partisi '<kaynak>_import' (analiz / dagitim / geri alma Veri Girisi'nde).
   ..\\.venv\\Scripts\\python.exe -m app.isci rapor-devre [--zorla] [--client <Instant Client>]
       Aylik rapor devre grafikleri (rapor/loe.py, LOE sorgusu): CMDB kopyasi (gunde bir) + secili devrelerin onceki / bu ay saatlik
       olcumleri. 'reportdb' turu her calismada bunu da (ayri kilitle, alarm senkronundan bagimsiz) calistirir. --zorla: hepsini yenile.
@@ -51,7 +47,7 @@ from app import ariza
 from app.config import env_dosyasi_yukle, get_settings
 from app.db import oturum
 from app.ortak import UygulamaHatasi
-from app.tampon import katalog, kaynak, oracle, postgres, reportdb, temip_kayit
+from app.tampon import katalog, oracle, postgres, reportdb, temip_kayit
 
 KILIT_BAYAT_SN = 600  # bundan eski kilit dosyasi coken calismadan kalmis sayilir
 
@@ -288,42 +284,6 @@ def utilizasyon_turu(kuru: bool = False) -> int:
     return 0 if " OK " in satir else 1
 
 
-def oracle_cek(anahtar: str, kuru: bool = False) -> int:
-    a = oracle.ayar(anahtar)
-    if not a.ENABLED:
-        return _hata(anahtar, f"{a.kaynak.enabled_key}=true degil; Oracle'a baglanilmadi.")
-    kilit = _klasor() / f"isci_{anahtar}.kilit"
-    if not kilit_al(kilit):
-        print("[-] Baska bir cekim suruyor; atlandi.")
-        gunluge_yaz(f"{anahtar} ATLANDI baska calisma suruyor")
-        return 2
-    t0 = time.time()
-    try:
-        if kuru:
-            akis = a.akis(oracle.sorgu_temizle(a.IMPORT_QUERY), 5)
-            basliklar = next(akis)
-            satirlar = [[oracle.deger(v) for v in s] for blok in akis for s in blok]
-            print(f"[OK] KURU: ilk {len(satirlar)} satir, {time.time() - t0:.1f} sn. Sutunlar: {basliklar}")
-            for s in satirlar:
-                print("    ", s)
-            return 0
-        with oturum() as db:
-            parti = kaynak.oracle_parti(db, anahtar, "isci")
-            parti_id, durum, n, red = parti.id, parti.status, parti.row_count, parti.error
-    except Exception as e:  # noqa: BLE001 - parti 'failed' olarak kalir (oracle_parti), ayrinti kisa mesajla
-        return _hata(anahtar, f"Cekim basarisiz: {_mesaj(e, a)}")
-    finally:
-        try:
-            kilit.unlink()
-        except OSError:
-            pass
-    if durum != "ready":
-        return _hata(anahtar, f"parti #{parti_id} kabul edilmedi: {red}")
-    print(f"[OK] parti #{parti_id}: {n} satir, {time.time() - t0:.1f} sn")
-    gunluge_yaz(f"{anahtar} OK parti #{parti_id}: {n} satir, {time.time() - t0:.1f} sn")
-    return 0
-
-
 def _kayit_ozeti(k: dict) -> str:
     return (f"alarm kayitlari ({k['kip']}): +{k['eklenen']} yeni, {k['guncellenen']} guncel, {k['acik_satir']} acik, "
             f"{k['dusen_acik']} dusen/{k['kapanan_sorgu']} kapanan, {k['yeniden_baglanan']} yeniden baglanan, {k['etkilenen_kart']} kart")  # fmt: skip
@@ -509,45 +469,6 @@ def pg_katalog_calistir(kaynak: str, adet: int, kullanici: str) -> int:
     return 0
 
 
-def pg_cek(anahtar: str, kuru: bool = False, kullanici: str = "isci") -> int:
-    """PostgreSQL iceri alma sorgusu -> tampon partisi (oracle_cek ile ayni kalip). Kaynak basina ayni anda tek calisma."""
-    a = postgres.ayar(anahtar)
-    if not a.ENABLED:
-        return _hata(anahtar, f"{a.tanim.enabled_key}=true degil; PostgreSQL'e baglanilmadi.")
-    kilit = _klasor() / f"isci_{anahtar}_cek.kilit"
-    if not kilit_al(kilit):
-        print("[-] Baska bir cekim suruyor; atlandi.")
-        gunluge_yaz(f"{anahtar} ATLANDI baska calisma suruyor")
-        return 2
-    t0 = time.time()
-    try:
-        if kuru:
-            akis = a.akis(oracle.sorgu_temizle(a.IMPORT_QUERY), 5)
-            basliklar = next(akis)
-            satirlar = [[oracle.deger(v) for v in s] for blok in akis for s in blok]
-            print(f"[OK] KURU: ilk {len(satirlar)} satir, {time.time() - t0:.1f} sn. Sutunlar: {basliklar}")
-            for s in satirlar:
-                print("    ", s)
-            return 0
-        with oturum() as db:
-            parti = kaynak.pg_parti(db, anahtar, kullanici)
-            parti_id, durum, n, red = parti.id, parti.status, parti.row_count, parti.error
-    except UygulamaHatasi as e:  # parti 'failed' olarak kalir (pg_parti), mesaj maskeli
-        return _hata(anahtar, f"Cekim basarisiz: {postgres.maskele(e.mesaj, a.gizliler())}")
-    except Exception as e:  # noqa: BLE001 - kuru calismada surucu / ag hatasi
-        return _hata(anahtar, f"Cekim basarisiz: {postgres.hata_metni(e, a.gizliler())}")
-    finally:
-        try:
-            kilit.unlink()
-        except OSError:
-            pass
-    if durum != "ready":
-        return _hata(anahtar, f"parti #{parti_id} kabul edilmedi: {red}")
-    print(f"[OK] parti #{parti_id}: {n} satir, {time.time() - t0:.1f} sn")
-    gunluge_yaz(f"{anahtar} OK parti #{parti_id}: {n} satir, {time.time() - t0:.1f} sn")
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     for akim in (sys.stdout, sys.stderr):
         if hasattr(akim, "reconfigure"):
@@ -555,8 +476,6 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.isci", description="Veri iscisi (Oracle cekimleri, panel disi surec)")
     alt = p.add_subparsers(dest="is_", required=True)
     r = alt.add_parser("reportdb", help="ReportDB alarm senkronu")
-    c = alt.add_parser("cek", help="<ON EK>_IMPORT_QUERY -> tampon partisi")
-    c.add_argument("kaynak", choices=sorted(oracle.KAYNAKLAR))
     t = alt.add_parser("temip-kayit", help="TEMIP alarm kayitlari: karta / TAM Radar'a (tam = ilk yukleme)")
     t.add_argument(
         "--kip", choices=temip_kayit.KIPLER, default="artimli", help="katalogdan: kapananlar ham katalog dosyasindan (ilk yukleme)"
@@ -577,10 +496,6 @@ def main(argv: list[str] | None = None) -> int:
     pg.add_argument("--kaynak", required=True, choices=sorted(postgres.KAYNAKLAR))
     pg.add_argument("--ornek", type=int, default=postgres.ORNEK_ADET, help="nesne basina ornek satir (1-200)")
     pg.add_argument("--kullanici", default="isci", help="kataloga yazilan baslatan")
-    pc = alt.add_parser("pg-cek", help="PostgreSQL <ON EK>_IMPORT_QUERY -> tampon partisi")
-    pc.add_argument("--kaynak", required=True, choices=sorted(postgres.KAYNAKLAR))
-    pc.add_argument("--kuru", action="store_true", help="yazmadan dene (ilk 5 satir)")
-    pc.add_argument("--kullanici", default="isci", help="partiye yazilan baslatan")
     rd = alt.add_parser("rapor-devre", help="aylik rapor devre grafikleri: CMDB kopyasi + secili devrelerin olcumleri (LOE)")
     rd.add_argument("--zorla", action="store_true", help="CMDB ve tum olcumleri yenile")
     rd.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
@@ -592,7 +507,7 @@ def main(argv: list[str] | None = None) -> int:
     ut.add_argument("--kuru", action="store_true", help="ozeti yaz, skora dokunma")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
-    for alt_p in (r, c):
+    for alt_p in (r,):
         alt_p.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
         alt_p.add_argument("--kuru", action="store_true", help="yazmadan dene")
     a = p.parse_args(argv)
@@ -601,8 +516,6 @@ def main(argv: list[str] | None = None) -> int:
         return temip_eslesme(a.csv)
     if a.is_ == "pg-katalog":
         return pg_katalog_calistir(a.kaynak, max(1, min(int(a.ornek), 200)), a.kullanici)
-    if a.is_ == "pg-cek":
-        return pg_cek(a.kaynak, a.kuru, a.kullanici)
     if a.is_ == "envanter":
         return envanter_turu(a.zorla)
     if a.is_ == "utilizasyon":
@@ -611,7 +524,7 @@ def main(argv: list[str] | None = None) -> int:
         return onedesk_kayit_turu(a.kip)
     hata = _istemci(a.client)
     if hata:
-        return _hata(a.is_ if a.is_ != "cek" else a.kaynak, hata)
+        return _hata(a.is_, hata)
     if a.is_ == "reportdb-katalog":
         parametre = {"ara": a.ara, "alan": a.alan, "degerler": a.deger, "saat": a.saat}
         return katalog_calistir(a.sema, max(1, min(int(a.ornek), 1000)), a.kullanici, parametre)
@@ -626,7 +539,7 @@ def main(argv: list[str] | None = None) -> int:
             envanter_turu()  # 2026-11-20: Kritik CI envanteri (4 saatte bir)
             onedesk_kayit_turu()  # 2026-11-21: OneDesk sikayet / talep kayitlari (alarm kurallariyla)
         return kod
-    return oracle_cek(a.kaynak, a.kuru)
+    return _hata(a.is_, "bilinmeyen is")
 
 
 if __name__ == "__main__":

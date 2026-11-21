@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app import musteri_alani
 from app.models import AppSetting, Customer, OnedeskRecord
-from app.onedesk.ice_al import TR_SAATI, sayaclari_yenile, tarih_oku
+from app.onedesk.sayac import TR_SAATI, sayaclari_yenile, tarih_oku
 from app.ortak import simdi
 from app.tampon import oracle, reportdb
 from app.tampon.eslestirme import anahtar, musteri_anahtarlari

@@ -6,9 +6,8 @@ Oturum salt okunur (default_transaction_read_only + read_only) ve zaman asimli (
 Katalog (kullanici karari: "baglanti + katalog"): sema -> tablo/gorunum -> sutunlar + ornek satirlar. Tarama ISCI surecinde
 (python -m app.isci pg-katalog --kaynak <id>), panel taramayi ayri surecte baslatir (katalog._ayri_baslat). Kisisel veri gibi duran
 sutunlarin (telefon, e-posta, adres, kimlik no, parola, token...) ornek degeri saklanmaz ("***").
-Veri hatti (2026-10-25 kullanici: "Gercek veri hatti ile ilerle"): <ON EK>_IMPORT_QUERY (tek SELECT / WITH) sonucu -> tampon partisi
-'<kaynak>_import' (Oracle 'cek' ile ayni kalip; python -m app.isci pg-cek --kaynak <id>). Sorgu _IMPORT_TIMEOUT sn (vars. 300) ile
-sinirli, satirlar sunucu tarafi imlecle blok blok akar.
+Veri: isciler dogrudan ceker (OneDesk sikayet / talep kayitlari onedesk/canli, ONENT envanteri musteri/envanter, utilizasyon
+skor/gunluk). Eski '<ON EK>_IMPORT_QUERY -> tampon partisi' yolu 2026-11-21 kaldirildi.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ import os
 import re
 import sys
 import zlib
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -30,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.tampon.models import SourceCatalog, SourceCatalogObject
-from app.tampon.oracle import BLOK, ag_adimlari, deger, maskele, sorgu_temizle
+from app.tampon.oracle import ag_adimlari, deger, maskele
 
 _log = logging.getLogger(__name__)
 
@@ -95,8 +94,6 @@ class PgKaynak:
         ssl = os.environ.get(f"{on}_SSLMODE", "").strip().lower()
         self.SSLMODE = ssl if ssl in SSL_KIPLERI else "prefer"
         self.TIMEOUT = max(1, min(_tam_sayi(f"{on}_TIMEOUT", 10), 60))
-        self.IMPORT_QUERY = os.environ.get(f"{on}_IMPORT_QUERY", "")
-        self.IMPORT_TIMEOUT = max(SORGU_SN, min(_tam_sayi(f"{on}_IMPORT_TIMEOUT", 300), 3600))
 
     def eksikler(self) -> list[str]:
         return [f"{self.tanim.on_ek}_{ad}" for ad in ZORUNLU if not getattr(self, ad).strip()]
@@ -120,18 +117,6 @@ class PgKaynak:
         conn.read_only = True
         return conn
 
-    def akis(self, sorgu: str, limit: int, blok: int = BLOK, baglanti: Callable[[], Any] | None = None) -> Iterator[list[Any]]:
-        """Once sutun adlari, sonra blok blok satirlar (sunucu tarafi imlec: bellekte tum sonuc yok). En fazla `limit` satir.
-        Sorgu yalniz koddan sarilir; icerigi .env'den (yonetici) gelir, kullanici girdisi degildir."""
-        from psycopg import sql
-
-        sarmal = sql.SQL("SELECT * FROM ({}) AS kaynak LIMIT {}").format(sql.SQL(sorgu), sql.Literal(int(limit)))  # type: ignore[arg-type]
-        with (baglanti or (lambda: self.baglan(self.IMPORT_TIMEOUT)))() as conn, conn.transaction(), conn.cursor(name="tamlife_import") as cur:
-            cur.execute(sarmal)
-            yield [d.name for d in cur.description or []]
-            while satirlar := cur.fetchmany(blok):
-                yield satirlar
-
 
 def ayar(anahtar: str) -> PgKaynak:
     if anahtar not in KAYNAKLAR:
@@ -144,20 +129,10 @@ def hata_metni(hata: BaseException, gizliler: tuple[str, ...]) -> str:
     return maskele((ham.splitlines() or [type(hata).__name__])[0], gizliler)[:220]
 
 
-def sorgu_hatasi(a: PgKaynak) -> str | None:
-    """Iceri alma sorgusu gecerli mi (None = tamam); gecersizse ekrana gidecek kisa neden."""
-    try:
-        sorgu_temizle(a.IMPORT_QUERY)
-    except UygulamaHatasi as e:
-        return e.mesaj.replace("*_IMPORT_QUERY", f"{a.tanim.on_ek}_IMPORT_QUERY")
-    return None
-
-
 def durum(anahtar: str) -> dict[str, Any]:
     a = ayar(anahtar)
     eksik = a.eksikler() if a.ENABLED else []
-    return {"acik": a.ENABLED, "eksik": eksik, "hazir": a.ENABLED and not eksik, "state": "disabled" if not a.ENABLED else ("incomplete" if eksik else "ready"),
-            "sorgu_hata": sorgu_hatasi(a)}  # fmt: skip
+    return {"acik": a.ENABLED, "eksik": eksik, "hazir": a.ENABLED and not eksik, "state": "disabled" if not a.ENABLED else ("incomplete" if eksik else "ready")}  # fmt: skip
 
 
 def bilgiler(anahtar: str) -> dict[str, Any]:
@@ -347,38 +322,4 @@ def yenile(db: Session, kaynak: str, kullanici: str) -> dict[str, Any]:
     gunluk.mkdir(parents=True, exist_ok=True)
     kisi = re.sub(r"[^A-Za-z0-9._@-]", "", kullanici)[:120] or "panel"
     katalog._ayri_baslat([sys.executable, "-m", "app.isci", "pg-katalog", "--kaynak", kaynak, "--kullanici", kisi], backend, gunluk / "isci_pg_katalog.log")
-    return {"basladi": True, "calisiyor": True}
-
-
-# --- veri hatti: iceri alma sorgusu -> tampon partisi -------------------------------------------------------------------
-def parti_anahtari(kaynak: str) -> str:
-    return f"{kaynak}_import"
-
-
-def _cekim_suruyor(db: Session, kaynak: str) -> bool:
-    from app.models import IngestBatch
-
-    esik = simdi() - timedelta(minutes=CALISIYOR_DK)
-    return db.scalars(
-        select(IngestBatch.id).where(IngestBatch.source_key == parti_anahtari(kaynak), IngestBatch.status == "receiving", IngestBatch.received_at >= esik).limit(1)
-    ).first() is not None
-
-
-def cek_baslat(db: Session, kaynak: str, kullanici: str) -> dict[str, Any]:
-    """Iceri alma cekimini isci surecte baslatir (panel PostgreSQL'e baglanmaz). Hazir degil / sorgu yoksa 409; suruyorsa baslamaz."""
-    from app.tampon import katalog
-
-    a = ayar(kaynak)
-    d = durum(kaynak)
-    if not d["hazir"]:
-        raise PgHata(f"{a.tanim.label} bağlantısı hazır değil: " + (", ".join(d["eksik"]) or f"{a.tanim.enabled_key}=true değil"), 409)
-    if d["sorgu_hata"]:
-        raise PgHata(d["sorgu_hata"], 409)
-    if _cekim_suruyor(db, kaynak):
-        return {"basladi": False, "calisiyor": True}
-    backend = Path(__file__).resolve().parents[2]
-    gunluk = backend / "var" / "logs"
-    gunluk.mkdir(parents=True, exist_ok=True)
-    kisi = re.sub(r"[^A-Za-z0-9._@-]", "", kullanici)[:120] or "panel"
-    katalog._ayri_baslat([sys.executable, "-m", "app.isci", "pg-cek", "--kaynak", kaynak, "--kullanici", kisi], backend, gunluk / "isci_pg_cek.log")
     return {"basladi": True, "calisiyor": True}
