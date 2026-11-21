@@ -10,7 +10,7 @@
       tur: "Günlük utilizasyon turu", turAcik: "Her gün 06:00'da çalışır: son 12 ayda kapanmış kayıtları ve envanteri toplar, final skorları yeniden hesaplar.",
       sonCalisma: "Son çalışma", sure: "Süre", skor: "Skor", calistir: "Şimdi çalıştır", calisiyor: "Çalışıyor…", hicCalismadi: "Henüz çalışmadı",
       skorOzet: function (s) { return s ? s.uygulanan + " güncellendi · " + s.degismeyen + " değişmedi · " + s.atlanan + " eksik kriterli" : "Skor yazılmadı"; },
-      kaynaklar: "Veri kaynakları", siklik: "Sıklık", sonBasari: "Son başarılı", durumOk: "Güncel", durumHata: "Hata", durumBekle: "Bekleniyor", durumEski: "Gecikmiş",
+      kaynaklar: "Veri kaynakları", siklik: "Sıklık", sonBasari: "Son başarılı", durumOk: "Güncel", durumHata: "Hata", durumBekle: "Bekleniyor", durumEski: "Gecikmiş", yetkiBekle: "Yetki bekleniyor",
       toplam: "Toplam (çatı müşteriler)", alarm: "Kapanan alarm", sikayet: "Kapanan şikayet", talep: "Kapanan talep", ci: "Aktif CI", lokasyon: "Lokasyon",
       musteriler: "Müşteriler", ara: "Müşteri, TAM ya da müşteri no ara", hepsi: "Tümü", eksik: "Verisi eksik", skorsuz: "Skoru yok",
       musteri: "Müşteri", tam: "TAM", no: "Müşteri No", finalSkor: "Final skor", guncelleme: "Skor güncellemesi", csv: "CSV indir",
@@ -23,7 +23,7 @@
       tur: "Daily utilization run", turAcik: "Runs every day at 06:00: collects closed records of the last 12 months and the inventory, recalculates final scores.",
       sonCalisma: "Last run", sure: "Duration", skor: "Score", calistir: "Run now", calisiyor: "Running…", hicCalismadi: "Not run yet",
       skorOzet: function (s) { return s ? s.uygulanan + " updated · " + s.degismeyen + " unchanged · " + s.atlanan + " missing criteria" : "No score written"; },
-      kaynaklar: "Data sources", siklik: "Frequency", sonBasari: "Last success", durumOk: "Up to date", durumHata: "Error", durumBekle: "Pending", durumEski: "Delayed",
+      kaynaklar: "Data sources", siklik: "Frequency", sonBasari: "Last success", durumOk: "Up to date", durumHata: "Error", durumBekle: "Pending", durumEski: "Delayed", yetkiBekle: "Awaiting access",
       toplam: "Total (parent customers)", alarm: "Closed alarms", sikayet: "Closed complaints", talep: "Closed requests", ci: "Active CIs", lokasyon: "Locations",
       musteriler: "Customers", ara: "Search customer, TAM or customer no", hepsi: "All", eksik: "Missing data", skorsuz: "No score",
       musteri: "Customer", tam: "TAM", no: "Customer No", finalSkor: "Final score", guncelleme: "Score updated", csv: "Download CSV",
@@ -122,7 +122,7 @@
         ad.appendChild(el("div", "font-size:12px;font-weight:700;color:" + C.ikincil, k.icerik));
         ust.appendChild(ad);
         var dk = k.son_basari ? dakika(k.son_basari) : null;
-        ust.appendChild(k.hata ? rozet("hata", m.durumHata) : dk == null ? rozet("bekle", m.durumBekle) : dk > (k.anahtar === "reportdb" ? 60 : k.anahtar === "onent" ? 600 : 1560) ? rozet("eski", m.durumEski) : rozet("ok", m.durumOk));
+        ust.appendChild(k.yetki_bekleniyor ? rozet("eski", m.yetkiBekle) : k.hata ? rozet("hata", m.durumHata) : dk == null ? rozet("bekle", m.durumBekle) : dk > (k.anahtar === "reportdb" ? 60 : k.anahtar === "onent" ? 600 : k.anahtar === "loe" ? 1500 : 1560) ? rozet("eski", m.durumEski) : rozet("ok", m.durumOk));
         kart.appendChild(ust);
         var tablo = el("div", "display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:12px");
         (k.hacim || []).concat([[m.siklik, k.siklik], [m.sonBasari, k.son_basari ? zaman(k.son_basari) + " · " + m.once(dk) : "—"]]).forEach(function (x) {
@@ -130,7 +130,7 @@
           tablo.appendChild(el("span", "font-weight:800;text-align:right;font-variant-numeric:tabular-nums", typeof x[1] === "number" || x[1] == null ? sayi(x[1], dil) : x[1]));
         });
         kart.appendChild(tablo);
-        if (k.hata) kart.appendChild(el("div", "font-size:11.5px;font-weight:700;color:" + C.kirmizi + ";background:" + C.kirmiziZ + ";border-radius:8px;padding:6px 8px;word-break:break-word", k.hata));
+        if (k.hata) kart.appendChild(el("div", "font-size:11.5px;font-weight:700;color:" + (k.yetki_bekleniyor ? C.amber : C.kirmizi) + ";background:" + (k.yetki_bekleniyor ? C.amberZ : C.kirmiziZ) + ";border-radius:8px;padding:6px 8px;word-break:break-word", k.hata));
         izg.appendChild(kart);
       });
       sar.appendChild(izg);

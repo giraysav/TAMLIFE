@@ -31,6 +31,30 @@ def _son_temip(db: Session) -> dict[str, Any]:
     return {"son_basari": iso(son_ok), "son_hata": p.error if p is not None and p.status == "failed" else "", "acik_alarm": acik, "siklik": "6 dk"}
 
 
+def _loe(db: Session) -> dict[str, Any]:
+    """4. kart: aylik rapor LOE grafikleri (ReportDB devre CMDB kopyasi + secili devrelerin saatlik olcumleri; app.rapor.loe).
+    ORA-00942 = tablo yetkisi henuz verilmedi: hata degil 'Yetki bekleniyor' gosterilir."""
+    from app.models import ReportCircuit, ReportCircuitData, ReportCmdb
+    from app.rapor import loe
+
+    d = loe.durum_oku(db)
+    cmdb, olcum = d.get("cmdb") or {}, d.get("olcum") or {}
+    basarilar = [z for z in (cmdb.get("son_basari"), olcum.get("son_basari")) if z]
+    hata = cmdb.get("hata") or olcum.get("hata") or ""
+    yetki = "ORA-00942" in hata or "ORA-01031" in hata
+    if yetki:
+        hata = "Grafik tablolarına okuma yetkisi henüz verilmedi (" + hata.split(":")[0] + "). Yetki gelince ilk turda kendiliğinden dolar."
+
+    def say(m: Any) -> int:
+        return db.scalar(select(func.count()).select_from(m)) or 0
+
+    return {"anahtar": "loe", "ad": "ReportDB", "icerik": "LOE grafikleri (erişilebilirlik, gecikme, jitter, kayıp)",
+            "siklik": "Devre listesi günde bir · ölçüm 6 dk turunda", "son_basari": max(basarilar) if basarilar else None,
+            "hata": hata, "yetki_bekleniyor": yetki,
+            "hacim": [["Devre listesi (CMDB kopyası)", say(ReportCmdb)], ["Grafiği seçili devre", say(ReportCircuit)],
+                      ["Saklanan aylık devre verisi", say(ReportCircuitData)]]}  # fmt: skip
+
+
 def kaynaklar(db: Session) -> list[dict[str, Any]]:
     from app.musteri import envanter
 
@@ -48,6 +72,7 @@ def kaynaklar(db: Session) -> list[dict[str, Any]]:
         {"anahtar": "onent", "ad": "ONENT", "icerik": "Müşteri envanteri (CMDB)", "siklik": "4 saatte bir",
          "son_basari": env.get("son_basari"), "hata": env.get("hata", ""),
          "hacim": [["Envanterdeki CI", env.get("satir")], ["Aktif CI (panel müşterileri)", (k.get("onent") or {}).get("ci")]]},
+        _loe(db),
     ]  # fmt: skip
 
 
