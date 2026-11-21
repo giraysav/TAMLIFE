@@ -225,7 +225,8 @@ def calistir(db: Session, skor_yaz: bool = True) -> dict[str, Any]:
     uygulama = None
     if skor_yaz:
         sonuc = servis.uygula(db, servis.cati_musteriler(db), "gunluk", ISCI, None, yalniz_degisen=True)
-        uygulama = {"uygulanan": len(sonuc["uygulanan"]), "atlanan": len(sonuc["atlanan"]), "degismeyen": sonuc["degismeyen"]}
+        uygulama = {"uygulanan": len(sonuc["uygulanan"]), "atlanan": len(sonuc["atlanan"]), "degismeyen": sonuc["degismeyen"],
+                    "kismi": sonuc["kismi"]}
     durum = {"zaman": iso(an), "yil": yil, "donem": [bas.date().isoformat(), (bit - timedelta(days=1)).date().isoformat()], "sure_sn": round(time.time() - t0, 1), "musteri": len(musteriler),
              "kaynaklar": kaynaklar, "skor": uygulama}  # fmt: skip
     _durum_yaz(db, durum)

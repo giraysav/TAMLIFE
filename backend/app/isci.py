@@ -247,7 +247,7 @@ def utilizasyon_turu(kuru: bool = False) -> int:
     parca = [f"{ad} {v.get('durum')}" + (f" ({v['hata'][:120]})" if v.get("hata") else "") for ad, v in k.items()]
     sk = d.get("skor")
     satir = (f"utilizasyon {'HATA' if any(v.get('durum') == 'hata' for v in k.values()) else 'OK'} {d['sure_sn']} sn; "
-             f"{'; '.join(parca)}" + (f"; skor {sk['uygulanan']} yazildi, {sk['degismeyen']} degismedi, {sk['atlanan']} eksik" if sk else "; skor yazilmadi (kuru)"))  # fmt: skip
+             f"{'; '.join(parca)}" + (f"; skor {sk['uygulanan']} yazildi, {sk['degismeyen']} degismedi, {sk['atlanan']} atlandi, {sk.get('kismi', 0)} ara skor (eksik kriterli)" if sk else "; skor yazilmadi (kuru)"))  # fmt: skip
     print(("[OK] " if " OK " in satir else "[!] ") + satir)
     gunluge_yaz(satir)
     return 0 if " OK " in satir else 1

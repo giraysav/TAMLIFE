@@ -230,6 +230,7 @@ def hesapla(db: Session, liste: list[Customer], kriterler: list[dict] | None = N
                 "yeni": h["skor"],
                 "fark": round(h["skor"] - mevcut, 1) if mevcut is not None else None,
                 "tamam": h["tamam"],
+                "yazilabilir": h["yazilabilir"],
                 "eksik": h["eksik"],
                 "kriterler": h["kriterler"],
                 "son_atama": atamalar.get(c.id),
@@ -318,20 +319,23 @@ def skoru_yaz(db: Session, musteri: Customer, deger: float, detay: list[dict], k
 def uygula(
     db: Session, liste: list[Customer], kaynak: str, actor: str, actor_id: int | None, yalniz_degisen: bool = False, kriterler: list[dict] | None = None
 ) -> dict:
-    """Hesaplar ve TAMAM olanlara yazar. {'uygulanan': [...], 'atlanan': [...], 'degismeyen': n}."""
+    """Hesaplar ve yazar: tum kriterleri dolu olanlar ve (2026-11-21) eksigi olsa da en az bir kriteri dolu olanlar - ara skor,
+    dolu kriterlerle orantili. {'uygulanan': [...], 'atlanan': [...], 'degismeyen': n, 'kismi': n}."""
     _, sonuc, _ = hesapla(db, liste, kriterler)
     kimlikten = {c.id: c for c in liste}
-    uygulanan, atlanan, degismeyen = [], [], 0
+    uygulanan, atlanan, degismeyen, kismi = [], [], 0, 0
     for s in sonuc:
-        if not s["tamam"]:
+        if not s["yazilabilir"]:
             atlanan.append({"id": s["id"], "ad": s["ad"], "neden": "eksik kriter: " + ", ".join(s["eksik"] or ["kriter yok"])})
             continue
+        if not s["tamam"]:
+            kismi += 1
         if yalniz_degisen and s["mevcut"] is not None and abs(s["yeni"] - s["mevcut"]) < DEGISIM_ESIGI:
             degismeyen += 1
             continue
         skoru_yaz(db, kimlikten[s["id"]], s["yeni"], dokum(s["kriterler"]), kaynak, actor, actor_id)
         uygulanan.append({"id": s["id"], "ad": s["ad"], "eski": s["mevcut"], "yeni": s["yeni"]})
-    return {"uygulanan": uygulanan, "atlanan": atlanan, "degismeyen": degismeyen}
+    return {"uygulanan": uygulanan, "atlanan": atlanan, "degismeyen": degismeyen, "kismi": kismi}
 
 
 def toplu_uygula(db: Session, istenen: object, actor: str, actor_id: int | None) -> dict:
@@ -410,8 +414,8 @@ def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: 
             raise SkorHata(400, f'"{k.get("title")}" icin {secim} puanin kriter tablosunda kurali yok.')
     metrikler = kaynaklar.birlesik_metrikler(db, [musteri], kriterler)[0].get(musteri.id, {}) if OTOMATIK_PUANLAMA else {}
     h = skor.musteri_skoru(kriterler, metrikler, secimler, otomatik=OTOMATIK_PUANLAMA)
-    if not h["tamam"]:
-        raise SkorHata(400, "Her kriter icin puan secin: " + ", ".join(h["eksik"] or ["kriter yok"]))
+    if not h["yazilabilir"]:
+        raise SkorHata(400, "En az bir kriter icin puan secin.")
     eski = round(musteri.score, 1) if musteri.score is not None else None
     skoru_yaz(db, musteri, h["skor"], dokum(h["kriterler"]), "toplu", actor, actor_id)
     return {"id": musteri.id, "ad": musteri.name, "eski": eski, "yeni": h["skor"], "kriter_surumu": surum}

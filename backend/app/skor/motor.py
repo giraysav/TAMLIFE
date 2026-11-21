@@ -307,14 +307,19 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
 
 
 def musteri_skoru(kriterler, metrikler, manuel=None, otomatik=True):
-    """Tum kriterler -> {'skor', 'kriterler', 'eksik', 'tamam'} (sayfayla ayni normalizasyon)."""
+    """Tum kriterler -> {'skor', 'kriterler', 'eksik', 'tamam', 'yazilabilir'}.
+    2026-11-21 kullanici karari ("dolu kriterlerle orantili"): skor YALNIZ dolu (eksik olmayan) kriterlerin agirligiyla 100 uzerinden
+    hesaplanir; elle girilecek kriter (Sozlesme, Raporlama) secildikce hesaba girer. tamam = hic eksik yok; yazilabilir = en az bir
+    kriter dolu (ara skor yazilir, ekranda 'eksik' etiketi kalir)."""
     satirlar = [kriter_degerlendir(k, metrikler, manuel, otomatik) for k in (kriterler or [])]
-    agirlik = sum(s['agirlik'] for s in satirlar)
-    toplam = sum(s['katki'] for s in satirlar)
+    dolu = [s for s in satirlar if s['durum'] != 'eksik']
+    agirlik = sum(s['agirlik'] for s in dolu)
+    toplam = sum(s['katki'] for s in dolu)
     skor = min(100.0, toplam / agirlik * 100) if agirlik > 0 else 0.0
     eksik = [s['baslik'] for s in satirlar if s['durum'] == 'eksik']
     return {'skor': round(skor, 1), 'kriterler': satirlar, 'eksik': eksik, 'tamam': not eksik and bool(satirlar),
-            'agirlik_toplami': round(agirlik, 2)}
+            'yazilabilir': agirlik > 0, 'agirlik_toplami': round(sum(s['agirlik'] for s in satirlar), 2),
+            'dolu_agirlik': round(agirlik, 2)}
 
 
 def manuel_secimler(detay):
