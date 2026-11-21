@@ -166,7 +166,11 @@ class _GunlukOzetKaynagi(Kaynak):
         sonuc = {}
         for c in musteriler:
             deger = self._deger(ozet, c, istirak.get(c.id, []))
-            if deger is not None:
+            if isinstance(deger, dict):  # birden fazla metrik
+                deger = {m: v for m, v in deger.items() if v is not None}
+                if deger:
+                    sonuc[c.id] = deger
+            elif deger is not None:
                 sonuc[c.id] = {self.metrikler[0]: deger}
         return sonuc
 
@@ -185,16 +189,18 @@ class OneDeskKaynagi(_GunlukOzetKaynagi):
 
 
 class OnentKaynagi(_GunlukOzetKaynagi):
-    """ONENT musteri envanteri: farkli kurumsal lokasyon sayisi (aktif CI'lar); lokasyon bilgisi yoksa aktif CI sayisi."""
+    """ONENT musteri envanteri (aktif CI'lar): farkli kurumsal lokasyon sayisi (lokasyon bilgisi yoksa aktif CI sayisi), servis
+    kategorileri (Servis Cesitliligi) ve baglanti tipleri (2026-11-21 kullanici: "ONENT'ten doldur"). Urun-Tutar'dan SONRA gelir."""
 
-    ad = "ONENT (aktif CI lokasyonu)"
-    metrikler = ("lokasyon_sayisi",)
+    ad = "ONENT (aktif CI envanteri)"
+    metrikler = ("lokasyon_sayisi", "servisler", "baglanti")
 
     def _deger(self, ozet: dict, cati: Customer, istirakler: list[Customer]) -> Any:
-        from app.skor.gunluk import grup_toplami
+        from app.skor.gunluk import grup_birlesimi, grup_toplami
 
         lok, ci = grup_toplami(ozet, cati, istirakler, "lokasyon"), grup_toplami(ozet, cati, istirakler, "ci")
-        return (lok or ci) or None
+        return {"lokasyon_sayisi": (lok or ci) or None, "servisler": grup_birlesimi(ozet, cati, istirakler, "servisler"),
+                "baglanti": grup_birlesimi(ozet, cati, istirakler, "baglanti")}  # fmt: skip
 
 
 class UrunTutarExcelKaynagi(Kaynak):
@@ -250,7 +256,7 @@ AD_EN = {
     "Ürün-Tutar (Excel)": "Product-Amount (Excel)",
     "Seçilen veri kaynağı": "Selected data source",
     "OneDesk (kapanan şikayet + talep)": "OneDesk (closed complaints + requests)",
-    "ONENT (aktif CI lokasyonu)": "ONENT (active CI locations)",
+    "ONENT (aktif CI envanteri)": "ONENT (active CI inventory)",
 }
 
 

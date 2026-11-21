@@ -54,8 +54,8 @@ TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('sikayet', 'auto_onedes
                 ('sozlesme', 'auto_sozlesme'), ('rapor', 'auto_rapor'))
 # Kriter turunun veri kaynagi (Veri Yonlendirici kriter editorunde satirin yaninda gosterilir).
 KAYNAK_ADLARI = {
-    'auto_onedesk': 'OneDesk · şikayet + talep sayısı', 'servis_cesitliligi': 'Ürün-Tutar · servis puanları',
-    'auto_servis_sayisi': 'Ürün-Tutar · lokasyon sayısı', 'auto_baglanti': 'Ürün-Tutar · bağlantı tipi',
+    'auto_onedesk': 'OneDesk · şikayet + talep sayısı', 'servis_cesitliligi': 'Ürün-Tutar / ONENT · servis puanları',
+    'auto_servis_sayisi': 'Ürün-Tutar · lokasyon sayısı', 'auto_baglanti': 'Ürün-Tutar / ONENT · bağlantı tipi',
     'auto_segment': 'Müşteri kartı · segment', 'auto_sozlesme': 'Ürün-Tutar · fatura bedeli (TL)',
     'auto_rapor': 'Aylık Rapor · rapor ayı sayısı', KAYNAKSIZ: 'Kaynak yok (başlıktan anlaşılamadı)',
 }
@@ -292,6 +292,9 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
         return sonuc
     anahtar = SAYISAL.get(tur) or KATEGORIK.get(tur)
     metrik = (metrikler or {}).get(anahtar) if anahtar and tur not in ELLE_SECILEN_TURLER else None
+    if metrik is not None and tur in KATEGORIK and not kurallar(kriter)[0]:
+        # Kategorik kriterde hicbir barem hucresi dolu degil (orn. Baglanti Tipi): veri her musteride 0 puan verirdi -> kayitli secime duser.
+        metrik = None
     if metrik is not None:
         puan, deger = kural_puani(kriter, metrik['deger'])
         sonuc.update(deger=deger, kaynak=metrik['kaynak'], durum='otomatik', puan=puan,

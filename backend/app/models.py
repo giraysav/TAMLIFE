@@ -307,6 +307,8 @@ class UtilSourceSummary(Base):
     talep: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ci: Mapped[int | None] = mapped_column(Integer, nullable=True)
     lokasyon: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    servisler: Mapped[list | None] = mapped_column(JSON, nullable=True)  # ONENT servis -> Servis Cesitliligi kategorileri (0030)
+    baglanti: Mapped[list | None] = mapped_column(JSON, nullable=True)  # ONENT erisim/servis -> baglanti tipleri
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

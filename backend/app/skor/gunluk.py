@@ -61,6 +61,25 @@ _YENI = (
 )
 ESKI_TUR = {1: "sikayet", 2: "talep"}
 
+# ONENT envanteri -> Servis Cesitliligi / Baglanti Tipi (2026-11-21 kullanici: "ONENT'ten doldur"). CI'in servis adi (normalize) icinde
+# KELIME olarak gecen ilk ifade; adlar motor.SERVIS_PUANLARI ve urun_tutar.BAGLANTI_ESLEME kategorileriyle AYNI. Sira onemli
+# ('DBS MS SDWAN YONETIMI' -> SDWAN, 'DBS MS FIREWALL' -> Guvenlik, diger 'DBS MS' -> Cloud).
+ONENT_SERVIS = (
+    ("soc", "SOC"), ("5651", "5651 Loglama"), ("sdwan", "SDWAN"), ("sd-wan", "SDWAN"),
+    ("mssp", "Güvenlik"), ("edr", "Güvenlik"), ("firewall", "Güvenlik"), ("guvenlik", "Güvenlik"), ("ddos", "Güvenlik"),
+    ("mfa", "Güvenlik"), ("wdm", "DWDM"), ("dwdm", "DWDM"), ("wifi", "WIFI"), ("ses", "Ses"), ("voip", "Ses"),
+    ("ndc", "Co-Location"), ("beyaz alan", "Co-Location"), ("colocation", "Co-Location"),
+    ("cloud", "Cloud"), ("sanal veri merkezi", "Cloud"), ("dbs ms", "Cloud"), ("svm", "Cloud"), ("uzaktan yedekleme", "Cloud"),
+    ("yurt disi", "Yurt Dışı"), ("uluslararasi", "Yurt Dışı"),
+    ("mpls", "Data"), ("internet", "Data"), ("sdh", "Data"), ("data", "Data"), ("resell", "Data"), ("uydu", "Data"),
+    ("guzergah", "Data"), ("mobile", "Data"), ("vpn", "Data"),
+)
+ONENT_BAGLANTI_SERVIS = (("mobile backup", "MOBILE BACKUP"), ("mpls", "MPLS"))
+ONENT_BAGLANTI_ERISIM = (
+    ("metroethernet", "ME"), ("adsl", "DSL"), ("vdsl", "DSL"), ("gshdsl", "DSL"), ("shdsl", "DSL"), ("dsl", "DSL"),
+    ("fiber", "FIBER"), ("r/l", "KIRALIK DEVRE"), ("leasedline", "KIRALIK DEVRE"),
+)
+
 
 GUN = 365  # 2026-11-21 kullanici onayi: takvim yili yerine SON 12 AY (Ocak'ta sayilar sifirlanmasin)
 
@@ -125,16 +144,33 @@ def alarm_kapanan(db: Session, bas: datetime, bit: datetime) -> dict[int, int]:
     return {cid: int(n) for cid, n in db.execute(sorgu)}
 
 
-def envanter_sayilari(db: Session) -> dict[str, tuple[int, int]]:
-    """{musteri no anahtari: (aktif CI, farkli lokasyon)} - musteri envanterinden."""
+def envanter_sayilari(db: Session) -> dict[str, tuple[int, int, set[str], set[str]]]:
+    """{musteri no anahtari: (aktif CI, farkli lokasyon, servis kategorileri, baglanti tipleri)} - musteri envanterinden."""
+    from app.skor.urun_tutar import _ilk_eslesen, _normal
+
     ci: dict[str, int] = defaultdict(int)
     lok: dict[str, set[str]] = defaultdict(set)
-    for k, attrs in db.execute(select(CustomerCi.customer_key, CustomerCi.attrs).where(CustomerCi.status == "ACTIVE")):
+    srv: dict[str, set[str]] = defaultdict(set)
+    bag: dict[str, set[str]] = defaultdict(set)
+    onbellek: dict[str, tuple[str | None, str | None]] = {}
+    sorgu = select(CustomerCi.customer_key, CustomerCi.service, CustomerCi.attrs).where(CustomerCi.status == "ACTIVE")
+    for k, servis, attrs in db.execute(sorgu):
         ci[k] += 1
-        ad = normal((attrs or {}).get("lokasyon"))
+        attrs = attrs or {}
+        ad = normal(attrs.get("lokasyon"))
         if ad:
             lok[k].add(ad)
-    return {k: (n, len(lok[k])) for k, n in ci.items()}
+        if servis not in onbellek:
+            s = _normal(servis)
+            onbellek[servis] = (_ilk_eslesen(ONENT_SERVIS, s), _ilk_eslesen(ONENT_BAGLANTI_SERVIS, s))
+        kategori, tip = onbellek[servis]
+        if kategori:
+            srv[k].add(kategori)
+        if tip:
+            bag[k].add(tip)
+        if (erisim := attrs.get("erisim")) and (tip := _ilk_eslesen(ONENT_BAGLANTI_ERISIM, _normal(erisim))):
+            bag[k].add(tip)
+    return {k: (n, len(lok[k]), srv[k], bag[k]) for k, n in ci.items()}
 
 
 # --- Tur -----------------------------------------------------------------------------------------------------------------------
@@ -172,7 +208,9 @@ def calistir(db: Session, skor_yaz: bool = True) -> dict[str, Any]:
             "customer_id": c.id, "year": yil, "alarm": alarm.get(c.id, 0),
             "sikayet": sum(od.get(k, {}).get("sikayet", 0) for k in ks) if od is not None and ks else (0 if od is not None else None),
             "talep": sum(od.get(k, {}).get("talep", 0) for k in ks) if od is not None and ks else (0 if od is not None else None),
-            "ci": sum(env.get(k, (0, 0))[0] for k in ks), "lokasyon": sum(env.get(k, (0, 0))[1] for k in ks), "refreshed_at": an,
+            "ci": sum(env[k][0] for k in ks if k in env), "lokasyon": sum(env[k][1] for k in ks if k in env),
+            "servisler": sorted({x for k in ks if k in env for x in env[k][2]}),
+            "baglanti": sorted({x for k in ks if k in env for x in env[k][3]}), "refreshed_at": an,
         })  # fmt: skip
     if od is None:  # OneDesk okunamadi: onceki sayilar korunur (bos yazilmaz)
         onceki = {r.customer_id: r for r in db.scalars(select(UtilSourceSummary))}
@@ -204,3 +242,9 @@ def grup_toplami(ozet: dict[int, UtilSourceSummary], cati: Customer, istirakler:
     """Cati + istiraklerin toplami; hicbirinde deger yoksa None."""
     degerler = [getattr(ozet[c.id], alan) for c in [cati, *istirakler] if c.id in ozet and getattr(ozet[c.id], alan) is not None]
     return sum(degerler) if degerler else None
+
+
+def grup_birlesimi(ozet: dict[int, UtilSourceSummary], cati: Customer, istirakler: list[Customer], alan: str) -> list[str] | None:
+    """Cati + istiraklerin liste alanlarinin birlesimi (servisler / baglanti); bos birlesim None (veri yok -> kayitli secime duser)."""
+    birlesim = {x for c in [cati, *istirakler] if c.id in ozet for x in (getattr(ozet[c.id], alan) or [])}
+    return sorted(birlesim) or None
