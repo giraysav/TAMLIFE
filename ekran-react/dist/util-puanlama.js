@@ -238,10 +238,13 @@
 
     function musteriSatiri(c) {
       var sar = el("div", "border-top:1px solid " + C.cizgi);
-      var satir = el("button", "all:unset;box-sizing:border-box;width:100%;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:9px 16px;cursor:pointer");
+      // Musteri satiri: icerden baslar, normal harf ve koyu gri (personel basligindan ayrilir).
+      var satir = el("button", "all:unset;box-sizing:border-box;width:100%;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:9px 16px 9px 30px;cursor:pointer;background:#fff;text-transform:none");
       satir.type = "button"; satir.setAttribute("aria-expanded", d.acik[c.id] ? "true" : "false");
+      satir.onmouseenter = function () { satir.style.background = C.zemin; };
+      satir.onmouseleave = function () { satir.style.background = "#fff"; };
       satir.appendChild(el("span", "font-size:12px;color:" + C.soluk + ";width:10px", d.acik[c.id] ? "▾" : "▸"));
-      satir.appendChild(el("span", "font-size:13px;font-weight:800;color:" + C.navy + ";flex:1 1 220px;min-width:0;overflow-wrap:anywhere", c.ad));
+      satir.appendChild(el("span", "font-size:13px;font-weight:600;color:#334155;text-transform:none;flex:1 1 220px;min-width:0;overflow-wrap:anywhere", c.ad));
       if ((c.istirakler || []).length) satir.appendChild(el("span", "font-size:11px;font-weight:700;color:" + C.ikincil, m.istirak(c.istirakler.length)));
       satir.appendChild(c.eksik && c.eksik.length ? rozet(C.amber, C.amberZ, m.eksik(c.eksik.length)) : rozet(C.yesil, C.yesilZ, m.tamam));
       var skor = el("span", "min-width:110px;text-align:right;font-family:monospace;font-size:13px");
@@ -257,11 +260,14 @@
 
     function grup(baslik, ek, musteriler, anahtar) {
       var g = el("section", KART + ";overflow:hidden");
-      var h = el("button", "all:unset;box-sizing:border-box;width:100%;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:11px 16px;cursor:pointer;background:" + C.zemin);
+      // Personel basligi: lacivert serit + bas harf rozeti (musteri satirlarindan acikca ayrilsin; 2026-11-21 kullanici geri bildirimi).
+      var h = el("button", "all:unset;box-sizing:border-box;width:100%;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:12px 16px;cursor:pointer;background:" + C.navy + ";color:#fff");
       h.type = "button"; var kapali = !!d.kapaliGrup[anahtar]; h.setAttribute("aria-expanded", kapali ? "false" : "true");
-      h.appendChild(el("span", "font-size:12px;color:" + C.soluk + ";width:10px", kapali ? "▸" : "▾"));
-      h.appendChild(el("span", "font-size:14px;font-weight:900;color:" + C.navy + ";flex:1 1 200px", baslik));
-      h.appendChild(el("span", "font-size:12px;font-weight:700;color:" + C.ikincil, ek));
+      h.appendChild(el("span", "font-size:12px;color:#cbd5e1;width:10px", kapali ? "▸" : "▾"));
+      var harf = String(baslik || "?").trim().split(/\s+/).slice(0, 2).map(function (x) { return x.charAt(0); }).join("");
+      h.appendChild(el("span", "display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;background:#ffc72c;color:" + C.navy + ";font-size:11px;font-weight:900;flex:none", harf));
+      h.appendChild(el("span", "font-size:15px;font-weight:900;color:#fff;flex:1 1 200px;letter-spacing:.02em", baslik));
+      h.appendChild(el("span", "font-size:12px;font-weight:700;color:#e2e8f0", ek));
       h.onclick = function () { d.kapaliGrup[anahtar] = !d.kapaliGrup[anahtar]; listeyiCiz(); };
       g.appendChild(h);
       if (!kapali) musteriler.forEach(function (c) { g.appendChild(musteriSatiri(c)); });

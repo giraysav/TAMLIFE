@@ -32,7 +32,7 @@ PRESENTATION: dict[str, tuple[str, str, str, str]] = {
 # Katalogdaki "utilizasyon" modülü (yalnız admin) arayüzde yonetim/utilizasyon bölümüne açılır.
 YONETIM_BOLUMLERI: tuple[tuple[str, str, str, str, str], ...] = (
     ("durum", "Genel Durum", "Sağlık kontrolleri ve göstergeler", "Overview", "Health checks and indicators"),
-    ("utilizasyon", "TAM Utilizasyon", "Genel bakış, kriterler, puanlama, talepler", "TAM Utilization", "Overview, criteria, scoring, requests"),
+    ("utilizasyon", "TAM Utilizasyon", "Genel bakış, kriterler, puanlama", "TAM Utilization", "Overview, criteria, scoring"),
     ("veri", "Veri Kaynakları", "Kaynak durumu, günlük tur, Ürün-Tutar ve veri girişi", "Data sources", "Source status, daily run, Product-Amount and data intake"),
     ("kurum", "Kurum Bağlantıları", "AD/LDAPS durumu, ayarları ve erişim testi", "Corporate connections", "AD/LDAPS status, settings and reachability test"),
     ("veritabani", "Veritabanı", "Sürüm, tablolar, bütünlük ve yedek", "Database", "Version, tables, integrity and backup"),
