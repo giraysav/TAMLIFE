@@ -25,6 +25,9 @@
   ..\\.venv\\Scripts\\python.exe -m app.isci envanter [--zorla]
       Musteri envanteri / Kritik CI (musteri/envanter.py): ONENT CMDB'den panel Musteri No'larinin CI'lari (4 saatte bir; --zorla:
       hemen). 'reportdb' turu her calismada bunu da (ayri kilitle) cagirir; Oracle istemcisi gerekmez.
+  ..\\.venv\\Scripts\\python.exe -m app.isci onedesk-kayit [--kip tam|artimli|mutabakat]
+      OneDesk sikayet / talep kayitlari (onedesk/canli.py; alarm kurallariyla ayni: 01.01.2026'dan acilanlar, Musteri No ile karta).
+      'reportdb' turu her calismada bunu da (ayri kilitle) cagirir: ilk calisma tam, gunde bir mutabakat, digerleri artimli.
   ..\\.venv\\Scripts\\python.exe -m app.isci utilizasyon [--kuru]
       Gunluk utilizasyon turu (skor/gunluk.py): bu yil KAPANAN sikayet/talep (OneDesk), kapanan alarm (ReportDB kayitlari), aktif CI /
       lokasyon (ONENT envanteri) -> util_source_summary; cati skorlari yeniden hesaplanip degisenlere yazilir. Zamanlanmis gorev her
@@ -216,6 +219,38 @@ def envanter_turu(zorla: bool = False) -> int:
             return _hata("envanter", f"basarisiz: {sonuc['hata']}")
         gunluge_yaz(f"envanter OK {sonuc['satir']} CI, {sonuc['sure_sn']} sn")
         print(f"[OK] envanter: {sonuc['satir']} CI, {sonuc['sure_sn']} sn")
+        return 0
+    finally:
+        try:
+            kilit.unlink()
+        except OSError:
+            pass
+
+
+def onedesk_kayit_turu(kip: str | None = None) -> int:
+    """OneDesk sikayet / talep kayitlari -> panel (onedesk/canli.py). Kaynak kapaliysa sessizce gecer; hata durumu Veri Ozeti'nde."""
+    from app.onedesk import canli
+    from app.tampon import postgres
+
+    if not postgres.ayar(canli.KAYNAK).ENABLED:
+        return 0
+    kilit = _klasor() / "isci_onedesk_kayit.kilit"
+    if not kilit_al(kilit):
+        return 2
+    try:
+        with oturum() as db:
+            k = kip or canli.otomatik_kip(db)
+            try:
+                o = canli.calistir(db, k)
+            except Exception as e:  # noqa: BLE001 - alarm senkronunu etkilemez; sonraki tur yeniden dener
+                db.rollback()
+                mesaj = str(getattr(e, "mesaj", "") or e)[:220]
+                canli.durum_yaz(db, son_deneme=datetime.now(UTC).isoformat(), hata=mesaj)
+                return _hata("onedesk-kayit", f"basarisiz ({k}): {mesaj}")
+        satir = (f"onedesk-kayit OK ({k}) {o['satir']} satir: +{o['eklenen']} yeni, {o['guncellenen']} guncel, {o['silinen']} silinen, "
+                 f"{o.get('yeniden_baglanan', 0)} yeniden baglanan, {o.get('etkilenen_kart', 0)} kart, {o.get('sure_sn', 0)} sn")  # fmt: skip
+        gunluge_yaz(satir)
+        print("[OK] " + satir)
         return 0
     finally:
         try:
@@ -551,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
     rd.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
     ev = alt.add_parser("envanter", help="musteri envanteri / Kritik CI (ONENT CMDB)")
     ev.add_argument("--zorla", action="store_true", help="yenileme zamanini bekleme")
+    ok = alt.add_parser("onedesk-kayit", help="OneDesk sikayet / talep kayitlari -> kartlar (alarm kurallariyla)")
+    ok.add_argument("--kip", choices=("tam", "artimli", "mutabakat"), default=None, help="vars. otomatik")
     ut = alt.add_parser("utilizasyon", help="gunluk utilizasyon: kapanan kayitlar + envanter -> ozet ve skor (06:00)")
     ut.add_argument("--kuru", action="store_true", help="ozeti yaz, skora dokunma")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
@@ -570,6 +607,8 @@ def main(argv: list[str] | None = None) -> int:
         return envanter_turu(a.zorla)
     if a.is_ == "utilizasyon":
         return utilizasyon_turu(a.kuru)
+    if a.is_ == "onedesk-kayit":
+        return onedesk_kayit_turu(a.kip)
     hata = _istemci(a.client)
     if hata:
         return _hata(a.is_ if a.is_ != "cek" else a.kaynak, hata)
@@ -585,6 +624,7 @@ def main(argv: list[str] | None = None) -> int:
         if not a.kuru:
             rapor_devre()  # 2026-11-20: ayni 6 dk'lik turda; sonucu alarm senkronunun cikis kodunu degistirmez
             envanter_turu()  # 2026-11-20: Kritik CI envanteri (4 saatte bir)
+            onedesk_kayit_turu()  # 2026-11-21: OneDesk sikayet / talep kayitlari (alarm kurallariyla)
         return kod
     return oracle_cek(a.kaynak, a.kuru)
 
