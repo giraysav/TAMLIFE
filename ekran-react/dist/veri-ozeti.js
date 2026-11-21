@@ -113,24 +113,38 @@
     function kaynakKartlari(v) {
       var sar = el("section", "display:grid;gap:8px");
       sar.appendChild(el("h3", "margin:0;font-size:12px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:" + C.ikincil, m.kaynaklar));
-      var izg = el("div", "display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))");
+      // 2026-11-21: kart duzeni - baslik / sayilar (ustten akar) / altta sabit sikilik + son basarili; etiketler buyuk harfe donmez
+      var izg = el("div", "display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));align-items:stretch");
+      var DUZ = ";text-transform:none;letter-spacing:0";
       (v.kaynaklar || []).forEach(function (k) {
-        var kart = el("div", KART + ";display:grid;gap:8px");
-        var ust = el("div", "display:flex;justify-content:space-between;gap:8px;align-items:flex-start");
-        var ad = el("div", "min-width:0");
-        ad.appendChild(el("div", "font-size:14px;font-weight:900;color:" + C.navy, k.ad));
-        ad.appendChild(el("div", "font-size:12px;font-weight:700;color:" + C.ikincil, k.icerik));
-        ust.appendChild(ad);
         var dk = k.son_basari ? dakika(k.son_basari) : null;
-        ust.appendChild(k.yetki_bekleniyor ? rozet("eski", m.yetkiBekle) : k.hata ? rozet("hata", m.durumHata) : dk == null ? rozet("bekle", m.durumBekle) : dk > (k.anahtar === "reportdb" ? 60 : k.anahtar === "onent" ? 600 : k.anahtar === "loe" ? 1500 : 1560) ? rozet("eski", m.durumEski) : rozet("ok", m.durumOk));
+        var kart = el("div", KART + ";display:flex;flex-direction:column;gap:12px" + DUZ);
+        var ust = el("div", "display:flex;justify-content:space-between;gap:10px;align-items:flex-start");
+        var ad = el("div", "min-width:0");
+        ad.appendChild(el("div", "font-size:15px;font-weight:900;color:" + C.navy + DUZ, k.ad));
+        ad.appendChild(el("div", "margin-top:2px;font-size:12px;font-weight:600;line-height:1.35;color:" + C.ikincil + DUZ, k.icerik));
+        ust.appendChild(ad);
+        var r = k.yetki_bekleniyor ? rozet("eski", m.yetkiBekle) : k.hata ? rozet("hata", m.durumHata) : dk == null ? rozet("bekle", m.durumBekle) : dk > (k.anahtar === "reportdb" ? 60 : k.anahtar === "onent" ? 600 : k.anahtar === "loe" ? 1500 : 1560) ? rozet("eski", m.durumEski) : rozet("ok", m.durumOk);
+        r.style.whiteSpace = "nowrap"; r.style.flexShrink = "0"; r.style.textTransform = "none";
+        ust.appendChild(r);
         kart.appendChild(ust);
-        var tablo = el("div", "display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:12px");
-        (k.hacim || []).concat([[m.siklik, k.siklik], [m.sonBasari, k.son_basari ? zaman(k.son_basari) + " · " + m.once(dk) : "—"]]).forEach(function (x) {
-          tablo.appendChild(el("span", "font-weight:700;color:" + C.ikincil, x[0]));
-          tablo.appendChild(el("span", "font-weight:800;text-align:right;font-variant-numeric:tabular-nums", typeof x[1] === "number" || x[1] == null ? sayi(x[1], dil) : x[1]));
+        var liste = el("div", "display:grid;align-content:start");
+        (k.hacim || []).forEach(function (x, i) {
+          var satir = el("div", "display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0" + (i ? ";border-top:1px solid " + C.cizgi : ""));
+          satir.appendChild(el("span", "min-width:0;font-size:12.5px;font-weight:600;line-height:1.3;color:" + C.ikincil + DUZ, x[0]));
+          satir.appendChild(el("span", "flex-shrink:0;font-size:16px;font-weight:900;color:" + C.navy + ";font-variant-numeric:tabular-nums", typeof x[1] === "number" || x[1] == null ? sayi(x[1], dil) : x[1]));
+          liste.appendChild(satir);
         });
-        kart.appendChild(tablo);
-        if (k.hata) kart.appendChild(el("div", "font-size:11.5px;font-weight:700;color:" + (k.yetki_bekleniyor ? C.amber : C.kirmizi) + ";background:" + (k.yetki_bekleniyor ? C.amberZ : C.kirmiziZ) + ";border-radius:8px;padding:6px 8px;word-break:break-word", k.hata));
+        kart.appendChild(liste);
+        if (k.hata) kart.appendChild(el("div", "font-size:11.5px;font-weight:600;line-height:1.4;color:" + (k.yetki_bekleniyor ? C.amber : C.kirmizi) + ";background:" + (k.yetki_bekleniyor ? C.amberZ : C.kirmiziZ) + ";border-radius:8px;padding:7px 9px;word-break:break-word" + DUZ, k.hata));
+        var alt = el("div", "margin-top:auto;padding-top:10px;border-top:1px dashed " + C.cizgi + ";display:grid;gap:3px;font-size:11.5px" + DUZ);
+        [[m.siklik, k.siklik || "—"], [m.sonBasari, k.son_basari ? zaman(k.son_basari) + " · " + m.once(dk) : "—"]].forEach(function (x) {
+          var s = el("div", "display:flex;justify-content:space-between;gap:10px");
+          s.appendChild(el("span", "flex-shrink:0;font-weight:600;color:" + C.ikincil + DUZ, x[0]));
+          s.appendChild(el("span", "min-width:0;text-align:right;font-weight:700;color:" + C.navy + DUZ, x[1]));
+          alt.appendChild(s);
+        });
+        kart.appendChild(alt);
         izg.appendChild(kart);
       });
       sar.appendChild(izg);

@@ -43,16 +43,16 @@ def _loe(db: Session) -> dict[str, Any]:
     hata = cmdb.get("hata") or olcum.get("hata") or ""
     yetki = "ORA-00942" in hata or "ORA-01031" in hata
     if yetki:
-        hata = "Grafik tablolarına okuma yetkisi henüz verilmedi (" + hata.split(":")[0] + "). Yetki gelince ilk turda kendiliğinden dolar."
+        hata = "Okuma yetkisi henüz verilmedi (" + hata.split(":")[0] + "). Yetki gelince ilk turda kendiliğinden dolar."
 
     def say(m: Any) -> int:
         return db.scalar(select(func.count()).select_from(m)) or 0
 
-    return {"anahtar": "loe", "ad": "ReportDB", "icerik": "LOE grafikleri (erişilebilirlik, gecikme, jitter, kayıp)",
-            "siklik": "Devre listesi günde bir · ölçüm 6 dk turunda", "son_basari": max(basarilar) if basarilar else None,
+    return {"anahtar": "loe", "ad": "ReportDB", "icerik": "LOE grafikleri · erişilebilirlik, gecikme, jitter, kayıp",
+            "siklik": "Liste günde bir · ölçüm 6 dk", "son_basari": max(basarilar) if basarilar else None,
             "hata": hata, "yetki_bekleniyor": yetki,
-            "hacim": [["Devre listesi (CMDB kopyası)", say(ReportCmdb)], ["Grafiği seçili devre", say(ReportCircuit)],
-                      ["Saklanan aylık devre verisi", say(ReportCircuitData)]]}  # fmt: skip
+            "hacim": [["Devre listesi", say(ReportCmdb)], ["Grafiği seçili devre", say(ReportCircuit)],
+                      ["Saklanan aylık veri", say(ReportCircuitData)]]}  # fmt: skip
 
 
 def _onedesk_kayit(db: Session) -> dict[str, Any]:
@@ -79,14 +79,14 @@ def kaynaklar(db: Session) -> list[dict[str, Any]]:
         {"anahtar": "reportdb", "ad": "ReportDB", "icerik": "Alarm kayıtları (TEMIP)", "siklik": temip["siklik"],
          "son_basari": temip["son_basari"], "hata": temip["son_hata"],
          "hacim": [["Son 12 ayda kapanan alarm", (k.get("reportdb") or {}).get("alarm")], ["Şu an açık alarm", temip["acik_alarm"]]]},
-        {"anahtar": "onedesk", "ad": "OneDesk", "icerik": "Şikayet ve talep kayıtları", "siklik": "Kayıtlar 6 dk · skor her gün 06:00",
+        {"anahtar": "onedesk", "ad": "OneDesk", "icerik": "Şikayet ve talep kayıtları", "siklik": "Kayıtlar 6 dk · skor 06:00",
          "son_basari": kayit["son_basari"] or (d.get("zaman") if od.get("durum") == "ok" else od.get("son_basari")),
          "hata": kayit["hata"] or od.get("hata", ""),
          "hacim": [["Son 12 ayda kapanan şikayet", od.get("sikayet")], ["Son 12 ayda kapanan talep", od.get("talep")],
                    ["Panelde açık şikayet / talep", kayit["acik"]], ["Panelde kayıt (01.01'den)", kayit["toplam"]]]},
         {"anahtar": "onent", "ad": "ONENT", "icerik": "Müşteri envanteri (CMDB)", "siklik": "4 saatte bir",
          "son_basari": env.get("son_basari"), "hata": env.get("hata", ""),
-         "hacim": [["Envanterdeki CI", env.get("satir")], ["Aktif CI (panel müşterileri)", (k.get("onent") or {}).get("ci")]]},
+         "hacim": [["Envanterdeki CI", env.get("satir")], ["Panel müşterilerinin aktif CI'ı", (k.get("onent") or {}).get("ci")]]},
         _loe(db),
     ]  # fmt: skip
 
