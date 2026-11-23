@@ -1,7 +1,7 @@
 """Veri iscisi: Oracle cekimleri panel (web) surecinin DISINDA (uretim isletim/reportdb_senkron.py + kutucuklar/veri/db_al.py).
 
   cd backend; ..\\.venv\\Scripts\\python.exe -m app.isci reportdb [--client <Instant Client>] [--kuru]
-      ReportDB alarm senkronu: ozet -> tampon partisi; 'Kartlara yaz' (dagitim kurallari) aciksa kartlar; her turda TEMIP alarm
+      ReportDB alarm senkronu: ozet -> tampon partisi (kartlara yazilmaz); her turda TEMIP alarm
       kayitlari (tampon/temip_kayit: karta ya da TAM Radar'a; gunde bir kez 30 gunluk mutabakat).
       Zamanlanmis gorev her 6 dk: kurulum\\canli_gorev_kur.ps1 (Oracle giris tetikleyicisinin izin verdigi kimlikle).
   ..\\.venv\\Scripts\\python.exe -m app.isci temip-kayit --kip tam|artimli|mutabakat [--kuru] [--csv]
@@ -142,18 +142,13 @@ def reportdb_senkron(kuru: bool = False) -> int:
         kayit = None
         try:
             with oturum() as db:
-                reportdb.kurallari_hazirla(db)
-                sonuc = reportdb.kartlara_uygula(db, parti_id)
-                # Alarm kayitlari (2026-10-17): 'Kartlara yaz' anahtarindan bagimsiz; karta (sorumlu TAM) ya da TAM Radar'a.
+                # Alarm kayitlari: karta (sorumlu TAM) ya da TAM Radar'a; kart alarm sayaclari YALNIZ bunlardan (ozet kartlara yazilmaz).
                 kayit = temip_kayit.calistir(db, temip_kayit.otomatik_kip(db))
         except Exception as e:  # noqa: BLE001 - parti yazildi; kart/kayit yazimi sonraki turda yeniden denenir
-            mesaj = f"{n} musteri tampona yazildi, kartlar/kayitlar yazilamadi: {_mesaj(e, a)}"
+            mesaj = f"{n} musteri tampona yazildi, alarm kayitlari yazilamadi: {_mesaj(e, a)}"
             ariza.kaydet("TL-TAM-01", mesaj, kaynak="isci.reportdb", kullanici=reportdb.ISCI)
             return _hata("reportdb", mesaj)
-        ek = (f"kartlara yazildi: {sonuc['guncellenen']} deger, {sonuc['sifirlanan']} sifirlanan"
-              if sonuc["uygulandi"] else f"kartlara yazilmadi ({sonuc['neden']})")  # fmt: skip
-        if kayit:
-            ek += f"; {_kayit_ozeti(kayit)}"
+        ek = _kayit_ozeti(kayit) if kayit else "kayit turu yok"
         print(f"[OK] parti #{parti_id}: {n} musteri, {time.time() - t0:.1f} sn; {ek}")
         gunluge_yaz(f"reportdb OK parti #{parti_id}: {n} musteri, {time.time() - t0:.1f} sn; {ek}")
         return 0

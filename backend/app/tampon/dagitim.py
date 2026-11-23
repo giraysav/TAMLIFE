@@ -27,13 +27,8 @@ from app.tampon import analiz, depo
 from app.tampon.eslestirme import DEGERSIZ_ISLECLER, ISLECLER, alan_anahtarlari, kosul_saglar, sayi
 from app.tampon.models import DistributionLog, DistributionRule
 
+# Alarm / sikayet / talep sayaclari hedef DEGIL: tek yazan kayitlar (onedesk/sayac.sayaclari_yenile; 2026-11-23).
 HEDEFLER: dict[str, dict[str, str]] = {
-    "customer.alarm_count": {"ad": "Aktif alarm", "sutun": "alarm_count", "tip": "sayi"},
-    "customer.alarm_closed_count": {"ad": "Kapanan alarm (yıl)", "sutun": "alarm_closed_count", "tip": "sayi"},
-    "customer.complaint_count": {"ad": "Açık şikayet", "sutun": "complaint_count", "tip": "sayi"},
-    "customer.complaint_closed_count": {"ad": "Kapanan şikayet (yıl)", "sutun": "complaint_closed_count", "tip": "sayi"},
-    "customer.request_count": {"ad": "Açık talep", "sutun": "request_count", "tip": "sayi"},
-    "customer.request_closed_count": {"ad": "Kapanan talep (yıl)", "sutun": "request_closed_count", "tip": "sayi"},
     "customer.inventory_count": {"ad": "Envanter / lokasyon", "sutun": "inventory_count", "tip": "sayi"},
     "customer.sector": {"ad": "Sektör", "sutun": "sector", "tip": "metin"},
 }

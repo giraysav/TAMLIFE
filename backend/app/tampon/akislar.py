@@ -92,7 +92,6 @@ def akislar(db: Session) -> dict[str, Any]:
     a = oracle.ayar(reportdb.KAYNAK)
     rhazir, rson = _son_parti(db, reportdb.KAYNAK)
     rzaman = _utc(rhazir.received_at) if rhazir else None
-    rd = reportdb.durum(db)
     hata = rson is not None and rson.status == "failed" and (rhazir is None or rson.id > rhazir.id)
     if not a.ENABLED:
         rdurum, raciklama = ("bilgi" if rzaman else "yok"), f"{a.kaynak.enabled_key}=true değil; işçi Oracle'a bağlanmaz."
@@ -109,7 +108,6 @@ def akislar(db: Session) -> dict[str, Any]:
             rdurum,
             raciklama,
             parti=rhazir.id if rhazir else None,
-            kartlara_yaz=rd["kartlara_yaz"],
             tazelik_dk=reportdb.TAZELIK_DAKIKA,
         )
     )

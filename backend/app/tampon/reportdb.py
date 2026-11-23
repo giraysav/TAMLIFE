@@ -1,23 +1,14 @@
-"""ReportDB alarm senkronu (uretim kutucuklar/veri/reportdb_tampon.py uyarlamasi): kurumsal (NETWORK = NOC DESTECH) alarm sayilari.
+"""ReportDB alarm ozeti (uretim kutucuklar/veri/reportdb_tampon.py uyarlamasi): kurumsal (NETWORK = NOC DESTECH) alarm sayilari.
 
 Akis (isci surec: python -m app.isci reportdb; zamanlanmis gorev her 6 dk, Oracle giris tetikleyicisinin izin verdigi kimlikle):
-SORGU -> tampon partisi (kaynak 'oracle_reportdb') -> 'Kartlara yaz' aciksa dagitim (Aktif Alarm -> alarm_count, Kapanan Alarm ->
-alarm_closed_count). Alarm KAYITLARI (tek tek, 01.01.2026'dan; karta ya da TAM Radar'a) ayri modulde: tampon/temip_kayit.py.
-Panel sureci Oracle'a baglanmaz; Oracle'a yalniz SELECT gider (oracle.sorgu_temizle).
-
-Uretimle ayni kurallar: eslesme YALNIZ Musteri No; numarasi dolu kartin verisi partide yoksa 0; parti TAZELIK_DAKIKA'dan eskiyse
-ya da kucuklme korumasina takildiysa (depo.EN_AZ_ORAN) kartlara HIC yazilmaz; ilk deger saklanir, geri alma yalniz hala bu isin
-yazdigi degerde duran kartlari dondurur. DEV yapisi geregi farklar:
-- 'Kartlara yaz' anahtari = bu kaynagin dagitim kurallari (KURALLAR; ilk basarili cekimde KAPALI acilir, Veri Girisi > Dagitim'da
-  etkinlestirilir). Tampon = degismez parti; son hata = kaynagin 'failed' partisi.
-- Uygulama kayitlari her turda tek uygulamada BIRIKIR (_birlestir): kart basina ilk eski deger + son yazilan (uretim
-  reportdb_kart_onceki). 'Eski degerlere don' = kurallari kapat + son uygulamayi geri al.
-- Bir numara birden cok karta dusuyorsa dagitim o satiri atlar (belirsiz); uretim hepsine yaziyordu.
+SORGU -> tampon partisi (kaynak 'oracle_reportdb'). Parti yalniz baglanti sagligi / tazelik ve TAM Radar'in kayit yokken kullandigi
+eski ozet icindir: KARTLARA YAZILMAZ. 2026-11-23 kullanici karari: kart alarm sayilari (alarm_count, alarm_closed_count) TEK yazandan,
+alarm KAYITLARINDAN (tampon/temip_kayit.py -> onedesk/sayac.sayaclari_yenile) gelir; eski 'Kartlara yaz' dagitim kurallari kaldirildi.
+Panel sureci Oracle'a baglanmaz; Oracle'a yalniz SELECT gider (oracle.sorgu_temizle). Kucuklme korumasi (depo.EN_AZ_ORAN) aynen.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import timedelta
 from typing import Any
 
@@ -27,9 +18,8 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import IngestBatch
 from app.ortak import UygulamaHatasi, simdi
-from app.tampon import dagitim, depo, oracle
+from app.tampon import depo, oracle
 from app.tampon.eslestirme import anahtar
-from app.tampon.models import DistributionLog, DistributionRule
 
 KAYNAK = "oracle_reportdb"
 KAYIT_KAYNAGI = "oracle_reportdb_kayit"  # 2026-10-17 oncesi kayit partileri (adlandirma icin; yeni parti yazilmaz)
@@ -58,11 +48,6 @@ SORGU = (
     'ORDER BY NVL(A.ADET, 0) + NVL(K.ADET, 0) DESC')  # fmt: skip
 GEREKLI = ("Musteri No", "Musteri Unvani", "Aktif Alarm", "Biletli Aktif Alarm", "Kapanan Alarm", "Biletli Kapanan Alarm")
 BASLIKLAR = [*GEREKLI, "En Eski Alarm", "Son Kapanis", "Veri Zamani"]
-# (kural adi, hedef, deger sutunu): 'Kartlara yaz'. Anahtar 'Musteri No', islem topla (bir kartta birden cok numara: sayilar toplanir).
-KURALLAR = (
-    ("ReportDB · Aktif alarm", "customer.alarm_count", "Aktif Alarm"),
-    ("ReportDB · Kapanan alarm (yıl)", "customer.alarm_closed_count", "Kapanan Alarm"),
-)
 
 
 class ReportdbHata(UygulamaHatasi):
@@ -153,76 +138,13 @@ def _yas_dk(parti: IngestBatch) -> float | None:
 
 
 def durum(db: Session) -> dict[str, Any]:
-    """Kaynak satiri icin: kartlara yaz acik mi, son hazir partinin yasi / tazeligi."""
+    """Kaynak satiri icin: son hazir partinin yasi / tazeligi."""
     son = db.scalars(
         select(IngestBatch).where(IngestBatch.source_key == KAYNAK, IngestBatch.status == "ready").order_by(IngestBatch.id.desc()).limit(1)
     ).first()
     yas = _yas_dk(son) if son is not None else None
-    kurallar = db.scalars(select(DistributionRule.enabled).where(DistributionRule.source_key == KAYNAK)).all()
     return {
-        "kartlara_yaz": any(kurallar),
-        "kural": len(kurallar),
         "yas_dk": None if yas is None else round(yas, 1),
         "taze": yas is not None and yas <= TAZELIK_DAKIKA,
         "tazelik_dk": TAZELIK_DAKIKA,
     }
-
-
-# --- Kartlara yazma (DEV dagitimi) ------------------------------------------------------------------------------------
-def kurallari_hazirla(db: Session) -> list[DistributionRule]:
-    """Kaynagin hedef basina dagitim kurali yoksa KAPALI acar (uretim 'Kartlara yaz' varsayilan KAPALI). Yonetici duzenleyebilir."""
-    mevcut = {k.target: k for k in db.scalars(select(DistributionRule).where(DistributionRule.source_key == KAYNAK))}
-    for ad, hedef, sutun in KURALLAR:
-        if hedef not in mevcut:
-            govde = {"name": ad, "source_key": KAYNAK, "match_field": "customer_no", "key_column": "Musteri No", "target": hedef,
-                     "operation": "topla", "value_column": sutun, "zero_unmatched": True, "max_age_minutes": TAZELIK_DAKIKA}  # fmt: skip
-            mevcut[hedef] = dagitim.kural_olustur(db, govde, ISCI)
-    db.commit()
-    return [mevcut[h] for _, h, _ in KURALLAR]
-
-
-def kartlara_uygula(db: Session, parti_id: int, kullanici: str = ISCI) -> dict[str, Any]:
-    """Etkin kurallari partiye uygular (tek islem). Kural yoksa / parti hazir degilse / eskiyse HICBIR SEY yazmaz (uretim neden'leri)."""
-    kurallar = db.scalars(
-        select(DistributionRule).where(DistributionRule.source_key == KAYNAK, DistributionRule.enabled.is_(True)).order_by(DistributionRule.id)
-    ).all()
-    if not kurallar:
-        return {"uygulandi": False, "neden": "kapali"}
-    parti = db.get(IngestBatch, parti_id)
-    if parti is None or parti.status != "ready" or parti.source_key != KAYNAK:
-        return {"uygulandi": False, "neden": "tampon_bos"}
-    yas = _yas_dk(parti)
-    if yas is None or yas > TAZELIK_DAKIKA:
-        return {"uygulandi": False, "neden": "eski"}
-    guncellenen = sifirlanan = 0
-    for kural in kurallar:
-        s = dagitim.uygula(db, kural.id, parti_id, kullanici)
-        guncellenen, sifirlanan = guncellenen + s["yazilan"], sifirlanan + s["sifirlanacak"]
-        _birlestir(db, kural.id, s["run_id"], parti_id, kullanici)
-    db.commit()
-    depo.eskileri_temizle(db, KAYNAK)  # birlesen eski uygulamalarin partileri artik serbest
-    return {"uygulandi": True, "kural": len(kurallar), "guncellenen": guncellenen, "sifirlanan": sifirlanan}
-
-
-def _birlestir(db: Session, kural_id: int, run_id: str, parti_id: int, kullanici: str) -> None:
-    """Kuralin geri alinmamis ESKI kayitlarini bu uygulamaya toplar: kart basina ILK eski deger + SON yazilan deger.
-    Boylece eski partiler serbest kalir ve bu uygulamanin geri alinmasi kartlari ilk degerine dondurur (elle degisen korunur)."""
-    yeni = {k.customer_id: k for k in db.scalars(select(DistributionLog).where(DistributionLog.run_id == run_id))}
-    gruplar: dict[int, list[DistributionLog]] = defaultdict(list)
-    for k in db.scalars(
-        select(DistributionLog)
-        .where(DistributionLog.rule_id == kural_id, DistributionLog.reverted.is_(False), DistributionLog.run_id != run_id)
-        .order_by(DistributionLog.id)
-    ):
-        gruplar[k.customer_id].append(k)
-    an = simdi()
-    for cid, eskiler in gruplar.items():
-        hedef = yeni.get(cid) or eskiler[-1]
-        hedef.old_value = eskiler[0].old_value
-        hedef.run_id, hedef.batch_id, hedef.at, hedef.actor = run_id, parti_id, an, kullanici[:120]
-        for k in eskiler:
-            if k is not hedef:
-                db.delete(k)
-        if (hedef.old_value or "") == (hedef.new_value or ""):
-            db.delete(hedef)  # kart ilk degerine donmus: geri alinacak bir sey yok
-    db.flush()

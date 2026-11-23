@@ -6,8 +6,10 @@ Kural (TEMIP alarm aktarimiyla ayni: tampon/temip_kayit):
   Musteri No'lar (OneDesk tum Turkcell kayitlarini tutar; kartsiz numara cekilmez).
 - Eski sistem T_SOL_INCIDENT_TICKETS: TICKETTYPEID 1, TICKETSUBTYPEID 1 = sikayet, 2 = talep (3 = alarm; alarm ReportDB'den gelir).
   Yeni sistem T_OCT_CORPORATE_MAIN: TICKETTYPE_DESC Sikayet / Talep (tarih alanlari bos: acilis / kapanis icin UPDATEUSERTIME).
-- Durum: CLOSE / Kapatildi = kapali; CANCEL / REJECT / Reddedildi = sayilmaz (panelde varsa silinir); digerleri (OPEN, SOLUTION,
-  SUSPEND, WORKINPROGRESS, REOPEN, DATAREQUEST, Acik) = acik.
+- Durum: CLOSE / Kapatildi ve SOLUTION / Cozuldu (cozum verildi, musteri onayi bekleniyor; 2026-11-23 karari) = kapali, kapanis
+  CLOSEDATE yoksa SOLUTIONDATE (yeniden acilirsa sonraki turda acik olur); CANCEL / REJECT / Reddedildi = sayilmaz (panelde varsa
+  silinir); digerleri (OPEN, SUSPEND, WORKINPROGRESS, REOPEN, DATAREQUEST, Acik, Bekleniyor, Calisiliyor) = acik.
+- Yeni sistemin gecis donemi test kayitlari (ozette 'test...' / 'deneme' / betik denemesi) sayilmaz (TEST_KAYDI).
 - Kayit = OneDesk is akisi (external_key = WFINSTANCEID, source = 'onedesk'). Atama: Musteri No tek karta duserse o karta; birden
   cok kartta ise kart bos (temip_kayit._kart ile ayni). Kart numarasi degisince her turda yeniden baglanir.
 - Kipler: 'tam' / 'mutabakat' (baslangictan bugune hepsi; gunde bir), 'artimli' (her 6 dk: acik olanlar + son 2 gunde kapananlar +
@@ -17,6 +19,7 @@ Kural (TEMIP alarm aktarimiyla ayni: tampon/temip_kayit):
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -43,14 +46,15 @@ SORGU_SN = 300
 PARCA = 1000
 
 ESKI_TUR = {1: "sikayet", 2: "talep"}
-KAPALI = {"CLOSE"}
+KAPALI = {"CLOSE", "SOLUTION"}
 SAYILMAZ = {"CANCEL", "REJECT"}
+TEST_KAYDI = re.compile(r"\b(test(?!i\b)\w*|deneme)\b|<script", re.IGNORECASE)  # yalniz yeni sistem ozeti; 'hiz testi' gercek kayit
 DURUM_ADI = {"OPEN": "Açık", "SOLUTION": "Çözüldü (onay bekliyor)", "SUSPEND": "Askıda", "WORKINPROGRESS": "Çalışılıyor",
              "REOPEN": "Yeniden açıldı", "DATAREQUEST": "Bilgi bekleniyor", "CLOSE": "Kapandı"}  # fmt: skip
 
 _ESKI_KOLON = (
     '"WFINSTANCEID"::text AS kimlik, LTRIM("CUSTOMERNO"::text, \'0\') AS mno, "TICKETSUBTYPEID"::int AS tur, "STATUS" AS durum, '
-    '"CREATEDDATE" AS acilis, "CLOSEDATE" AS kapanis, LEFT("CUSTOMERFULLNAME", 200) AS unvan, '
+    '"CREATEDDATE" AS acilis, COALESCE("CLOSEDATE", "SOLUTIONDATE") AS kapanis, LEFT("CUSTOMERFULLNAME", 200) AS unvan, '
     'LEFT(COALESCE(NULLIF("LOCATIONNAME", \'\'), NULLIF("CICIRCUITNO", \'\'), \'\'), 200) AS yer, '
     'LEFT(COALESCE(NULLIF("CICATEGORYDESC", \'\'), \'\'), 200) AS kategori, LEFT("SUMMARY", 200) AS ozet'
 )
@@ -106,7 +110,9 @@ def alanlar(s: dict[str, Any], yeni: bool, h: dict[str, set[int]]) -> tuple[str,
         n = normal(s.get("tur") or "")
         tur = "sikayet" if n.startswith("sikayet") else "talep" if n.startswith("talep") else None
         d = normal(s.get("durum") or "")
-        durum = "closed" if d.startswith("kapat") else None if d.startswith(("redd", "iptal")) else "open"
+        durum = "closed" if d.startswith(("kapat", "cozul")) else None if d.startswith(("redd", "iptal")) else "open"
+        if TEST_KAYDI.search(_ozet(s.get("ozet"))):
+            durum = None
         detay = _metin(s.get("durum"), 80)
     else:
         tur = ESKI_TUR.get(int(s.get("tur") or 0))
