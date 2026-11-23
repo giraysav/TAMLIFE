@@ -11,7 +11,7 @@ import time
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, extract, func, literal, literal_column, or_, select
+from sqlalchemy import and_, extract, func, literal, literal_column, select
 from sqlalchemy.orm import Session
 
 from app import gorunurluk, musteri_alani
@@ -39,13 +39,10 @@ def _aralik(yil: int) -> tuple[datetime, datetime]:
     return datetime(yil, 1, 1, tzinfo=UTC), datetime(yil + 1, 1, 1, tzinfo=UTC)
 
 
-RADAR_KAYNAGI = "temip"  # karti olmayan TEMIP kaydi TAM Radar'indir (radar.servis); Onedesk sayilarina girmez
-
-
 def _kapsam_kosulu(db: Session, user: Principal):
-    """Kartsiz TEMIP kaydi (TAM Radar'in) Onedesk sayilarina girmez. 2026-10-26 (app.gorunurluk): Onedesk "Benim Yerim" modulu; admin ve
-    TeamMngr tum kayitlari, personel yalniz kendi kartlarina bagli kayitlari gorur (kartsiz kayit personelde sayilmaz)."""
-    temel = or_(OnedeskRecord.customer_id.is_not(None), OnedeskRecord.source != RADAR_KAYNAGI)
+    """Kartsiz kayit (TEMIP alarmi ya da Radar numarasinin sikayet / talebi; Musteri Radar'in) Onedesk sayilarina girmez. 2026-10-26
+    (app.gorunurluk): Onedesk "Benim Yerim" modulu; admin ve TeamMngr tum kart kayitlarini, personel yalniz kendi kartlarinin kayitlarini gorur."""
+    temel = OnedeskRecord.customer_id.is_not(None)
     kartlar = gorunurluk.kart_kimlikleri(db, user, musteri_alani.secili())
     return temel if kartlar is None else and_(temel, OnedeskRecord.customer_id.in_(kartlar or [-1]))
 

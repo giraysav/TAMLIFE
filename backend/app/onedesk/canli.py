@@ -3,7 +3,9 @@ kapali hepsini aktar. alarmdaki kurallara gore esitle; 01.01.2026 00:00 itibari 
 
 Kural (TEMIP alarm aktarimiyla ayni: tampon/temip_kayit):
 - Kapsam: REPORTDB_KAYIT_BASLANGIC'tan (vars. 2026-01-01 00:00, Turkiye saati) itibaren ACILAN kayitlar; yalniz panel kartlarindaki
-  Musteri No'lar (OneDesk tum Turkcell kayitlarini tutar; kartsiz numara cekilmez).
+  ve Musteri Radar'a atanan Musteri No'lar (OneDesk tum Turkcell kayitlarini tutar; diger kartsiz numara cekilmez). Radar numarasinin
+  kayitlari kartsiz kalir (Kayit Takibi'ne / kart sayaclarina girmez; yalniz Radar listesi ve analizi; 2026-11-23 kullanici karari A).
+  Numara Radar'dan cikarsa kayitlari gunluk mutabakatta silinir; karta eklenirse sonraki turda o karta baglanir.
 - Eski sistem T_SOL_INCIDENT_TICKETS: TICKETTYPEID 1, TICKETSUBTYPEID 1 = sikayet, 2 = talep (3 = alarm; alarm ReportDB'den gelir).
   Yeni sistem T_OCT_CORPORATE_MAIN: TICKETTYPE_DESC Sikayet / Talep (tarih alanlari bos: acilis / kapanis icin UPDATEUSERTIME).
 - Durum: CLOSE / Kapatildi ve SOLUTION / Cozuldu (cozum verildi, musteri onayi bekleniyor; 2026-11-23 karari) = kapali, kapanis
@@ -195,6 +197,12 @@ def yeniden_bagla(db: Session, h: dict[str, set[int]], etkilenen: set[int]) -> i
     return degisen
 
 
+def radar_numaralari(db: Session) -> set[str]:
+    from app.radar import servis  # gec import: radar.servis temip_kayit zincirini yukler
+
+    return servis._radar_numaralari(db)
+
+
 def durum_oku(db: Session) -> dict[str, Any]:
     kayit = db.get(AppSetting, DURUM_ANAHTARI)
     return dict(kayit.value) if kayit is not None and isinstance(kayit.value, dict) else {}
@@ -226,7 +234,7 @@ def calistir(db: Session, kip: str = "artimli") -> dict[str, Any]:
     t0 = time.time()
     bas = datetime.combine(baslangic(), datetime.min.time())  # Turkiye saati, dilimsiz (OneDesk tarihleri yerel)
     h = harita(db)
-    nolar = sorted({k for (no,) in db.execute(select(Customer.customer_no)) for k in musteri_anahtarlari(no)})
+    nolar = sorted({k for (no,) in db.execute(select(Customer.customer_no)) for k in musteri_anahtarlari(no)} | radar_numaralari(db))
     ozet: dict[str, Any] = {"kip": kip, "baslangic": bas.date().isoformat(), "satir": 0, "eklenen": 0, "guncellenen": 0, "silinen": 0}
     if not nolar:
         return ozet

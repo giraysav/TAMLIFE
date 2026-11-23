@@ -8,8 +8,8 @@ Kok neden (2026-10-25 veri denetimi): kurumsal devre alarmlari IP SLA olcum alar
 / CIName / DEVRE KAPASITESI / MUSTERI SEGMENTI" tasir, PROBABLECAUSE "Unknown". TEMIP'te ariza kok nedeni YOKTUR (OneDesk bilet cozum
 kaydindadir). Bu yuzden "ariza profili" verinin gercekten tasidigi uc boyuttan cikarilir: kesinti suresi (anlik < 5 dk: hat kararsizligi;
 uzun > 1 sa: fiziksel / enerji / saha arizasi), etki turu (ALARMHEADER: erisilemezlik, gecikme, paket kaybi, jitter) ve hizmet / devre
-turu (CI adindan: SD-WAN, MPLS, VPLS, P2P, Internet). Sikayet / talep: OneDesk bilet tablolari (ONEDESKDB elysion_project_fix
-SOLI_VW_MAPTICKET) bu hesapla OKUNAMIYOR (yalniz public semasi) -> alan "erisim yok" doner, uydurulmaz.
+turu (CI adindan: SD-WAN, MPLS, VPLS, P2P, Internet). Sikayet / talep (2026-11-23 kullanici karari A): Radar numaralarinin OneDesk
+kayitlari onedesk.canli isci turuyla kartsiz gelir; musteri basina sayi, acik adet ve en sik konular (kategori) ozetlenir.
 
 Analiz iki katmanli: (1) kural tabanli (her zaman; sayilar, profil -> satis onerisi, firsat skoru) ve (2) istege bagli YZ yorumu
 (onedesk.yz; kapaliysa 503). YZ'ye YALNIZ toplu sayilar ve oranlar gider; musteri ve lokasyon adi gonderilmez. Uretilen YZ yorumu
@@ -35,11 +35,7 @@ from app.ortak import UygulamaHatasi, iso, simdi
 YZ_AYARI = "radar.yz_analizleri"
 LOKASYON_ADET = 5
 AY_ADET = 12
-SIKAYET_TALEP = {
-    "erisim": False,
-    "kaynak": "OneDesk (ONEDESKDB · SOLI_VW_MAPTICKET)",
-    "neden": "OneDesk bilet tablolarına (ONEDESKDB · SOLI_VW_MAPTICKET) okuma yetkisi bekleniyor; yetki verilince konular burada özetlenir.",
-}
+KONU_ADET = 5
 # (anahtar, ad, ust sinir dakika) - sabit sira
 SURELER = (("anlik", "Anlık (< 5 dk)", 5), ("kisa", "Kısa (5–60 dk)", 60), ("uzun", "Uzun (1–8 sa)", 480), ("cok_uzun", "Çok uzun (> 8 sa)", None))
 ETKILER = {"AVAILABILITY": "Erişilemezlik (devre kesintisi)", "DELAY": "Gecikme", "PACKETLOSS": "Paket kaybı", "JITTER": "Jitter"}
@@ -109,6 +105,34 @@ def _kayitlar(db: Session, nolar: set[str]) -> dict[str, list[tuple]]:
         ):
             grup[no].append(tuple(geri))
     return grup
+
+
+def _biletler(db: Session, nolar: set[str]) -> dict[str, list[tuple[str, str, str]]]:
+    """Musteri No -> [(tur, durum, konu)]: Radar numarasinin kartsiz sikayet / talep kayitlari (onedesk.canli)."""
+    from app.onedesk import canli
+
+    grup: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
+    liste = sorted(nolar)
+    for i in range(0, len(liste), 500):
+        for no, tur, durum, konu in db.execute(
+            select(OnedeskRecord.customer_no, OnedeskRecord.kind, OnedeskRecord.status, OnedeskRecord.category).where(
+                OnedeskRecord.source == canli.KAYNAK_ADI, OnedeskRecord.customer_id.is_(None), OnedeskRecord.customer_no.in_(liste[i : i + 500])
+            )
+        ):
+            grup[no].append((tur, durum, konu or ""))
+    return grup
+
+
+def _bilet_ozeti(biletler: list[tuple[str, str, str]]) -> dict[str, Any]:
+    """{sikayet, talep, sikayet_acik, talep_acik, konular: [{ad, adet, sikayet, talep}]} (en sik KONU_ADET konu)."""
+    s = {t: sum(1 for k in biletler if k[0] == t) for t in ("sikayet", "talep")}
+    s.update({f"{t}_acik": sum(1 for k in biletler if k[0] == t and k[1] == "open") for t in ("sikayet", "talep")})
+    konu: dict[str, Counter[str]] = defaultdict(Counter)
+    for tur, _, ad in biletler:
+        konu[ad or "Konu belirtilmemiş"][tur] += 1
+    sirali = sorted(konu.items(), key=lambda x: (-x[1].total(), x[0]))[:KONU_ADET]
+    s["konular"] = [{"ad": ad, "adet": c.total(), "sikayet": c["sikayet"], "talep": c["talep"]} for ad, c in sirali]
+    return s
 
 
 def _yuzde(pay: float, payda: float) -> float:
@@ -225,6 +249,11 @@ def _ozet_cumleleri(m: dict[str, Any], sira: int, adet: int) -> list[str]:
         c.append(f"Son 30 günde {_tr(m['son30'])} alarm; önceki 30 güne göre %{_tr(abs(m['degisim']))} {yon}.")
     if m["acik"]:
         c.append(f"Şu an {_tr(m['acik'])} açık alarm var.")
+    b = m["sikayet_talep"]
+    if b["sikayet"] or b["talep"]:
+        acik = b["sikayet_acik"] + b["talep_acik"]
+        c.append(f"{_tr(b['sikayet'])} şikayet ve {_tr(b['talep'])} talep kaydı" + (f" ({_tr(acik)} açık)" if acik else "")
+                 + (f"; en sık konu: {b['konular'][0]['ad']}." if b["konular"] else "."))  # fmt: skip
     return c
 
 
@@ -280,13 +309,16 @@ def portfoy(db: Session) -> dict[str, Any]:
     global _ONBELLEK
     from app.tampon import temip_kayit
 
+    from app.radar import servis
+
     nolar = _numaralar(db)
-    iz = (temip_kayit.surum(db), frozenset(nolar))
+    iz = (temip_kayit.surum(db), servis.bilet_surumu(db), frozenset(nolar))
     with _KILIT:
         if _ONBELLEK is not None and _ONBELLEK[0] == iz:
             return _ONBELLEK[1]
     bugun = _naif(simdi())
-    musteriler = [_musteri(no, k, bugun) for no, k in _kayitlar(db, nolar).items() if k]
+    biletler = _biletler(db, nolar)
+    musteriler = [{**_musteri(no, k, bugun), "sikayet_talep": _bilet_ozeti(biletler.get(no, []))} for no, k in _kayitlar(db, nolar).items() if k]
     _skorla(musteriler)
     hacim_sirasi = {m["musteri_no"]: i for i, m in enumerate(sorted(musteriler, key=lambda m: -m["toplam"]), 1)}
     yz = _yz_kayitlari(db)
@@ -306,7 +338,6 @@ def portfoy(db: Session) -> dict[str, Any]:
         "sure_profili": _topla(musteriler, "sure_profili"),
         "etki": _topla(musteriler, "etki"),
         "musteriler": musteriler,
-        "sikayet_talep": SIKAYET_TALEP,
         "yz": _yz_durumu(),
     }
     with _KILIT:
@@ -333,6 +364,12 @@ def istem(m: dict[str, Any]) -> str:
     etki = ", ".join(f"{x['ad']}: {x['adet']}" for x in m["etki"])
     hizmet = ", ".join(f"{x['ad']}: {x['adet']} alarm / {x['lokasyon']} lokasyon" for x in m["hizmetler"]) + f"; yedek hatlı lokasyon %{m['yedek_oran']}"
     aylar = ", ".join(f"{a['ay']}: {a['toplam']}" for a in m["aylar"])
+    b = m["sikayet_talep"]
+    bilet = (
+        f"Müşteri kayıtları: {b['sikayet']} şikayet ({b['sikayet_acik']} açık), {b['talep']} talep ({b['talep_acik']} açık).\n"
+        if b["sikayet"] or b["talep"]
+        else "Bu dönemde müşterinin şikayet ya da talep kaydı yok.\n"
+    )
     return (
         "Panelde hiçbir teknik müşteri yöneticisine (TAM) atanmamış bir kurumsal müşterinin devre izleme (IP SLA) alarm özeti aşağıda. "
         "Alarmlar devreye erişilemediğini ya da kalitenin düştüğünü gösterir; arıza kök nedeni kayıtta yoktur, süre profili kök neden "
@@ -340,7 +377,7 @@ def istem(m: dict[str, Any]) -> str:
         f"Toplam alarm {m['toplam']} (açık {m['acik']}), aylık ortalama {m['aylik_ortalama']}, etkilenen lokasyon/devre {m['lokasyon_sayisi']}, "
         f"medyan kesinti süresi {m['medyan_cozum_dk'] if m['medyan_cozum_dk'] is not None else 'bilinmiyor'} dk, son 30 gün {m['son30']} / "
         f"önceki 30 gün {m['onceki30']}.\nKesinti süresi profili: {sure}\nEtki türü: {etki}\nHizmet türü: {hizmet}\nAylık alarm: {aylar}\n"
-        "Şikayet ve talep verisi yok (erişim bekleniyor); bunlar hakkında yorum yapma.\n\n"
+        f"{bilet}\n"
         "Şu başlıklarla yaz (her biri en çok 2 madde): 1) Durum, 2) İş etkisi ve risk, 3) Satış fırsatı (somut hizmet önerisi ve "
         "gerekçesi), 4) Önerilen ilk aksiyon. Toplam 160 kelimeyi geçme."
     )

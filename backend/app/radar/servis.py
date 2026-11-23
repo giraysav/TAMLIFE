@@ -58,11 +58,37 @@ def _radar_numaralari(db: Session) -> set[str]:
     return temip_atama.radar_numaralari(db) - fark.silinen_numaralar(db) - elle
 
 
+def bilet_surumu(db: Session) -> str:
+    """Sikayet / talep kayitlarinin son basarili turu (onedesk.canli); Radar onbellek izine girer."""
+    from app.onedesk import canli
+
+    return str(canli.durum_oku(db).get("son_basari") or "")
+
+
+def bilet_sayilari(db: Session, nolar: set[str]) -> dict[str, dict[str, int]]:
+    """Musteri No -> {sikayet, talep, sikayet_acik, talep_acik}: Radar numarasinin kartsiz OneDesk kayitlari (onedesk.canli)."""
+    from app.onedesk import canli
+
+    sonuc: dict[str, dict[str, int]] = {}
+    liste = sorted(nolar)
+    for i in range(0, len(liste), 500):
+        for no, tur, durum, n in db.execute(
+            select(OnedeskRecord.customer_no, OnedeskRecord.kind, OnedeskRecord.status, func.count())
+            .where(OnedeskRecord.source == canli.KAYNAK_ADI, OnedeskRecord.customer_id.is_(None), OnedeskRecord.customer_no.in_(liste[i : i + 500]))
+            .group_by(OnedeskRecord.customer_no, OnedeskRecord.kind, OnedeskRecord.status)
+        ):
+            s = sonuc.setdefault(no, {"sikayet": 0, "talep": 0, "sikayet_acik": 0, "talep_acik": 0})
+            s[tur] += n
+            if durum == "open":
+                s[f"{tur}_acik"] += n
+    return sonuc
+
+
 def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
-    """Radar'a atanan kartsiz TEMIP kayitlari Musteri No'ya gore (toplam azalan). Her yazimda (Radar atamasi dahil) degisen surum + kart
-    tablosu izine gore onbellekte."""
+    """Radar'a atanan kartsiz TEMIP kayitlari Musteri No'ya gore (toplam azalan) + sikayet / talep sayilari. Her yazimda (Radar atamasi
+    dahil) degisen surum + sikayet / talep turu + kart tablosu izine gore onbellekte."""
     global _KAYIT_ONBELLEK
-    iz = (_temip().surum(db), *db.execute(select(func.count(), func.max(Customer.id))).one())
+    iz = (_temip().surum(db), bilet_surumu(db), *db.execute(select(func.count(), func.max(Customer.id))).one())
     with _KILIT:
         if _KAYIT_ONBELLEK is not None and _KAYIT_ONBELLEK[0] == iz:
             return _KAYIT_ONBELLEK[1]
@@ -78,6 +104,8 @@ def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
         .group_by(OnedeskRecord.customer_no)
     ).all()
     radarda = _radar_numaralari(db)
+    biletler = bilet_sayilari(db, radarda)
+    bos = {"sikayet": 0, "talep": 0, "sikayet_acik": 0, "talep_acik": 0}
     liste = [
         {
             "musteri_no": no,
@@ -88,6 +116,7 @@ def _musteri_listesi(db: Session) -> list[dict[str, Any]]:
             "ticketli": int(t or 0),
             "son_kayit": iso(son),
             "kart_adayi": cekirdekler.get(unvan_cekirdegi(unvan or "")),
+            **biletler.get(no, bos),
         }
         for no, unvan, a, n, t, son in satirlar
         if no in radarda
@@ -113,7 +142,7 @@ def _kayit_tazeligi(db: Session) -> tuple[bool, str | None]:
 
 @musteri_alani.tum_alanlarda
 def adaylar(db: Session, adet: int = RADAR_ADET, sayfa: int = 1, arama: str = "") -> dict[str, Any]:
-    """{'var', 'taze', 'veri_zamani', 'kaynak': kayit|ozet, 'satirlar': [{sira, musteri_no, unvan, aktif, kapanan, toplam, ...}],
+    """{'var', 'taze', 'veri_zamani', 'kaynak': kayit, 'satirlar': [{sira, musteri_no, unvan, aktif, kapanan, toplam, sikayet, talep, ...}],
     'toplam_musteri', 'toplam_kayit', 'sayfa', 'adet'}. TEMIP kayitlarindan (sayfali, aranabilir); kayit yoksa bos."""
     adet, sayfa = min(max(1, adet), EN_COK_ADET), max(1, sayfa)
     if db.scalar(select(OnedeskRecord.id).where(OnedeskRecord.source == _temip().KAYNAK_ADI).limit(1)) is not None:

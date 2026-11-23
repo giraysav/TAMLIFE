@@ -103,7 +103,7 @@ def _hesapla(db: Session) -> dict[str, Any]:
         {"musteri_no": no or "", "ad": ad or "", "adet": adet}
         for no, ad, adet in db.execute(
             select(OnedeskRecord.customer_no, func.max(OnedeskRecord.customer_label), func.count().label("adet"))
-            .where(OnedeskRecord.customer_id.is_(None))
+            .where(OnedeskRecord.customer_id.is_(None), OnedeskRecord.source == temip_kayit.KAYNAK_ADI)  # sikayet / talep yalniz kart + Radar numarasi
             .group_by(OnedeskRecord.customer_no)
             .order_by(func.count().desc())
             .limit(KARTSIZ_ILK)
