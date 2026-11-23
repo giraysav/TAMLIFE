@@ -1,9 +1,9 @@
 """Veri iscisi: Oracle cekimleri panel (web) surecinin DISINDA (uretim isletim/reportdb_senkron.py + kutucuklar/veri/db_al.py).
 
-  cd backend; ..\\.venv\\Scripts\\python.exe -m app.isci reportdb [--client <Instant Client>] [--kuru]
-      ReportDB alarm senkronu: ozet -> tampon partisi (kartlara yazilmaz); her turda TEMIP alarm
-      kayitlari (tampon/temip_kayit: karta ya da TAM Radar'a; gunde bir kez 30 gunluk mutabakat).
-      Zamanlanmis gorev her 6 dk: kurulum\\canli_gorev_kur.ps1 (Oracle giris tetikleyicisinin izin verdigi kimlikle).
+  cd backend; ..\\.venv\\Scripts\\python.exe -m app.isci reportdb [--client <Instant Client>]
+      30 dk'lik tur: TEMIP alarm kayitlari (tampon/temip_kayit: karta ya da TAM Radar'a; gunde bir mutabakat), ardindan LOE
+      devre grafikleri, CI envanteri ve OneDesk sikayet / talep kayitlari. Eski alarm ozet sorgusu 2026-11-23 kaldirildi.
+      Servis dongusu her 30 dk: kurulum\\canli_gorev_kur.ps1 (Oracle giris tetikleyicisinin izin verdigi kimlikle).
   ..\\.venv\\Scripts\\python.exe -m app.isci temip-kayit --kip tam|artimli|mutabakat [--kuru] [--csv]
       TEMIP alarm kayitlari elle; 'tam' REPORTDB_KAYIT_BASLANGIC'tan (vars. 2026-01-01) bugune ilk yukleme (dakikalar surer).
       --kuru: ayni sorgular, yazmaz; Musteri No -> unvan -> kart -> sorumlu personel -> acik kayit eslesmesini gosterir.
@@ -107,7 +107,9 @@ def _hata(is_: str, mesaj: str) -> int:
     return 1
 
 
-def reportdb_senkron(kuru: bool = False) -> int:
+def reportdb_senkron() -> int:
+    """30 dk'lik tur: TEMIP alarm kayitlari (karta ya da TAM Radar'a; gunde bir mutabakat). Kart alarm sayaclari yalniz bunlardan.
+    2026-11-23: eski alarm ozet sorgusu kaldirildi. Sonuc reportdb.durum_yaz ile Veri Ozeti / Veri Akisi'nda gorunur."""
     a = oracle.ayar(reportdb.KAYNAK)
     if not a.ENABLED:
         return _hata("reportdb", f"{a.kaynak.enabled_key}=true degil; Oracle'a baglanilmadi.")
@@ -119,38 +121,21 @@ def reportdb_senkron(kuru: bool = False) -> int:
     t0 = time.time()
     try:
         try:
-            basliklar, satirlar = reportdb.cek()
-            sure = time.time() - t0
-            if kuru:
-                print(f"[OK] KURU: {len(satirlar)} satir, {sure:.1f} sn. Sutunlar: {basliklar}")
-                for s in satirlar[:5]:
-                    print("    ", s)
-                return 0
             with oturum() as db:
-                parti = reportdb.tampona_yaz(db, basliklar, satirlar, sure)
-                parti_id, durum, n, red = parti.id, parti.status, parti.row_count, parti.error
-        except Exception as e:  # noqa: BLE001 - her hata partiye yazilir, kartlara dokunulmaz
+                kayit = temip_kayit.calistir(db, temip_kayit.otomatik_kip(db))
+                reportdb.durum_yaz(db)
+        except Exception as e:  # noqa: BLE001 - yazilan parcalar kalir (idempotent); sonraki tur tamamlar
             mesaj = _mesaj(e, a)
             try:
                 with oturum() as db:
-                    reportdb.hata_yaz(db, mesaj)
+                    reportdb.durum_yaz(db, mesaj)
             except Exception as yazilamadi:  # noqa: BLE001 - panel DB'sine de yazilamiyorsa gunluk yeter
-                gunluge_yaz(f"reportdb hata partisi yazilamadi: {type(yazilamadi).__name__}")
-            return _hata("reportdb", f"Senkron basarisiz: {mesaj}")
-        if durum != "ready":
-            return _hata("reportdb", f"parti #{parti_id} kabul edilmedi: {red}")
-        kayit = None
-        try:
-            with oturum() as db:
-                # Alarm kayitlari: karta (sorumlu TAM) ya da TAM Radar'a; kart alarm sayaclari YALNIZ bunlardan (ozet kartlara yazilmaz).
-                kayit = temip_kayit.calistir(db, temip_kayit.otomatik_kip(db))
-        except Exception as e:  # noqa: BLE001 - parti yazildi; kart/kayit yazimi sonraki turda yeniden denenir
-            mesaj = f"{n} musteri tampona yazildi, alarm kayitlari yazilamadi: {_mesaj(e, a)}"
-            ariza.kaydet("TL-TAM-01", mesaj, kaynak="isci.reportdb", kullanici=reportdb.ISCI)
-            return _hata("reportdb", mesaj)
-        ek = _kayit_ozeti(kayit) if kayit else "kayit turu yok"
-        print(f"[OK] parti #{parti_id}: {n} musteri, {time.time() - t0:.1f} sn; {ek}")
-        gunluge_yaz(f"reportdb OK parti #{parti_id}: {n} musteri, {time.time() - t0:.1f} sn; {ek}")
+                gunluge_yaz(f"reportdb durum yazilamadi: {type(yazilamadi).__name__}")
+            ariza.kaydet("TL-TAM-01", f"alarm kayit turu: {mesaj}", kaynak="isci.reportdb", kullanici=reportdb.ISCI)
+            return _hata("reportdb", f"Alarm kayit turu basarisiz: {mesaj}")
+        satir = f"{time.time() - t0:.1f} sn; {_kayit_ozeti(kayit)}"
+        print(f"[OK] {satir}")
+        gunluge_yaz(f"reportdb OK {satir}")
         return 0
     finally:
         try:
@@ -344,7 +329,7 @@ def temip_eslesme(csv: bool) -> int:
 
 
 def temip_kayit_calistir(kip: str, kuru: bool = False, csv: bool = False) -> int:
-    """Elle: 'tam' ilk yukleme (REPORTDB_KAYIT_BASLANGIC'tan bugune, ay ay), 'mutabakat', 'artimli'. 6 dk senkronuyla ayni kilit.
+    """Elle: 'tam' ilk yukleme (REPORTDB_KAYIT_BASLANGIC'tan bugune, ay ay), 'mutabakat', 'artimli'. 30 dk'lik turla ayni kilit.
     kuru: ayni sorgular, panel DB'sine yazmaz (kilit almaz); eslesmeyi gosterir."""
     a = oracle.ayar(reportdb.KAYNAK)
     if not a.ENABLED:
@@ -417,7 +402,7 @@ def katalog_calistir(semalar: list[str] | None, adet: int, kullanici: str, param
 
 def _katalogdan_kayitlar() -> int:
     """2026-10-19 kullanici: "reportdb verileri guncellemiyor": katalog taramasi bitince alarm kayitlari ham dosyadan kartlara / TAM
-    Radar'a aktarilir (eskiden ayri 'temip-kayit --kip katalogdan' gerekiyordu). Ayni kilit: 6 dk senkronu suruyorsa atlanir."""
+    Radar'a aktarilir (eskiden ayri 'temip-kayit --kip katalogdan' gerekiyordu). Ayni kilit: 30 dk'lik tur suruyorsa atlanir."""
     kilit = _klasor() / "isci_reportdb.kilit"
     if not kilit_al(kilit):
         gunluge_yaz("temip-kayit (katalogdan) atlandi: baska senkron suruyor")
@@ -470,7 +455,7 @@ def main(argv: list[str] | None = None) -> int:
             akim.reconfigure(errors="replace")  # Windows konsol kod sayfasinda olmayan harf cokertmesin
     p = argparse.ArgumentParser(prog="python -m app.isci", description="Veri iscisi (Oracle cekimleri, panel disi surec)")
     alt = p.add_subparsers(dest="is_", required=True)
-    r = alt.add_parser("reportdb", help="ReportDB alarm senkronu")
+    r = alt.add_parser("reportdb", help="30 dk turu: TEMIP alarm kayitlari + LOE + envanter + OneDesk")
     t = alt.add_parser("temip-kayit", help="TEMIP alarm kayitlari: karta / TAM Radar'a (tam = ilk yukleme)")
     t.add_argument(
         "--kip", choices=temip_kayit.KIPLER, default="artimli", help="katalogdan: kapananlar ham katalog dosyasindan (ilk yukleme)"
@@ -504,7 +489,6 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
     for alt_p in (r,):
         alt_p.add_argument("--client", default=None, help="Oracle Instant Client klasoru (vars. ORACLE_CLIENT_DIR)")
-        alt_p.add_argument("--kuru", action="store_true", help="yazmadan dene")
     a = p.parse_args(argv)
     env_dosyasi_yukle()
     if a.is_ == "temip-eslesme":
@@ -528,11 +512,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.is_ == "rapor-devre":
         return rapor_devre(a.zorla)
     if a.is_ == "reportdb":
-        kod = reportdb_senkron(a.kuru)
-        if not a.kuru:
-            rapor_devre()  # 2026-11-20: ayni 6 dk'lik turda; sonucu alarm senkronunun cikis kodunu degistirmez
-            envanter_turu()  # 2026-11-20: Kritik CI envanteri (4 saatte bir)
-            onedesk_kayit_turu()  # 2026-11-21: OneDesk sikayet / talep kayitlari (alarm kurallariyla)
+        kod = reportdb_senkron()
+        rapor_devre()  # 2026-11-20: ayni 30 dk'lik turda; sonucu alarm turunun cikis kodunu degistirmez
+        envanter_turu()  # 2026-11-20: Kritik CI envanteri (4 saatte bir)
+        onedesk_kayit_turu()  # 2026-11-21: OneDesk sikayet / talep kayitlari (alarm kurallariyla)
         return kod
     return _hata(a.is_, "bilinmeyen is")
 

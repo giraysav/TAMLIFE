@@ -124,7 +124,7 @@
         ad.appendChild(el("div", "font-size:15px;font-weight:900;color:" + C.navy + DUZ, k.ad));
         ad.appendChild(el("div", "margin-top:2px;font-size:12px;font-weight:600;line-height:1.35;color:" + C.ikincil + DUZ, k.icerik));
         ust.appendChild(ad);
-        var r = k.yetki_bekleniyor ? rozet("eski", m.yetkiBekle) : k.hata ? rozet("hata", m.durumHata) : dk == null ? rozet("bekle", m.durumBekle) : dk > (k.anahtar === "reportdb" ? 60 : k.anahtar === "onent" ? 600 : k.anahtar === "loe" ? 1500 : 1560) ? rozet("eski", m.durumEski) : rozet("ok", m.durumOk);
+        var r = k.yetki_bekleniyor ? rozet("eski", m.yetkiBekle) : k.hata ? rozet("hata", m.durumHata) : dk == null ? rozet("bekle", m.durumBekle) : dk > (k.anahtar === "reportdb" ? 75 : k.anahtar === "onent" ? 600 : k.anahtar === "loe" ? 1500 : 1560) ? rozet("eski", m.durumEski) : rozet("ok", m.durumOk);
         r.style.whiteSpace = "nowrap"; r.style.flexShrink = "0"; r.style.textTransform = "none";
         ust.appendChild(r);
         kart.appendChild(ust);

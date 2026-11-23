@@ -10,7 +10,7 @@ Tur (python -m app.isci utilizasyon; zamanlanmis gorev 06:00, kurulum\\canli_gor
                 ALINMAZ: alarm ReportDB'den), STATUS='CLOSE', CLOSEDATE donemde. Yeni sistem elysion_soxdata_octopuscorp.
                 T_OCT_CORPORATE_MAIN (TICKETTYPE_DESC Sikayet/Talep, STATUS Kapatildi; 2026-11-21 itibariyla tarih alanlari bos ->
                 tarihsiz kapali kayit doneme sayilir).
-  2) ReportDB : donemde kapanan alarm = panelde zaten olan TEMIP kayitlari (onedesk_record source=temip, 6 dk isci doldurur).
+  2) ReportDB : donemde kapanan alarm = panelde zaten olan TEMIP kayitlari (onedesk_record source=temip, 30 dk'lik isci doldurur).
   3) ONENT    : aktif CI ve farkli kurumsal lokasyon sayisi = musteri envanteri (customer_ci, 4 saatte bir isci doldurur).
   4) util_source_summary bastan yazilir; cati musterilerin skoru yeniden hesaplanir ve DEGISENLERE yazilir (kaynak 'gunluk').
 Skorda cati musterinin degeri = cati + istiraklerinin toplami. Bir kaynak okunamazsa o sutun bos (None) kalir; skor o kriter icin

@@ -9,7 +9,7 @@ Kural:
   EVENTTIME ile bolumlu -> her sorgu iki yonlu EVENTTIME sinirli).
 - Atama: Musteri No tek bir karta duserse kayit o karta (sorumlu TAM'in kaydi) baglanir; kart yoksa customer_id bos kalir ve kayit
   TAM Radar'a duser (radar.servis). Kart numarasi degisince her turda yeniden baglanir.
-- Kipler: 'tam' (baslangictan bugune ay ay; ilk yukleme, dakikalar surer), 'artimli' (her 6 dk: son 1 gunde kapananlar + acik
+- Kipler: 'tam' (baslangictan bugune ay ay; ilk yukleme, dakikalar surer), 'artimli' (her 30 dk: son 1 gunde kapananlar + acik
   goruntu + goruntuden dusen aciklarin kapanisi IDENTIFIER ile), 'mutabakat' (son N gun yeniden; gece).
 - Kapali kayit yeniden acilmaz (anlik goruntu VIEW_REPORT_ACTIVE'den geri kalabilir). Kisisel veri alinmaz: kapatan kullanici
   yalniz atm / Auto-Clear / operator olarak yazilir.

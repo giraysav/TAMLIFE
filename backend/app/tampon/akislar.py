@@ -20,7 +20,7 @@ from app.tampon.models import CustomerImportRun, DistributionLog, DistributionRu
 
 TEMIP_SURUM = "temip.surum"  # temip_kayit.SURUM_AYARI (temip_kayit oracle zincirini yukler; burada yalniz ayar okunur)
 TEMIP_KAYNAGI = "temip"
-TEMIP_BAYAT_DK = 30  # 6 dk'lik dongunun 5 kacirilmasi
+BAYAT_DK = reportdb.BAYAT_DK  # 30 dk'lik isci turunun iki kacirilmasi
 ONEDESK_DURUM = "onedesk.kayit_durum"  # onedesk/canli.DURUM_ANAHTARI
 ONEDESK_KAYNAGI = "onedesk"
 ONEDESK_PG = "pg_onedesk"
@@ -88,31 +88,8 @@ def akislar(db: Session) -> dict[str, Any]:
         )
     )
 
-    # 2. ReportDB alarm ozeti (isci, 6 dk)
     a = oracle.ayar(reportdb.KAYNAK)
-    rhazir, rson = _son_parti(db, reportdb.KAYNAK)
-    rzaman = _utc(rhazir.received_at) if rhazir else None
-    hata = rson is not None and rson.status == "failed" and (rhazir is None or rson.id > rhazir.id)
-    if not a.ENABLED:
-        rdurum, raciklama = ("bilgi" if rzaman else "yok"), f"{a.kaynak.enabled_key}=true değil; işçi Oracle'a bağlanmaz."
-    else:
-        rdurum = _durum(rzaman, reportdb.TAZELIK_DAKIKA, hata)
-        raciklama = (rson.error or "Son çekim başarısız.") if hata and rson else ""
-    liste.append(
-        _akis(
-            "oracle_reportdb",
-            "ReportDB alarm özeti",
-            "işçi (6 dk)",
-            "yonetim/tampon?sekme=canli",
-            rzaman,
-            rdurum,
-            raciklama,
-            parti=rhazir.id if rhazir else None,
-            tazelik_dk=reportdb.TAZELIK_DAKIKA,
-        )
-    )
-
-    # 3. TEMIP alarm kayitlari (isci her turda; ilk yukleme CLI)
+    # 2. TEMIP alarm kayitlari (30 dk'lik isci turu; ilk yukleme CLI)
     ayar = db.get(AppSetting, TEMIP_SURUM)
     deger = ayar.value if ayar is not None and isinstance(ayar.value, dict) else {}
     tzaman = _utc(datetime.fromisoformat(deger["an"])) if deger.get("an") else None
@@ -131,30 +108,31 @@ def akislar(db: Session) -> dict[str, Any]:
     elif not tzaman:
         tdurum, taciklama = "yok", "İlk yükleme yapılmadı: kurulum\\temip_kayit_ice_al.ps1 -Adim Yukle"
     else:
-        tdurum = _durum(tzaman, TEMIP_BAYAT_DK if a.ENABLED else None)
-        taciklama = f"Son tur: {deger.get('kip', '')}, +{deger.get('eklenen', 0)} yeni, {deger.get('guncellenen', 0)} güncel."
+        thata = reportdb.son_hata(reportdb.durum_oku(db))
+        tdurum = _durum(tzaman, BAYAT_DK if a.ENABLED else None, bool(thata))
+        taciklama = thata or f"Son tur: {deger.get('kip', '')}, +{deger.get('eklenen', 0)} yeni, {deger.get('guncellenen', 0)} güncel."
     liste.append(
-        _akis("temip", "TEMIP alarm kayıtları", "işçi (6 dk) + CLI", "yonetim/tampon?sekme=akis", tzaman, tdurum, taciklama, sema=sema, **sayilar)
+        _akis("temip", "TEMIP alarm kayıtları", "işçi (30 dk) + CLI", "yonetim/tampon?sekme=akis", tzaman, tdurum, taciklama, sema=sema, **sayilar)
     )
 
-    # 4. OneDesk sikayet / talep kayitlari (isci her turda; onedesk/canli)
+    # 3. OneDesk sikayet / talep kayitlari (30 dk'lik isci turu; onedesk/canli)
     od = (db.get(AppSetting, ONEDESK_DURUM) or AppSetting(value={})).value or {}
     ozaman = _utc(datetime.fromisoformat(od["son_basari"])) if od.get("son_basari") else None
     ohata = bool(od.get("hata")) and od.get("son_deneme", "") >= od.get("son_basari", "")
     osayi = {("acik" if d == "open" else "kapali"): n for d, n in db.execute(
         select(OnedeskRecord.status, func.count()).where(OnedeskRecord.source == ONEDESK_KAYNAGI).group_by(OnedeskRecord.status))}  # fmt: skip
-    liste.append(_akis("onedesk", "OneDesk şikayet / talep kayıtları", "işçi (6 dk)", "onedesk", ozaman,
-                       _durum(ozaman, TEMIP_BAYAT_DK if postgres.ayar(ONEDESK_PG).ENABLED else None, ohata),
+    liste.append(_akis("onedesk", "OneDesk şikayet / talep kayıtları", "işçi (30 dk)", "onedesk", ozaman,
+                       _durum(ozaman, BAYAT_DK if postgres.ayar(ONEDESK_PG).ENABLED else None, ohata),
                        od.get("hata", "") if ohata else "", acik=osayi.get("acik", 0), kapali=osayi.get("kapali", 0)))  # fmt: skip
 
-    # 5-6. Baska ekranlardan gelen dosyalar (denetim kaydi / yukleme zamani)
+    # 4-5. Baska ekranlardan gelen dosyalar (denetim kaydi / yukleme zamani)
     denetim = _denetim_son(db, ("gelir_uretim.ice_al",))
     ut = _utc(db.scalar(select(func.max(UrunTutarOzet.uploaded_at))))
     liste.append(_akis("urun_tutar", "Ürün-Tutar Excel", "dosya", "yonetim/tampon?sekme=import", ut, _durum(ut, None)))
     liste.append(_akis("gelir_uretim", "Gelir Faydası Excel", "dosya", "yonetim/tampon?sekme=import", denetim.get("gelir_uretim.ice_al"),
                        _durum(denetim.get("gelir_uretim.ice_al"), None)))  # fmt: skip
 
-    # 7. Genel CSV partileri (yalniz dagitim icin)
+    # 6. Genel CSV partileri (yalniz dagitim icin)
     csv_son = _utc(db.scalar(select(func.max(IngestBatch.received_at)).where(IngestBatch.source_key.startswith(kaynak.CSV_ON_EK))))
     liste.append(_akis("csv", "Genel CSV partileri", "dosya", "yonetim/tampon?sekme=import", csv_son, _durum(csv_son, None)))
 

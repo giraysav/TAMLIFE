@@ -12,7 +12,7 @@ Kural (TEMIP alarm aktarimiyla ayni: tampon/temip_kayit):
 - Yeni sistemin gecis donemi test kayitlari (ozette 'test...' / 'deneme' / betik denemesi) sayilmaz (TEST_KAYDI).
 - Kayit = OneDesk is akisi (external_key = WFINSTANCEID, source = 'onedesk'). Atama: Musteri No tek karta duserse o karta; birden
   cok kartta ise kart bos (temip_kayit._kart ile ayni). Kart numarasi degisince her turda yeniden baglanir.
-- Kipler: 'tam' / 'mutabakat' (baslangictan bugune hepsi; gunde bir), 'artimli' (her 6 dk: acik olanlar + son 2 gunde kapananlar +
+- Kipler: 'tam' / 'mutabakat' (baslangictan bugune hepsi; gunde bir), 'artimli' (her 30 dk: acik olanlar + son 2 gunde kapananlar +
   panelde acik gorunenlerin son durumu).
 - Kisisel veri alinmaz: bildiren kisi, telefon, e-posta ve serbest cozum metni cekilmez; ozet yalniz kategori yoksa (kisaltilmis).
 """

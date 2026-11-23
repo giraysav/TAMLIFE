@@ -8,13 +8,11 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ad import directory
 from app.config import get_settings
 from app.external import SOURCES, acik_mi, oracle_eksikleri
-from app.ortak import iso
 
 
 def connections() -> list[dict[str, object]]:
@@ -84,22 +82,10 @@ def integrations() -> dict[str, object]:
     return {"items": items, "runtime": {"network": "kapali (canli baglanti yok)", "assets": "yerel"}}
 
 
-def _son_parti(db: Session, anahtar: str) -> dict[str, object] | None:
-    """Kaynaktan gelen son parti (tampon, ice alma sorgusu ya da REPORTDB kayitlari): durum, satir, zaman, hata."""
-    from app.models import IngestBatch
-    from app.tampon import reportdb
-
-    anahtarlar = [anahtar, f"{anahtar}_import"] + ([reportdb.KAYIT_KAYNAGI] if anahtar == reportdb.KAYNAK else [])
-    son = db.scalars(select(IngestBatch).where(IngestBatch.source_key.in_(anahtarlar)).order_by(IngestBatch.id.desc()).limit(1)).first()
-    if son is None:
-        return None
-    return {"id": son.id, "durum": son.status, "satir": son.row_count, "zaman": iso(son.received_at), "hata": son.error}
-
-
 def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
     """Yonetim > Kurum Baglantilari: AD/LDAPS + Oracle (REPORTDB) + PostgreSQL (ONENTDB, ONEDESKDB) kaynaklari. Gizli deger yok; Oracle'da
     adres/servis/kullanici yalniz tanimli mi. Canli baglanti yalniz test ucunda (ayri surec)."""
-    from app.tampon import oracle, postgres, reportdb
+    from app.tampon import oracle, postgres
 
     sonuc: list[dict[str, object]] = []
     for i in integrations()["items"]:  # type: ignore[union-attr]
@@ -110,10 +96,7 @@ def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
                 "tur": "oracle",
                 "acma_anahtari": oracle.KAYNAKLAR[i["id"]].enabled_key,
                 "bilgiler": oracle.bilgiler(i["id"]),
-                "son_parti": _son_parti(db, i["id"]),
             }
-            if i["id"] == reportdb.KAYNAK:
-                ek["reportdb"] = reportdb.durum(db)
             sonuc.append({**i, **ek})
         elif i["id"] in postgres.KAYNAKLAR:
             sonuc.append({**i, "tur": "postgres", "acma_anahtari": postgres.KAYNAKLAR[i["id"]].enabled_key, "bilgiler": postgres.bilgiler(i["id"]),

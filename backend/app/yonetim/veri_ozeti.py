@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import AppUser, Customer, IngestBatch, OnedeskRecord, ScoreHistory
+from app.models import AppSetting, AppUser, Customer, OnedeskRecord, ScoreHistory
 from app.ortak import UygulamaHatasi, iso, simdi
 from app.skor import gunluk
 
@@ -25,10 +25,14 @@ BASLAT_ANAHTARI = "utilizasyon.gunluk_baslatildi"
 
 
 def _son_temip(db: Session) -> dict[str, Any]:
-    p = db.scalar(select(IngestBatch).where(IngestBatch.source_key == "oracle_reportdb").order_by(IngestBatch.id.desc()).limit(1))
-    son_ok = db.scalar(select(func.max(IngestBatch.received_at)).where(IngestBatch.source_key == "oracle_reportdb", IngestBatch.status == "ready"))
+    """TEMIP alarm kayit turu (30 dk'lik isci; reportdb.durum_yaz)."""
+    from app.tampon import reportdb
+
+    d = reportdb.durum_oku(db)
     acik = db.scalar(select(func.count()).select_from(OnedeskRecord).where(OnedeskRecord.source == "temip", OnedeskRecord.status == "open")) or 0
-    return {"son_basari": iso(son_ok), "son_hata": p.error if p is not None and p.status == "failed" else "", "acik_alarm": acik, "siklik": "6 dk"}
+    surum = db.get(AppSetting, "temip.surum")  # temip_kayit.SURUM_AYARI: durum kaydi oncesi turlar icin
+    son = d.get("son_basari") or (surum.value.get("an") if surum is not None and isinstance(surum.value, dict) else None)
+    return {"son_basari": son, "son_hata": reportdb.son_hata(d), "acik_alarm": acik, "siklik": "30 dk"}
 
 
 def _loe(db: Session) -> dict[str, Any]:
@@ -49,14 +53,14 @@ def _loe(db: Session) -> dict[str, Any]:
         return db.scalar(select(func.count()).select_from(m)) or 0
 
     return {"anahtar": "loe", "ad": "ReportDB", "icerik": "LOE grafikleri · erişilebilirlik, gecikme, jitter, kayıp",
-            "siklik": "Liste günde bir · ölçüm 6 dk", "son_basari": max(basarilar) if basarilar else None,
+            "siklik": "Liste günde bir · ölçüm 30 dk", "son_basari": max(basarilar) if basarilar else None,
             "hata": hata, "yetki_bekleniyor": yetki,
             "hacim": [["Devre listesi", say(ReportCmdb)], ["Grafiği seçili devre", say(ReportCircuit)],
                       ["Saklanan aylık veri", say(ReportCircuitData)]]}  # fmt: skip
 
 
 def _onedesk_kayit(db: Session) -> dict[str, Any]:
-    """OneDesk sikayet / talep kayit aktarimi (app.onedesk.canli; 6 dk'lik isci turu)."""
+    """OneDesk sikayet / talep kayit aktarimi (app.onedesk.canli; 30 dk'lik isci turu)."""
     from app.onedesk import canli
 
     d = canli.durum_oku(db)
@@ -79,7 +83,7 @@ def kaynaklar(db: Session) -> list[dict[str, Any]]:
         {"anahtar": "reportdb", "ad": "ReportDB", "icerik": "Alarm kayıtları (TEMIP)", "siklik": temip["siklik"],
          "son_basari": temip["son_basari"], "hata": temip["son_hata"],
          "hacim": [["Son 12 ayda kapanan alarm", (k.get("reportdb") or {}).get("alarm")], ["Şu an açık alarm", temip["acik_alarm"]]]},
-        {"anahtar": "onedesk", "ad": "OneDesk", "icerik": "Şikayet ve talep kayıtları", "siklik": "Kayıtlar 6 dk · skor 06:00",
+        {"anahtar": "onedesk", "ad": "OneDesk", "icerik": "Şikayet ve talep kayıtları", "siklik": "Kayıtlar 30 dk · skor 06:00",
          "son_basari": kayit["son_basari"] or (d.get("zaman") if od.get("durum") == "ok" else od.get("son_basari")),
          "hata": kayit["hata"] or od.get("hata", ""),
          "hacim": [["Son 12 ayda kapanan şikayet", od.get("sikayet")], ["Son 12 ayda kapanan talep", od.get("talep")],

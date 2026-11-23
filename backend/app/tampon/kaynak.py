@@ -117,8 +117,6 @@ def _oracle_durum(db: Session) -> list[dict[str, Any]]:
             "yapilandirma": "kapalı" if not d["acik"] else ("eksik" if d["eksik"] else "tamam"),
             "eksik": d["eksik"],
         }
-        if anahtar == reportdb.KAYNAK:
-            satir["reportdb"] = reportdb.durum(db)
         cikti.append(satir)
     return cikti
 

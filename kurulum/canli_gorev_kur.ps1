@@ -2,7 +2,7 @@
 #   TAMLIFE_Servis (TEK GOREV, 2026-11-09) -> bu betigin -Calistir servis kipi (supervizor dongu), oturum acilinca + 5 dk bekci:
 #       panel dongusu   -> kurulum\canli_baslat.ps1  (panel, 127.0.0.1:8117, canli mod)
 #       vekil dongusu   -> kurulum\tls_vekili.ps1    (https://<VekilAd>:443/ -> panel)
-#       ReportDB iscisi -> python -m app.isci reportdb, her 6 dk, tur siniri 20 dk (eski ayri gorevin 5 dk siniri turu yariyda oldurdu)
+#       ReportDB iscisi -> python -m app.isci reportdb, her 30 dk (2026-11-23), tur siniri 20 dk (eski ayri gorevin 5 dk siniri turu yariyda oldurdu)
 #   TAMLIFE_Utilizasyon_0600 (2026-11-21) -> python -m app.isci utilizasyon, HER GUN 06:00, SYSTEM (oturum gerekmez; Oracle'a
 #       baglanmaz: OneDesk/ONENT PostgreSQL + panel DB). Kapanan kayit + envanter ozeti ve final skor. Kacirilirsa ilk firsatta calisir.
 #   Eski ayri gorevler (TAMLIFE_v35_Panel / _TLS_Vekil / TAM_Life_v35_ReportDB_6dk / _Gece_Sync) kayitta silinir.
@@ -70,7 +70,7 @@ if ($Calistir) {
         # Donguler kapanirsa 15 sn icinde yeniden acilir; panel yeniden baslatmasi yalniz panel dongusunu oldurur (-PanelYenile), vekil ve isci dokunulmaz.
         $Pyw = Join-Path $Kok '.venv\Scripts\pythonw.exe'
         $Backend = Join-Path $Kok 'backend'
-        $IsciAralikDk = 6
+        $IsciAralikDk = 30  # 2026-11-23 kullanici: "guncel veriyi 30 dk periyotla cek" (onceden 6 dk)
         $IsciSinirDk = 20
         function Servis-Gunluk($m) { try { Add-Content -Path $Log -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [servis] $m" -Encoding ASCII } catch { } }
         function Dongu-Var($kip) {
