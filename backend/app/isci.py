@@ -266,7 +266,7 @@ def utilizasyon_turu(kuru: bool = False) -> int:
 
 def _kayit_ozeti(k: dict) -> str:
     return (f"alarm kayitlari ({k['kip']}): +{k['eklenen']} yeni, {k['guncellenen']} guncel, {k['acik_satir']} acik, "
-            f"{k['dusen_acik']} dusen/{k['kapanan_sorgu']} kapanan, {k['yeniden_baglanan']} yeniden baglanan, {k['etkilenen_kart']} kart")  # fmt: skip
+            f"{k['dusen_acik']} dusen ({k.get('aranan_dusen', k['dusen_acik'])} arandi)/{k['kapanan_sorgu']} kapanan,{k['yeniden_baglanan']} yeniden baglanan, {k['etkilenen_kart']} kart")  # fmt: skip
 
 
 ESLESME_DURUMLARI = (("kart", "karta (sorumlu TAM)"), ("kart_personelsiz", "karta, sorumlusu TAM degil"),

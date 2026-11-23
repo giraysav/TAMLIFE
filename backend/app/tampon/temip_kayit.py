@@ -41,6 +41,8 @@ VARSAYILAN_BASLANGIC = date(2026, 1, 1)
 SURUM_AYARI = "temip.surum"  # her yazimda degisir: TAM Radar onbellegi buna bakar
 PARCA = 1000
 KAPANIS_PARCASI = 500
+KUME_BOSLUK_GUN = 2  # kapanis aramasi: acilislari bu kadar gunden fazla ayrik kimlikler ayri araliklarla sorgulanir
+BULUNAMAYAN_AYARI = "temip.kapanisi_bulunamayan"  # {IDENTIFIER: ilk arama}; artimli turlar yeniden aramaz, mutabakat arar
 SORGU_SINIRI = 400_000  # tek sorgu (ay dilimi) en fazla bu kadar satir
 ARTIMLI_GUN = 1
 MUTABAKAT_GUN = 30
@@ -387,16 +389,39 @@ def dusen_acik_kayitlar(db: Session, acik_kimlikler: set[str]) -> list[tuple[str
 
 
 def kapanislari_cek(dusenler: list[tuple[str, datetime]], h: dict[str, set[int]]) -> list[dict[str, Any]]:
-    """Dusen aciklarin kapali satirlarini VIEW_REPORT_ACTIVE'den IDENTIFIER ile ceker (acilis araligi +- 1 gun)."""
+    """Dusen aciklarin kapali satirlarini VIEW_REPORT_ACTIVE'den IDENTIFIER ile ceker. 2026-11-23 hizlandirma: acilislar gune gore
+    kumelenir (ardisik acilis arasi KUME_BOSLUK_GUN'den fazlaysa yeni kume) ve her kume kendi araligiyla (+- 1 gun) sorgulanir; eskiden
+    Haziran-Kasim'a yayilan ~80 kimlik tek aralikla tum bolumleri tarayip turu ~7 dk surduruyordu."""
     sonuc: list[dict[str, Any]] = []
-    dusenler = sorted(dusenler, key=lambda x: x[1])
-    for i in range(0, len(dusenler), KAPANIS_PARCASI):
-        parca = dusenler[i : i + KAPANIS_PARCASI]
-        alt, ust = _tr(parca[0][1]) - timedelta(days=1), _tr(parca[-1][1]) + timedelta(days=1)
-        for s in _cek(kimlik_sorgusu([k for k, _ in parca], alt, ust)):
+    kume: list[tuple[str, datetime]] = []
+
+    def sorgula() -> None:
+        alt, ust = _tr(kume[0][1]) - timedelta(days=1), _tr(kume[-1][1]) + timedelta(days=1)
+        for s in _cek(kimlik_sorgusu([k for k, _ in kume], alt, ust)):
             if (a := alanlar(s, False, h)) is not None:
                 sonuc.append(a)
+
+    for k, a in sorted(dusenler, key=lambda x: x[1]):
+        if kume and (a - kume[-1][1] > timedelta(days=KUME_BOSLUK_GUN) or len(kume) >= KAPANIS_PARCASI):
+            sorgula()
+            kume = []
+        kume.append((k, a))
+    if kume:
+        sorgula()
     return sonuc
+
+
+def _bulunamayanlar(db: Session) -> dict[str, str]:
+    ayar = db.get(AppSetting, BULUNAMAYAN_AYARI)
+    return dict(ayar.value) if ayar is not None and isinstance(ayar.value, dict) else {}
+
+
+def _bulunamayan_yaz(db: Session, deger: dict[str, str]) -> None:
+    ayar = db.get(AppSetting, BULUNAMAYAN_AYARI)
+    if ayar is None:
+        db.add(AppSetting(key=BULUNAMAYAN_AYARI, value=deger, updated_by=reportdb.ISCI, updated_at=simdi()))
+    else:
+        ayar.value, ayar.updated_by, ayar.updated_at = deger, reportdb.ISCI, simdi()
 
 
 @musteri_alani.tum_alanlarda
@@ -554,11 +579,17 @@ def calistir(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dic
     topla(yaz(db, acik, etkilenen, parca_commit=True))
     ozet["acik_satir"] = len(acik)
     dusenler = dusen_acik_kayitlar(db, {a["external_key"] for a in acik})
-    if dusenler:
-        kapananlar = kapanislari_cek(dusenler, h)
-        ozet["kapanan_sorgu"] = len(kapananlar)
-        topla(yaz(db, kapananlar, etkilenen, parca_commit=True))
+    # Bir kez aranip kapanisi bulunamayanlar artimli turlarda yeniden aranmaz; gunluk mutabakat / tam hepsini arar.
+    onceki = _bulunamayanlar(db)
+    aranacak = [d for d in dusenler if d[0] not in onceki] if kip == "artimli" else dusenler
+    kapananlar = kapanislari_cek(aranacak, h) if aranacak else []
+    ozet["kapanan_sorgu"] = len(kapananlar)
+    topla(yaz(db, kapananlar, etkilenen, parca_commit=True))
+    bulunan = {a["external_key"] for a in kapananlar}
+    an = simdi().isoformat()
+    _bulunamayan_yaz(db, {k: onceki.get(k, an) for k, _ in dusenler if k not in bulunan})
     ozet["dusen_acik"] = len(dusenler)
+    ozet["aranan_dusen"] = len(aranacak)
     ozet["yeniden_baglanan"] = yeniden_bagla(db, h, etkilenen)
     sayaclari_yenile(db, etkilenen)
     ozet["etkilenen_kart"] = len(etkilenen)
