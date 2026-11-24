@@ -46,8 +46,9 @@ KAYNAKSIZ = 'auto_kaynaksiz'
 # sabit puandir (kullanici karari 2026-10-08); diger hucreler arayuzde kilitlenir, burada yok sayilir.
 SABIT_PUAN_TURLERI = ('auto_sozlesme', 'auto_rapor')
 # Veri olsa da ELLE secilen turler (2026-11-21 kullanici onayi): Raporlama 'Standart / Ozel' olarak dokumden secilir; rapor ayi
-# sayisi puana yansitilmaz (cogu musteride 1 ay -> haksiz 30 puan).
-ELLE_SECILEN_TURLER = ('auto_rapor',)
+# sayisi puana yansitilmaz (cogu musteride 1 ay -> haksiz 30 puan). Baglanti Tipi (2026-11-24 kullanici): barem Fiber / Karasal /
+# Mobil + yedeklilik; urun -> grup eslesme listesi kullanicidan gelene kadar dokumde secilir (veri kurala baglanmaz).
+ELLE_SECILEN_TURLER = ('auto_rapor', 'auto_baglanti')
 OTOMATIK_TURLER = tuple(SAYISAL) + tuple(KATEGORIK) + (KAYNAKSIZ,)
 # Baslik -> tur (normalize baslikta ilk eslesen; sira onemli). Sayfadaki TUR_IPUCLARI ile AYNI.
 TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('kayit hacmi', 'auto_onedesk'), ('sikayet', 'auto_onedesk'), ('talep', 'auto_onedesk'),
@@ -56,7 +57,7 @@ TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('kayit hacmi', 'auto_on
 # Kriter turunun veri kaynagi (Veri Yonlendirici kriter editorunde satirin yaninda gosterilir).
 KAYNAK_ADLARI = {
     'auto_onedesk': 'Kayıt hacmi · alarm + talep + şikayet (bu yıl kapanan + açık)', 'servis_cesitliligi': 'Ürün-Tutar / ONENT · servis puanları',
-    'auto_servis_sayisi': 'Ürün-Tutar · lokasyon sayısı', 'auto_baglanti': 'Ürün-Tutar / ONENT · bağlantı tipi',
+    'auto_servis_sayisi': 'Ürün-Tutar · lokasyon sayısı', 'auto_baglanti': 'Kriter dökümünde seçilir (ürün eşleşmesi bekleniyor)',
     'auto_segment': 'Müşteri kartı · segment', 'auto_sozlesme': 'Ürün-Tutar · fatura bedeli (TL)',
     'auto_rapor': 'Aylık Rapor · rapor ayı sayısı', KAYNAKSIZ: 'Kaynak yok (başlıktan anlaşılamadı)',
 }
@@ -66,7 +67,7 @@ KAYNAK_ADLARI = {
 # sayfadaki eski sabit esiklerle ayni.
 VARSAYILAN_KURALLAR = {
     'auto_onedesk': {'b30': '1-49', 'b50': '50-199', 'b70': '200-499', 'b100': '500+'},
-    'auto_servis_sayisi': {'b30': '1-19', 'b50': '20-99', 'b70': '100-299', 'b100': '300+'},
+    'auto_servis_sayisi': {'b30': '1-19', 'b50': '20-59', 'b70': '60-99', 'b100': '100+'},  # 2026-11-24 kullanici
     'servis_cesitliligi': {'b30': '1-19', 'b50': '20-29', 'b70': '30-39', 'b100': '40+'},
     'auto_segment': {'b50': 'SMB', 'b70': 'MA', 'b100': 'SA, PA, WHOLESALE'},
     'auto_sozlesme': {'b30': '1-49.999', 'b50': '50.000-249.999', 'b70': '250.000-999.999', 'b100': '1.000.000+'},
@@ -85,8 +86,8 @@ SERVIS_PUANLARI = {
 VARSAYILAN_KRITERLER = (
     {'type': 'auto_onedesk', 'title': '1. Kayıt Hacmi', 'metric': 'Bu yıl kapanan + açıkta bekleyen alarm, talep ve şikayet toplamı', 'b30': '1-49', 'b50': '50-199', 'b70': '200-499', 'b100': '500+', 'weight': 20},
     {'type': 'servis_cesitliligi', 'title': '2. Servis Çeşitliliği', 'metric': 'Servis puanları toplamı (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-29', 'b70': '30-39', 'b100': '40+', 'weight': 20},
-    {'type': 'auto_servis_sayisi', 'title': '3. Lokasyon Sayısı', 'metric': 'Açık adres + atanmış devre (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-99', 'b70': '100-299', 'b100': '300+', 'weight': 5},
-    {'type': 'auto_baglanti', 'title': '4. Bağlantı Tipi', 'metric': 'ME / DSL / Mobile Backup yapısı (Ürün-Tutar)', 'b30': '', 'b50': '', 'b70': '', 'b100': '', 'weight': 5},
+    {'type': 'auto_servis_sayisi', 'title': '3. Lokasyon Sayısı', 'metric': 'Açık adres + atanmış devre (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-59', 'b70': '60-99', 'b100': '100+', 'weight': 5},
+    {'type': 'auto_baglanti', 'title': '4. Bağlantı Tipi', 'metric': 'Fiber / Karasal / Mobil + yedeklilik (ürün eşleşmesi bekleniyor; şimdilik dökümde seçilir)', 'b30': 'Yalnız DSL / Mobil (yedeksiz)', 'b50': 'Karasal + Yedek', 'b70': 'Yedeksiz Fiber', 'b100': 'Fiber + Yedek', 'weight': 5},
     {'type': 'auto_segment', 'title': '5. Segment', 'metric': 'SMB 50 · MA 70 · SA / PA / WHOLESALE 100', 'b30': '', 'b50': 'SMB', 'b70': 'MA', 'b100': 'SA, PA, WHOLESALE', 'weight': 15},
     {'type': 'auto_sozlesme', 'title': '6. Sözleşme', 'metric': 'Fatura bedeli TL (Ürün-Tutar; yedek: kart FT Hacim)', 'b30': '1-49.999', 'b50': '50.000-249.999', 'b70': '250.000-999.999', 'b100': '1.000.000+', 'weight': 20},
     {'type': 'auto_rapor', 'title': '7. Raporlama', 'metric': 'Bu yıl aylık rapor hazırlanan ay sayısı', 'b30': '1-3', 'b50': '4-6', 'b70': '7-9', 'b100': '10+', 'weight': 15},
