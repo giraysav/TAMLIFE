@@ -27,6 +27,7 @@ from app.models import (
     AppUser,
     Base,
     Customer,
+    CustomerCi,
     CustomerTeam,
     MatrixConfig,
     Report,
@@ -356,6 +357,17 @@ def rapor_bekleniyor_mu(musteri: Customer) -> bool:
     """Bu ay raporu beklenen birim: rapor birimi ve kartinda 'raporu atilmamaktadir' isaretli degil (2026-10-31 kullanici).
     Raporun hangi birime sayilacagi rapor_birimi_mi ile kalir; muafiyet yalniz beklenen/bekleyen sayimini etkiler."""
     return rapor_birimi_mi(musteri) and not musteri.report_exempt
+
+
+def envanter_cileri(db: Session, user: Principal, musteri_id: int) -> tuple[Customer, list[CustomerCi], set[str]]:
+    """TopoMaker envanter cizimi: kart ve istiraklerinin AKTIF CI'lari + kartta kritik isaretli CI no'lari."""
+    musteri = musteri_getir(db, user, musteri_id)
+    istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
+    anahtarlar = envanter._anahtarlar([musteri, *istirakler])
+    if not anahtarlar:
+        return musteri, [], set()
+    satirlar = list(db.scalars(select(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar), CustomerCi.status == "ACTIVE")))
+    return musteri, satirlar, envanter._kritikler(db, musteri.id)
 
 
 def kritik_ci_listesi(db: Session, user: Principal, musteri_id: int, metin: str = "") -> dict:
