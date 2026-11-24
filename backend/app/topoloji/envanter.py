@@ -46,6 +46,27 @@ KISA_SERVIS = (
 IL_KISALTMA = {"IST": "İSTANBUL", "ISTANBUL": "İSTANBUL", "AFYON": "AFYONKARAHİSAR", "MARAS": "KAHRAMANMARAŞ", "URFA": "ŞANLIURFA",
                "ANTEP": "GAZİANTEP", "IZMIT": "KOCAELİ"}  # fmt: skip
 _ILCE_DISI = {"TURKIYE", "TR", "MAH", "MAHALLESI", "NO", "CAD", "SK", "SOKAK", "MERKEZI"}
+YURT_DISI = "Yurt Dışı"
+# Adresin sonundaki ulke adi (katlanmis) -> ekranda ulke. Il 'Yurt Disi', ilce ulke olur (2026-11-24 kullanici onayi).
+ULKELER = {
+    "ALMANYA": "Almanya", "ITALYA": "İtalya", "INGILTERE": "İngiltere", "FRANSA": "Fransa", "ROMANYA": "Romanya", "FAS": "Fas",
+    "SUDAN": "Sudan", "BOSNAHERSEK": "Bosna-Hersek", "HOLLANDA": "Hollanda", "BELCIKA": "Belçika", "AVUSTURYA": "Avusturya",
+    "ISVICRE": "İsviçre", "IRAK": "Irak", "IRAN": "İran", "AZERBAYCAN": "Azerbaycan", "GURCISTAN": "Gürcistan", "ABD": "ABD",
+    "AMERIKA": "ABD", "OZBEKISTAN": "Özbekistan", "KAZAKISTAN": "Kazakistan", "TURKMENISTAN": "Türkmenistan", "KIRGIZISTAN": "Kırgızistan",
+    "KKTC": "KKTC", "KIBRIS": "KKTC", "YUNANISTAN": "Yunanistan", "BULGARISTAN": "Bulgaristan", "RUSYA": "Rusya", "UKRAYNA": "Ukrayna",
+    "ISPANYA": "İspanya", "POLONYA": "Polonya", "MACARISTAN": "Macaristan", "SIRBISTAN": "Sırbistan", "KOSOVA": "Kosova",
+    "ARNAVUTLUK": "Arnavutluk", "MAKEDONYA": "Makedonya", "LIBYA": "Libya", "MISIR": "Mısır", "CEZAYIR": "Cezayir", "TUNUS": "Tunus",
+    "KATAR": "Katar", "BAE": "BAE", "SUUDIARABISTAN": "Suudi Arabistan", "KUVEYT": "Kuveyt", "GURCUSTAN": "Gürcistan",
+}  # fmt: skip
+# Veri merkezleri: adres girilmemis DC CI'lari lokasyon adindan ile baglanir. Il / ilce, ayni adi tasiyan ADRESLI CI'lardan cikarildi
+# (2026-11-24 envanter: Gebze DC 783 CI Kocaeli/Gebze, Temelli DC 357 Ankara/Sincan, Kartal DC Istanbul/Kartal, Sekerpinar Kocaeli/Cayirova).
+VERI_MERKEZLERI = (
+    ("TURKCELLGEBZEDC", "Gebze DC", "Kocaeli", "Gebze"), ("GEBZEDC", "Gebze DC", "Kocaeli", "Gebze"),
+    ("GEBZEDATACENTER", "Gebze DC", "Kocaeli", "Gebze"), ("DCGOSB", "Gebze DC", "Kocaeli", "Gebze"),
+    ("TEMELLIDC", "Temelli DC", "Ankara", "Sincan"), ("KARTALDC", "Kartal DC", "İstanbul", "Kartal"),
+    ("IZMIRDC", "İzmir DC", "İzmir", "Menderes"), ("BASAKSEHIRVERIMERKEZI", "Başakşehir Veri Merkezi", "İstanbul", "Başakşehir"),
+    ("SEKERPINAR", "Şekerpınar", "Kocaeli", "Çayırova"),
+)  # fmt: skip
 
 
 def pe_router(ci_adi: str) -> str:
@@ -105,7 +126,7 @@ def tr_baslik(metin: str) -> str:
 def il_ilce(adres: str) -> tuple[str, str]:
     """Acik adres / kurumsal lokasyon adi -> (il, ilce). Adreste gecen SON il adi il, ondan onceki kelime ilce ('Esenler/IST',
     'CAN / CANAKKALE' de okunur); il ilk kelimeyse ('Ankara Cankaya') ilce sonraki kelimedir. Il bulunamazsa ('', '').
-    Ilce adresteki yazilisiyla (Turkce harfler korunur) doner; bulunamazsa 'Merkez'."""
+    Ilce adresteki yazilisiyla (Turkce harfler korunur) doner; bulunamazsa '' (ekranda 'Belirsiz')."""
     ham = [k for k in re.split(r"[\s,;/\-().:]+", adres or "") if k]
     kelimeler = [_katla(k) for k in ham]
 
@@ -120,7 +141,7 @@ def il_ilce(adres: str) -> tuple[str, str]:
             once = [j for j in range(i - 1, max(-1, i - 3), -1) if ilce_mi(j)]
             sonra = [j for j in range(i + 1, min(len(kelimeler), i + 2)) if ilce_mi(j) and kelimeler[j] != "TURKIYE"]
             j = once[0] if once and i > 0 else (sonra[0] if sonra else (once[0] if once else None))
-            return tr_baslik(_IL_ADLARI[k]), (tr_baslik(ham[j]) if j is not None else "Merkez")
+            return tr_baslik(_IL_ADLARI[k]), (tr_baslik(ham[j]) if j is not None else "")
     return "", ""
 
 
@@ -135,23 +156,84 @@ def _kisa_adres(adres: str) -> str:
     return metin[:70] + ("…" if len(metin) > 70 else "")
 
 
+def ulke(metin: str) -> str:
+    """Adresin son kelimelerinde ulke adi varsa ulke (yurt disi adres), yoksa ''. Turkiye ili gecen adres yurt disi sayilmaz."""
+    kelimeler = [k for k in re.split(r"[^A-Z]+", _katla(metin or "")) if k]
+    for n in (2, 1):
+        if len(kelimeler) >= n and (u := ULKELER.get("".join(kelimeler[-n:]))):
+            return u
+    return ""
+
+
+def veri_merkezi(*adlar: str) -> tuple[str, str, str] | None:
+    """Lokasyon adlarindan veri merkezi -> (ad, il, ilce)."""
+    for ad in adlar:
+        sik = re.sub(r"[^A-Z0-9]", "", _katla(ad or ""))
+        for anahtar, dc, il, ilce in VERI_MERKEZLERI:
+            if sik and anahtar in sik:
+                return dc, il, ilce
+    return None
+
+
 def _saha(r: Any) -> dict:
+    """CI -> saha. Oncelik: acik adres (yurt disi adres -> il 'Yurt Disi', ilce ulke) > veri merkezi adi > kurumsal lokasyon adi >
+    lokasyon adi. Bulunamayan il / ilce 'Belirsiz' (ciz() ayni devre / IMT / saha kodlu kardes CI'dan tamamlar)."""
     a = r.attrs or {}
     adres = a.get("adres", "")
     kurumsal = " ".join(str(a.get("lokasyon") or "").split())
+    lok_adi = " ".join(str(a.get("lok_adi") or "").split())
+    anahtar = _saha_anahtari(adres)
     il, ilce = il_ilce(adres) if adres else ("", "")
-    if not il and kurumsal:
-        il, ilce = il_ilce(kurumsal)
-    anahtar = _saha_anahtari(adres) or ("L " + _katla(kurumsal) if kurumsal else "")
-    return {"anahtar": anahtar or "YOK", "il": il or BELIRSIZ, "ilce": ilce or BELIRSIZ, "adres": adres, "kurumsal": kurumsal}
+    if adres and not il and (u := ulke(adres)):
+        il, ilce = YURT_DISI, u
+    if not il and not adres and (dc := veri_merkezi(lok_adi, kurumsal)):
+        il, ilce, anahtar = dc[1], dc[2], "DC " + _katla(dc[0])
+        return {"anahtar": anahtar, "il": il, "ilce": ilce, "adres": "", "kurumsal": dc[0], "turetilen": ""}
+    for ad in (kurumsal, lok_adi):
+        if il:
+            break
+        if ad:
+            il, ilce = il_ilce(ad)
+            if not il and (u := ulke(ad)):
+                il, ilce = YURT_DISI, u
+    anahtar = anahtar or ("L " + _katla(kurumsal) if kurumsal else "")
+    return {"anahtar": anahtar or "YOK", "il": il or BELIRSIZ, "ilce": ilce or BELIRSIZ, "adres": adres, "kurumsal": kurumsal, "turetilen": ""}
+
+
+KARDES_ALANLARI = ("devre", "imt", "hatbasi")
+
+
+def kardesten_tamamla(satirlar: list[Any], bilgiler: dict[str, dict]) -> int:
+    """Ili belirsiz CI, ayni musteride ayni DEVRE_NO / IMT_ID / hat basi saha kodunu tasiyan ve ili bilinen CI'in sahasina katilir
+    (ornek: adresi bos CPE / Mobile Backup CI'i, adresli ana hat CI'i ile ayni devrede). Doner: tamamlanan CI sayisi."""
+    bilinen: dict[tuple[str, str, str], dict] = {}
+    for r in satirlar:
+        b = bilgiler[r.ci_no]
+        if b["il"] != BELIRSIZ:
+            for alan in KARDES_ALANLARI:
+                if deger := (r.attrs or {}).get(alan):
+                    bilinen.setdefault((r.customer_key, alan, deger), b)
+    n = 0
+    for r in satirlar:
+        if bilgiler[r.ci_no]["il"] != BELIRSIZ:
+            continue
+        for alan in KARDES_ALANLARI:
+            deger = (r.attrs or {}).get(alan)
+            if deger and (k := bilinen.get((r.customer_key, alan, deger))):
+                bilgiler[r.ci_no] = {**k, "turetilen": alan}
+                n += 1
+                break
+    return n
 
 
 def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN_FAZLA_SAHA, il: str = "", ilce: str = "",
         saha: str = "") -> dict:  # fmt: skip
     """satirlar: CustomerCi (aktif). Donus servis.analiz bicimi + 'adres_agaci', 'secim', 'gosterilen', 'eslesen'."""
     sahalar: dict[str, dict] = {}
+    bilgiler = {r.ci_no: _saha(r) for r in satirlar}
+    tamamlanan = kardesten_tamamla(satirlar, bilgiler)
     for r in satirlar:
-        bilgi = _saha(r)
+        bilgi = bilgiler[r.ci_no]
         s = sahalar.setdefault(bilgi["anahtar"], {**bilgi, "ciler": [], "lok_adlari": Counter()})
         s["ciler"].append(r)
         if (r.attrs or {}).get("lok_adi"):
@@ -270,6 +352,8 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
                      "devre_alt": "Devre tipi"},  # fmt: skip
         "satir": len(satirlar),
         "lokasyon": len(sahalar),
+        "belirsiz_ci": sum(1 for b in bilgiler.values() if b["il"] == BELIRSIZ),
+        "tamamlanan_ci": tamamlanan,
         "adres_agaci": adres_agaci,
         "secim": {"il": il, "ilce": ilce, "saha": saha},
         "gosterilen": len(secilen),
