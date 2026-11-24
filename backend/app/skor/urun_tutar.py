@@ -9,6 +9,9 @@ eslesen satir o istirake; eslesmeyen satir secilen musteriye yazilir (onay sorul
 gosterilir). Unvan: sirket ekleri (A.S., Tic., Hizmetleri...) yok sayilir ve paneldeki kisa ad dosyadaki tam unvanin BASINDA
 geciyorsa eslesir (en uzun ad kazanir).
 
+2026-11-24 (TopoMaker): AKTIF satirlarin devre no / acik adres / urun grubu listesi urun_tutar_ozet.circuits'e de yazilir; envanter
+cizimi CI'in DEVRE_NO'sunu bununla eslestirir (devre_anahtari). Fiyat satir bazinda saklanmaz.
+
 Ozet (yalniz AKTIF satirlar: durum ACT_*; DEACT_* haric):
   lokasyon_sayisi : devre numarasi atanmis farkli acik adres sayisi
   devre_sayisi    : farkli devre numarasi
@@ -193,6 +196,54 @@ def ozetle(satirlar):
             'eslesmeyen_gruplar': sorted(eslesmeyen)}
 
 
+AZAMI_DEVRE = 50_000
+
+
+def devre_anahtari(devre) -> str:
+    """Devre no karsilastirma anahtari (Urun-Tutar ve envanter ayni kuralla): harf / rakam disi silinir, buyuk harf; yalniz
+    rakamsa bastaki sifirlar ve GSM numarasindaki 90 ulke kodu atilir ('0655_000003' = '655000003', '905316047426' = '5316047426')."""
+    if isinstance(devre, float) and devre.is_integer():
+        devre = int(devre)
+    k = re.sub(r'[^0-9A-Z]', '', str(devre or '').upper())
+    if k.isdigit():
+        k = k.lstrip('0')
+        if len(k) == 12 and k.startswith('90'):
+            k = k[2:]
+    return k
+
+
+def devreleri(satirlar) -> list[dict]:
+    """TopoMaker eslesmesi icin AKTIF ve devre no'lu satirlar: [{'devre', 'adres', 'grup'}] (ayni devre + adres bir kez)."""
+    sonuc, gorulen = [], set()
+    for s in satirlar:
+        if not aktif_mi(s.get('durum')):
+            continue
+        devre = ' '.join(str(s.get('devre') or '').split())[:60]
+        if not devre_anahtari(devre):
+            continue
+        adres = ' '.join(str(s.get('adres') or '').split())[:300]
+        if (devre, adres) in gorulen:
+            continue
+        gorulen.add((devre, adres))
+        sonuc.append({'devre': devre, 'adres': adres, 'grup': ' '.join(str(s.get('grup') or '').split())[:80]})
+        if len(sonuc) >= AZAMI_DEVRE:
+            break
+    return sonuc
+
+
+def devre_haritasi(db: Session, musteri_idleri: list[int]) -> dict[str, dict]:
+    """TopoMaker: ailenin Urun-Tutar devreleri {devre_anahtari: {'devre', 'adres', 'grup'}} (adresli kayit adressizi ezer)."""
+    harita: dict[str, dict] = {}
+    if not musteri_idleri:
+        return harita
+    for (liste,) in db.execute(select(UrunTutarOzet.circuits).where(UrunTutarOzet.customer_id.in_(musteri_idleri))):
+        for d in liste or []:
+            k = devre_anahtari(d.get('devre'))
+            if k and (k not in harita or (d.get('adres') and not harita[k].get('adres'))):
+                harita[k] = d
+    return harita
+
+
 def _cekirdek(ad):
     """'DOGUS Teknoloji Hiz. ve Tic. A.S.' -> 'dogus teknoloji'."""
     kelimeler = re.sub(r'[^a-z0-9]+', ' ', _normal(ad)).split()
@@ -239,23 +290,26 @@ def ice_aktar(db: Session, musteri: Customer, icerik: bytes) -> dict:
             eslesen += 1
         dagitim.setdefault((hedef or musteri).id, []).append(s)
         unvanlar[(str(s.get('musteri_adi') or '').strip(), _numara(s.get('musteri_no')))] += 1
-    return {'ozetler': {cid: ozetle(liste) for cid, liste in dagitim.items()}, 'eslesen': eslesen,
+    return {'ozetler': {cid: ozetle(liste) for cid, liste in dagitim.items()},
+            'devreler': {cid: devreleri(liste) for cid, liste in dagitim.items()}, 'eslesen': eslesen,
             'kart_musterisine': len(dagitim.get(musteri.id, [])),
             'dosyadaki': [{'ad': ad, 'musteri_no': no, 'satir': n} for (ad, no), n in unvanlar.most_common(5)],
             'dosyadaki_adet': len(unvanlar)}
 
 
 # --- depo (uretim sla_deposu.urun_tutar_kaydet / urun_tutar_hepsi) ------------------------------------------------------
-def kaydet(db: Session, ozetler: dict[int, dict], dosya: str, yukleyen: str) -> str | None:
+def kaydet(db: Session, ozetler: dict[int, dict], dosya: str, yukleyen: str, devreler: dict[int, list] | None = None) -> str | None:
     """Musteri basina son yukleme degistirir (commit cagiranda). Donus: yazilan uploaded_at (ISO; geri alma karsilastirmasi)."""
     zaman = simdi()
+    devreler = devreler or {}
     mevcut = {s.customer_id: s for s in db.scalars(select(UrunTutarOzet).where(UrunTutarOzet.customer_id.in_([int(c) for c in ozetler])))}
     for cid, ozet in ozetler.items():
         satir = mevcut.get(int(cid))
+        liste = devreler.get(cid) or []
         if satir is None:
-            db.add(UrunTutarOzet(customer_id=int(cid), summary=ozet, file_name=dosya[:200], uploaded_by=yukleyen[:120], uploaded_at=zaman))
+            db.add(UrunTutarOzet(customer_id=int(cid), summary=ozet, circuits=liste, file_name=dosya[:200], uploaded_by=yukleyen[:120], uploaded_at=zaman))
         else:
-            satir.summary, satir.file_name, satir.uploaded_by, satir.uploaded_at = ozet, dosya[:200], yukleyen[:120], zaman
+            satir.summary, satir.circuits, satir.file_name, satir.uploaded_by, satir.uploaded_at = ozet, liste, dosya[:200], yukleyen[:120], zaman
     db.flush()
     return iso(zaman)
 
@@ -282,7 +336,10 @@ def yukle(db: Session, musteri_id: int, icerik: bytes, dosya: str, yukleyen: str
         raise DosyaHatasi('Excel dosyası seçilmedi.')
     sonuc = ice_aktar(db, musteri, icerik)
     onceki = hepsi(db, [int(c) for c in sonuc['ozetler']])
-    zaman = kaydet(db, sonuc['ozetler'], dosya, yukleyen)
+    onceki_devre = dict(db.execute(select(UrunTutarOzet.customer_id, UrunTutarOzet.circuits).where(UrunTutarOzet.customer_id.in_(list(onceki)))).all()) if onceki else {}
+    for cid, k in onceki.items():
+        k['devreler'] = onceki_devre.get(cid) or []
+    zaman = kaydet(db, sonuc['ozetler'], dosya, yukleyen, sonuc['devreler'])
     ad = dict(db.execute(select(Customer.id, Customer.name).where(Customer.id.in_(list(sonuc['ozetler'])))).all())
     # 2026-11-01: yukleme geri alinabilir (Import > Ice aktarma gecmisi); onceki ozet varsa ona doner, yoksa ozet silinir.
     ice_aktarma_gecmisi.kaydet(

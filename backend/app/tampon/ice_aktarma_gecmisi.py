@@ -6,7 +6,7 @@ yuklemeler (dagitim geri alma) kendi geri almalarina sahiptir. Kural digerleriyl
 DEGISTIRILMEMIS kayitlar geri doner (yazildigi andaki updated_at / uploaded_at hala ayniysa); degisenler korunur ve sayilir.
 
 record bicimi:
-  urun_tutar   : {'musteriler': [{'id', 'zaman' (yeni uploaded_at), 'onceki': None | {'ozet', 'dosya', 'yukleyen', 'zaman'}}]}
+  urun_tutar   : {'musteriler': [{'id', 'zaman' (yeni uploaded_at), 'onceki': None | {'ozet', 'dosya', 'yukleyen', 'zaman', 'devreler'}}]}
   gelir_uretim : {'kayitlar': [{'id', 'zaman' (updated_at)}]}
   proje        : {'kayitlar': [{'id', 'zaman' (updated_at)}]}
 """
@@ -59,6 +59,7 @@ def _urun_tutar(db: Session, kayit: dict) -> tuple[int, int]:
         onceki = g.get("onceki")
         if onceki:
             satir.summary, satir.file_name, satir.uploaded_by = onceki.get("ozet") or {}, onceki.get("dosya") or "", onceki.get("yukleyen") or ""
+            satir.circuits = onceki.get("devreler") or []  # 2026-11-24 oncesi kayitlarda devre listesi yoktu
             satir.uploaded_at = datetime.fromisoformat(onceki["zaman"]) if onceki.get("zaman") else None
         else:
             db.delete(satir)

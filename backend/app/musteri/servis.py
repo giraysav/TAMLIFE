@@ -33,6 +33,7 @@ from app.models import (
     Report,
     ScoreApprovalRequest,
     SmsRevenue,
+    UrunTutarOzet,
     UserNotification,
 )
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
@@ -359,15 +360,22 @@ def rapor_bekleniyor_mu(musteri: Customer) -> bool:
     return rapor_birimi_mi(musteri) and not musteri.report_exempt
 
 
-def envanter_cileri(db: Session, user: Principal, musteri_id: int) -> tuple[Customer, list[CustomerCi], set[str]]:
-    """TopoMaker envanter cizimi: kart ve istiraklerinin AKTIF CI'lari + kartta kritik isaretli CI no'lari."""
+def envanter_cileri(db: Session, user: Principal, musteri_id: int) -> tuple[Customer, list[CustomerCi], dict[str, Any]]:
+    """TopoMaker envanter cizimi: kart ve istiraklerinin AKTIF CI'lari + baglam: kartta kritik isaretli CI no'lari, kartta
+    duzeltilmis lokasyon adlari, ailenin Urun-Tutar devreleri (devre no -> acik adres / urun grubu) ve yukleme var mi."""
+    from app.skor import urun_tutar
+
     musteri = musteri_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
+    aile = [musteri.id, *(c.id for c in istirakler)]
+    ut_yuklu = db.scalar(select(func.count()).select_from(UrunTutarOzet).where(UrunTutarOzet.customer_id.in_(aile))) or 0
+    baglam: dict[str, Any] = {"kritik": envanter._kritikler(db, musteri.id), "lokasyon": envanter.lokasyon_duzeltmeleri(db, musteri.id),
+                              "ut_devre": urun_tutar.devre_haritasi(db, aile), "ut_yuklu": bool(ut_yuklu)}  # fmt: skip
     anahtarlar = envanter._anahtarlar([musteri, *istirakler])
     if not anahtarlar:
-        return musteri, [], set()
+        return musteri, [], baglam
     satirlar = list(db.scalars(select(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar), CustomerCi.status == "ACTIVE")))
-    return musteri, satirlar, envanter._kritikler(db, musteri.id)
+    return musteri, satirlar, baglam
 
 
 def kritik_ci_listesi(db: Session, user: Principal, musteri_id: int, metin: str = "") -> dict:
@@ -382,6 +390,13 @@ def kritik_ci_isaretle(db: Session, user: Principal, musteri_id: int, ci_no: str
     musteri = musteri_yaz_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
     return envanter.isaretle(db, musteri, [musteri, *istirakler], ci_no, kritik, user.username)
+
+
+def kritik_ci_lokasyon(db: Session, user: Principal, musteri_id: int, ci_no: str, ad: str) -> dict:
+    """CI listesindeki Lokasyon adi duzeltmesi (2026-11-24); yalniz karti duzenleyebilen."""
+    musteri = musteri_yaz_getir(db, user, musteri_id)
+    istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
+    return envanter.lokasyon_ata(db, musteri, [musteri, *istirakler], ci_no, ad, user.username)
 
 
 def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] | None) -> dict:

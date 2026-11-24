@@ -184,12 +184,22 @@ def _anahtarlar(musteriler: list[Customer]) -> list[str]:
 def _basliklar(coklu: bool) -> list[str]:
     return ([m("Müşteri No", "Customer No")] if coklu else []) + [
         m("CI adı", "CI name"), m("Devre No", "Circuit No"), m("Servis", "Service"), m("Durum", "Status"), m("Bant genişliği", "Bandwidth"), "IMT ID",
-        m("Lokasyon", "Location"), m("Altyapı", "Infrastructure"), m("Hizmet saati", "Service hours"), m("Kurulum tarihi", "Installed"),
+        m("Lokasyon", "Location"), m("Lokasyon adı", "Location name"), m("Altyapı", "Infrastructure"), m("Hizmet saati", "Service hours"),
+        m("Kurulum tarihi", "Installed"),
     ]  # fmt: skip
+
+
+LOKASYON_ADI_SUTUNU = 7  # _basliklar(False) icinde 'Lokasyon adi' sirasi (coklu kartta +1)
 
 
 def _kritikler(db: Session, musteri_id: int) -> set[str]:
     return set(db.scalars(select(CustomerCiFlag.ci_no).where(CustomerCiFlag.customer_id == musteri_id, CustomerCiFlag.critical.is_(True))))
+
+
+def lokasyon_duzeltmeleri(db: Session, musteri_id: int) -> dict[str, str]:
+    """Kartta elle duzeltilmis CI lokasyon adlari {ci_no: ad} (TopoMaker sahasi ve CI listesi bunu kullanir)."""
+    return dict(db.execute(select(CustomerCiFlag.ci_no, CustomerCiFlag.location_name).where(
+        CustomerCiFlag.customer_id == musteri_id, CustomerCiFlag.location_name.is_not(None), CustomerCiFlag.location_name != "")).all())
 
 
 def _ozet(db: Session, anahtarlar: list[str], kritik: int = 0) -> tuple[int, str]:
@@ -224,6 +234,7 @@ def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: s
         return {"basliklar": _basliklar(False), "satirlar": [], "kayitlar": [], "toplam": 0, "eslesen": 0,
                 "ozet": m("Kartta Müşteri No yok.", "The card has no Customer No."), **etiket}  # fmt: skip
     kritik = _kritikler(db, musteri_id)
+    duzeltme = lokasyon_duzeltmeleri(db, musteri_id)
     kayitlar = db.scalars(select(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar))).all()
     kayitlar = sorted(kayitlar, key=lambda r: (r.ci_no not in kritik, SIRA.get(r.status.upper(), 9), r.service, r.ci_name))
     parcalar = [p for p in " ".join((metin or "").split())[:200].casefold().split(" ") if p]
@@ -233,7 +244,7 @@ def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: s
         a = r.attrs or {}
         hucreler = ([r.customer_key] if coklu else []) + [
             r.ci_name, a.get("devre", ""), r.service, _durum_adi(r.status), a.get("bw", ""), a.get("imt", ""), a.get("lokasyon", ""),
-            _altyapi(a), a.get("saat", ""), (a.get("kurulum", "") or "")[:10],
+            duzeltme.get(r.ci_no) or a.get("lok_adi", ""), _altyapi(a), a.get("saat", ""), (a.get("kurulum", "") or "")[:10],
         ]  # fmt: skip
         k = r.ci_no in kritik
         if parcalar:
@@ -242,10 +253,14 @@ def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: s
                 continue
         eslesen += 1
         if len(sonuc) < EN_COK_SATIR:
-            sonuc.append({"ci": r.ci_no, "kritik": k, "hucreler": hucreler})
+            sonuc.append({"ci": r.ci_no, "kritik": k, "hucreler": hucreler, "lokasyon_duzeltildi": r.ci_no in duzeltme,
+                          "lokasyon_ilk": a.get("lok_adi", "")})  # fmt: skip
     toplam, ozet = _ozet(db, anahtarlar, len(kritik))
     return {"basliklar": _basliklar(coklu), "satirlar": [x["hucreler"] for x in sonuc], "kayitlar": sonuc, "toplam": toplam,
-            "eslesen": eslesen, "ozet": ozet, **etiket}  # fmt: skip
+            "eslesen": eslesen, "ozet": ozet, "lokasyon_sutun": LOKASYON_ADI_SUTUNU + (1 if coklu else 0),
+            "lokasyon_ipucu": m("Lokasyon adını düzeltin (boş bırakılırsa envanterdeki ad kullanılır). TopoMaker aynı adlı CI'ları tek sahada çizer.",
+                                "Correct the location name (empty = inventory name). TopoMaker draws CIs with the same name as one site."),
+            **etiket}  # fmt: skip
 
 
 def isaretle(db: Session, musteri: Customer, musteriler: list[Customer], ci_no: str, kritik: bool, kullanici: str) -> dict[str, Any]:
@@ -262,3 +277,24 @@ def isaretle(db: Session, musteri: Customer, musteriler: list[Customer], ci_no: 
         db.add(k)
     k.critical, k.updated_by, k.updated_at = bool(kritik), kullanici, simdi()
     return {"ci": ci_no, "kritik": bool(kritik)}
+
+
+def lokasyon_ata(db: Session, musteri: Customer, musteriler: list[Customer], ci_no: str, ad: str, kullanici: str) -> dict[str, Any]:
+    """CI'in lokasyon adini kartta duzeltir; bos ya da envanterdeki adla ayni ise duzeltme kalkar (envanter degeri kullanilir)."""
+    from app.musteri.servis import MusteriHata
+
+    ci_no = (ci_no or "").strip()[:40]
+    ad = " ".join((ad or "").split())[:300]
+    r = db.scalar(select(CustomerCi).where(CustomerCi.ci_no == ci_no, CustomerCi.customer_key.in_(_anahtarlar(musteriler))).limit(1))
+    if not ci_no or r is None:
+        raise MusteriHata(404, m("CI bu müşterinin envanterinde bulunamadı.", "CI not found in this customer's inventory."))
+    ilk = (r.attrs or {}).get("lok_adi", "")
+    yeni = ad if ad and ad != ilk else None
+    k = db.get(CustomerCiFlag, (musteri.id, ci_no))
+    if k is None:
+        if yeni is None:
+            return {"ci": ci_no, "lokasyon": ilk, "duzeltildi": False}
+        k = CustomerCiFlag(customer_id=musteri.id, ci_no=ci_no, critical=False)
+        db.add(k)
+    k.location_name, k.updated_by, k.updated_at = yeni, kullanici, simdi()
+    return {"ci": ci_no, "lokasyon": yeni or ilk, "duzeltildi": yeni is not None}

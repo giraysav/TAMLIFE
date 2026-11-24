@@ -2,21 +2,24 @@
 olmadigi icin rol gorunumu duzenleyicisinde secilemez, bu yuzden kapi 'musteri'dir. Dosya saklanmaz.
 
   PUT /topoloji/analiz?dosya=  -> ham CSV/XLSX govdesi (en fazla 10 MB) -> dugum/kenar/SPoF/il dagilimi
-  GET /topoloji/envanter?musteri=&il=&ilce=&saha=&ara=&en_fazla= -> kart envanterindeki aktif CI'lardan ayni bicimde cizim (topoloji/envanter.py)
+  GET /topoloji/envanter?musteri=&il=&ilce=&saha=&ara=&en_fazla=&kural= -> kart envanterindeki aktif CI'lardan ayni bicimde cizim (topoloji/envanter.py)
+  PUT /topoloji/kurallar          -> cizim kural seti (CI adi onekleri; yalniz yonetici; topoloji/kurallar.py)
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.audit import audit_log
+from app.authz import is_admin
 from app.db import get_db
 from app.erisim import Erisim, musteri_alani_erisim
 from app.musteri import servis as musteri_servis
 from app.ortak import govde_oku, ok
-from app.topoloji import envanter, servis
+from app.topoloji import envanter, kurallar, servis
 
 router = APIRouter(prefix="/api/v1/topoloji", tags=["topoloji"])
 topoloji_erisim = musteri_alani_erisim()
@@ -51,11 +54,35 @@ def envanter_topolojisi(
     il: str = Query(default="", max_length=60),
     ilce: str = Query(default="", max_length=60),
     saha: str = Query(default="", max_length=400),
+    kural: str = Query(default="", max_length=2000),
     e: Erisim = Depends(topoloji_erisim),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Kart (ve istirakleri) envanterindeki aktif CI'lardan acik adrese gore il > ilce > saha secimiyle topoloji (2026-11-24)."""
-    kayit, satirlar, kritik = musteri_servis.envanter_cileri(db, e.user, musteri)
-    sonuc = envanter.ciz(satirlar, kritik, ara, en_fazla, il, ilce, saha)
+    """Kart (ve istirakleri) envanterindeki aktif CI'lardan acik adrese gore il > ilce > saha secimiyle topoloji (2026-11-24).
+    kural: cizilecek CI adi onekleri ('nw_li,nw_mbl,diger'; bos = kural setindeki varsayilan, '-' = hicbiri)."""
+    kayit, satirlar, baglam = musteri_servis.envanter_cileri(db, e.user, musteri)
+    sonuc = envanter.ciz(satirlar, baglam, ara, en_fazla, il, ilce, saha, kurallar.oku(db), kural, is_admin(e.user))
     sonuc["musteri"] = {"id": kayit.id, "unvan": kayit.name}
     return ok(sonuc)
+
+
+class KuralGovde(BaseModel):
+    onek: str = Field(min_length=1, max_length=60)
+    ad: str = Field(default="", max_length=60)
+    ciz: bool = True
+
+
+class KuralSetiGovde(BaseModel):
+    kurallar: list[KuralGovde] = Field(max_length=kurallar.AZAMI_KURAL)
+
+
+@router.put("/kurallar")
+def kural_seti_kaydet(body: KuralSetiGovde, e: Erisim = Depends(topoloji_erisim), db: Session = Depends(get_db)) -> dict:
+    """Cizim kural seti (CI adi onekleri + varsayilan secim); yalniz yonetici."""
+    if not is_admin(e.user):
+        raise servis.TopolojiHata(403, "Çizim kurallarını yalnız yönetici değiştirebilir.")
+    sonuc = kurallar.kaydet(db, [k.model_dump() for k in body.kurallar], e.user.username)
+    db.commit()
+    audit_log.remember(actor=e.user.username, action="topoloji.kurallar", outcome="allow", module_key="topoloji",
+                       detail=",".join(f"{k['onek']}{'' if k['ciz'] else '(-)'}" for k in sonuc)[:500])  # fmt: skip
+    return ok({"kurallar": sonuc})

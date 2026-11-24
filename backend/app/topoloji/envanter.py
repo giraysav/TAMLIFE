@@ -17,6 +17,13 @@ Cizim dosya analiziyle (servis.analiz) AYNI bicimde doner, istemcideki SVG cizim
   Yedek = Mobile Backup servisi / urunu ya da YEDEKLILIK_KATEGORISI dolu.
   SPoF (tahmin): tek ana devreli ve yedeksiz saha.
 Kaynak adi ekranda yazilmaz ("envanter").
+
+2026-11-24 kullanici (3) "cizme kural seti":
+  KURAL     = CI adi oneki (topoloji/kurallar.py; 'nw_li', 'nw_mbl'...). Yalniz secili kurallardaki CI'lar cizilir; sayilar ekranda.
+  URUN-TUTAR= CI DEVRE_NO'su ailenin Urun-Tutar aktif devre no'lariyla eslesir (skor.urun_tutar.devre_anahtari). Adressiz CI'in
+              sahasi Urun-Tutar acik adresinden; iki adres farkli ildeyse CI ipucunda uyari. Eslesme sayilari 'urun_tutar'da.
+  LOKASYON  = Kartta elle duzeltilen lokasyon adi (customer_ci_flag.location_name) en yuksek onceliklidir: ayni ilde ayni adli
+              CI'lar tek saha, baslik bu ad.
 """
 
 from __future__ import annotations
@@ -25,6 +32,8 @@ import re
 from collections import Counter
 from typing import Any
 
+from app.skor.urun_tutar import devre_anahtari
+from app.topoloji import kurallar
 from app.topoloji.servis import _KOORDINAT, BULUT, KABLO_RENKLERI, _katla
 
 EN_FAZLA_SAHA = 25
@@ -175,11 +184,15 @@ def veri_merkezi(*adlar: str) -> tuple[str, str, str] | None:
     return None
 
 
-def _saha(r: Any) -> dict:
-    """CI -> saha. Oncelik: acik adres (yurt disi adres -> il 'Yurt Disi', ilce ulke) > veri merkezi adi > kurumsal lokasyon adi >
-    lokasyon adi. Bulunamayan il / ilce 'Belirsiz' (ciz() ayni devre / IMT / saha kodlu kardes CI'dan tamamlar)."""
+def _saha(r: Any, ut: dict | None = None) -> dict:
+    """CI -> saha. Oncelik: acik adres (yurt disi adres -> il 'Yurt Disi', ilce ulke) > Urun-Tutar'da ayni devre no'nun acik
+    adresi (ut) > veri merkezi adi > kurumsal lokasyon adi > lokasyon adi. Bulunamayan il / ilce 'Belirsiz' (ciz() ayni devre /
+    IMT / saha kodlu kardes CI'dan tamamlar)."""
     a = r.attrs or {}
     adres = a.get("adres", "")
+    turetilen = ""
+    if not adres and ut and ut.get("adres"):
+        adres, turetilen = ut["adres"], "urun_tutar"
     kurumsal = " ".join(str(a.get("lokasyon") or "").split())
     lok_adi = " ".join(str(a.get("lok_adi") or "").split())
     anahtar = _saha_anahtari(adres)
@@ -197,7 +210,30 @@ def _saha(r: Any) -> dict:
             if not il and (u := ulke(ad)):
                 il, ilce = YURT_DISI, u
     anahtar = anahtar or ("L " + _katla(kurumsal) if kurumsal else "")
-    return {"anahtar": anahtar or "YOK", "il": il or BELIRSIZ, "ilce": ilce or BELIRSIZ, "adres": adres, "kurumsal": kurumsal, "turetilen": ""}
+    return {"anahtar": anahtar or "YOK", "il": il or BELIRSIZ, "ilce": ilce or BELIRSIZ, "adres": adres, "kurumsal": kurumsal,
+            "turetilen": turetilen}  # fmt: skip
+
+
+def duzeltmeyi_uygula(bilgi: dict, ad: str) -> dict:
+    """Kartta elle verilen lokasyon adi: ayni ilde ayni adi tasiyan CI'lar TEK saha olur, baslik bu addir. Adda il gecerse il / ilce
+    addan ('Ankara Cankaya Sube'), gecmezse CI'in adres / kardes bilgisinden gelir."""
+    il, ilce = il_ilce(ad)
+    if not il:
+        il, ilce = bilgi["il"], bilgi["ilce"]
+    ilce = ilce or BELIRSIZ
+    return {**bilgi, "il": il, "ilce": ilce, "anahtar": f"E {_katla(il)}|{_katla(ad)}", "duzeltme": ad}
+
+
+def ut_karsilastir(r: Any, ut: dict | None) -> str:
+    """Urun-Tutar eslesmesi: '' (devre Urun-Tutar'da yok), 'adres' (CI adressiz, adres Urun-Tutar'dan), 'uyumlu' (iki adresin ili
+    ayni ya da il okunamadi), 'farkli' (iki adres farkli ilde)."""
+    if not ut:
+        return ""
+    adres = (r.attrs or {}).get("adres", "")
+    if not adres:
+        return "adres" if ut.get("adres") else "uyumlu"
+    il1, il2 = il_ilce(adres)[0], il_ilce(ut.get("adres", ""))[0]
+    return "farkli" if il1 and il2 and il1 != il2 else "uyumlu"
 
 
 KARDES_ALANLARI = ("devre", "imt", "hatbasi")
@@ -226,18 +262,42 @@ def kardesten_tamamla(satirlar: list[Any], bilgiler: dict[str, dict]) -> int:
     return n
 
 
-def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN_FAZLA_SAHA, il: str = "", ilce: str = "",
-        saha: str = "") -> dict:  # fmt: skip
-    """satirlar: CustomerCi (aktif). Donus servis.analiz bicimi + 'adres_agaci', 'secim', 'gosterilen', 'eslesen'."""
-    sahalar: dict[str, dict] = {}
-    bilgiler = {r.ci_no: _saha(r) for r in satirlar}
+def ciz(satirlar: list[Any], baglam: dict | None = None, ara: str = "", en_fazla: int = EN_FAZLA_SAHA, il: str = "", ilce: str = "",
+        saha: str = "", kural_seti: list[dict] | None = None, kural: str = "", kural_duzenler: bool = False) -> dict:  # fmt: skip
+    """satirlar: CustomerCi (aktif). baglam: musteri.servis.envanter_cileri ('kritik', 'lokasyon', 'ut_devre', 'ut_yuklu').
+    kural_seti / kural: CI adi oneki kurallari ve istekteki secim (kurallar.secim_coz). Donus servis.analiz bicimi + 'adres_agaci',
+    'secim', 'gosterilen', 'eslesen', 'kurallar', 'urun_tutar'."""
+    baglam = baglam or {}
+    kritik: set[str] = baglam.get("kritik") or set()
+    duzeltme: dict[str, str] = baglam.get("lokasyon") or {}
+    ut_devre: dict[str, dict] = baglam.get("ut_devre") or {}
+    kural_seti = kural_seti if kural_seti is not None else kurallar.varsayilan()
+    onekler = sorted((k["onek"] for k in kural_seti), key=len, reverse=True)
+    secili = kurallar.secim_coz(kural, kural_seti)
+
+    # Urun-Tutar devre eslesmesi (devre no anahtari) ve saha bilgisi TUM CI'lar icin (kardes tamamlama filtreden once)
+    ut_ci = {r.ci_no: ut_devre.get(devre_anahtari((r.attrs or {}).get("devre"))) for r in satirlar} if ut_devre else {}
+    bilgiler = {r.ci_no: _saha(r, ut_ci.get(r.ci_no)) for r in satirlar}
     tamamlanan = kardesten_tamamla(satirlar, bilgiler)
+    for ci_no, ad in duzeltme.items():
+        if ci_no in bilgiler:
+            bilgiler[ci_no] = duzeltmeyi_uygula(bilgiler[ci_no], ad)
+    ut_durum = {r.ci_no: ut_karsilastir(r, ut_ci.get(r.ci_no)) for r in satirlar} if ut_devre else {}
+    eslesen_ut = {devre_anahtari((r.attrs or {}).get("devre")) for r in satirlar if ut_ci.get(r.ci_no)}
+
+    # Kural filtresi: CI adi oneki
+    sinif = {r.ci_no: kurallar.sinifla(r.ci_name, onekler) for r in satirlar}
+    kural_sayilari = Counter(sinif.values())
+    tum_satirlar = satirlar
+    satirlar = [r for r in satirlar if sinif[r.ci_no] in secili]
+
+    sahalar: dict[str, dict] = {}
     for r in satirlar:
         bilgi = bilgiler[r.ci_no]
         s = sahalar.setdefault(bilgi["anahtar"], {**bilgi, "ciler": [], "lok_adlari": Counter()})
         s["ciler"].append(r)
-        if (r.attrs or {}).get("lok_adi"):
-            s["lok_adlari"][(r.attrs or {})["lok_adi"]] += 1
+        if lok := (bilgi.get("duzeltme") or (r.attrs or {}).get("lok_adi")):
+            s["lok_adlari"][lok] += 1
     # Ilce yazilisi tek: ayni ilce ('PENDIK' -> 'Pendık', 'Pendik') katlanmis anahtarla birlesir, en sik yazilis gosterilir
     yazilis: dict[tuple[str, str], Counter] = {}
     for s in sahalar.values():
@@ -261,7 +321,9 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
             ilceler.append({**c, "sahalar": sorted(c["sahalar"], key=lambda x: (-x["ci"], x["baslik"]))[:AZAMI_SAHA]})
         adres_agaci.append({"il": i["il"], "ci": i["ci"], "ilceler": ilceler})
 
-    # Secim: il verilmemisse en cok CI'li il (Belirsiz haric, varsa)
+    # Secim: il verilmemisse (ya da kural degisince secili il kalmadiysa) en cok CI'li il (Belirsiz haric, varsa)
+    if il and not any(_katla(x["il"]) == _katla(il) for x in adres_agaci):
+        il = ilce = saha = ""
     if not il and adres_agaci:
         il = next((x["il"] for x in adres_agaci if x["il"] != BELIRSIZ), adres_agaci[0]["il"])
     parcalar = [_katla(p) for p in (ara or "").split() if p][:10]
@@ -275,7 +337,8 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
             return False
         if not parcalar:
             return True
-        metin = _katla(" ".join([s["baslik"], s["adres"], s["kurumsal"]] + [f"{r.ci_name} {r.service} {(r.attrs or {}).get('devre', '')}" for r in s["ciler"]]))
+        metin = _katla(" ".join([s["baslik"], s["adres"], s["kurumsal"]] + [
+            f"{r.ci_name} {r.service} {(r.attrs or {}).get('devre', '')} {(ut_ci.get(r.ci_no) or {}).get('adres', '')}" for r in s["ciler"]]))
         return all(p in metin for p in parcalar)
 
     eslesen = sorted((s for s in sahalar.values() if uyar(s)), key=lambda s: (-len(s["ciler"]), s["baslik"]))
@@ -304,6 +367,10 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
             ci_id = f"CI_{r.ci_no}"
             etiket, kod = kisa_servis(r.service)
             ayrinti = " · ".join(x for x in (r.ci_name, a.get("urun", ""), a.get("model", ""), a.get("bw", "")) if x and x != "CIHAZ_MODEL")
+            if ut := ut_ci.get(r.ci_no):
+                ayrinti += "\nÜrün-Tutar: " + " · ".join(x for x in (ut.get("grup", ""), ut.get("adres", "")) if x)
+                if ut_durum.get(r.ci_no) == "farkli":
+                    ayrinti += "\n⚠ Envanter adresi ile Ürün-Tutar adresi farklı ilde"
             dugumler[ci_id] = {"id": ci_id, "tur": "router", "kisa": kod, "etiket": etiket, "lokasyon": lok, "il": il_adi,
                                "ci": ayrinti, "kritik": r.ci_no in kritik}  # fmt: skip
             ci_sayisi += 1
@@ -340,6 +407,22 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
         uyarilar.append(f"Çizim sınırı (saha başına {SAHA_BASI_CI}, toplam {AZAMI_CI} CI) nedeniyle {gizlenen} CI gösterilmedi.")
     if spof:
         uyarilar.append("Tek devre (SPoF) tespiti açık adres ve devre no ile yapılan bir tahmindir.")
+    ut_ozet = {
+        "yuklu": bool(baglam.get("ut_yuklu")),
+        "devre": len(ut_devre),
+        "eslesen_devre": len(eslesen_ut),
+        "eslesen_ci": sum(1 for v in ut_ci.values() if v),
+        "adres_tamamlanan": sum(1 for v in ut_durum.values() if v == "adres"),
+        "il_farkli": sum(1 for v in ut_durum.values() if v == "farkli"),
+    }
+    ut_ozet["envanterde_yok"] = ut_ozet["devre"] - ut_ozet["eslesen_devre"]
+    if baglam.get("ut_yuklu") and not ut_devre:
+        uyarilar.append("Ürün-Tutar dosyası devre listesi saklanmadan önce yüklenmiş; devre no / açık adres eşleşmesi için dosyayı yeniden yükleyin.")
+    elif ut_ozet["il_farkli"]:
+        uyarilar.append(f"{ut_ozet['il_farkli']} CI'da envanter adresi ile Ürün-Tutar adresi farklı ilde (CI ipucunda gösterilir).")
+    kural_listesi = [{**k, "ci": kural_sayilari.get(k["onek"], 0), "secili": k["onek"] in secili, "varsayilan": k["ciz"]} for k in kural_seti]
+    kural_listesi.append({"onek": kurallar.DIGER, "ad": "Diğer", "ciz": True, "ci": kural_sayilari.get(kurallar.DIGER, 0),
+                          "secili": kurallar.DIGER in secili, "varsayilan": True, "sabit": True})  # fmt: skip
     return {
         "kaynak": "envanter",
         "spof": bool(spof),
@@ -350,12 +433,17 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
         "konumsuz_iller": [],
         "kolonlar": {"loc": "Açık adres", "il": "İl / İlçe", "ci": "CI adı", "c_no_primary": "Devre No", "bb_host": "BB router",
                      "devre_alt": "Devre tipi"},  # fmt: skip
-        "satir": len(satirlar),
+        "satir": len(tum_satirlar),
+        "cizime_giren": len(satirlar),
         "lokasyon": len(sahalar),
-        "belirsiz_ci": sum(1 for b in bilgiler.values() if b["il"] == BELIRSIZ),
+        "belirsiz_ci": sum(1 for r in satirlar if bilgiler[r.ci_no]["il"] == BELIRSIZ),
         "tamamlanan_ci": tamamlanan,
+        "duzeltilen_ci": sum(1 for r in tum_satirlar if r.ci_no in duzeltme),
         "adres_agaci": adres_agaci,
-        "secim": {"il": il, "ilce": ilce, "saha": saha},
+        "secim": {"il": il, "ilce": ilce, "saha": saha, "kural": ",".join(sorted(secili)) or "-"},
+        "kurallar": kural_listesi,
+        "kural_duzenler": kural_duzenler,
+        "urun_tutar": ut_ozet,
         "gosterilen": len(secilen),
         "eslesen": len(eslesen),
         "degerlendirme": "riskli" if spof else "sinirli",

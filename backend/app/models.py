@@ -284,12 +284,15 @@ class CustomerCi(Base):
 
 
 class CustomerCiFlag(Base):
-    """Kartta kullanicinin isaretledigi kritik CI'lar (EVET/HAYIR). Envanter (customer_ci) yenilense de korunur; anahtar CMDB CI no."""
+    """Kartta kullanicinin CI isaretleri: kritik CI (EVET/HAYIR) ve duzeltilmis lokasyon adi (2026-11-24 kullanici: "envanter CI
+    listesinde lokasyon adi alanini duzenlenebilir yap"; bos = envanterdeki deger). Envanter (customer_ci) yenilense de korunur;
+    anahtar CMDB CI no."""
 
     __tablename__ = "customer_ci_flag"
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
     ci_no: Mapped[str] = mapped_column(String(40), primary_key=True)
     critical: Mapped[bool] = mapped_column(Boolean, default=False)
+    location_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     updated_by: Mapped[str] = mapped_column(String(120), default="")
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -520,12 +523,14 @@ class AffiliateFinalFlag(Base):
 
 
 class UrunTutarOzet(Base):
-    """Urun-Tutar Excel ozeti (uretim analiz.db urun_tutar): musteri basina son yukleme degistirir. Ham satir (adres, devre,
-    numara) SAKLANMAZ; yalniz skor icin gereken ozet (servisler, lokasyon, baglanti, fatura...). Bkz. app/skor/urun_tutar.py."""
+    """Urun-Tutar Excel ozeti (uretim analiz.db urun_tutar): musteri basina son yukleme degistirir. summary skor icin ozet
+    (servisler, lokasyon, baglanti, fatura...); circuits yalniz AKTIF satirlarin devre no / acik adres / urun grubu listesi
+    (2026-11-24 kullanici: TopoMaker devre no + acik adres eslesmesi). Fiyat ve diger ham alanlar saklanmaz. Bkz. app/skor/urun_tutar.py."""
 
     __tablename__ = "urun_tutar_ozet"
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), primary_key=True)
     summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    circuits: Mapped[list | None] = mapped_column(JSON, nullable=True)
     file_name: Mapped[str] = mapped_column(String(200), default="")
     uploaded_by: Mapped[str] = mapped_column(String(120), default="")
     uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

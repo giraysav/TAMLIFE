@@ -319,6 +319,19 @@ def kritik_ci_isaretle(musteri_id: KimlikTipi, body: KritikCiGovde, e: Erisim = 
     return sonuc
 
 
+class CiLokasyonGovde(BaseModel):
+    ci: str = Field(min_length=1, max_length=40)
+    lokasyon: str = Field(default="", max_length=300)
+
+
+@router.put("/musteri/{musteri_id:int}/kritik-ci/lokasyon")
+def kritik_ci_lokasyon(musteri_id: KimlikTipi, body: CiLokasyonGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """CI listesinde Lokasyon adi duzeltmesi (bos = envanterdeki ad); TopoMaker envanter cizimi bunu kullanir."""
+    sonuc = _yap(db, lambda: ms.kritik_ci_lokasyon(db, e.user, musteri_id, body.ci, body.lokasyon), yaz=True)
+    _denetim(e.user, "musteri.ci_lokasyon", f"musteri={musteri_id} ci={body.ci}")
+    return sonuc
+
+
 @router.get("/musteri/{musteri_id:int}/rapor/trafik")
 def trafik_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     """Donemin devre trafik serileri (ReportDB); cizim tarayicida ayri kodla (dist/rapor-trafik.js, Apache ECharts)."""
