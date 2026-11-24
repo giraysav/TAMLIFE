@@ -21,7 +21,7 @@ Kriter turleri (UtilCriteria.criteria_json 'type') ve veri:
   auto_onedesk        sayisal   'kayit_hacmi'    : Kayit Hacmi = bu yil kapanan + su an acik alarm + talep + sikayet (2026-11-24)
   auto_servis_sayisi  sayisal   'lokasyon_sayisi': acik adres + atanmis devre (Urun-Tutar)
   servis_cesitliligi  sayisal   'servisler'      : musterinin servisleri -> satirin servis puanlari toplami
-  auto_segment        kategorik 'segment'        : SMB 50, MA 70, SA/PA/WHOLESALE 100 (varsayilan)
+  auto_segment        kategorik 'segment'        : SMB / MA 70, SA / PA 100 (varsayilan, 2026-11-24)
   auto_baglanti       kategorik 'baglanti'       : baglanti tipleri (Urun-Tutar; alanlar sonra)
   auto_sozlesme       sayisal   'fatura_bedeli'  : fatura bedeli TL (Urun-Tutar; yedek kart FT Hacim)
   auto_rapor          sayisal   'rapor_sayisi'   : bu yil aylik rapor hazirlanan ay sayisi (panel)
@@ -69,7 +69,7 @@ VARSAYILAN_KURALLAR = {
     'auto_onedesk': {'b30': '1-49', 'b50': '50-199', 'b70': '200-499', 'b100': '500+'},
     'auto_servis_sayisi': {'b30': '1-19', 'b50': '20-59', 'b70': '60-99', 'b100': '100+'},  # 2026-11-24 kullanici
     'servis_cesitliligi': {'b30': '1-19', 'b50': '20-29', 'b70': '30-39', 'b100': '40+'},
-    'auto_segment': {'b50': 'SMB', 'b70': 'MA', 'b100': 'SA, PA, WHOLESALE'},
+    'auto_segment': {'b70': 'SMB, MA', 'b100': 'SA, PA'},  # 2026-11-24 kullanici
     'auto_sozlesme': {'b30': '1-49.999', 'b50': '50.000-249.999', 'b70': '250.000-999.999', 'b100': '1.000.000+'},
     'auto_rapor': {'b30': '1-3', 'b50': '4-6', 'b70': '7-9', 'b100': '10+'},
 }
@@ -88,7 +88,7 @@ VARSAYILAN_KRITERLER = (
     {'type': 'servis_cesitliligi', 'title': '2. Servis Çeşitliliği', 'metric': 'Servis puanları toplamı (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-29', 'b70': '30-39', 'b100': '40+', 'weight': 20},
     {'type': 'auto_servis_sayisi', 'title': '3. Lokasyon Sayısı', 'metric': 'Açık adres + atanmış devre (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-59', 'b70': '60-99', 'b100': '100+', 'weight': 5},
     {'type': 'auto_baglanti', 'title': '4. Bağlantı Tipi', 'metric': 'Fiber / Karasal / Mobil + yedeklilik (ürün eşleşmesi bekleniyor; şimdilik dökümde seçilir)', 'b30': 'Yalnız DSL / Mobil (yedeksiz)', 'b50': 'Karasal + Yedek', 'b70': 'Yedeksiz Fiber', 'b100': 'Fiber + Yedek', 'weight': 5},
-    {'type': 'auto_segment', 'title': '5. Segment', 'metric': 'SMB 50 · MA 70 · SA / PA / WHOLESALE 100', 'b30': '', 'b50': 'SMB', 'b70': 'MA', 'b100': 'SA, PA, WHOLESALE', 'weight': 15},
+    {'type': 'auto_segment', 'title': '5. Segment', 'metric': 'SMB / MA 70 · SA / PA 100', 'b30': '', 'b50': '', 'b70': 'SMB, MA', 'b100': 'SA, PA', 'weight': 15},
     {'type': 'auto_sozlesme', 'title': '6. Sözleşme', 'metric': 'Fatura bedeli TL (Ürün-Tutar; yedek: kart FT Hacim)', 'b30': '1-49.999', 'b50': '50.000-249.999', 'b70': '250.000-999.999', 'b100': '1.000.000+', 'weight': 20},
     {'type': 'auto_rapor', 'title': '7. Raporlama', 'metric': 'Bu yıl aylık rapor hazırlanan ay sayısı', 'b30': '1-3', 'b50': '4-6', 'b70': '7-9', 'b100': '10+', 'weight': 15},
 )  # fmt: skip
