@@ -35,7 +35,7 @@ from app.tampon.eslestirme import alan_anahtarlari, sayi
 SECIM_ANAHTARI = 'kaynak_secimi'
 SERVIS_DAHIL_ANAHTARI = 'servis_dahil'
 # Metrik -> deger tipi (uretim veri/hedefler.py HEDEFLER 'tip').
-METRIK_TIPI = {'sikayet_talep': 'sayi', 'lokasyon_sayisi': 'sayi', 'servisler': 'liste', 'baglanti': 'liste', 'segment': 'metin',
+METRIK_TIPI = {'kayit_hacmi': 'sayi', 'lokasyon_sayisi': 'sayi', 'servisler': 'liste', 'baglanti': 'liste', 'segment': 'metin',
                'fatura_bedeli': 'sayi', 'rapor_sayisi': 'sayi'}
 ISLEM_TIPI = {'say': 'sayi', 'farkli_say': 'sayi', 'topla': 'sayi', 'ortalama': 'sayi', 'en_buyuk': 'sayi',
               'en_kucuk': 'sayi', 'liste': 'liste', 'esle_liste': 'liste', 'ilk': 'metin', 'en_cok': 'metin'}

@@ -2,8 +2,8 @@
 
 Her kaynak musteri basina METRIK uretir; motor metrikleri kriter kurallarina (barem hucreleri) gore puana cevirir. Oncelik (metrik
 basina, ilk hazir olan kullanilir; hata veren kaynak atlanir, siradakine gecilir):
-  Secilen veri kaynagi (kriterdeki kaynak_secimi) > OneDesk > Urun-Tutar Excel > ONENT > Panel
-  sikayet_talep   : OneDesk (gunluk ozet: son 12 ayda KAPANAN sikayet + talep, 2026-11-21) > Panel
+  Secilen veri kaynagi (kriterdeki kaynak_secimi) > Kayit hacmi > Urun-Tutar Excel > ONENT > Panel
+  kayit_hacmi     : Kayit hacmi (gunluk ozet: bu yil kapanan + su an acik alarm + talep + sikayet, 2026-11-24)
   lokasyon_sayisi : Urun-Tutar Excel > ONENT (gunluk ozet: aktif CI'larin farkli lokasyonu) > Panel (Envanter alani - YEDEK)
   servisler       : Urun-Tutar Excel (musterinin servis/urun adlari)
   segment         : Panel (kartta secilen segment; SEGMENTLER disindaki deger veri sayilmaz)
@@ -118,7 +118,7 @@ class PanelKaynagi(Kaynak):
     raporlar, Envanter (lokasyon icin YEDEK) ve FT Hacim (fatura bedeli icin YEDEK)."""
 
     ad = "Panel (kart + aylık rapor)"
-    metrikler = ("sikayet_talep", "lokasyon_sayisi", "segment", "rapor_sayisi", "fatura_bedeli")
+    metrikler = ("lokasyon_sayisi", "segment", "rapor_sayisi", "fatura_bedeli")
 
     def _oku(self, db: Session, musteriler: list[Customer]) -> dict[int, dict]:
         rapor_aylari = yillik_rapor_aylari(db)
@@ -127,7 +127,6 @@ class PanelKaynagi(Kaynak):
             s = panel_sayilari([c], rapor_aylari)
             # FT Hacim girilmemisse (0,00 ₺) veri YOK sayilir - 0 TL fatura degil.
             sonuc[c.id] = {
-                "sikayet_talep": s["sikayet"] + s["talep"],
                 "lokasyon_sayisi": s["envanter"],
                 "segment": c.segment if c.segment in SEGMENTLER else None,
                 "rapor_sayisi": s["rapor"],
@@ -175,17 +174,17 @@ class _GunlukOzetKaynagi(Kaynak):
         return sonuc
 
 
-class OneDeskKaynagi(_GunlukOzetKaynagi):
-    """OneDesk: son 12 ayda KAPANAN sikayet + talep (2026-11-21 kullanici: "durumu closed olmuslarla skor hesabi yapacagiz")."""
+class KayitHacmiKaynagi(_GunlukOzetKaynagi):
+    """Kayit Hacmi (2026-11-24 kullanici): bu yil kapanan + su an acik alarm + talep + sikayet; acik / kapali ayrimi yapilmaz."""
 
-    ad = "OneDesk (kapanan şikayet + talep)"
-    metrikler = ("sikayet_talep",)
+    ad = "Kayıt hacmi (alarm + talep + şikayet)"
+    metrikler = ("kayit_hacmi",)
 
     def _deger(self, ozet: dict, cati: Customer, istirakler: list[Customer]) -> Any:
         from app.skor.gunluk import grup_toplami
 
-        s, t = grup_toplami(ozet, cati, istirakler, "sikayet"), grup_toplami(ozet, cati, istirakler, "talep")
-        return None if s is None and t is None else (s or 0) + (t or 0)
+        degerler = [grup_toplami(ozet, cati, istirakler, alan) for alan in ("alarm", "sikayet", "talep")]
+        return None if all(d is None for d in degerler) else sum(d or 0 for d in degerler)
 
 
 class OnentKaynagi(_GunlukOzetKaynagi):
@@ -248,14 +247,14 @@ class KriterSecimKaynagi(Kaynak):
 
 def kaynaklar(kriterler: list[dict] | None) -> list[Kaynak]:
     """Oncelik sirasi: listede ONCE gelen hazir kaynak metrigi saglar."""
-    return [KriterSecimKaynagi(kriterler), OneDeskKaynagi(), UrunTutarExcelKaynagi(), OnentKaynagi(), PanelKaynagi()]
+    return [KriterSecimKaynagi(kriterler), KayitHacmiKaynagi(), UrunTutarExcelKaynagi(), OnentKaynagi(), PanelKaynagi()]
 
 
 AD_EN = {
     "Panel (kart + aylık rapor)": "Panel (card + monthly report)",
     "Ürün-Tutar (Excel)": "Product-Amount (Excel)",
     "Seçilen veri kaynağı": "Selected data source",
-    "OneDesk (kapanan şikayet + talep)": "OneDesk (closed complaints + requests)",
+    "Kayıt hacmi (alarm + talep + şikayet)": "Record volume (alarms + requests + complaints)",
     "ONENT (aktif CI envanteri)": "ONENT (active CI inventory)",
 }
 

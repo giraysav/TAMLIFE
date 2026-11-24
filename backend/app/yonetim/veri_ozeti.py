@@ -76,17 +76,16 @@ def kaynaklar(db: Session) -> list[dict[str, Any]]:
 
     d = gunluk.durum_oku(db)
     k = d.get("kaynaklar") or {}
-    od, env = k.get("onedesk") or {}, envanter.durum_oku(db)
+    hacim, env = k.get("kayit") or {}, envanter.durum_oku(db)
     temip = _son_temip(db)
     kayit = _onedesk_kayit(db)
     return [
         {"anahtar": "reportdb", "ad": "ReportDB", "icerik": "Alarm kayıtları (TEMIP)", "siklik": temip["siklik"],
          "son_basari": temip["son_basari"], "hata": temip["son_hata"],
-         "hacim": [["Son 12 ayda kapanan alarm", (k.get("reportdb") or {}).get("alarm")], ["Şu an açık alarm", temip["acik_alarm"]]]},
+         "hacim": [["Kayıt hacmi: alarm (bu yıl kapanan + açık)", hacim.get("alarm")], ["Şu an açık alarm", temip["acik_alarm"]]]},
         {"anahtar": "onedesk", "ad": "OneDesk", "icerik": "Şikayet ve talep kayıtları", "siklik": "Kayıtlar 30 dk · skor 06:00",
-         "son_basari": kayit["son_basari"] or (d.get("zaman") if od.get("durum") == "ok" else od.get("son_basari")),
-         "hata": kayit["hata"] or od.get("hata", ""),
-         "hacim": [["Son 12 ayda kapanan şikayet", od.get("sikayet")], ["Son 12 ayda kapanan talep", od.get("talep")],
+         "son_basari": kayit["son_basari"], "hata": kayit["hata"],
+         "hacim": [["Kayıt hacmi: şikayet (bu yıl kapanan + açık)", hacim.get("sikayet")], ["Kayıt hacmi: talep (bu yıl kapanan + açık)", hacim.get("talep")],
                    ["Panelde açık şikayet / talep", kayit["acik"]], ["Panelde kayıt (01.01'den)", kayit["toplam"]]]},
         {"anahtar": "onent", "ad": "ONENT", "icerik": "Müşteri envanteri (CMDB)", "siklik": "4 saatte bir",
          "son_basari": env.get("son_basari"), "hata": env.get("hata", ""),

@@ -18,7 +18,7 @@ TUM KRITERLER OTOMATIK (kullanici karari 2026-09-27: "utilizasyon modulundeki he
 otomatik olacak"). Manuel tur / tur secici yok; satirin turu kayitli 'type' otomatik bir
 tur degilse BASLIKTAN cikarilir (tur_coz - sayfadaki _turCoz ile ayni).
 Kriter turleri (UtilCriteria.criteria_json 'type') ve veri:
-  auto_onedesk        sayisal   'sikayet_talep'  : yil boyu acik + kapanan sikayet/talep (OneDesk)
+  auto_onedesk        sayisal   'kayit_hacmi'    : Kayit Hacmi = bu yil kapanan + su an acik alarm + talep + sikayet (2026-11-24)
   auto_servis_sayisi  sayisal   'lokasyon_sayisi': acik adres + atanmis devre (Urun-Tutar)
   servis_cesitliligi  sayisal   'servisler'      : musterinin servisleri -> satirin servis puanlari toplami
   auto_segment        kategorik 'segment'        : SMB 50, MA 70, SA/PA/WHOLESALE 100 (varsayilan)
@@ -37,7 +37,7 @@ from app.ortak import normal
 PUANLAR = (30, 50, 70, 100)
 BAREM_ALANLARI = (('b30', 30), ('b50', 50), ('b70', 70), ('b100', 100))
 
-SAYISAL = {'auto_onedesk': 'sikayet_talep', 'auto_servis_sayisi': 'lokasyon_sayisi',
+SAYISAL = {'auto_onedesk': 'kayit_hacmi', 'auto_servis_sayisi': 'lokasyon_sayisi',
            'servis_cesitliligi': 'servisler', 'auto_sozlesme': 'fatura_bedeli', 'auto_rapor': 'rapor_sayisi'}
 KATEGORIK = {'auto_segment': 'segment', 'auto_baglanti': 'baglanti'}
 KAYNAKSIZ = 'auto_kaynaksiz'
@@ -49,12 +49,12 @@ SABIT_PUAN_TURLERI = ('auto_sozlesme', 'auto_rapor')
 ELLE_SECILEN_TURLER = ('auto_rapor',)
 OTOMATIK_TURLER = tuple(SAYISAL) + tuple(KATEGORIK) + (KAYNAKSIZ,)
 # Baslik -> tur (normalize baslikta ilk eslesen; sira onemli). Sayfadaki TUR_IPUCLARI ile AYNI.
-TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('sikayet', 'auto_onedesk'), ('talep', 'auto_onedesk'),
+TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('kayit hacmi', 'auto_onedesk'), ('sikayet', 'auto_onedesk'), ('talep', 'auto_onedesk'),
                 ('lokasyon', 'auto_servis_sayisi'), ('baglanti', 'auto_baglanti'), ('segment', 'auto_segment'),
                 ('sozlesme', 'auto_sozlesme'), ('rapor', 'auto_rapor'))
 # Kriter turunun veri kaynagi (Veri Yonlendirici kriter editorunde satirin yaninda gosterilir).
 KAYNAK_ADLARI = {
-    'auto_onedesk': 'OneDesk · şikayet + talep sayısı', 'servis_cesitliligi': 'Ürün-Tutar / ONENT · servis puanları',
+    'auto_onedesk': 'Kayıt hacmi · alarm + talep + şikayet (bu yıl kapanan + açık)', 'servis_cesitliligi': 'Ürün-Tutar / ONENT · servis puanları',
     'auto_servis_sayisi': 'Ürün-Tutar · lokasyon sayısı', 'auto_baglanti': 'Ürün-Tutar / ONENT · bağlantı tipi',
     'auto_segment': 'Müşteri kartı · segment', 'auto_sozlesme': 'Ürün-Tutar · fatura bedeli (TL)',
     'auto_rapor': 'Aylık Rapor · rapor ayı sayısı', KAYNAKSIZ: 'Kaynak yok (başlıktan anlaşılamadı)',
@@ -82,7 +82,7 @@ SERVIS_PUANLARI = {
 # Kriter tablosu hic kaydedilmemisse (cati ve istirak) kullanilan resmi Excel modeli: 7 kriter, agirliklar 20/20/5/5/15/20/15.
 # Uretim kutucuklar/utilizasyon/servis.py _default_util_criteria ile birebir.
 VARSAYILAN_KRITERLER = (
-    {'type': 'auto_onedesk', 'title': '1. Şikayet/Talep Yoğunluğu', 'metric': 'Yıl boyu açık + kapanan şikayet ve talep (OneDesk)', 'b30': '1-49', 'b50': '50-199', 'b70': '200-499', 'b100': '500+', 'weight': 20},
+    {'type': 'auto_onedesk', 'title': '1. Kayıt Hacmi', 'metric': 'Bu yıl kapanan + açıkta bekleyen alarm, talep ve şikayet toplamı', 'b30': '1-49', 'b50': '50-199', 'b70': '200-499', 'b100': '500+', 'weight': 20},
     {'type': 'servis_cesitliligi', 'title': '2. Servis Çeşitliliği', 'metric': 'Servis puanları toplamı (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-29', 'b70': '30-39', 'b100': '40+', 'weight': 20},
     {'type': 'auto_servis_sayisi', 'title': '3. Lokasyon Sayısı', 'metric': 'Açık adres + atanmış devre (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-99', 'b70': '100-299', 'b100': '300+', 'weight': 5},
     {'type': 'auto_baglanti', 'title': '4. Bağlantı Tipi', 'metric': 'ME / DSL / Mobile Backup yapısı (Ürün-Tutar)', 'b30': '', 'b50': '', 'b70': '', 'b100': '', 'weight': 5},

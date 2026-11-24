@@ -295,8 +295,8 @@ class CustomerCiFlag(Base):
 
 
 class UtilSourceSummary(Base):
-    """Utilizasyon veri ozeti (2026-11-21 kullanici: "skor hesabi icin kapanmis kayitlari baz alacagiz; her sabah 06:00'da isci
-    calissin ve skoru guncellesin"): musteri karti basina bu yil KAPANAN alarm (ReportDB) / sikayet / talep (OneDesk) ve aktif CI /
+    """Utilizasyon veri ozeti (2026-11-21 kullanici: "her sabah 06:00'da isci calissin ve skoru guncellesin"): musteri karti basina
+    Kayit Hacmi (2026-11-24: bu yil kapanan + su an acik alarm / sikayet / talep, panel kayitlarindan) ve aktif CI /
     lokasyon (ONENT envanteri). Gunluk isci (skor/gunluk.py) bastan yazar; skor ve Yonetim > Veri Ozeti buradan okur."""
 
     __tablename__ = "util_source_summary"

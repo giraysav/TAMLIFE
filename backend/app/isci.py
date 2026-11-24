@@ -25,7 +25,7 @@
       OneDesk sikayet / talep kayitlari (onedesk/canli.py; alarm kurallariyla ayni: 01.01.2026'dan acilanlar, Musteri No ile karta).
       'reportdb' turu her calismada bunu da (ayri kilitle) cagirir: ilk calisma tam, gunde bir mutabakat, digerleri artimli.
   ..\\.venv\\Scripts\\python.exe -m app.isci utilizasyon [--kuru]
-      Gunluk utilizasyon turu (skor/gunluk.py): bu yil KAPANAN sikayet/talep (OneDesk), kapanan alarm (ReportDB kayitlari), aktif CI /
+      Gunluk utilizasyon turu (skor/gunluk.py): Kayit Hacmi (panel kayitlarindan bu yil kapanan + acik alarm / talep / sikayet), aktif CI /
       lokasyon (ONENT envanteri) -> util_source_summary; cati skorlari yeniden hesaplanip degisenlere yazilir. Zamanlanmis gorev her
       sabah 06:00 (kurulum\\canli_gorev_kur.ps1). --kuru: ozeti yazar, skora dokunmaz.
   --kuru: hicbir sey yazmaz; sorguyu calistirip satir sayisini ve ilk satirlari gosterir.

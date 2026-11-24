@@ -1,20 +1,17 @@
-"""Gunluk utilizasyon turu (2026-11-21 kullanici): her sabah 06:00'da isci calisir, kapanmis kayitlarla skoru gunceller.
+"""Gunluk utilizasyon turu (2026-11-21 kullanici): her sabah 06:00'da isci calisir, veri ozetini yazar ve skoru gunceller.
 
   "30 dk kodu cok yorar, utilizasyon skorunu dinamik hesaplamak icin sabaha karsi bir isci kur. Skor hesabi icin kapanmis kayitlari
    baz alacagimizdan anlik veri akisina gerek yok; durumu closed olmuslarla skor hesabi yapacagiz."
 
 Tur (python -m app.isci utilizasyon; zamanlanmis gorev 06:00, kurulum\\canli_gorev_kur.ps1):
-  Donem = SON 12 AY (bugunden geriye 365 gun; 2026-11-21 kullanici onayi, takvim yili Ocak'ta sifirlaniyordu).
-  1) OneDesk  : donemde KAPANAN sikayet + talep, kart Musteri No'su basina (yalniz sayim, satir tasinmaz). Eski sistem
-                elysion_customdata_fix.T_SOL_INCIDENT_TICKETS (TICKETTYPEID=1; TICKETSUBTYPEID 1=sikayet, 2=talep, 3=alarm -> alarm
-                ALINMAZ: alarm ReportDB'den), STATUS='CLOSE', CLOSEDATE donemde. Yeni sistem elysion_soxdata_octopuscorp.
-                T_OCT_CORPORATE_MAIN (TICKETTYPE_DESC Sikayet/Talep, STATUS Kapatildi; 2026-11-21 itibariyla tarih alanlari bos ->
-                tarihsiz kapali kayit doneme sayilir).
-  2) ReportDB : donemde kapanan alarm = panelde zaten olan TEMIP kayitlari (onedesk_record source=temip, 30 dk'lik isci doldurur).
+  Donem = BU YIL (Turkiye saatiyle 01.01'den bugune).
+  1-2) Kayit Hacmi (2026-11-24 kullanici: "Alarm Talep Sikayet toplamini koy; kaydin acik kapali olduguna bakma; o yil itibari
+       ile kapali ve acikta bekleyen hepsinin toplami"): panele aktarilmis kayitlardan (onedesk_record: alarm = ReportDB TEMIP,
+       sikayet / talep = OneDesk; isciler 30 dk'da bir doldurur) kart basina SU AN ACIK + BU YIL KAPANAN alarm / sikayet / talep.
+       Kart sayaclarindaki "acik + bu yil kapanan" tanimiyla ayni; kaynaga ayrica sorgu atilmaz.
   3) ONENT    : aktif CI ve farkli kurumsal lokasyon sayisi = musteri envanteri (customer_ci, 4 saatte bir isci doldurur).
   4) util_source_summary bastan yazilir; cati musterilerin skoru yeniden hesaplanir ve DEGISENLERE yazilir (kaynak 'gunluk').
-Skorda cati musterinin degeri = cati + istiraklerinin toplami. Bir kaynak okunamazsa o sutun bos (None) kalir; skor o kriter icin
-kayitli secime (dokum) duser, mevcut deger korunur. Kaynak adlari yalniz Yonetim ekraninda gorunur.
+Skorda cati musterinin degeri = cati + istiraklerinin toplami. Kaynak adlari yalniz Yonetim ekraninda gorunur.
 """
 
 from __future__ import annotations
@@ -24,7 +21,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, delete, func, insert, select
+from sqlalchemy import and_, delete, func, insert, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -35,31 +32,11 @@ from app.models import (
     UtilSourceSummary,
 )
 from app.ortak import iso, normal, simdi
-from app.tampon import postgres
 from app.tampon.eslestirme import musteri_anahtarlari
 
-ONEDESK = "pg_onedesk"
 DURUM_ANAHTARI = "utilizasyon.gunluk_durum"
 TR = timezone(timedelta(hours=3))
-DENEME = 3  # OneDesk salt okunur kopya: uzun sorgu "conflict with recovery" ile kesilebilir -> yeniden dene
-SORGU_SN = 600
 ISCI = "Günlük işçi"
-
-_ESKI = (
-    'SELECT LTRIM("CUSTOMERNO"::text, \'0\') AS k, "TICKETSUBTYPEID"::int AS t, COUNT(*) '
-    'FROM elysion_customdata_fix."T_SOL_INCIDENT_TICKETS" '
-    'WHERE "TICKETTYPEID" = 1 AND "TICKETSUBTYPEID" IN (1, 2) AND "STATUS" = \'CLOSE\' '
-    'AND "CREATEDDATE" >= %(alt)s AND "CLOSEDATE" >= %(bas)s AND "CLOSEDATE" < %(bit)s '
-    'AND LTRIM("CUSTOMERNO"::text, \'0\') = ANY(%(nolar)s) GROUP BY 1, 2'
-)
-_YENI = (
-    'SELECT LTRIM("CUSTOMERNO"::text, \'0\') AS k, "TICKETTYPE_DESC" AS t, COUNT(*) '
-    'FROM elysion_soxdata_octopuscorp."T_OCT_CORPORATE_MAIN" '
-    'WHERE "STATUS" IN (\'Kapatıldı\', \'CLOSE\', \'Closed\') '
-    'AND ("CLOSEDATE" IS NULL OR ("CLOSEDATE" >= %(bas)s AND "CLOSEDATE" < %(bit)s)) '
-    'AND LTRIM("CUSTOMERNO"::text, \'0\') = ANY(%(nolar)s) GROUP BY 1, 2'
-)
-ESKI_TUR = {1: "sikayet", 2: "talep"}
 
 # ONENT envanteri -> Servis Cesitliligi / Baglanti Tipi (2026-11-21 kullanici: "ONENT'ten doldur"). CI'in servis adi (normalize) icinde
 # KELIME olarak gecen ilk ifade; adlar motor.SERVIS_PUANLARI ve urun_tutar.BAGLANTI_ESLEME kategorileriyle AYNI. Sira onemli
@@ -81,13 +58,10 @@ ONENT_BAGLANTI_ERISIM = (
 )
 
 
-GUN = 365  # 2026-11-21 kullanici onayi: takvim yili yerine SON 12 AY (Ocak'ta sayilar sifirlanmasin)
-
-
 def donem_araligi(an: datetime | None = None) -> tuple[datetime, datetime]:
-    """Turkiye saatiyle son 12 ay [bas, bit) (naive; OneDesk zamanlari yerel saat). bit = bugun 00:00 (tamamlanmis gunler)."""
+    """Bu yil: Turkiye saatiyle 01.01 00:00 - bugun 00:00 (naive, yerel; ekranda donem olarak gosterilir)."""
     bugun = (an or datetime.now(TR)).astimezone(TR).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-    return bugun - timedelta(days=GUN), bugun
+    return bugun.replace(month=1, day=1), bugun
 
 
 # --- Durum ---------------------------------------------------------------------------------------------------------------------
@@ -109,39 +83,19 @@ def _kart_anahtarlari(musteriler: list[Customer]) -> dict[int, list[str]]:
     return {c.id: musteri_anahtarlari(c.customer_no) for c in musteriler}
 
 
-def onedesk_kapanan(nolar: list[str], bas: datetime, bit: datetime) -> dict[str, dict[str, int]]:
-    """{musteri no anahtari: {'sikayet': n, 'talep': n}} - donemde kapanan (eski + yeni sistem)."""
-    a = postgres.ayar(ONEDESK)
-    parametre = {"alt": bas - timedelta(days=GUN), "bas": bas, "bit": bit, "nolar": nolar}
-    sonuc: dict[str, dict[str, int]] = defaultdict(lambda: {"sikayet": 0, "talep": 0})
-    for sorgu, eski in ((_ESKI, True), (_YENI, False)):
-        for deneme in range(1, DENEME + 1):
-            try:
-                with a.baglan(SORGU_SN) as conn, conn.cursor() as cur:
-                    cur.execute(sorgu, parametre)
-                    satirlar = cur.fetchall()
-                break
-            except Exception as e:
-                if deneme == DENEME:
-                    raise postgres.PgHata(postgres.hata_metni(e, a.gizliler()), 502) from e
-                time.sleep(5 * deneme)
-        for k, t, n in satirlar:
-            tur = ESKI_TUR.get(int(t)) if eski else ("sikayet" if normal(t).startswith("sikayet") else "talep" if normal(t).startswith("talep") else None)
-            if tur and k:
-                sonuc[str(k)][tur] += int(n)
-    return dict(sonuc)
-
-
-def alarm_kapanan(db: Session, bas: datetime, bit: datetime) -> dict[int, int]:
-    """{customer_id: donemde kapanan alarm} - panelde olan ReportDB (TEMIP) kayitlari."""
-    bas, bit = bas.replace(tzinfo=TR).astimezone(UTC), bit.replace(tzinfo=TR).astimezone(UTC)
+def kayit_hacmi(db: Session, yil: int) -> dict[int, dict[str, int]]:
+    """{customer_id: {'alarm', 'sikayet', 'talep'}} = su an acik + bu yil (Turkiye saati) kapanan kayitlar. Kartsiz kayit sayilmaz."""
+    bas = datetime(yil, 1, 1, tzinfo=TR).astimezone(UTC)
+    sonuc: dict[int, dict[str, int]] = defaultdict(lambda: {"alarm": 0, "sikayet": 0, "talep": 0})
     sorgu = (
-        select(OnedeskRecord.customer_id, func.count())
-        .where(OnedeskRecord.source == "temip", OnedeskRecord.status == "closed", OnedeskRecord.customer_id.is_not(None))
-        .where(and_(OnedeskRecord.closed_at >= bas, OnedeskRecord.closed_at < bit))
-        .group_by(OnedeskRecord.customer_id)
+        select(OnedeskRecord.customer_id, OnedeskRecord.kind, func.count())
+        .where(OnedeskRecord.customer_id.is_not(None), OnedeskRecord.kind.in_(("alarm", "sikayet", "talep")))
+        .where(or_(OnedeskRecord.status == "open", and_(OnedeskRecord.status == "closed", OnedeskRecord.closed_at >= bas)))
+        .group_by(OnedeskRecord.customer_id, OnedeskRecord.kind)
     )
-    return {cid: int(n) for cid, n in db.execute(sorgu)}
+    for cid, tur, n in db.execute(sorgu):
+        sonuc[cid][tur] += int(n)
+    return dict(sonuc)
 
 
 def envanter_sayilari(db: Session) -> dict[str, tuple[int, int, set[str], set[str]]]:
@@ -182,19 +136,10 @@ def calistir(db: Session, skor_yaz: bool = True) -> dict[str, Any]:
     bas, bit = donem_araligi()
     musteriler = list(db.scalars(select(Customer)))
     anahtarlar = _kart_anahtarlari(musteriler)
-    nolar = sorted({k for v in anahtarlar.values() for k in v})
     kaynaklar: dict[str, dict[str, Any]] = {}
 
-    od: dict[str, dict[str, int]] | None = None
-    t = time.time()
-    try:
-        od = onedesk_kapanan(nolar, bas, bit) if postgres.ayar(ONEDESK).ENABLED else None
-        kaynaklar["onedesk"] = {"durum": "ok" if od is not None else "kapali", "sure_sn": round(time.time() - t, 1),
-                                "sikayet": sum(v["sikayet"] for v in (od or {}).values()), "talep": sum(v["talep"] for v in (od or {}).values())}  # fmt: skip
-    except postgres.PgHata as e:
-        kaynaklar["onedesk"] = {"durum": "hata", "hata": e.mesaj[:300], "sure_sn": round(time.time() - t, 1)}
-    alarm = alarm_kapanan(db, bas, bit)
-    kaynaklar["reportdb"] = {"durum": "ok", "alarm": sum(alarm.values())}
+    hacim = kayit_hacmi(db, yil)
+    kaynaklar["kayit"] = {"durum": "ok", **{t: sum(v[t] for v in hacim.values()) for t in ("alarm", "sikayet", "talep")}}
     env = envanter_sayilari(db)
     from app.musteri import envanter
 
@@ -205,18 +150,11 @@ def calistir(db: Session, skor_yaz: bool = True) -> dict[str, Any]:
     for c in musteriler:
         ks = anahtarlar[c.id]
         satirlar.append({
-            "customer_id": c.id, "year": yil, "alarm": alarm.get(c.id, 0),
-            "sikayet": sum(od.get(k, {}).get("sikayet", 0) for k in ks) if od is not None and ks else (0 if od is not None else None),
-            "talep": sum(od.get(k, {}).get("talep", 0) for k in ks) if od is not None and ks else (0 if od is not None else None),
+            "customer_id": c.id, "year": yil, **hacim.get(c.id, {"alarm": 0, "sikayet": 0, "talep": 0}),
             "ci": sum(env[k][0] for k in ks if k in env), "lokasyon": sum(env[k][1] for k in ks if k in env),
             "servisler": sorted({x for k in ks if k in env for x in env[k][2]}),
             "baglanti": sorted({x for k in ks if k in env for x in env[k][3]}), "refreshed_at": an,
         })  # fmt: skip
-    if od is None:  # OneDesk okunamadi: onceki sayilar korunur (bos yazilmaz)
-        onceki = {r.customer_id: r for r in db.scalars(select(UtilSourceSummary))}
-        for s in satirlar:
-            if (o := onceki.get(s["customer_id"])) is not None:
-                s["sikayet"], s["talep"] = o.sikayet, o.talep
     db.execute(delete(UtilSourceSummary))
     if satirlar:
         db.execute(insert(UtilSourceSummary), satirlar)
@@ -227,7 +165,7 @@ def calistir(db: Session, skor_yaz: bool = True) -> dict[str, Any]:
         sonuc = servis.uygula(db, servis.cati_musteriler(db), "gunluk", ISCI, None, yalniz_degisen=True)
         uygulama = {"uygulanan": len(sonuc["uygulanan"]), "atlanan": len(sonuc["atlanan"]), "degismeyen": sonuc["degismeyen"],
                     "kismi": sonuc["kismi"]}
-    durum = {"zaman": iso(an), "yil": yil, "donem": [bas.date().isoformat(), (bit - timedelta(days=1)).date().isoformat()], "sure_sn": round(time.time() - t0, 1), "musteri": len(musteriler),
+    durum = {"zaman": iso(an), "yil": yil, "donem": [bas.date().isoformat(), bit.date().isoformat()], "sure_sn": round(time.time() - t0, 1), "musteri": len(musteriler),
              "kaynaklar": kaynaklar, "skor": uygulama}  # fmt: skip
     _durum_yaz(db, durum)
     db.commit()
