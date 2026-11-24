@@ -104,8 +104,25 @@ MAIL_GOVDESI = {
 
 
 def mail_konusu(musteri_adi: str, ay: int, yil: int, dil: str = "tr") -> str:
+    """2026-11-24 kullanici: 'Musteri Unvani - TAM Aylik Rapor - Ay Yil' sirasi."""
     baslik = "TAM Monthly Report" if dil == "en" else "TAM Aylık Rapor"
-    return f"{baslik} - {ay_adi(ay, dil)} {yil} | {musteri_adi}"
+    return f"{musteri_adi} - {baslik} - {ay_adi(ay, dil)} {yil}"
+
+
+ESKI_UNVANLAR = ("Teknik Müşteri Yöneticisi (TAM)", "Technical Account Manager (TAM)")  # 2026-11-24 oncesi hazir imza satiri
+
+
+def eski_hazir_metni_guncelle(alanlar: dict, musteri_adi: str, ay: int, yil: int) -> dict:
+    """Gonderilmemis taslakta 2026-11-24 oncesi HAZIR konu ('TAM Aylik Rapor - Ay Yil | Musteri') ve imza unvan satiri yenisine
+    cevrilir; personelin elle yazdigi metne dokunulmaz."""
+    sonuc = dict(alanlar)
+    for dil in DILLER:
+        baslik = "TAM Monthly Report" if dil == "en" else "TAM Aylık Rapor"
+        if sonuc.get("konu") == f"{baslik} - {ay_adi(ay, dil)} {yil} | {musteri_adi}":
+            sonuc["konu"] = mail_konusu(musteri_adi, ay, yil, dil)
+    if isinstance(sonuc.get("imza"), str):
+        sonuc["imza"] = "\n".join("Technical Account Manager" if s.strip() in ESKI_UNVANLAR else s for s in sonuc["imza"].split("\n"))
+    return sonuc
 
 
 def mail_govdesi(ay: int, yil: int, dil: str = "tr") -> str:
@@ -116,5 +133,5 @@ def imza(personel_adi: str, dil: str = "tr") -> str:
     if not personel_adi:
         return ""
     if dil == "en":
-        return f"{personel_adi}\nTechnical Account Manager (TAM)\nTurkcell Corporate Customer Management"
-    return f"{personel_adi}\nTeknik Müşteri Yöneticisi (TAM)\nTurkcell Kurumsal Müşteri Yönetimi"
+        return f"{personel_adi}\nTechnical Account Manager\nTurkcell Corporate Customer Management"
+    return f"{personel_adi}\nTechnical Account Manager\nTurkcell Kurumsal Müşteri Yönetimi"

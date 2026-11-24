@@ -225,10 +225,11 @@ def _devreden(db: Session, user: Principal, musteri: Customer, yil: int, ay: int
     if satir is None or not isinstance(satir.fields, dict) or aktif_gonderim(db, musteri.id, oyil, oay) is None:
         return {}, None
     hazir = [hazir_metinler(musteri.name, oay, oyil, ad, d) for ad in {user.username, personel_adi(db, user)} for d in rapor_metin.DILLER]
+    onceki = rapor_metin.eski_hazir_metni_guncelle(satir.fields, musteri.name, oay, oyil)
     alanlar = {
-        ad: str(satir.fields[ad])
+        ad: str(onceki[ad])
         for ad in DEVREDEN_ALANLAR
-        if str(satir.fields.get(ad) or "").strip() and all(satir.fields[ad] != h.get(ad) for h in hazir)
+        if str(onceki.get(ad) or "").strip() and all(onceki[ad] != h.get(ad) for h in hazir)
     }
     if alanlar and satir.fields.get("dil") in rapor_metin.DILLER:
         alanlar["dil"] = str(satir.fields["dil"])
@@ -260,6 +261,8 @@ def taslak_getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str 
     dil: str = str(kayitli.get("dil")) if kayitli.get("dil") in rapor_metin.DILLER else ("en" if secili() == "en" else "tr")
     varsayilanlar = {d: hazir_metinler(musteri.name, ay, yil, personel_adi(db, user), d) for d in rapor_metin.DILLER}
     gonderim = aktif_gonderim(db, musteri.id, yil, ay)
+    if gonderim is None:  # gonderilmis raporun metni oldugu gibi kalir
+        kayitli = rapor_metin.eski_hazir_metni_guncelle(kayitli, musteri.name, ay, yil)
     return {
         "yil": yil,
         "ay": ay,
