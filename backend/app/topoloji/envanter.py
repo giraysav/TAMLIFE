@@ -1,32 +1,37 @@
-"""TopoMaker - musteri envanterinden basit topoloji (2026-11-24 kullanici: "lokasyon ismi ve ci name alanindaki verileri kullanarak
-onent'ten gelen ci bilgileri ile basit bir topo ciz; once neler yapabildigimizi gorelim sonra gelistirelim").
+"""TopoMaker - musteri envanterinden topoloji.
 
-Ilk surum (deneme). Kaynak: customer_ci (kart + istiraklerinin AKTIF CI'lari; isci 4 saatte bir yeniler). Cizim dosya analiziyle
-(servis.analiz) AYNI bicimde doner, istemcideki SVG cizimi degismeden kullanilir:
+2026-11-24 kullanici (1): "lokasyon ismi ve ci name alanindaki verileri kullanarak onent'ten gelen ci bilgileri ile basit bir topo ciz".
+2026-11-24 kullanici (2): "CI'in alanlarini oku; topolojiyi cizerken acik adrese gore filtrele. Musterinin hangi lokasyonda, hangi il
+ilcede servisi varsa ona gore cizimleri daha spesifik olustur; tum envanter cizilince cok buyuk ve anlamsiz veri cikiyor."
+
+Kaynak: customer_ci (kart + istiraklerinin AKTIF CI'lari; isci 4 saatte bir yeniler; adres / devre alanlari musteri.envanter.OZELLIKLER).
+  SAHA     = CI'in acik adresi (MUSTERI_ADDRESS; bosluk / noktalama katlanir). Adresi olmayan CI kurumsal lokasyon adiyla gruplanir.
+  IL/ILCE  = acik adresin sonundaki "<Ilce> <Il> [TURKIYE]" (adreste gecen SON il adi; ilce ondan onceki kelime). Adres yoksa kurumsal
+             lokasyon adi ("Ankara Cankaya") ayni kuralla okunur. Bulunamayan 'Belirsiz'.
+  SECIM    = il > ilce > saha. Il secilmemisse en cok CI'li il cizilir; ekranda il / ilce / saha listesi (CI sayilariyla) gelir.
+Cizim dosya analiziyle (servis.analiz) AYNI bicimde doner, istemcideki SVG cizimi kullanilir:
   katman 0  Turkcell BB (bulut)
-  katman 1  devre (CI'in DEVRE_NO ozelligi; ayni devre no'lu hat / servis CI'lari tek devrede birlesir) - tur 'switch'
-  katman 2  CI (servis basina; kisa servis adi) - tur 'router'. Devresi olmayan CI dogrudan BB'ye baglanir.
-  Lokasyon = CI'in KURUMSAL_LOKASYON_ADI ozelligi (buyuk harf / Turkce katlanarak gruplanir; bos ise 'Lokasyonsuz').
-  Kenar etiketi = CI adindaki PE router adi (orn. 'ne40_01.34mslk'); altyapi = erisim / servis adindan.
-  Il = lokasyon adinin ilk kelimesi il ise (harita sekmesi).
-  SPoF (ilk kural): tek devreli ve yedeksiz (Mobile Backup yok) lokasyon.
-Buyuk musteride (binlerce CI) cizim okunmaz: arama + en fazla N lokasyon (CI sayisi en cok olanlar) gosterilir.
+  katman 1  devre (DEVRE_NO; ayni devre no'lu hat / servis CI'lari birlesir) - tur 'switch'
+  katman 2  CI (servis kisaltmasi; ipucunda CI adi, urun, cihaz, bant genisligi) - tur 'router'. Devresiz CI dogrudan BB'ye baglanir.
+  Kenar etiketi = BB_ROUTER_HOSTNAME, yoksa CI adindaki PE router. Altyapi = DEVRE_TIPI (+ ALTYAPI_SAHIPLIGI) > erisim > CI adi.
+  Yedek = Mobile Backup servisi / urunu ya da YEDEKLILIK_KATEGORISI dolu.
+  SPoF (tahmin): tek ana devreli ve yedeksiz saha.
 Kaynak adi ekranda yazilmaz ("envanter").
 """
 
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from collections import Counter
 from typing import Any
 
 from app.topoloji.servis import _KOORDINAT, BULUT, KABLO_RENKLERI, _katla
 
-EN_FAZLA_LOKASYON = 25
-AZAMI_LOKASYON = 100
+EN_FAZLA_SAHA = 25
+AZAMI_SAHA = 100
 AZAMI_CI = 600  # cizilen CI dugumu siniri
-LOKASYON_BASI_CI = 40  # tek lokasyon cizimi doldurmasin
-LOKASYONSUZ = "Lokasyonsuz"
+SAHA_BASI_CI = 40  # tek saha cizimi doldurmasin
+BELIRSIZ = "Belirsiz"
 # CI adindaki PE / BB router adi: 'nw_rt_ne40_01.34mslk', 'asr9_01.06sogz' -> 'ne40_01.34mslk', 'asr9_01.06sogz'
 _PE = re.compile(r"(?<![a-z0-9])([a-z]+[0-9]+[a-z0-9]*_\d{2}\.\d{2}[a-z]{2,8})", re.I)
 # Servis adi -> (etiket, dugumdeki kisaltma). Sira onemli; eslesmeyen servis ilk iki kelimesiyle yazilir, kisaltmasi CI.
@@ -37,11 +42,22 @@ KISA_SERVIS = (
     ("GUVENLIK DUVARI", "Firewall", "FW"), ("FIREWALL", "Firewall", "FW"), ("SDWAN", "SD-WAN", "SDWN"), ("WDM", "WDM", "WDM"),
     ("DBS MS", "Yönetilen", "YÖN"), ("MSSP", "Güvenlik", "GÜV"),
 )  # fmt: skip
+# Adreste il yerine gecen kisaltmalar
+IL_KISALTMA = {"IST": "İSTANBUL", "ISTANBUL": "İSTANBUL", "AFYON": "AFYONKARAHİSAR", "MARAS": "KAHRAMANMARAŞ", "URFA": "ŞANLIURFA",
+               "ANTEP": "GAZİANTEP", "IZMIT": "KOCAELİ"}  # fmt: skip
+_ILCE_DISI = {"TURKIYE", "TR", "MAH", "MAHALLESI", "NO", "CAD", "SK", "SOKAK", "MERKEZI"}
 
 
 def pe_router(ci_adi: str) -> str:
     m = _PE.search(ci_adi or "")
     return m.group(1).lower() if m else ""
+
+
+def bb_adi(a: dict, ci_adi: str) -> str:
+    bb = (a.get("bb") or "").strip().lower()
+    if bb:
+        return re.sub(r"^nw_(rt|ra)_", "", bb)
+    return pe_router(ci_adi)
 
 
 def kisa_servis(servis: str) -> tuple[str, str]:
@@ -50,57 +66,138 @@ def kisa_servis(servis: str) -> tuple[str, str]:
     return next(((k, kod) for anahtar, k, kod in KISA_SERVIS if anahtar in s), (" ".join((servis or "CI").split()[:2]), "CI"))
 
 
-def altyapi(servis: str, erisim: str, altyapi_tipi: str, ci_adi: str = "") -> tuple[str, bool]:
-    """(cizgi altyapisi, yedek mi) - KABLO_RENKLERI anahtarlari. Erisim ozelligi bossa CI adindaki parcalardan
-    ('_me_', 'tsol' -> SOL Fiber; 'ttme' -> TT; 'dsl' -> xDSL; '4g' / 'lte' -> 4.5G)."""
-    s, e = _katla(servis or ""), _katla(f"{erisim or ''} {altyapi_tipi or ''}")
+def altyapi(servis: str, a: dict, ci_adi: str = "") -> tuple[str, bool]:
+    """(cizgi altyapisi, yedek mi) - KABLO_RENKLERI anahtarlari. Oncelik DEVRE_TIPI (FO / 4.5G / Bakir / MetroEthernet) +
+    ALTYAPI_SAHIPLIGI (TT ise TT), sonra erisim / altyapi ozelligi, en son CI adindaki parcalar."""
+    s = _katla(servis or "")
+    urun = _katla(f"{a.get('urun', '')} {a.get('devre_alt', '')}")
+    yedek = "MOBILE BACKUP" in s or "MOBILEBACKUP" in urun.replace(" ", "") or bool(a.get("yedeklilik"))
+    tt = _katla(a.get("sahiplik", "")) == "TT" or "TTME" in urun or "RESELL" in s
+    tip = _katla(a.get("devre_tipi", ""))
+    e = _katla(f"{a.get('erisim', '')} {a.get('altyapi', '')}")
     parca = set(re.split(r"[^a-z0-9]+", (ci_adi or "").lower()))
-    if not e.strip():
-        if parca & {"dsl", "adsl", "vdsl", "xdsl", "gshdsl"}:
-            e = "DSL"
-        elif parca & {"4g", "lte", "mbb", "45g"}:
-            e = "MOBIL"
-        elif parca & {"ttme", "tt"}:
-            e = "TT"
-        elif parca & {"me", "tsol", "solme", "fiber"}:
-            e = "METROETHERNET"
-    if "MOBILE" in s or "MOBIL" in e:
+    if any(k in tip for k in ("4.5G", "4G", "3G", "LTE", "MOBIL")) or "MOBIL" in e or "MOBILE" in s or parca & {"4g", "lte", "mbb"}:
         return "4.5G", True
-    if "DSL" in e:
-        return "xDSL", True
-    if "RESELL" in s or "TT" in e.split():
-        return "TT Fiber", False
-    if "METROETHERNET" in e or "FIBER" in e:
-        return "SOL Fiber", False
-    if "R/L" in e or "LEASEDLINE" in e or "SDH" in s:
-        return "Fiber/RL", False
-    return "Bilinmiyor", False
+    if "BAKIR" in tip or "DSL" in tip or "DSL" in e or parca & {"dsl", "adsl", "vdsl", "xdsl", "gshdsl"}:
+        return "xDSL", yedek
+    if "R/L" in tip or "RADYO" in tip or "R/L" in e or "LEASEDLINE" in e or "RADIOLINK" in urun.replace(" ", ""):
+        return "RL", yedek
+    if tip in ("FO", "FIBER") or "METROETHERNET" in tip or "METROETHERNET" in e or "FIBER" in e or "SOLME" in urun or parca & {"me", "tsol", "solme", "ttme"}:
+        return ("TT Fiber" if tt or "ttme" in parca else "SOL Fiber"), yedek
+    if "SDH" in s:
+        return "Fiber/RL", yedek
+    return "Bilinmiyor", yedek
 
 
-def _il(lokasyon: str) -> str:
-    ilk = _katla(lokasyon).split(" ")[0] if lokasyon else ""
-    return _KOORDINAT[ilk][0] if ilk in _KOORDINAT else ""
+_IL_ADLARI = {_katla(ad): ad for ad, _ in _KOORDINAT.values()}
 
 
-def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN_FAZLA_LOKASYON) -> dict:
-    """satirlar: CustomerCi (aktif). Donus servis.analiz bicimi + 'kaynak', 'lokasyon_listesi', 'gosterilen', 'gizlenen_ci'."""
-    gruplar: dict[str, dict] = {}
+def tr_baslik(metin: str) -> str:
+    """Turkce bas harf buyuk: 'ÇANKAYA' -> 'Çankaya', 'IĞDIR' -> 'Iğdır', 'istanbul' -> 'İstanbul'."""
+    def kelime(k: str) -> str:
+        if not k:
+            return k
+        bas = "İ" if k[0] == "i" else k[0].upper()
+        return bas + k[1:].replace("I", "ı").replace("İ", "i").lower()
+    return " ".join(kelime(k) for k in metin.split())
+
+
+def il_ilce(adres: str) -> tuple[str, str]:
+    """Acik adres / kurumsal lokasyon adi -> (il, ilce). Adreste gecen SON il adi il, ondan onceki kelime ilce ('Esenler/IST',
+    'CAN / CANAKKALE' de okunur); il ilk kelimeyse ('Ankara Cankaya') ilce sonraki kelimedir. Il bulunamazsa ('', '').
+    Ilce adresteki yazilisiyla (Turkce harfler korunur) doner; bulunamazsa 'Merkez'."""
+    ham = [k for k in re.split(r"[\s,;/\-().:]+", adres or "") if k]
+    kelimeler = [_katla(k) for k in ham]
+
+    def ilce_mi(j: int) -> bool:
+        aday = kelimeler[j]
+        return aday not in _ILCE_DISI and not any(ch.isdigit() for ch in aday) and len(aday) > 1 and \
+            _katla(IL_KISALTMA.get(aday, aday)) not in _IL_ADLARI
+
+    for i in range(len(kelimeler) - 1, -1, -1):
+        k = _katla(IL_KISALTMA.get(kelimeler[i], kelimeler[i]))
+        if k in _IL_ADLARI:
+            once = [j for j in range(i - 1, max(-1, i - 3), -1) if ilce_mi(j)]
+            sonra = [j for j in range(i + 1, min(len(kelimeler), i + 2)) if ilce_mi(j) and kelimeler[j] != "TURKIYE"]
+            j = once[0] if once and i > 0 else (sonra[0] if sonra else (once[0] if once else None))
+            return tr_baslik(_IL_ADLARI[k]), (tr_baslik(ham[j]) if j is not None else "Merkez")
+    return "", ""
+
+
+def _saha_anahtari(adres: str) -> str:
+    return " ".join(re.split(r"[^0-9A-Z]+", _katla(adres or ""))).strip()
+
+
+def _kisa_adres(adres: str) -> str:
+    """Ekranda saha basligi: bos / '.' / '-' parcalar atilir, ilk anlamli parcalar."""
+    parcalar = [p.strip() for p in (adres or "").split(",") if p.strip() and p.strip() not in (".", "-", "*", "..", "...")]
+    metin = ", ".join(parcalar[:3])
+    return metin[:70] + ("…" if len(metin) > 70 else "")
+
+
+def _saha(r: Any) -> dict:
+    a = r.attrs or {}
+    adres = a.get("adres", "")
+    kurumsal = " ".join(str(a.get("lokasyon") or "").split())
+    il, ilce = il_ilce(adres) if adres else ("", "")
+    if not il and kurumsal:
+        il, ilce = il_ilce(kurumsal)
+    anahtar = _saha_anahtari(adres) or ("L " + _katla(kurumsal) if kurumsal else "")
+    return {"anahtar": anahtar or "YOK", "il": il or BELIRSIZ, "ilce": ilce or BELIRSIZ, "adres": adres, "kurumsal": kurumsal}
+
+
+def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN_FAZLA_SAHA, il: str = "", ilce: str = "",
+        saha: str = "") -> dict:  # fmt: skip
+    """satirlar: CustomerCi (aktif). Donus servis.analiz bicimi + 'adres_agaci', 'secim', 'gosterilen', 'eslesen'."""
+    sahalar: dict[str, dict] = {}
     for r in satirlar:
-        a = r.attrs or {}
-        ad = " ".join(str(a.get("lokasyon") or "").split()) or LOKASYONSUZ
-        g = gruplar.setdefault(_katla(ad), {"ad": ad, "ciler": []})
-        g["ciler"].append(r)
+        bilgi = _saha(r)
+        s = sahalar.setdefault(bilgi["anahtar"], {**bilgi, "ciler": [], "lok_adlari": Counter()})
+        s["ciler"].append(r)
+        if (r.attrs or {}).get("lok_adi"):
+            s["lok_adlari"][(r.attrs or {})["lok_adi"]] += 1
+    # Ilce yazilisi tek: ayni ilce ('PENDIK' -> 'Pendık', 'Pendik') katlanmis anahtarla birlesir, en sik yazilis gosterilir
+    yazilis: dict[tuple[str, str], Counter] = {}
+    for s in sahalar.values():
+        yazilis.setdefault((_katla(s["il"]), _katla(s["ilce"])), Counter())[s["ilce"]] += len(s["ciler"])
+    for s in sahalar.values():
+        s["ilce"] = yazilis[(_katla(s["il"]), _katla(s["ilce"]))].most_common(1)[0][0]
+        s["baslik"] = (s["lok_adlari"].most_common(1)[0][0] if s["lok_adlari"] else "") or _kisa_adres(s["adres"]) or s["kurumsal"] or "Adressiz"
+
+    # Il > ilce > saha agaci (tum envanter; secim listesi)
+    agac: dict[str, dict] = {}
+    for s in sahalar.values():
+        i = agac.setdefault(s["il"], {"il": s["il"], "ci": 0, "ilceler": {}})
+        i["ci"] += len(s["ciler"])
+        c = i["ilceler"].setdefault(s["ilce"], {"ilce": s["ilce"], "ci": 0, "sahalar": []})
+        c["ci"] += len(s["ciler"])
+        c["sahalar"].append({"anahtar": s["anahtar"], "baslik": s["baslik"], "adres": _kisa_adres(s["adres"]), "ci": len(s["ciler"])})
+    adres_agaci = []
+    for i in sorted(agac.values(), key=lambda x: (x["il"] == BELIRSIZ, -x["ci"], x["il"])):
+        ilceler = []
+        for c in sorted(i["ilceler"].values(), key=lambda x: (x["ilce"] == BELIRSIZ, -x["ci"], x["ilce"])):
+            ilceler.append({**c, "sahalar": sorted(c["sahalar"], key=lambda x: (-x["ci"], x["baslik"]))[:AZAMI_SAHA]})
+        adres_agaci.append({"il": i["il"], "ci": i["ci"], "ilceler": ilceler})
+
+    # Secim: il verilmemisse en cok CI'li il (Belirsiz haric, varsa)
+    if not il and adres_agaci:
+        il = next((x["il"] for x in adres_agaci if x["il"] != BELIRSIZ), adres_agaci[0]["il"])
     parcalar = [_katla(p) for p in (ara or "").split() if p][:10]
 
-    def uyar(g: dict) -> bool:
+    def uyar(s: dict) -> bool:
+        if il and _katla(s["il"]) != _katla(il):
+            return False
+        if ilce and _katla(s["ilce"]) != _katla(ilce):
+            return False
+        if saha and s["anahtar"] != saha:
+            return False
         if not parcalar:
             return True
-        metin = _katla(g["ad"] + " " + " ".join(f"{r.ci_name} {r.service} {(r.attrs or {}).get('devre', '')}" for r in g["ciler"]))
+        metin = _katla(" ".join([s["baslik"], s["adres"], s["kurumsal"]] + [f"{r.ci_name} {r.service} {(r.attrs or {}).get('devre', '')}" for r in s["ciler"]]))
         return all(p in metin for p in parcalar)
 
-    liste = sorted(gruplar.values(), key=lambda g: (-len(g["ciler"]), _katla(g["ad"])))
-    eslesen = [g for g in liste if uyar(g)]
-    secilen = eslesen[: max(1, min(en_fazla, AZAMI_LOKASYON))]
+    eslesen = sorted((s for s in sahalar.values() if uyar(s)), key=lambda s: (-len(s["ciler"]), s["baslik"]))
+    secilen = eslesen[: max(1, min(en_fazla, AZAMI_SAHA))]
 
     dugumler: dict[str, dict] = {BULUT: {"id": BULUT, "tur": "bulut", "etiket": "Turkcell BB", "lokasyon": "", "il": ""}}
     kenarlar: list[dict] = []
@@ -111,61 +208,56 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
         kenarlar.append({"id": kimlik, "kaynak": a, "hedef": b, "altyapi": alt, "etiket": etiket, "yedek": yedek, "devre": devre,
                          "renk": KABLO_RENKLERI.get(alt, "#7F8C8D")})  # fmt: skip
 
-    for g in secilen:
-        lok, il = g["ad"], _il(g["ad"])
+    for s in secilen:
+        lok = f"{s['ilce']} · {s['baslik']}" if s["ilce"] != BELIRSIZ else s["baslik"]
+        il_adi = s["il"] if s["il"] != BELIRSIZ else ""
         devreler: dict[str, dict] = {}
-        for sira, r in enumerate(sorted(g["ciler"], key=lambda r: (r.service, r.ci_name))):
-            if ci_sayisi >= AZAMI_CI or sira >= LOKASYON_BASI_CI:
+        for sira, r in enumerate(sorted(s["ciler"], key=lambda r: (r.service, r.ci_name))):
+            if ci_sayisi >= AZAMI_CI or sira >= SAHA_BASI_CI:
                 gizlenen += 1
                 continue
             a = r.attrs or {}
-            alt, yedek = altyapi(r.service, a.get("erisim", ""), a.get("altyapi", ""), r.ci_name)
-            pe = pe_router(r.ci_name)
+            alt, yedek = altyapi(r.service, a, r.ci_name)
+            bb = bb_adi(a, r.ci_name)
             ci_id = f"CI_{r.ci_no}"
             etiket, kod = kisa_servis(r.service)
-            dugumler[ci_id] = {"id": ci_id, "tur": "router", "kisa": kod, "etiket": etiket,
-                               "lokasyon": lok, "il": il, "ci": r.ci_name, "servis": r.service, "bw": a.get("bw", ""),
-                               "kritik": r.ci_no in kritik}  # fmt: skip
+            ayrinti = " · ".join(x for x in (r.ci_name, a.get("urun", ""), a.get("model", ""), a.get("bw", "")) if x and x != "CIHAZ_MODEL")
+            dugumler[ci_id] = {"id": ci_id, "tur": "router", "kisa": kod, "etiket": etiket, "lokasyon": lok, "il": il_adi,
+                               "ci": ayrinti, "kritik": r.ci_no in kritik}  # fmt: skip
             ci_sayisi += 1
             devre = str(a.get("devre") or "").strip()
             if not devre:
-                kenar(f"K{r.ci_no}", BULUT, ci_id, alt, pe, yedek, r.ci_name)
+                kenar(f"K{r.ci_no}", BULUT, ci_id, alt, bb, yedek, r.ci_name)
                 continue
-            d_id = f"D_{_katla(lok)}_{devre}"
+            d_id = f"D_{s['anahtar']}_{devre}"
             d = devreler.get(d_id)
             if d is None:
-                d = devreler[d_id] = {"pe": pe, "alt": alt, "yedek": yedek, "ciler": []}
-                dugumler[d_id] = {"id": d_id, "tur": "switch", "kisa": "DEVRE", "etiket": devre, "lokasyon": lok, "il": il}
-            # Devrenin altyapisi / PE'si: bilinen ilk deger (hat CI'inda olur; servis CI'inda bos olabilir)
-            d["pe"] = d["pe"] or pe
+                d = devreler[d_id] = {"bb": bb, "alt": alt, "yedek": yedek, "ad": devre}
+                dugumler[d_id] = {"id": d_id, "tur": "switch", "kisa": "DEVRE", "etiket": devre, "lokasyon": lok, "il": il_adi}
+            d["bb"] = d["bb"] or bb
             if d["alt"] == "Bilinmiyor":
-                d["alt"], d["yedek"] = alt, yedek
-            d["ciler"].append(ci_id)
+                d["alt"] = alt
+            d["yedek"] = d["yedek"] or yedek
             kenar(f"L{r.ci_no}", d_id, ci_id, "LAN", "LAN", False, devre)
         for d_id, d in devreler.items():
-            kenar(f"W{d_id}", BULUT, d_id, d["alt"], d["pe"], d["yedek"], dugumler[d_id]["etiket"])
+            kenar(f"W{d_id}", BULUT, d_id, d["alt"], d["bb"], d["yedek"], d["ad"])
         ana = [d for d in devreler.values() if not d["yedek"]]
-        if len(ana) == 1 and not any(d["yedek"] for d in devreler.values()) and not any(
-            "MOBILE" in _katla(x.service) for x in g["ciler"]
-        ):
-            spof.append({"lokasyon": lok, "bb": ana[0]["pe"] or "—", "altyapilar": [ana[0]["alt"]], "neden": "tek_devre",
-                         "devreler": [next(dugumler[k]["etiket"] for k, v in devreler.items() if v is ana[0])]})  # fmt: skip
+        yedekli = any(d["yedek"] for d in devreler.values()) or any("MOBILE" in _katla(x.service) for x in s["ciler"])
+        if len(ana) == 1 and not yedekli:
+            spof.append({"lokasyon": lok, "bb": ana[0]["bb"] or "—", "altyapilar": [ana[0]["alt"]], "neden": "tek_devre",
+                         "devreler": [ana[0]["ad"]]})  # fmt: skip
 
-    sayac: dict[str, int] = defaultdict(int)
-    for d in dugumler.values():
-        if d["tur"] == "router" and d["il"]:
-            sayac[d["il"]] += 1
-    sehirler = [{"il": il, "adet": n, "enlem": _KOORDINAT[_katla(il)][1][0], "boylam": _KOORDINAT[_katla(il)][1][1]}
-                for il, n in sorted(sayac.items(), key=lambda x: (-x[1], x[0]))]  # fmt: skip
+    sehirler = [
+        {"il": x["il"], "adet": x["ci"], "enlem": _KOORDINAT[_katla(x["il"])][1][0], "boylam": _KOORDINAT[_katla(x["il"])][1][1]}
+        for x in adres_agaci if _katla(x["il"]) in _KOORDINAT
+    ]  # fmt: skip
     uyarilar = []
     if len(eslesen) > len(secilen):
-        uyarilar.append(f"{len(eslesen)} lokasyondan CI sayısı en çok olan {len(secilen)} lokasyon çizildi; aramayla daraltın.")
+        uyarilar.append(f"{len(eslesen)} sahadan CI sayısı en çok olan {len(secilen)} saha çizildi; ilçe / adres seçerek daraltın.")
     if gizlenen:
-        uyarilar.append(f"Çizim sınırı (lokasyon başına {LOKASYON_BASI_CI}, toplam {AZAMI_CI} CI) nedeniyle {gizlenen} CI gösterilmedi.")
+        uyarilar.append(f"Çizim sınırı (saha başına {SAHA_BASI_CI}, toplam {AZAMI_CI} CI) nedeniyle {gizlenen} CI gösterilmedi.")
     if spof:
-        uyarilar.append("Tek devre (SPoF) tespiti yalnız lokasyon adı ve devre no ile yapılan bir tahmindir; lokasyon adları tutarsız olabilir.")
-    if LOKASYONSUZ.upper() in {_katla(g["ad"]) for g in secilen}:
-        uyarilar.append("Lokasyon bilgisi olmayan CI'lar 'Lokasyonsuz' altında toplandı.")
+        uyarilar.append("Tek devre (SPoF) tespiti açık adres ve devre no ile yapılan bir tahmindir.")
     return {
         "kaynak": "envanter",
         "spof": bool(spof),
@@ -174,10 +266,12 @@ def ciz(satirlar: list[Any], kritik: set[str], ara: str = "", en_fazla: int = EN
         "kenarlar": kenarlar,
         "sehirler": sehirler,
         "konumsuz_iller": [],
-        "kolonlar": {"loc": "Lokasyon", "ci": "CI adı", "c_no_primary": "Devre No", "bb_host": "CI adındaki PE router"},
+        "kolonlar": {"loc": "Açık adres", "il": "İl / İlçe", "ci": "CI adı", "c_no_primary": "Devre No", "bb_host": "BB router",
+                     "devre_alt": "Devre tipi"},  # fmt: skip
         "satir": len(satirlar),
-        "lokasyon": len(gruplar),
-        "lokasyon_listesi": [{"ad": g["ad"], "ci": len(g["ciler"])} for g in liste[:AZAMI_LOKASYON * 3]],
+        "lokasyon": len(sahalar),
+        "adres_agaci": adres_agaci,
+        "secim": {"il": il, "ilce": ilce, "saha": saha},
         "gosterilen": len(secilen),
         "eslesen": len(eslesen),
         "degerlendirme": "riskli" if spof else "sinirli",

@@ -42,6 +42,23 @@ OZELLIKLER = (
     ("ERISIM_ALTYAPISI", "erisim"),
     ("IZLEME_SAATI", "saat"),
     ("DEVRE_KURULUM_TARIHI", "kurulum"),
+    # TopoMaker (2026-11-24 kullanici: "CI'in alanlarini oku, acik adrese gore filtrele; il / ilce / lokasyona gore spesifik ciz").
+    # Yalniz adres / saha / devre / cihaz tanimi; IP, VAN/LAN adresi, e-posta, SNMP, kullanici adi ALINMAZ.
+    ("MUSTERI_ADDRESS", "adres"),
+    ("LOKASYON_ADI", "lok_adi"),
+    ("HATBASI_LOKASYON", "hatbasi"),
+    ("HATSONU_LOKASYON", "hatsonu"),
+    ("BB_ROUTER_HOSTNAME", "bb"),
+    ("DEVRE_ALTYAPISI", "devre_alt"),
+    ("DEVRE_TIPI", "devre_tipi"),
+    ("URUN_BILGISI", "urun"),
+    ("YEDEKLILIK_KATEGORISI", "yedeklilik"),
+    ("MUSTERI_ROUTER_HOSTNAME", "cpe"),
+    ("CIHAZ_MODEL", "model"),
+    ("ALTYAPI_SAHIPLIGI", "sahiplik"),
+    ("KARSI_UC_DEVRE_NO", "karsi_devre"),
+    ("ANA_HAT_SERVICE_ID", "ana_hat"),
+    ("YEDEK_HAT_SERVICE_ID", "yedek_hat"),
 )
 DURUMLAR = {
     "ACTIVE": ("Aktif", "Active"), "INACTIVE": ("Pasif", "Inactive"), "CANCELLED": ("İptal", "Cancelled"),
@@ -124,7 +141,7 @@ def yenile(db: Session) -> dict[str, Any]:
                 cur.execute(_OZELLIK_SORGU, (ci_nolar[i : i + PARCA], list(adlar)))
                 for ci_no, ad, deger in cur.fetchall():
                     if deger not in (None, ""):
-                        ozellik[str(ci_no)][adlar[ad]] = str(deger).strip()[:200]
+                        ozellik[str(ci_no)][adlar[ad]] = " ".join(str(deger).split())[:300]
         an = simdi()
         satirlar = [{**v, "attrs": ozellik.get(v["ci_no"], {}), "refreshed_at": an} for v in cis.values()]
         db.execute(delete(CustomerCi))
