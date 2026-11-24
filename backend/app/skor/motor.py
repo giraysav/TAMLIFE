@@ -23,13 +23,15 @@ Kriter turleri (UtilCriteria.criteria_json 'type') ve veri:
   servis_cesitliligi  sayisal   'servisler'      : musterinin servisleri -> satirin servis puanlari toplami
   auto_segment        kategorik 'segment'        : SMB / MA 70, SA / PA 100 (varsayilan, 2026-11-24)
   auto_baglanti       kategorik 'baglanti'       : baglanti tipleri (Urun-Tutar; alanlar sonra)
-  auto_sozlesme       sayisal   'fatura_bedeli'  : fatura bedeli TL (Urun-Tutar; yedek kart FT Hacim)
+  auto_sozlesme       alt kriter 'fatura_bedeli' : Fatura (Urun-Tutar fatura bedeli >= 1.000.000 TL) 70 + Kritik Madde 15 + SLA 15
   auto_rapor          sayisal   'rapor_sayisi'   : bu yil aylik rapor hazirlanan ay sayisi (panel)
   auto_kaynaksiz      -         -                : basliktan kaynak cikarilamadi -> hep 'eksik'
 Verisi olmayan kriter 'eksik': toplu / otomatik atama o musteriyi atlar, mevcut skor korunur.
 Servis Cesitliligi: musterinin servisleri (Urun-Tutar > ONENT) satirin servis_puanlari tablosuyla toplanir, barem uygulanir. Verisi
 olmayan musteride servisler Kriter dokumunde isaretlenir; ayni toplam + barem kurali. Servis puanlari YALNIZ kriter tablosunda
 degistirilir (2026-11-24 kullanici).
+Sozlesme (2026-11-24 kullanici): uc alt kriter dokumde isaretlenir - Fatura 70, Kritik Madde +15, SLA +15 (ucu 100). Fatura, Urun-Tutar
+fatura bedeli 1.000.000 TL ve uzeriyse saglanir (veri varsa otomatik, isaret kilitli; yoksa elle). 1 Mio alti fatura saglanmaz.
 """
 import re
 
@@ -42,9 +44,14 @@ SAYISAL = {'auto_onedesk': 'kayit_hacmi', 'auto_servis_sayisi': 'lokasyon_sayisi
            'servis_cesitliligi': 'servisler', 'auto_sozlesme': 'fatura_bedeli', 'auto_rapor': 'rapor_sayisi'}
 KATEGORIK = {'auto_segment': 'segment', 'auto_baglanti': 'baglanti'}
 KAYNAKSIZ = 'auto_kaynaksiz'
-# Sozlesme / Raporlama satirinda barem hucrelerinden TEK birine 'X' yazilirsa o hucrenin puani TUM musteriler icin
-# sabit puandir (kullanici karari 2026-10-08); diger hucreler arayuzde kilitlenir, burada yok sayilir.
-SABIT_PUAN_TURLERI = ('auto_sozlesme', 'auto_rapor')
+# Raporlama satirinda barem hucrelerinden TEK birine 'X' yazilirsa o hucrenin puani TUM musteriler icin sabit puandir (kullanici
+# karari 2026-10-08); diger hucreler arayuzde kilitlenir, burada yok sayilir. Sozlesme 2026-11-24'ten beri alt kriterlerle hesaplanir.
+SABIT_PUAN_TURLERI = ('auto_rapor',)
+# Sozlesme alt kriterleri (2026-11-24 kullanici: "fatura 1 Mio TL ve uzeri, yalniz fatura 70; kritik madde ve SLA +15'er").
+SOZLESME_FATURA = 'Fatura'
+SOZLESME_ALT_KRITERLER = ((SOZLESME_FATURA, 70), ('Kritik Madde', 15), ('SLA', 15))
+FATURA_ESIGI = 1_000_000
+SOZLESME_METNI = 'Fatura (Ürün-Tutar, 1.000.000 TL ve üzeri) 70 · Kritik Madde +15 · SLA +15'
 # Veri olsa da ELLE secilen turler (2026-11-21 kullanici onayi): Raporlama 'Standart / Ozel' olarak dokumden secilir; rapor ayi
 # sayisi puana yansitilmaz (cogu musteride 1 ay -> haksiz 30 puan). Baglanti Tipi (2026-11-24 kullanici): barem Fiber / Karasal /
 # Mobil + yedeklilik; urun -> grup eslesme listesi kullanicidan gelene kadar dokumde secilir (veri kurala baglanmaz).
@@ -58,7 +65,7 @@ TUR_IPUCLARI = (('servis cesit', 'servis_cesitliligi'), ('kayit hacmi', 'auto_on
 KAYNAK_ADLARI = {
     'auto_onedesk': 'Kayıt hacmi · alarm + talep + şikayet (bu yıl kapanan + açık)', 'servis_cesitliligi': 'Ürün-Tutar / ONENT · servis puanları',
     'auto_servis_sayisi': 'Ürün-Tutar · lokasyon sayısı', 'auto_baglanti': 'Kriter dökümünde seçilir (ürün eşleşmesi bekleniyor)',
-    'auto_segment': 'Müşteri kartı · segment', 'auto_sozlesme': 'Ürün-Tutar · fatura bedeli (TL)',
+    'auto_segment': 'Müşteri kartı · segment', 'auto_sozlesme': 'Ürün-Tutar · fatura bedeli + dökümde Kritik Madde / SLA',
     'auto_rapor': 'Aylık Rapor · rapor ayı sayısı', KAYNAKSIZ: 'Kaynak yok (başlıktan anlaşılamadı)',
 }
 # Yalniz Servis Cesitliligi sayfa secimini yedek alir (servisler sayfada secilir).
@@ -70,7 +77,6 @@ VARSAYILAN_KURALLAR = {
     'auto_servis_sayisi': {'b30': '1-19', 'b50': '20-59', 'b70': '60-99', 'b100': '100+'},  # 2026-11-24 kullanici
     'servis_cesitliligi': {'b30': '1-19', 'b50': '20-29', 'b70': '30-39', 'b100': '40+'},
     'auto_segment': {'b70': 'SMB, MA', 'b100': 'SA, PA'},  # 2026-11-24 kullanici
-    'auto_sozlesme': {'b30': '1-49.999', 'b50': '50.000-249.999', 'b70': '250.000-999.999', 'b100': '1.000.000+'},
     'auto_rapor': {'b30': '1-3', 'b50': '4-6', 'b70': '7-9', 'b100': '10+'},
 }
 # Kategori es anlamlilari (normalize edilmis).
@@ -89,7 +95,7 @@ VARSAYILAN_KRITERLER = (
     {'type': 'auto_servis_sayisi', 'title': '3. Lokasyon Sayısı', 'metric': 'Açık adres + atanmış devre (Ürün-Tutar)', 'b30': '1-19', 'b50': '20-59', 'b70': '60-99', 'b100': '100+', 'weight': 5},
     {'type': 'auto_baglanti', 'title': '4. Bağlantı Tipi', 'metric': 'Fiber / Karasal / Mobil + yedeklilik (ürün eşleşmesi bekleniyor; şimdilik dökümde seçilir)', 'b30': 'Yalnız DSL / Mobil (yedeksiz)', 'b50': 'Karasal + Yedek', 'b70': 'Yedeksiz Fiber', 'b100': 'Fiber + Yedek', 'weight': 5},
     {'type': 'auto_segment', 'title': '5. Segment', 'metric': 'SMB / MA 70 · SA / PA 100', 'b30': '', 'b50': '', 'b70': 'SMB, MA', 'b100': 'SA, PA', 'weight': 15},
-    {'type': 'auto_sozlesme', 'title': '6. Sözleşme', 'metric': 'Fatura bedeli TL (Ürün-Tutar; yedek: kart FT Hacim)', 'b30': '1-49.999', 'b50': '50.000-249.999', 'b70': '250.000-999.999', 'b100': '1.000.000+', 'weight': 20},
+    {'type': 'auto_sozlesme', 'title': '6. Sözleşme', 'metric': SOZLESME_METNI, 'b30': '', 'b50': '', 'b70': 'Yalnız Fatura (1.000.000 TL+)', 'b100': 'Fatura + Kritik Madde + SLA', 'weight': 20},
     {'type': 'auto_rapor', 'title': '7. Raporlama', 'metric': 'Bu yıl aylık rapor hazırlanan ay sayısı', 'b30': '1-3', 'b50': '4-6', 'b70': '7-9', 'b100': '10+', 'weight': 15},
 )  # fmt: skip
 
@@ -212,6 +218,24 @@ def servis_kurallari(kriter):
     return [{'puan': p, 'alt': a, 'ust': u} for p, (a, u) in kurallar(kriter)[0]]
 
 
+def sozlesme_degerlendir(metrik, secim):
+    """Sozlesme alt kriterleri -> (puan, alt kriter listesi, saglanan adlar). metrik: Urun-Tutar fatura bedeli {'deger', 'kaynak'} ya da
+    None; secim: dokumde isaretlenen adlar. Fatura verisi varsa fatura isareti veriden gelir (secimdeki yok sayilir)."""
+    secili = {normal(x) for x in (secim or [])}
+    fatura = float(metrik['deger']) if metrik is not None else None
+    alt, saglanan = [], []
+    for ad, puan in SOZLESME_ALT_KRITERLER:
+        oto = ad == SOZLESME_FATURA and fatura is not None
+        tamam = fatura >= FATURA_ESIGI if oto else normal(ad) in secili
+        satir = {'ad': ad, 'puan': puan, 'oto': oto, 'saglandi': tamam}
+        if ad == SOZLESME_FATURA:
+            satir['fatura_bedeli'] = fatura
+        alt.append(satir)
+        if tamam:
+            saglanan.append(ad)
+    return min(100, sum(p for ad, p in SOZLESME_ALT_KRITERLER if ad in saglanan)), alt, saglanan
+
+
 def sabit_puan(kriter):
     """Sozlesme / Raporlama satirinda tam bir barem hucresinde 'X' varsa o hucrenin puani (30/50/70/100), yoksa None.
     Birden fazla X belirsizdir (arayuz buna izin vermez): kural gecerli sayilmaz, satir normal kuralla hesaplanir."""
@@ -276,13 +300,27 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
         sonuc.update(puan=sabit, durum='otomatik', kaynak='Sabit puan (X işareti)', deger='X')
         sonuc['katki'] = round(agirlik * (sabit / 100), 4)
         return sonuc
+    if tur == 'auto_sozlesme':
+        # Alt kriterler: Fatura (Urun-Tutar verisi varsa otomatik) + dokumde Kritik Madde / SLA. Veri de secim de yoksa 'eksik'.
+        metrik = (metrikler or {}).get('fatura_bedeli') if otomatik else None
+        secim = (manuel or {}).get(normal(baslik))
+        secim = [str(x) for x in secim] if isinstance(secim, (list, tuple)) else None
+        puan, alt, saglanan = sozlesme_degerlendir(metrik, secim)
+        sonuc.update(alt_kriterler=alt, secim=secim)
+        if metrik is not None:
+            kaynak = metrik['kaynak'] + (' + ' + MANUEL_KAYNAK if secim else '')
+            sonuc.update(puan=puan, durum='otomatik', kaynak=kaynak, deger=saglanan)
+        elif secim is not None:
+            sonuc.update(puan=puan, durum='manuel', kaynak=MANUEL_KAYNAK, deger=saglanan)
+        sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
+        return sonuc
     if not otomatik and tur == 'servis_cesitliligi':
         # Alt kriter: dokumde alinan servisler isaretlenir (bos liste = hic servis yok, 0 puan); secim yoksa 'eksik'.
         sonuc['servisler'], sonuc['kurallar'] = servis_listesi(kriter), servis_kurallari(kriter)
         secim = (manuel or {}).get(normal(baslik))
         if isinstance(secim, (list, tuple)):
             puan, adlar = servis_secim_puani(kriter, secim)
-            sonuc.update(puan=puan, durum='manuel', kaynak=MANUEL_KAYNAK, deger=adlar)
+            sonuc.update(puan=puan, durum='manuel', kaynak=MANUEL_KAYNAK, deger=adlar, secim=adlar)
         sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
         return sonuc
     if not otomatik:
@@ -329,10 +367,14 @@ def musteri_skoru(kriterler, metrikler, manuel=None, otomatik=True):
 def manuel_secimler(detay):
     """Kaydedilmis skor dokumu -> {normal(baslik): puan}. Tum satirlar: otomatik kriterde
     kaynak hazirsa metrik oncelikli, degilse bu secim yedek olarak kullanilir. Manuel Servis Cesitliligi satirinda deger
-    alinan servis listesidir ({baslik: [servis, ...]})."""
+    alinan servis listesidir ({baslik: [servis, ...]}); Sozlesme satirinda dokumde isaretlenen alt kriterler ('secim')."""
     sonuc = {}
     for satir in (detay or []):
         if not isinstance(satir, dict):
+            continue
+        if satir.get('tur') == 'auto_sozlesme':
+            if isinstance(satir.get('secim'), list):
+                sonuc[normal(satir.get('baslik'))] = [str(x) for x in satir['secim']]
             continue
         if satir.get('tur') == 'servis_cesitliligi' and satir.get('kaynak') == MANUEL_KAYNAK and isinstance(satir.get('deger'), list):
             sonuc[normal(satir.get('baslik'))] = [str(x) for x in satir['deger']]

@@ -283,7 +283,7 @@ def _detay_oku(ham: object) -> list[dict]:
             agirlik = float(satir.get("agirlik") or 0)
         except (TypeError, ValueError):
             continue
-        if puan not in (0, 30, 50, 70, 100) or not math.isfinite(agirlik):
+        if not 0 <= puan <= 100 or not math.isfinite(agirlik):  # Sozlesme alt kriterleri 15 / 85 de verir
             continue
         sonuc.append(
             {"baslik": str(satir.get("baslik") or "")[:200], "tur": str(satir.get("tur") or "manual")[:40], "puan": puan, "agirlik": agirlik}
@@ -292,9 +292,11 @@ def _detay_oku(ham: object) -> list[dict]:
 
 
 def dokum(kriter_sonuclari: list[dict]) -> list[dict]:
-    """Kaydedilen kriter dokumu: kaynak ve deger de saklanir (uretim toplu_atama.dokum)."""
+    """Kaydedilen kriter dokumu: kaynak ve deger de saklanir (uretim toplu_atama.dokum); dokumde yapilan liste secimi (Servis
+    Cesitliligi / Sozlesme) 'secim' olarak saklanir, sonraki hesaplarda kullanilir."""
     return [
         {"baslik": k["baslik"], "tur": k["tur"], "puan": k["puan"], "agirlik": k["agirlik"], "kaynak": k["kaynak"], "deger": k["deger"]}
+        | ({"secim": k["secim"]} if k.get("secim") is not None else {})
         for k in kriter_sonuclari
     ]
 
@@ -358,7 +360,7 @@ def toplu_uygula(db: Session, istenen: object, actor: str, actor_id: int | None)
 
 def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: int | None) -> dict:
     """Kriter dokumunde secilen puanlar (baslik -> kriterin secenegindeki 30/50/70/100; Servis Cesitliligi icin alinan servis
-    listesi) ile cati musterinin final skoru sunucuda hesaplanip yazilir (kaynak 'toplu'). Her kriter secilmis olmali (X sabit puanli
+    listesi; Sozlesme icin isaretlenen alt kriterler) ile cati musterinin final skoru sunucuda hesaplanip yazilir (kaynak 'toplu'). Her kriter secilmis olmali (X sabit puanli
     satir haric); secimler dokumle saklanir. Servis puanlari burada degil kriter tablosunda degistirilir."""
     musteri = db.get(Customer, musteri_id)
     if musteri is None or musteri.parent_id is not None:
@@ -384,6 +386,12 @@ def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: 
             liste = {skor.normal(s["ad"]) for s in skor.servis_listesi(k)}
             if yok := [x for x in secim if skor.normal(x) not in liste]:
                 raise SkorHata(400, f'"{k.get("title")}" listesinde olmayan servis: {", ".join(yok)}')
+        elif skor.tur_coz(k) == "auto_sozlesme":
+            if not isinstance(secim, list):
+                raise SkorHata(400, f'"{k.get("title")}" icin alt kriterler isaretlenmeli.')
+            liste = {skor.normal(ad) for ad, _ in skor.SOZLESME_ALT_KRITERLER}
+            if yok := [x for x in secim if skor.normal(x) not in liste]:
+                raise SkorHata(400, f'"{k.get("title")}" alt kriteri degil: {", ".join(yok)}')
         elif isinstance(secim, list) or secim not in {s["puan"] for s in skor.secenekler(k)}:
             raise SkorHata(400, f'"{k.get("title")}" icin {secim} puanin kriter tablosunda kurali yok.')
     metrikler = kaynaklar.birlesik_metrikler(db, [musteri], kriterler)[0].get(musteri.id, {}) if OTOMATIK_PUANLAMA else {}

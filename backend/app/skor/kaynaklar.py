@@ -8,19 +8,17 @@ basina, ilk hazir olan kullanilir; hata veren kaynak atlanir, siradakine gecilir
   servisler       : Urun-Tutar Excel (musterinin servis/urun adlari)
   segment         : Panel (kartta secilen segment; SEGMENTLER disindaki deger veri sayilmaz)
   baglanti        : Urun-Tutar Excel (baglanti tipleri)
-  fatura_bedeli   : Urun-Tutar Excel > Panel (kart FT Hacim - YEDEK; 0 = veri yok)
+  fatura_bedeli   : YALNIZ Urun-Tutar Excel (2026-11-24 kullanici: "fatura bedelini urun-tutardan alacak"; kart FT Hacim yedegi kaldirildi)
   rapor_sayisi    : Panel (bu yil aylik rapor hazirlanan ay sayisi; 2026-11-21 itibariyla PUANA YANSIMAZ, Raporlama elle secilir)
 
 Panel verisi DEV veritabanindandir: kart sayaclari (Onedesk kayitlari ve Veri Girisi dagitimi doldurur: REPORTDB / CSV / Oracle
-ice alma), Envanter, FT Hacim, segment ve gonderilmis aylik raporlar (report). DB kaynaklari (REPORTDB / ONENTDB)
+ice alma), Envanter, segment ve gonderilmis aylik raporlar (report). DB kaynaklari (REPORTDB / ONENTDB)
 uretimdeki gibi sozlesme bekler: baglanti ayarli degilse 'hazir degil', ayarliysa 'sorgu henuz yazilmadi' uyarisi; tampona alinmis
 bu verileri skora baglamanin yolu kriterdeki veri kaynagi secimidir.
 """
 
 from __future__ import annotations
 
-import re
-from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -49,15 +47,6 @@ class KaynakDegeri:
         self.deger, self.kaynak = deger, kaynak
 
 
-def tutar_ayikla(metin: object) -> float:
-    """Kart tutari ('1.234.567,89 ₺') -> 1234567.89; okunamazsa 0. Turkce bicim: nokta binlik, virgul ondalik."""
-    temiz = re.sub(r"[^0-9.,]", "", str(metin or ""))
-    try:
-        return float(temiz.replace(".", "").replace(",", ".")) if temiz else 0.0
-    except ValueError:
-        return 0.0
-
-
 def rapor_birimi_mi(musteri: Customer) -> bool:
     """musteri.servis.rapor_birimi_mi ile ayni: cati ya da 'ayri rapor' secilmis istirak."""
     return musteri.parent_id is None or bool(musteri.separate_report)
@@ -77,19 +66,6 @@ def yillik_rapor_aylari(db: Session, yil: int | None = None) -> dict[int, int]:
         birim = cid if (ust is None or ayri) else ust
         aylar.setdefault(birim, set()).add(ay)
     return {k: len(v) for k, v in aylar.items()}
-
-
-def panel_sayilari(musteriler: Sequence[Customer], rapor_aylari: dict[int, int]) -> dict[str, float]:
-    """Panel verisinden sayilar (tek tanim): sikayet / talep = bu yil kapanan + su an acik; rapor = bu yil rapor hazirlanan ay
-    sayisi; fatura = kart FT Hacim toplami (TL)."""
-    return {
-        "alarm": sum((c.alarm_count or 0) + (c.alarm_closed_count or 0) for c in musteriler),
-        "sikayet": sum((c.complaint_count or 0) + (c.complaint_closed_count or 0) for c in musteriler),
-        "talep": sum((c.request_count or 0) + (c.request_closed_count or 0) for c in musteriler),
-        "envanter": sum((c.inventory_count or 0) for c in musteriler),
-        "rapor": sum(rapor_aylari.get(c.id, 0) for c in musteriler),
-        "fatura": round(sum(tutar_ayikla(c.ft_volume) for c in musteriler), 2),
-    }
 
 
 class Kaynak:
@@ -114,25 +90,21 @@ class Kaynak:
 
 
 class PanelKaynagi(Kaynak):
-    """Panelin kendi verisi: kart sayaclari (acik + bu yil kapanan sikayet/talep), kartta secilen segment, gonderilmis aylik
-    raporlar, Envanter (lokasyon icin YEDEK) ve FT Hacim (fatura bedeli icin YEDEK)."""
+    """Panelin kendi verisi: kartta secilen segment, gonderilmis aylik raporlar ve Envanter (lokasyon icin YEDEK)."""
 
     ad = "Panel (kart + aylık rapor)"
-    metrikler = ("lokasyon_sayisi", "segment", "rapor_sayisi", "fatura_bedeli")
+    metrikler = ("lokasyon_sayisi", "segment", "rapor_sayisi")
 
     def _oku(self, db: Session, musteriler: list[Customer]) -> dict[int, dict]:
         rapor_aylari = yillik_rapor_aylari(db)
-        sonuc = {}
-        for c in musteriler:
-            s = panel_sayilari([c], rapor_aylari)
-            # FT Hacim girilmemisse (0,00 ₺) veri YOK sayilir - 0 TL fatura degil.
-            sonuc[c.id] = {
-                "lokasyon_sayisi": s["envanter"],
+        return {
+            c.id: {
+                "lokasyon_sayisi": c.inventory_count or 0,
                 "segment": c.segment if c.segment in SEGMENTLER else None,
-                "rapor_sayisi": s["rapor"],
-                "fatura_bedeli": s["fatura"] or None,
+                "rapor_sayisi": rapor_aylari.get(c.id, 0),
             }
-        return sonuc
+            for c in musteriler
+        }
 
 
 class _GunlukOzetKaynagi(Kaynak):
