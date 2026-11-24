@@ -46,7 +46,6 @@ class TopluUygula(BaseModel):
 
 class ManuelSecim(BaseModel):
     secimler: dict[str, int | list[str]] = Field(max_length=servis.EN_FAZLA_KRITER)
-    servis_puanlari: dict[str, float] | None = Field(default=None, max_length=50)
 
 
 class MusteriSkoru(BaseModel):
@@ -115,10 +114,9 @@ def toplu_uygula(body: TopluUygula, user: Principal = Depends(utilizasyon_yetkis
 
 @router.put("/toplu/manuel/{musteri_id}")
 def toplu_manuel(musteri_id: KimlikTipi, body: ManuelSecim, user: Principal = Depends(utilizasyon_yetkisi), db: Session = Depends(get_db)) -> dict:
-    sonuc = servis.manuel_ata(db, musteri_id, body.secimler, user.username, _kimlik(db, user), body.servis_puanlari)
+    sonuc = servis.manuel_ata(db, musteri_id, body.secimler, user.username, _kimlik(db, user))
     db.commit()
-    ek = f" kriter_surumu={sonuc['kriter_surumu']}" if sonuc["kriter_surumu"] else ""
-    _denetim(user, "skor.manuel", f"musteri={musteri_id} skor={sonuc['yeni']}{ek}")
+    _denetim(user, "skor.manuel", f"musteri={musteri_id} skor={sonuc['yeni']}")
     return ok(sonuc)
 
 

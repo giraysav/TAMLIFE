@@ -93,17 +93,20 @@ def cati_kriterleri(db: Session) -> list[dict]:
 
 
 def _servis_puanlari(deger: object, baslik: str) -> dict:
-    gecerli = (
-        isinstance(deger, dict)
-        and len(deger) <= 50
-        and all(
-            isinstance(k, str) and len(k) <= 80 and isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-            for k, v in deger.items()
-        )
-    )
-    if not gecerli:
+    """Kriter tablosunda duzenlenen servis puanlari (2026-11-24: puan atamasi yalniz buradan). Servis adlari sabit listedir (veri
+    eslemesi bu adlara yapilir: Urun-Tutar / ONENT kategorileri); puan 0-100. Eksik servis varsayilan puaniyla tamamlanir."""
+    if not isinstance(deger, dict):
         raise SkorHata(400, f'Kriter "{baslik}" servis puanlari gecersiz.')
-    return dict(deger)  # type: ignore[arg-type]
+    adlar = {skor.normal(ad): ad for ad in skor.SERVIS_PUANLARI}
+    tablo = dict(skor.SERVIS_PUANLARI)
+    for ad, puan in deger.items():
+        asil = adlar.get(skor.normal(str(ad)))
+        if asil is None:
+            raise SkorHata(400, f'"{ad}" servis listesinde yok.')
+        if not isinstance(puan, (int, float)) or isinstance(puan, bool) or not math.isfinite(puan) or not 0 <= puan <= 100:
+            raise SkorHata(400, f'"{asil}" servis puani 0-100 arasinda bir sayi olmali.')
+        tablo[asil] = int(puan) if float(puan).is_integer() else float(puan)
+    return tablo
 
 
 def _kriter_temizle(db: Session, ham: object) -> list[dict]:
@@ -353,44 +356,15 @@ def toplu_uygula(db: Session, istenen: object, actor: str, actor_id: int | None)
     return sonuc
 
 
-def _servis_puanlarini_guncelle(db: Session, ham: object, actor: str, actor_id: int | None) -> int | None:
-    """Dokumde duzenlenen servis puanlari (servis -> puan) Servis Cesitliligi satirina yazilir: degisiklik varsa kriter tablosunun
-    yeni surumu kaydedilir (tum musteriler kayitli secimleriyle yeniden hesaplanir). Donus: yeni surum ya da None."""
-    if ham is None:
-        return None
-    if not isinstance(ham, dict) or len(ham) > 50:
-        raise SkorHata(400, "Servis puanlari gecersiz.")
-    kriterler = cati_kriterleri(db)
-    satir = next((k for k in kriterler if skor.tur_coz(k) == "servis_cesitliligi"), None)
-    if satir is None:
-        raise SkorHata(400, "Kriter tablosunda Servis Cesitliligi satiri yok.")
-    tablo = dict(satir["servis_puanlari"]) if isinstance(satir.get("servis_puanlari"), dict) else dict(skor.SERVIS_PUANLARI)
-    adlar = {skor.normal(ad): ad for ad in tablo}
-    degisti = False
-    for ad, puan in ham.items():
-        if skor.normal(str(ad)) not in adlar:
-            raise SkorHata(400, f'"{ad}" servis listesinde yok.')
-        if not isinstance(puan, (int, float)) or isinstance(puan, bool) or not math.isfinite(puan) or not 0 <= puan <= 1000:
-            raise SkorHata(400, f'"{ad}" servis puani 0-1000 arasinda bir sayi olmali.')
-        asil = adlar[skor.normal(str(ad))]
-        if tablo[asil] != puan:
-            tablo[asil], degisti = puan, True
-    if not degisti:
-        return None
-    satir["servis_puanlari"] = tablo
-    return kriterler_kaydet(db, "parent", kriterler, actor, actor_id)["version"]
-
-
-def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: int | None, servis_puanlari: object = None) -> dict:
+def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: int | None) -> dict:
     """Kriter dokumunde secilen puanlar (baslik -> kriterin secenegindeki 30/50/70/100; Servis Cesitliligi icin alinan servis
     listesi) ile cati musterinin final skoru sunucuda hesaplanip yazilir (kaynak 'toplu'). Her kriter secilmis olmali (X sabit puanli
-    satir haric); secimler dokumle saklanir. servis_puanlari verilirse once kriter tablosuna yazilir (tum musteriler icin gecerli)."""
+    satir haric); secimler dokumle saklanir. Servis puanlari burada degil kriter tablosunda degistirilir."""
     musteri = db.get(Customer, musteri_id)
     if musteri is None or musteri.parent_id is not None:
         raise SkorHata(404, "Cati musteri bulunamadi.")
     if not isinstance(ham, dict) or len(ham) > EN_FAZLA_KRITER:
         raise SkorHata(400, "Kriter secimleri gecersiz.")
-    surum = _servis_puanlarini_guncelle(db, servis_puanlari, actor, actor_id)
     secimler: dict[str, int | list[str]] = {}
     for baslik, puan in ham.items():
         if isinstance(puan, list) and len(puan) <= 50 and all(isinstance(x, str) for x in puan):
@@ -418,7 +392,7 @@ def manuel_ata(db: Session, musteri_id: int, ham: object, actor: str, actor_id: 
         raise SkorHata(400, "En az bir kriter icin puan secin.")
     eski = round(musteri.score, 1) if musteri.score is not None else None
     skoru_yaz(db, musteri, h["skor"], dokum(h["kriterler"]), "toplu", actor, actor_id)
-    return {"id": musteri.id, "ad": musteri.name, "eski": eski, "yeni": h["skor"], "kriter_surumu": surum}
+    return {"id": musteri.id, "ad": musteri.name, "eski": eski, "yeni": h["skor"]}
 
 
 def musteri_skoru_ata(db: Session, musteri_id: int, tam_id: int, deger: object, detay: object, actor: str, actor_id: int | None) -> None:

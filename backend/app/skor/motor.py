@@ -27,8 +27,9 @@ Kriter turleri (UtilCriteria.criteria_json 'type') ve veri:
   auto_rapor          sayisal   'rapor_sayisi'   : bu yil aylik rapor hazirlanan ay sayisi (panel)
   auto_kaynaksiz      -         -                : basliktan kaynak cikarilamadi -> hep 'eksik'
 Verisi olmayan kriter 'eksik': toplu / otomatik atama o musteriyi atlar, mevcut skor korunur.
-Tek istisna Servis Cesitliligi: Urun-Tutar gelene kadar servisler sayfadaki acilir listeden
-secilir; musteriye sayfadan son atanan puani yedektir.
+Servis Cesitliligi: musterinin servisleri (Urun-Tutar > ONENT) satirin servis_puanlari tablosuyla toplanir, barem uygulanir. Verisi
+olmayan musteride servisler Kriter dokumunde isaretlenir; ayni toplam + barem kurali. Servis puanlari YALNIZ kriter tablosunda
+degistirilir (2026-11-24 kullanici).
 """
 import re
 
@@ -197,15 +198,17 @@ def servis_listesi(kriter):
     return liste
 
 
-def servis_orani(kriter, secilen):
-    """Manuel Servis Cesitliligi (2026-10-20 kullanici): kriter puani = alinan servislerin puani / listedeki tum servislerin puani
-    x 100 (barem yok); kriterin agirligi (orn. %20) servislere puanlariyla orantili dagilir. Donus: (puan 0-100, alinan adlar)."""
-    liste = servis_listesi(kriter)
+def servis_secim_puani(kriter, secilen):
+    """Dokumde elle isaretlenen servisler -> (kriter puani, alinan adlar). 2026-11-24 kullanici karari: otomatik veriyle AYNI kural -
+    alinan servislerin puanlari toplanir, satirin 30/50/70/100 baremine gore puanlanir (eski oran kurali kaldirildi)."""
     secili = {normal(x) for x in secilen}
-    alinan = [s for s in liste if normal(s['ad']) in secili]
-    toplam = sum(s['puan'] for s in liste)
-    puan = round(sum(s['puan'] for s in alinan) / toplam * 100, 2) if toplam > 0 else 0.0
-    return puan, [s['ad'] for s in alinan]
+    alinan = [s['ad'] for s in servis_listesi(kriter) if normal(s['ad']) in secili]
+    return kural_puani(kriter, alinan)[0], alinan
+
+
+def servis_kurallari(kriter):
+    """Dokum onizlemesi icin satirin barem kurallari [{puan, alt, ust}] (ust None = sinirsiz)."""
+    return [{'puan': p, 'alt': a, 'ust': u} for p, (a, u) in kurallar(kriter)[0]]
 
 
 def sabit_puan(kriter):
@@ -274,10 +277,10 @@ def kriter_degerlendir(kriter, metrikler, manuel=None, otomatik=True):
         return sonuc
     if not otomatik and tur == 'servis_cesitliligi':
         # Alt kriter: dokumde alinan servisler isaretlenir (bos liste = hic servis yok, 0 puan); secim yoksa 'eksik'.
-        sonuc['servisler'] = servis_listesi(kriter)
+        sonuc['servisler'], sonuc['kurallar'] = servis_listesi(kriter), servis_kurallari(kriter)
         secim = (manuel or {}).get(normal(baslik))
         if isinstance(secim, (list, tuple)):
-            puan, adlar = servis_orani(kriter, secim)
+            puan, adlar = servis_secim_puani(kriter, secim)
             sonuc.update(puan=puan, durum='manuel', kaynak=MANUEL_KAYNAK, deger=adlar)
         sonuc['katki'] = round(agirlik * (sonuc['puan'] / 100), 4)
         return sonuc
