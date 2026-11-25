@@ -8,6 +8,8 @@ __pycache__/
 .env.*
 node_modules/
 dist/
+# canli arayuz derlemesi git'te izlenir (gelistirmede derlenir, sunucu yalniz ceker; 2026-11-25)
+!ekran-react/dist/
 *.log
 *.db
 *.db-shm
