@@ -1,0 +1,587 @@
+backend/araclar/ariza_bildir.py
+  s_35f59806ed5eb5::t_dd273ff380502f 1-30
+backend/araclar/db_yedek.py
+  s_35f59806ed5eb5::t_6794dcca5e14e2 1-53
+backend/araclar/genel_test.py
+  s_35f59806ed5eb5::t_effc43ff565c22 1-298
+backend/araclar/guncelleme_dogrula.py
+  s_35f59806ed5eb5::t_8e9a586d250e80 1-179
+backend/araclar/panel_saglik.py
+  s_35f59806ed5eb5::t_35ca3aec051c62 1-148
+backend/araclar/reportdb_kesif.py
+  s_35f59806ed5eb5::t_3a85d247b9665f 1-229
+backend/araclar/sizma_testi.py
+  s_35f59806ed5eb5::t_82e74475f65aac 1-175
+backend/araclar/yuk/e2e_sunucu.py
+  s_35f59806ed5eb5::t_08decabc0c2f05 1-103
+backend/araclar/yuk/locustfile.py
+  s_35f59806ed5eb5::t_3a2f9537ae8697 1-74
+backend/araclar/yuk/ornek.py
+  s_35f59806ed5eb5::t_77caf99011b13a 1-250
+backend/araclar/yuk/yuk_testi.py
+  s_f3a3bbba3a8c11::t_82db67cca1fcda 1-331
+backend/pytest.ini
+  s_f3a3bbba3a8c11::t_db1cf790af528b 1-6
+backend/requirements-test.txt
+  s_f3a3bbba3a8c11::t_81e1030bc26d2b 1-3
+backend/ruff.toml
+  s_f3a3bbba3a8c11::t_bdf8efac0c2dad 1-5
+backend/tests/conftest.py
+  s_f3a3bbba3a8c11::t_01c8f15fbbb588 1-69
+backend/tests/skor_golden.json
+  s_f3a3bbba3a8c11::t_5e991d14b9f0b1 1-2378
+backend/tests/test_ad.py
+  s_f3a3bbba3a8c11::t_c3c0d73a5eb81b 1-384
+backend/tests/test_akislar.py
+  s_f3a3bbba3a8c11::t_cc2269fe1e74a0 1-115
+backend/tests/test_alembic.py
+  s_f3a3bbba3a8c11::t_e2f14e4fa22c59 1-143
+backend/tests/test_arayuz_sunumu.py
+  s_f3a3bbba3a8c11::t_f05176e0ae84e8 1-62
+backend/tests/test_auth_security.py
+  s_f3a3bbba3a8c11::t_04310126cbe9ba 1-226
+backend/tests/test_dil.py
+  s_f3a3bbba3a8c11::t_27ed3f52271cff 1-56
+backend/tests/test_ekip.py
+  s_f3a3bbba3a8c11::t_73466d7e6308c9 1-213
+backend/tests/test_eski_aktar.py
+  s_f3a3bbba3a8c11::t_2ecf87d1e734e5 1-301
+backend/tests/test_eslesme.py
+  s_f3a3bbba3a8c11::t_544e548187a9c7 1-56
+backend/tests/test_fark.py
+  s_f3a3bbba3a8c11::t_22e47f23ea991b 1-143
+backend/tests/test_gecmis_temizle.py
+  s_f3a3bbba3a8c11::t_7825f7c9ab0666 1-102
+backend/tests/test_gelir_onay.py
+  s_f3a3bbba3a8c11::t_f881f15a413554 1-216
+backend/tests/test_gelir_uretim.py
+  s_f3a3bbba3a8c11::t_4db5240be26247 1-763
+backend/tests/test_gelir_uretim_ayristir.py
+  s_f3a3bbba3a8c11::t_62c0fc8c6e1011 1-304
+backend/tests/test_genel_test.py
+  s_f3a3bbba3a8c11::t_07276753d7f061 1-114
+backend/tests/test_guvenlik_sinir.py
+  s_f3a3bbba3a8c11::t_3718905742a64a 1-252
+backend/tests/test_imza.py
+  s_f3a3bbba3a8c11::t_8279d859fc1cda 1-122
+backend/tests/test_katalog.py
+  s_f3a3bbba3a8c11::t_a26d9fa334dd57 1-358
+backend/tests/test_kimlik_siniri.py
+  s_f3a3bbba3a8c11::t_8a70326e7c6ae6 1-179
+backend/tests/test_kullanici_silme.py
+  s_f3a3bbba3a8c11::t_de701218df8950 1-357
+backend/tests/test_kurum_takvimi.py
+  s_f3a3bbba3a8c11::t_d45f4faf63ebd6 1-87
+backend/tests/test_musteri.py
+  s_f3a3bbba3a8c11::t_434e3a63bf2417 1-556
+backend/tests/test_musteri_alani.py
+  s_f3a3bbba3a8c11::t_bba9d68b6fbb8d 1-147
+backend/tests/test_musteri_cati.py
+  s_f3a3bbba3a8c11::t_ae95e202fe0616 1-64
+backend/tests/test_musteri_ham.py
+  s_f3a3bbba3a8c11::t_a5d1cdaf862d32 1-284
+backend/tests/test_musteri_kayitlar.py
+  s_f3a3bbba3a8c11::t_6f12e577e18673 1-71
+backend/tests/test_ozellikler.py
+  s_f3a3bbba3a8c11::t_07857e20650341 1-655
+backend/tests/test_personel_senkron.py
+  s_f3a3bbba3a8c11::t_fa192b9a6940ee 1-133
+backend/tests/test_postgres.py
+  s_f3a3bbba3a8c11::t_79fa912946602f 1-253
+backend/tests/test_profil_foto.py
+  s_f3a3bbba3a8c11::t_a8572573dae005 1-38
+backend/tests/test_profil_kisi_musteri_listesi.py
+  s_f3a3bbba3a8c11::t_baa8950342e6d0 1-210
+backend/tests/test_proje.py
+  s_f3a3bbba3a8c11::t_7426c96be5c3cb 1-149
+backend/tests/test_proje_ice_al.py
+  s_f3a3bbba3a8c11::t_ea0eb8a09446d0 1-125
+backend/tests/test_radar.py
+  s_f3a3bbba3a8c11::t_b342e1d81e90c3 1-68
+backend/tests/test_radar_analiz.py
+  s_f3a3bbba3a8c11::t_7023015e29f012 1-84
+backend/tests/test_rapor_sla.py
+  s_f3a3bbba3a8c11::t_7f8c15ba2c0fc9 1-317
+backend/tests/test_reportdb.py
+  s_f3a3bbba3a8c11::t_f19065d9ed8137 1-571
+backend/tests/test_roller.py
+  s_f3a3bbba3a8c11::t_2d63347fe81dea 1-232
+backend/tests/test_skor.py
+  s_f3a3bbba3a8c11::t_1b2aec610ed778 1-74
+backend/tests/test_skor_api.py
+  s_f3a3bbba3a8c11::t_b2669a350c176d 1-206
+backend/tests/test_sorgu_sayisi.py
+  s_f3a3bbba3a8c11::t_d963ee02f08e68 1-77
+backend/tests/test_sqlite_kilit.py
+  s_f3a3bbba3a8c11::t_b4aee70bf63b58 1-88
+backend/tests/test_sunum.py
+  s_f3a3bbba3a8c11::t_b91e27e9da510d 1-502
+backend/tests/test_sunum_senkron.py
+  s_f3a3bbba3a8c11::t_a1e24c7c89fa3a 1-116
+backend/tests/test_takvim_senkron.py
+  s_f3a3bbba3a8c11::t_c908df17471615 1-86
+backend/tests/test_talep.py
+  s_f3a3bbba3a8c11::t_ce4678cfacd87d 1-192
+backend/tests/test_tampon.py
+  s_f3a3bbba3a8c11::t_c9c79a2c912638 1-470
+backend/tests/test_temip_atama.py
+  s_f3a3bbba3a8c11::t_ec13b424201a4e 1-118
+backend/tests/test_temip_kayit.py
+  s_f3a3bbba3a8c11::t_74cc0c5aefbe50 1-359
+backend/tests/test_topoloji.py
+  s_f3a3bbba3a8c11::t_6a6951388806f6 1-165
+backend/tests/test_utilizasyon.py
+  s_f3a3bbba3a8c11::t_4a5d5253654d0e 1-316
+backend/tests/test_yonetim.py
+  s_f3a3bbba3a8c11::t_84632d70c44dbd 1-320
+backend/tests/test_yuk_async_bellek.py
+  s_f3a3bbba3a8c11::t_2cd4f31b5b28b0 1-216
+backend/tests/test_yuk_ornek.py
+  s_f3a3bbba3a8c11::t_168a16c0d64129 1-94
+backend/tests/test_yuk_sinirlayici.py
+  s_f3a3bbba3a8c11::t_f986153ff2e6dd 1-74
+backend/tests/test_yuk_yaris.py
+  s_f3a3bbba3a8c11::t_f5a4fac6c4e9e3 1-66
+docs/architecture.md
+  s_f3a3bbba3a8c11::t_ea6ebf667d1dac 1-94
+docs/eposta-gonderimi.md
+  s_f3a3bbba3a8c11::t_759a3a25b30005 1-21
+docs/inceleme-2026-10-16.md
+  s_f3a3bbba3a8c11::t_4dbc527b9e3b9b 1-93
+docs/kararlar.md
+  s_f3a3bbba3a8c11::t_d3056f4a9d2414 1-155
+docs/lansman-oncesi-bulgular.md
+  s_f3a3bbba3a8c11::t_189e2c9b70b24d 1-28
+docs/modul-onedesk-gelir-takvim.md
+  s_f3a3bbba3a8c11::t_54513fbbbc221b 1-49
+docs/musteri-karti.md
+  s_f3a3bbba3a8c11::t_05e9525c64af24 1-41
+docs/onedesk-pg-sorgu.md
+  s_f3a3bbba3a8c11::t_677f3040d68a9c 1-39
+docs/reportdb-tablo-kesfi.md
+  s_f3a3bbba3a8c11::t_73d431bc217079 1-133
+docs/test-ve-ariza-inceleme.md
+  s_f3a3bbba3a8c11::t_454e294722cd92 1-58
+docs/topoloji-ve-dizin.md
+  s_f3a3bbba3a8c11::t_ac08c848a7199b 1-177
+docs/veri-yonetimi.md
+  s_f3a3bbba3a8c11::t_7df9382574ccf4 1-124
+docs/yonetim-ve-tampon-tasarimi.md
+  s_f3a3bbba3a8c11::t_3ecb489f75862e 1-110
+ekran-react/.gitignore
+  s_f3a3bbba3a8c11::t_0aa4a18b7f5fcc 1-28
+ekran-react/e2e-oturum/ortam.ts
+  s_f3a3bbba3a8c11::t_da112a14163875 1-14
+ekran-react/e2e-oturum/oturum-dusme.spec.ts
+  s_f3a3bbba3a8c11::t_d4f0f8819681fc 1-98
+ekran-react/e2e/giris.spec.ts
+  s_f3a3bbba3a8c11::t_4d7d1a45b37750 1-188
+ekran-react/e2e/musteri.spec.ts
+  s_f3a3bbba3a8c11::t_1772fe6fa921e8 1-97
+ekran-react/index.html
+  s_f3a3bbba3a8c11::t_e0068fa3647932 1-13
+ekran-react/package.json
+  s_f3a3bbba3a8c11::t_5db1a5234f5058 1-44
+ekran-react/playwright.config.ts
+  s_f3a3bbba3a8c11::t_2dda4090f7b4b4 1-6
+ekran-react/playwright.oturum.config.ts
+  s_f3a3bbba3a8c11::t_8d4d48ecb19e88 1-23
+ekran-react/postcss.config.cjs
+  s_f3a3bbba3a8c11::t_8f9fbb6d97ddbc 1-5
+ekran-react/public/favicon.svg
+  s_f3a3bbba3a8c11::t_79e71d3d8d84d8 1
+ekran-react/public/html2canvas-1.4.1.min.js
+  s_f3a3bbba3a8c11::t_11268116492720 1-20
+ekran-react/public/jspdf-4.2.1.umd.min.js
+  s_f3a3bbba3a8c11::t_672d6078bbb18f 1-373
+ekran-react/src/App.tsx
+  s_f3a3bbba3a8c11::t_6c419fc6c27189 1-43
+ekran-react/src/app/providers.tsx
+  s_f3a3bbba3a8c11::t_4b33dc1611dad5 1-14
+ekran-react/src/components/cekmece.tsx
+  s_f3a3bbba3a8c11::t_5840ed08c506d3 1-45
+ekran-react/src/components/coklu-secim.tsx
+  s_f3a3bbba3a8c11::t_670727794fb2ec 1-103
+ekran-react/src/components/duzenlenebilir-tablo.tsx
+  s_f3a3bbba3a8c11::t_cdba35235c4a9a 1-256
+ekran-react/src/components/grafik.tsx
+  s_f3a3bbba3a8c11::t_f21ed34b696a3a 1-143
+ekran-react/src/components/sayfa-ui.tsx
+  s_f3a3bbba3a8c11::t_7b79b4600d4673 1-340
+ekran-react/src/components/temip-atama.tsx
+  s_f3a3bbba3a8c11::t_953e39458cd53d 1-275
+ekran-react/src/components/ui/button.tsx
+  s_f3a3bbba3a8c11::t_16b6b9316d7456 1-42
+ekran-react/src/components/ui/card.tsx
+  s_f3a3bbba3a8c11::t_849c8882ad6a69 1-23
+ekran-react/src/components/ui/input.tsx
+  s_f3a3bbba3a8c11::t_392b200dd095d6 1-16
+ekran-react/src/components/ui/label.tsx
+  s_f3a3bbba3a8c11::t_758da196595f9b 1-13
+ekran-react/src/components/ui/modul-yayi.test.ts
+  s_f3a3bbba3a8c11::t_0953619e1a0018 1-45
+ekran-react/src/components/ui/modul-yayi.tsx
+  s_f3a3bbba3a8c11::t_07103f4d4cbc03 1-349
+ekran-react/src/components/ui/ozet-orbit.tsx
+  s_f3a3bbba3a8c11::t_f1b97c29e49aab 1-62
+ekran-react/src/components/ui/sheet.tsx
+  s_f3a3bbba3a8c11::t_6925201ef7d7d0 1-40
+ekran-react/src/components/ui/sidebar.tsx
+  s_f3a3bbba3a8c11::t_9036d04bf32a0c 1-171
+ekran-react/src/components/ui/skeleton.tsx
+  s_f3a3bbba3a8c11::t_07f1025a746cb6 1-7
+ekran-react/src/ekip/ekip-metin.ts
+  s_f3a3bbba3a8c11::t_928214bc5d2ece 1-36
+ekran-react/src/ekip/ekip-ozeti.tsx
+  s_f3a3bbba3a8c11::t_3258d5f8989838 1-150
+ekran-react/src/ekip/ekip.test.tsx
+  s_f3a3bbba3a8c11::t_4981ab3a400c9c 1-101
+ekran-react/src/gelir-uretim/ayrinti.tsx
+  s_f3a3bbba3a8c11::t_e740efd82322be 1-215
+ekran-react/src/gelir-uretim/gelir-uretim-metin.ts
+  s_f3a3bbba3a8c11::t_7891a164e617fa 1-456
+ekran-react/src/gelir-uretim/gelir-uretim-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_e386c9bea5f1a1 1-386
+ekran-react/src/gelir-uretim/gelir-uretim.test.tsx
+  s_f3a3bbba3a8c11::t_9038956311683a 1-676
+ekran-react/src/gelir-uretim/ice-aktar.tsx
+  s_f3a3bbba3a8c11::t_763f4c32abfbfe 1-189
+ekran-react/src/gelir-uretim/kayit-formu.tsx
+  s_f3a3bbba3a8c11::t_451ec60b77a73e 1-320
+ekran-react/src/gelir-uretim/ortak.tsx
+  s_f3a3bbba3a8c11::t_6bc3a697e655b4 1-69
+ekran-react/src/gelir-uretim/rapor.tsx
+  s_f3a3bbba3a8c11::t_5ae41b859fdabb 1-153
+ekran-react/src/gelir/apn-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_45ecef1adcaa7a 1-178
+ekran-react/src/gelir/gelir-metin.ts
+  s_f3a3bbba3a8c11::t_62d0661d2e01e9 1-109
+ekran-react/src/gelir/gelir.test.tsx
+  s_f3a3bbba3a8c11::t_1264e95c2a7e6d 1-65
+ekran-react/src/gelir/sms-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_186df0ee9a179c 1-89
+ekran-react/src/index.css
+  s_f3a3bbba3a8c11::t_c31e48cb774e92 1-167
+ekran-react/src/lib/bicim.test.ts
+  s_f3a3bbba3a8c11::t_b1582d5f60ebad 1-11
+ekran-react/src/lib/bicim.ts
+  s_f3a3bbba3a8c11::t_7d7a0ea1a3bdf3 1-76
+ekran-react/src/lib/buyuk-harf.test.ts
+  s_f3a3bbba3a8c11::t_109b18b7ca0eab 1-54
+ekran-react/src/lib/buyuk-harf.ts
+  s_f3a3bbba3a8c11::t_66ed18c7633c51 1-52
+ekran-react/src/lib/foto.ts
+  s_f3a3bbba3a8c11::t_20ed6196499442 1-16
+ekran-react/src/lib/hareket.ts
+  s_f3a3bbba3a8c11::t_49d3707abcd708 1-68
+ekran-react/src/lib/http.test.ts
+  s_f3a3bbba3a8c11::t_4afb44d6ceec28 1-44
+ekran-react/src/lib/http.ts
+  s_f3a3bbba3a8c11::t_25eabc247013c4 1-40
+ekran-react/src/lib/kanca.ts
+  s_f3a3bbba3a8c11::t_b5f4ccf2aecd4f 1-11
+ekran-react/src/lib/oturum.ts
+  s_f3a3bbba3a8c11::t_75ec61febd55b5 1-163
+ekran-react/src/lib/sorgu.ts
+  s_f3a3bbba3a8c11::t_3e6de7f6d56f9a 1-50
+ekran-react/src/lib/utils.ts
+  s_f3a3bbba3a8c11::t_76e3e53d525db0 1-6
+ekran-react/src/lib/yazi.ts
+  s_f3a3bbba3a8c11::t_10ba33f8711283 1-59
+ekran-react/src/lib/yillar.test.ts
+  s_f3a3bbba3a8c11::t_50b0034cc63c26 1-11
+ekran-react/src/lib/yillar.ts
+  s_f3a3bbba3a8c11::t_36e707c3c718df 1-17
+ekran-react/src/main.tsx
+  s_f3a3bbba3a8c11::t_665b7cc571e619 1-20
+ekran-react/src/musteri/aylik-rapor-gonderim.test.tsx
+  s_f3a3bbba3a8c11::t_e6177d50fa665c 1-52
+ekran-react/src/musteri/aylik-rapor.test.ts
+  s_f3a3bbba3a8c11::t_459655910afd3a 1-40
+ekran-react/src/musteri/aylik-rapor.tsx
+  s_f3a3bbba3a8c11::t_7631d7800655dd 1-570
+ekran-react/src/musteri/kayitlar.test.tsx
+  s_f3a3bbba3a8c11::t_53834482fa7212 1-65
+ekran-react/src/musteri/kayitlar.tsx
+  s_f3a3bbba3a8c11::t_6289ddd58988f3 1-151
+ekran-react/src/musteri/musteri-ekle-formu.tsx
+  s_f3a3bbba3a8c11::t_4418b205b731c9 1-154
+ekran-react/src/musteri/musteri-karti.tsx
+  s_f3a3bbba3a8c11::t_8f7962a18dea3a 1-706
+ekran-react/src/musteri/musteri-listesi.test.tsx
+  s_f3a3bbba3a8c11::t_7cc647d460b4cb 1-64
+ekran-react/src/musteri/musteri-listesi.tsx
+  s_f3a3bbba3a8c11::t_eefa9b33c1d98c 1-178
+ekran-react/src/musteri/musteri-metin.ts
+  s_f3a3bbba3a8c11::t_c703c2c84bad15 1-452
+ekran-react/src/musteri/musteri-rapor.tsx
+  s_f3a3bbba3a8c11::t_310f585946a45e 1-46
+ekran-react/src/musteri/musteri-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_3159906b2f4b67 1-29
+ekran-react/src/musteri/musteri-yolu.test.tsx
+  s_f3a3bbba3a8c11::t_b296ff1185b450 1-25
+ekran-react/src/musteri/musteri-yolu.ts
+  s_f3a3bbba3a8c11::t_403ff58df3ecce 1-15
+ekran-react/src/musteri/portfoy-kart.tsx
+  s_f3a3bbba3a8c11::t_da260002b2c940 1-115
+ekran-react/src/musteri/portfoy-metin.ts
+  s_f3a3bbba3a8c11::t_2a803e674d3484 1-151
+ekran-react/src/musteri/rapor-ice-aktar.test.tsx
+  s_f3a3bbba3a8c11::t_96ffe8222f973a 1-48
+ekran-react/src/musteri/rapor-ice-aktar.tsx
+  s_f3a3bbba3a8c11::t_df1afd1bea03cb 1-138
+ekran-react/src/musteri/rapor-onizleme.test.tsx
+  s_f3a3bbba3a8c11::t_ebb4612370fac4 1-31
+ekran-react/src/musteri/rapor-onizleme.tsx
+  s_f3a3bbba3a8c11::t_24b6090900b5c0 1-128
+ekran-react/src/musteri/rapor-pdf.ts
+  s_f3a3bbba3a8c11::t_0b807ae2abb022 1-334
+ekran-react/src/musteri/rapor-sayfasi.test.tsx
+  s_f3a3bbba3a8c11::t_e60bcd9c1d05c0 1-43
+ekran-react/src/musteri/rapor-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_9732a9bbe288c3 1-232
+ekran-react/src/musteri/sla-analizi-geri-al.test.tsx
+  s_f3a3bbba3a8c11::t_38cc0198f45aee 1-52
+ekran-react/src/musteri/sla-analizi.tsx
+  s_f3a3bbba3a8c11::t_5f4ef57786944c 1-102
+ekran-react/src/musteri/sla-paneli.tsx
+  s_f3a3bbba3a8c11::t_77bb9f736da943 1-233
+ekran-react/src/musteri/taslak-otomatik.test.tsx
+  s_f3a3bbba3a8c11::t_4d6c356e6d448a 1-120
+ekran-react/src/musteri/taslak-otomatik.ts
+  s_f3a3bbba3a8c11::t_2e319a9337340a 1-180
+ekran-react/src/onedesk/analiz.tsx
+  s_f3a3bbba3a8c11::t_dc0513e8b4fc0e 1-212
+ekran-react/src/onedesk/kaynak.tsx
+  s_f3a3bbba3a8c11::t_ba19732ebaacef 1-104
+ekran-react/src/onedesk/onedesk-metin.ts
+  s_f3a3bbba3a8c11::t_b962dd86fa6c9d 1-154
+ekran-react/src/onedesk/onedesk-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_7ca9a9a2219f7f 1-105
+ekran-react/src/onedesk/tipler.ts
+  s_f3a3bbba3a8c11::t_00cffb238221bd 1-47
+ekran-react/src/panel-gorunum.test.tsx
+  s_f3a3bbba3a8c11::t_7f92ff49ac647c 1-372
+ekran-react/src/profil-yetki-musteri.test.tsx
+  s_f3a3bbba3a8c11::t_54e5b36426b16e 1-430
+ekran-react/src/proje/ice-aktar.test.tsx
+  s_f3a3bbba3a8c11::t_df8911c4edb57a 1-60
+ekran-react/src/proje/ice-aktar.tsx
+  s_f3a3bbba3a8c11::t_716dccb8a2f493 1-191
+ekran-react/src/proje/proje-metin.ts
+  s_f3a3bbba3a8c11::t_5c8e303b25c8a8 1-155
+ekran-react/src/proje/proje-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_a8efcdccf949b3 1-497
+ekran-react/src/proje/proje.test.tsx
+  s_f3a3bbba3a8c11::t_9bdb7e08da0534 1-120
+ekran-react/src/radar/radar-metin.ts
+  s_f3a3bbba3a8c11::t_5bc22cdb8058dc 1-100
+ekran-react/src/radar/radar-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_6f4dd65b88dece 1-272
+ekran-react/src/radar/radar-sunum-metin.ts
+  s_f3a3bbba3a8c11::t_9b74cb1b488144 1-153
+ekran-react/src/radar/radar-sunum.tsx
+  s_f3a3bbba3a8c11::t_47d3b2ce3d703a 1-414
+ekran-react/src/radar/radar.test.tsx
+  s_f3a3bbba3a8c11::t_f497a3e88f2c24 1-151
+ekran-react/src/shell/arama.tsx
+  s_f3a3bbba3a8c11::t_23acbf55ea8cef 1-75
+ekran-react/src/shell/bildirim.test.tsx
+  s_f3a3bbba3a8c11::t_17665cfee915ce 1-35
+ekran-react/src/shell/bildirim.tsx
+  s_f3a3bbba3a8c11::t_731de6acd30358 1-119
+ekran-react/src/shell/giris.tsx
+  s_f3a3bbba3a8c11::t_518c7c436fc0cd 1-81
+ekran-react/src/shell/ikon.ts
+  s_f3a3bbba3a8c11::t_9985e396b1d47b 1-38
+ekran-react/src/shell/imza-editoru.tsx
+  s_f3a3bbba3a8c11::t_4f92110680a6c3 1-511
+ekran-react/src/shell/kullanici-karti.tsx
+  s_f3a3bbba3a8c11::t_aa0d20238c02df 1-200
+ekran-react/src/shell/metin.ts
+  s_f3a3bbba3a8c11::t_7e7794c4781144 1-409
+ekran-react/src/shell/modul-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_bb7e8eeecd7b20 1-66
+ekran-react/src/shell/panel.tsx
+  s_f3a3bbba3a8c11::t_eab08c7d56bc0e 1-363
+ekran-react/src/shell/profil-foto.test.tsx
+  s_f3a3bbba3a8c11::t_0d01d65f3b1de0 1-65
+ekran-react/src/shell/profil-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_0ddf63853c15b9 1-213
+ekran-react/src/shell/roller-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_5f02f87746b0a7 1-768
+ekran-react/src/shell/rota.test.ts
+  s_f3a3bbba3a8c11::t_7355e8d4e44941 1-17
+ekran-react/src/shell/rota.ts
+  s_f3a3bbba3a8c11::t_942ffe80b31f24 1-35
+ekran-react/src/sunum/sayilar-seridi.tsx
+  s_f3a3bbba3a8c11::t_4dbfc894c20efd 1-63
+ekran-react/src/sunum/sunum-disa-aktar.tsx
+  s_f3a3bbba3a8c11::t_0efd4a441b2e4a 1-47
+ekran-react/src/sunum/sunum-kartlari.tsx
+  s_f3a3bbba3a8c11::t_4d41afcb726417 1-211
+ekran-react/src/sunum/sunum-kaynaklari.tsx
+  s_f3a3bbba3a8c11::t_f4689b364bdd90 1-95
+ekran-react/src/sunum/sunum-metin.ts
+  s_f3a3bbba3a8c11::t_0fda6a20211319 1-248
+ekran-react/src/sunum/sunum-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_898aa149eab72c 1-399
+ekran-react/src/sunum/sunum-senkron.tsx
+  s_f3a3bbba3a8c11::t_46157cc630526f 1-105
+ekran-react/src/sunum/sunum-slayt.tsx
+  s_f3a3bbba3a8c11::t_5a893f767fd1dd 1-91
+ekran-react/src/sunum/sunum-tipleri.ts
+  s_f3a3bbba3a8c11::t_8a67b3f36edceb 1-47
+ekran-react/src/sunum/sunum.test.tsx
+  s_f3a3bbba3a8c11::t_179d27049dd930 1-449
+ekran-react/src/sunum/tanitim-karti.tsx
+  s_f3a3bbba3a8c11::t_990d91133ac32a 1-166
+ekran-react/src/takvim/izin-takvim.test.tsx
+  s_f3a3bbba3a8c11::t_14a1e0c7ceed7f 1-207
+ekran-react/src/takvim/izin-takvim.tsx
+  s_f3a3bbba3a8c11::t_4c3eaa74631287 1-392
+ekran-react/src/takvim/takvim-grafigi.tsx
+  s_f3a3bbba3a8c11::t_d7e8bcfbc0f056 1-45
+ekran-react/src/takvim/takvim-metin.ts
+  s_f3a3bbba3a8c11::t_cc2ee418d405a0 1-219
+ekran-react/src/takvim/tam-takvim.test.tsx
+  s_f3a3bbba3a8c11::t_e31521cd32ab6f 1-81
+ekran-react/src/takvim/tam-takvim.tsx
+  s_f3a3bbba3a8c11::t_584f3e3428eb68 1-337
+ekran-react/src/talep/talep-metin.ts
+  s_f3a3bbba3a8c11::t_b909200427e986 1-180
+ekran-react/src/talep/talep-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_621b526c2acea2 1-457
+ekran-react/src/talep/talep.test.tsx
+  s_f3a3bbba3a8c11::t_a85800c9f2ee11 1-121
+ekran-react/src/test/setup.ts
+  s_f3a3bbba3a8c11::t_487a62828d4087 1
+ekran-react/src/topoloji/topo-maker.tsx
+  s_f3a3bbba3a8c11::t_a3337b0f33f817 1-357
+ekran-react/src/topoloji/topoloji-metin.ts
+  s_f3a3bbba3a8c11::t_e77f11239630c7 1-80
+ekran-react/src/topoloji/topoloji.test.tsx
+  s_f3a3bbba3a8c11::t_25655bce81884a 1-92
+ekran-react/src/yeni-ozellikler.test.tsx
+  s_f3a3bbba3a8c11::t_020b40e9132532 1-277
+ekran-react/src/yonetim/api.ts
+  s_f3a3bbba3a8c11::t_0923f9fe261abe 1-557
+ekran-react/src/yonetim/bolumler/arizalar.tsx
+  s_f3a3bbba3a8c11::t_cbb2a979443d38 1-220
+ekran-react/src/yonetim/bolumler/durum.tsx
+  s_f3a3bbba3a8c11::t_1616ea5613dc55 1-90
+ekran-react/src/yonetim/bolumler/gunlukler.tsx
+  s_f3a3bbba3a8c11::t_f3e4441df56408 1-213
+ekran-react/src/yonetim/bolumler/kurum.tsx
+  s_f3a3bbba3a8c11::t_467bd8ea992014 1-254
+ekran-react/src/yonetim/bolumler/roller.tsx
+  s_f3a3bbba3a8c11::t_a602287ac2486d 1-7
+ekran-react/src/yonetim/bolumler/tampon.tsx
+  s_f3a3bbba3a8c11::t_e288cb4295dae5 1-178
+ekran-react/src/yonetim/bolumler/utilizasyon.tsx
+  s_f3a3bbba3a8c11::t_8c19820087b583 1-65
+ekran-react/src/yonetim/bolumler/veritabani.tsx
+  s_f3a3bbba3a8c11::t_3f0256c1728fcd 1-156
+ekran-react/src/yonetim/metin.ts
+  s_f3a3bbba3a8c11::t_06c4b92cd1b484 1-615
+ekran-react/src/yonetim/tampon/akislar.tsx
+  s_f3a3bbba3a8c11::t_77cdbf4f0ebe20 1-71
+ekran-react/src/yonetim/tampon/analiz.tsx
+  s_f3a3bbba3a8c11::t_77cf4a059c6438 1-181
+ekran-react/src/yonetim/tampon/csv-yukle.tsx
+  s_f3a3bbba3a8c11::t_40d14c2442507a 1-60
+ekran-react/src/yonetim/tampon/dagitim.tsx
+  s_f3a3bbba3a8c11::t_ce5c03d7f61880 1-342
+ekran-react/src/yonetim/tampon/eslesme.tsx
+  s_f3a3bbba3a8c11::t_b3d2966c778175 1-83
+ekran-react/src/yonetim/tampon/fark.tsx
+  s_f3a3bbba3a8c11::t_8ba9314b574b1f 1-399
+ekran-react/src/yonetim/tampon/ice-aktarma-gecmisi.test.tsx
+  s_f3a3bbba3a8c11::t_5e151684707da3 1-39
+ekran-react/src/yonetim/tampon/ice-aktarma-gecmisi.tsx
+  s_f3a3bbba3a8c11::t_a5b22c6de1dd75 1-70
+ekran-react/src/yonetim/tampon/katalog.tsx
+  s_f3a3bbba3a8c11::t_69ec455a64093a 1-461
+ekran-react/src/yonetim/tampon/kaynaklar.tsx
+  s_f3a3bbba3a8c11::t_8d8a91cde71fe5 1-168
+ekran-react/src/yonetim/tampon/kural-formu.tsx
+  s_f3a3bbba3a8c11::t_d418b99257d611 1-210
+ekran-react/src/yonetim/tampon/metin.ts
+  s_f3a3bbba3a8c11::t_8d385b93e63987 1-716
+ekran-react/src/yonetim/tampon/musteri-ham.tsx
+  s_f3a3bbba3a8c11::t_3e130127083421 1-290
+ekran-react/src/yonetim/tampon/partiler.tsx
+  s_f3a3bbba3a8c11::t_5f605f2bfd8740 1-88
+ekran-react/src/yonetim/tampon/pg-katalog.test.tsx
+  s_f3a3bbba3a8c11::t_4c9d72db6bd574 1-53
+ekran-react/src/yonetim/tampon/pg-katalog.tsx
+  s_f3a3bbba3a8c11::t_73e5b79b0eafa9 1-224
+ekran-react/src/yonetim/tampon/rehber.tsx
+  s_f3a3bbba3a8c11::t_5d27db7c50ed73 1-80
+ekran-react/src/yonetim/tampon/temip.tsx
+  s_f3a3bbba3a8c11::t_163d659e5842ff 1-167
+ekran-react/src/yonetim/ui.tsx
+  s_f3a3bbba3a8c11::t_c266379cdc7b27 1-84
+ekran-react/src/yonetim/utilizasyon.test.tsx
+  s_f3a3bbba3a8c11::t_7ef6c8b50db6ec 1-278
+ekran-react/src/yonetim/utilizasyon/agac.tsx
+  s_f3a3bbba3a8c11::t_10adf9b7bd7af7 1-186
+ekran-react/src/yonetim/utilizasyon/atama.tsx
+  s_f3a3bbba3a8c11::t_c1a00b674d373d 1-251
+ekran-react/src/yonetim/utilizasyon/iptal-talepleri.tsx
+  s_f3a3bbba3a8c11::t_3b35f1d0429768 1-13
+ekran-react/src/yonetim/utilizasyon/kriterler.tsx
+  s_f3a3bbba3a8c11::t_76d3f0be900db9 1-585
+ekran-react/src/yonetim/utilizasyon/metin.ts
+  s_f3a3bbba3a8c11::t_8bbebe697fae63 1-424
+ekran-react/src/yonetim/utilizasyon/musteri-listesi.tsx
+  s_f3a3bbba3a8c11::t_f0cfcb6ff8b4a4 1-373
+ekran-react/src/yonetim/utilizasyon/ortak.tsx
+  s_f3a3bbba3a8c11::t_263453814368ea 1-256
+ekran-react/src/yonetim/utilizasyon/ozet.tsx
+  s_f3a3bbba3a8c11::t_bfbf555717f318 1-100
+ekran-react/src/yonetim/utilizasyon/talepler.tsx
+  s_f3a3bbba3a8c11::t_6ceb2176cc181f 1-77
+ekran-react/src/yonetim/utilizasyon/urun-tutar.tsx
+  s_f3a3bbba3a8c11::t_32efcaee0be7d7 1-150
+ekran-react/src/yonetim/yonetim-sayfasi.tsx
+  s_f3a3bbba3a8c11::t_95c11e331f67fa 1-98
+ekran-react/src/yonetim/yonetim.test.tsx
+  s_f3a3bbba3a8c11::t_58dd4f9f774196 1-801
+ekran-react/src/yuk-render.test.tsx
+  s_f3a3bbba3a8c11::t_34d8036b0be631 1-184
+ekran-react/tsconfig.app.json
+  s_f3a3bbba3a8c11::t_ba5c649e2105e4 1-25
+ekran-react/tsconfig.json
+  s_f3a3bbba3a8c11::t_81f30622daabc5 1-7
+ekran-react/tsconfig.node.json
+  s_f3a3bbba3a8c11::t_bd980f65cfefd8 1-23
+ekran-react/vite.config.ts
+  s_f3a3bbba3a8c11::t_640a299d067952 1-21
+ekran-react/vitest.config.ts
+  s_f3a3bbba3a8c11::t_13250e9b5db278 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6c71afd90b0a9c009f955175455c91fd7e2b9579",
+  "prompts": {},
+  "sessions": {
+    "s_35f59806ed5eb5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c8a155aa-0cf9-488b-8eb1-7f2136ea09ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "giraysav <giray.sav@turkcell.com.tr>"
+    },
+    "s_f3a3bbba3a8c11": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be577754-b48b-4574-a265-23f1111b10e2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "giraysav <giray.sav@turkcell.com.tr>"
+    }
+  }
+}
