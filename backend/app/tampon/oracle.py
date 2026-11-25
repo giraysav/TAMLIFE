@@ -32,6 +32,13 @@ BACKEND = Path(__file__).resolve().parents[2]
 KAYNAKLAR: dict[str, Source] = {s.id: s for s in SOURCES if not s.id.endswith("_import")}
 AZAMI_SORGU_UZUNLUGU = 20_000
 BLOK = 2_000
+KOLEKSIYON_TIPI = "SYS.ODCIVARCHAR2LIST"  # Oracle'in herkese acik VARRAY(32767) OF VARCHAR2(4000) tipi
+KOLEKSIYON_AZAMI = 32_767
+
+
+class MetinListesi(list):
+    """Bind degeri olarak metin listesi: akis() baglantida SYS.ODCIVARCHAR2LIST nesnesine cevirir; sorguda
+    "... IN (SELECT COLUMN_VALUE FROM TABLE(:ad))". Uzun liste SQL metnine gomulmez (sorgu kisa kalir, ayristirma ucuz)."""
 _SORGU = re.compile(r"\s*(select|with)\b", re.IGNORECASE)
 # Oracle / python-oracledb hata kodu -> yoneticiye anlasilir ipucu (uretim db_kaynak._IPUCLARI).
 _IPUCLARI = (
@@ -157,6 +164,13 @@ class OracleKaynak:
         with self._baglan(oracledb) as conn:
             conn.call_timeout = self.IMPORT_TIMEOUT * 1000
             conn.outputtypehandler = _tip
+            listeler = [k for k, v in binds.items() if isinstance(v, MetinListesi)]
+            if listeler:
+                tip = conn.gettype(KOLEKSIYON_TIPI)
+                for k in listeler:
+                    if len(binds[k]) > KOLEKSIYON_AZAMI:
+                        raise OracleHata("Bind listesi çok uzun.")
+                    binds[k] = tip.newobject(list(binds[k]))
             with conn.cursor() as cur:
                 cur.arraysize = blok
                 cur.execute(sarmal, binds)
@@ -174,13 +188,12 @@ def ayar(anahtar: str) -> OracleKaynak:
     return OracleKaynak(KAYNAKLAR[anahtar])
 
 
-def sorgu_temizle(sorgu: str | None, azami: int = AZAMI_SORGU_UZUNLUGU) -> str:
-    """Yalniz tek SELECT / WITH. Bos ya da gecersizse OracleHata. azami: yalniz kodun urettigi sorgular icin yukseltilir (TEMIP toptan
-    CI listesi); elle girilen sorgular varsayilan sinirdadir."""
+def sorgu_temizle(sorgu: str | None) -> str:
+    """Yalniz tek SELECT / WITH. Bos ya da gecersizse OracleHata."""
     s = (sorgu or "").strip().rstrip(";").strip()
     if not s:
         raise OracleHata("Sorgu boş.")
-    if len(s) > azami:
+    if len(s) > AZAMI_SORGU_UZUNLUGU:
         raise OracleHata("Sorgu çok uzun.")
     if not _SORGU.match(s) or ";" in s:
         raise OracleHata("Sorgu yalnız tek bir SELECT / WITH ifadesi olabilir.")

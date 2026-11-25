@@ -15,6 +15,8 @@ Kural:
   modulune ata"): toptan alarmlari BACKBONE vb. domainde, Musteri No'suz ve ticketsiz gelir. Ikinci kapsam: CI adi (NODE1) panel
   envanterindeki bir toptan CI'ina esitse (ONENT CRM_MUSTERI_SEGMENT = TOPTAN ya da NCE_DEVRE_TIPI = WHOLESALE, ya da karti Toptan
   modulunde) domain / Musteri No aranmadan alinir; Musteri No CI'in kartindan gelir, kayit kartin moduline (Toptan) duser.
+  Karti olmayan toptan musterinin CI'lari da envanterdedir (2026-11-25): alarmi kartsiz kalir, Fark'ta (radar) ONENT musteri adiyla
+  listelenir. CI adlari sorguya bind koleksiyonu olarak gider (oracle.MetinListesi).
 - Kapali kayit yeniden acilmaz (anlik goruntu VIEW_REPORT_ACTIVE'den geri kalabilir). Kisisel veri alinmaz: kapatan kullanici
   yalniz atm / Auto-Clear / operator olarak yazilir.
 """
@@ -59,9 +61,8 @@ _KOSUL = (
     "REPLACE(NETWORK, '\"', '') IN ('NOC DESTECH') AND REGEXP_LIKE(INFORMATION1, '^[0-9]{8}$') "
     "AND (INSTR(LOWER(MANAGEDOBJECT), 'nw_li_cust') > 0 OR INSTR(LOWER(NODE1), 'nw_li_cust') > 0)"
 )
-TOPTAN_PARCA = 5_000  # tek sorgudaki toptan CI adi (alt sorgu satiri; IN listesindeki 1000 sinirina tabi degil)
-AZAMI_TOPTAN_CI = 20_000  # tek sorgu ~1,2 MB'i asmasin (2026-11-25: 1.472 toptan CI; ustu alinmaz)
-SORGU_UZUNLUGU = 1_500_000  # kodun urettigi TEMIP sorgusu (toptan CI listesi) icin oracle.sorgu_temizle siniri
+TOPTAN_PARCA = 30_000  # bind koleksiyonu basina CI adi (oracle.KOLEKSIYON_AZAMI 32.767)
+AZAMI_TOPTAN_CI = 150_000  # 2026-11-25: ~50 bin toptan CI (kartsiz toptan musteriler dahil)
 KIPLER = ("tam", "artimli", "mutabakat", "katalogdan")
 _CI_ADI = re.compile(r"CIName:\s*(\S+)")
 _TICKET = re.compile(r"^[0-9]+")
@@ -105,43 +106,47 @@ def _kolonlar(acik: bool) -> str:
     )
 
 
-_CI_ADI_GECERLI = re.compile(r"^[^\x00-\x1f\x7f]{3,200}$")  # sorguya sabit olarak giren CI adi: kontrol karakteri yok; tirnak kacirilir
+_CI_ADI_GECERLI = re.compile(r"^[^\x00-\x1f\x7f]{3,200}$")  # toptan CI adi: kontrol karakteri yok (deger bind ile gider)
+Kapsam = tuple[str, dict[str, Any]]  # (WHERE kosulu, bind degerleri)
+# oracle.akis sorguyu "WHERE ROWNUM <= n" ile sarar; Oracle bunu ilk-satir hedefi sayip toptan koleksiyonuyla ic ice dongu kuruyordu
+# (2026-11-25: 1 gun 60 sn+). Ic sorguda ALL_ROWS hash join'e doner: 1 gun ~8 sn.
+_IPUCU = "/*+ ALL_ROWS */"
 
 
-def toptan_kosulu(adlar: list[str]) -> str:
-    """CI adi (NODE1, kucuk harf) listesi -> Oracle kosulu. Adlar panel envanterinden gelir; yine de yalniz guvenli karakterler."""
+def toptan_kapsami(adlar: list[str]) -> Kapsam:
+    """CI adi (NODE1, kucuk harf) listesi -> kosul + bind koleksiyonlari. 2026-11-25 olcum (50 bin ad): 1 gun 0,7 sn, 30 gun 18 sn;
+    SQL metnine gomulen DUAL alt sorgusu 1.472 adla 30 gun 187 sn, duz IN listesi 467 sn suruyordu."""
     temiz = [a for a in adlar if _CI_ADI_GECERLI.match(a)]
     if not temiz:
         raise reportdb.ReportdbHata("Geçersiz toptan CI listesi.")
-    # Alt sorgu (DUAL satirlari): Oracle hash join ile eslestirir. Duz IN listesi her satirda tek tek karsilastiriyordu (2026-11-25:
-    # 1.472 ad, 30 gun 2 x ~185 sn); alt sorgu ayrica IN'in 1000 oge sinirina tabi degil.
-    satirlar = " UNION ALL ".join("SELECT '" + a.replace("'", "''") + "' FROM DUAL" for a in temiz)
-    return f"LOWER(NODE1) IN ({satirlar})"
+    binds = {f"toptan{i}": oracle.MetinListesi(temiz[j : j + TOPTAN_PARCA]) for i, j in enumerate(range(0, len(temiz), TOPTAN_PARCA))}
+    alt = " UNION ALL ".join(f"SELECT /*+ CARDINALITY(t {TOPTAN_PARCA}) */ COLUMN_VALUE FROM TABLE(:{k}) t" for k in binds)
+    return f"LOWER(NODE1) IN ({alt})", binds
 
 
-def kosullar(toptan: dict[str, str] | None = None) -> list[str]:
-    """Kapsam sorgulari: kurumsal kosul + toptan CI adlari (TOPTAN_PARCA'lik parcalar) ayri sorgu. 2026-11-25 olcum: kurumsal kosulla
-    tek sorguda OR ile birlestirmek Oracle planini bozuyor (1 gun 82 sn, 30 gun 20 dk+)."""
+def kosullar(toptan: dict[str, str] | None = None) -> list[Kapsam]:
+    """Kapsam sorgulari: kurumsal kosul + toptan CI adlari ayri sorgu. 2026-11-25 olcum: kurumsal kosulla tek sorguda OR ile
+    birlestirmek Oracle planini bozuyor (1 gun 82 sn, 30 gun 20 dk+)."""
     adlar = sorted(a for a in (toptan or {}) if _CI_ADI_GECERLI.match(a))[:AZAMI_TOPTAN_CI]
-    return [_KOSUL] + [toptan_kosulu(adlar[i : i + TOPTAN_PARCA]) for i in range(0, len(adlar), TOPTAN_PARCA)]
+    return [(_KOSUL, {})] + ([toptan_kapsami(adlar)] if adlar else [])
 
 
-def _cek_hepsi(sorgu: Any, kosul_listesi: list[str]) -> list[dict[str, Any]]:
-    """sorgu(kosul) -> SQL; her kosul icin ceker, IDENTIFIER tekil (ayni alarm iki kapsama girerse bir kez)."""
+def _cek_hepsi(sorgu: Any, kapsamlar: list[Kapsam]) -> list[dict[str, Any]]:
+    """sorgu(kosul) -> SQL; her kapsam icin ceker, IDENTIFIER tekil (ayni alarm iki kapsama girerse bir kez)."""
     sonuc: dict[str, dict[str, Any]] = {}
-    for k in kosul_listesi:
-        for s in _cek(sorgu(k)):
+    for kosul, binds in kapsamlar:
+        for s in _cek(sorgu(kosul), binds):
             sonuc.setdefault(str(s.get("KIMLIK")), s)
     return list(sonuc.values())
 
 
 def acik_sorgusu(bas: date, kosul: str = _KOSUL) -> str:
-    return f"SELECT {_kolonlar(True)} FROM TEMIP.ACTIVEALARMS_5DK WHERE EVENTTIME >= {_tarih(bas)} AND {kosul}"
+    return f"SELECT {_IPUCU} {_kolonlar(True)} FROM TEMIP.ACTIVEALARMS_5DK WHERE EVENTTIME >= {_tarih(bas)} AND {kosul}"
 
 
 def kapali_sorgusu(alt: str, ust: str, kosul: str = _KOSUL) -> str:
     """alt / ust: koddan uretilmis Oracle ifadesi (_tarih ya da SYSDATE aritmetigi). EVENTTIME iki yonlu sinirli (bolum budama)."""
-    return f"SELECT {_kolonlar(False)} FROM TEMIP.VIEW_REPORT_ACTIVE WHERE EVENTTIME >= {alt} AND EVENTTIME < {ust} AND {kosul}"
+    return f"SELECT {_IPUCU} {_kolonlar(False)} FROM TEMIP.VIEW_REPORT_ACTIVE WHERE EVENTTIME >= {alt} AND EVENTTIME < {ust} AND {kosul}"
 
 
 def kimlik_sorgusu(kimlikler: list[str], alt: datetime, ust: datetime) -> str:
@@ -155,8 +160,8 @@ def kimlik_sorgusu(kimlikler: list[str], alt: datetime, ust: datetime) -> str:
 
 
 
-def _cek(sorgu: str) -> list[dict[str, Any]]:
-    akis = oracle.ayar(reportdb.KAYNAK).akis(oracle.sorgu_temizle(sorgu, SORGU_UZUNLUGU), SORGU_SINIRI + 1)
+def _cek(sorgu: str, binds: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    akis = oracle.ayar(reportdb.KAYNAK).akis(oracle.sorgu_temizle(sorgu), SORGU_SINIRI + 1, parametreler=binds)
     kolonlar = [str(k).upper() for k in next(akis)]
     satirlar = [dict(zip(kolonlar, s, strict=True)) for blok in akis for s in blok]
     if len(satirlar) > SORGU_SINIRI:
@@ -178,14 +183,24 @@ def harita(db: Session) -> dict[str, set[int]]:
     return sonuc
 
 
+class ToptanHaritasi(dict):
+    """{toptan CI adi (kucuk harf): Musteri No anahtari}; unvan: {Musteri No anahtari: ONENT musteri adi} (kartsiz toptan musterinin
+    Fark'taki adi; toptan alarmlarinda unvan bos gelir)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.unvan: dict[str, str] = {}
+
+
 @musteri_alani.tum_alanlarda
-def toptan_cileri(db: Session) -> dict[str, str]:
-    """Toptan CI adi (kucuk harf) -> Musteri No anahtari. Kaynak panel envanteri (customer_ci): ONENT segmenti TOPTAN ya da devre
-    tipi WHOLESALE olan CI'lar + Toptan modulundeki kartlarin tum CI'lari. Iki karta duzen ad (farkli Musteri No) alinmaz."""
+def toptan_cileri(db: Session) -> ToptanHaritasi:
+    """Toptan CI adi (kucuk harf) -> Musteri No anahtari. Kaynak panel envanteri (customer_ci; kartsiz toptan musterilerin CI'lari
+    dahil): ONENT segmenti TOPTAN ya da devre tipi WHOLESALE olan CI'lar + Toptan modulundeki kartlarin tum CI'lari. Iki ayri
+    Musteri No'ya duzen ad alinmaz."""
     from app.musteri.envanter import TOPTAN_DEVRE_TIPI, TOPTAN_SEGMENT
 
     toptan_no = {k for (no,) in db.execute(select(Customer.customer_no).where(Customer.modul == "toptan")) for k in musteri_anahtarlari(no)}
-    sonuc: dict[str, str] = {}
+    sonuc = ToptanHaritasi()
     cift: set[str] = set()
     for ad, mno, a in db.execute(select(CustomerCi.ci_name, CustomerCi.customer_key, CustomerCi.attrs)):
         a = a or {}
@@ -196,6 +211,8 @@ def toptan_cileri(db: Session) -> dict[str, str]:
         if sonuc.get(k, mno) != mno:
             cift.add(k)
         sonuc[k] = mno
+        if (adi := a.get("musteri_adi")) and mno not in sonuc.unvan:
+            sonuc.unvan[mno] = str(adi)[:200]
     for k in cift:
         sonuc.pop(k, None)
     return sonuc
@@ -376,8 +393,10 @@ def alanlar(satir: dict[str, Any], acik: bool, h: dict[str, set[int]], toptan: d
     if not _KIMLIK.match(kimlik):
         return None
     mno = _metin(satir.get("MNO"), 20)
+    unvan = _metin(satir.get("UNVAN"), 200)
     if toptan and not re.fullmatch(r"\d{8}", mno):
         mno = toptan.get(_metin(satir.get("CI"), 200).lower()) or mno
+        unvan = unvan or getattr(toptan, "unvan", {}).get(mno, "")
     acilis = tarih_oku(satir.get("ACILIS")) or simdi()
     kapanis = None if acik else (tarih_oku(satir.get("KAPANIS")) or acilis)
     return {
@@ -386,7 +405,7 @@ def alanlar(satir: dict[str, Any], acik: bool, h: dict[str, set[int]], toptan: d
         "external_key": kimlik,
         "customer_no": mno,
         "customer_id": _kart(h, mno),
-        "customer_label": _metin(satir.get("UNVAN"), 200),
+        "customer_label": unvan,
         "ticket_no": _metin(satir.get("TICKET"), 40),
         "location": _metin(satir.get("CI"), 200),
         "category": _metin(satir.get("BASLIK"), 200),

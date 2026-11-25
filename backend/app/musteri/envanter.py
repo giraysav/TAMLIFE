@@ -64,6 +64,7 @@ OZELLIKLER = (
     # adiyla karta baglanir (tampon/temip_kayit.toptan_cileri).
     ("CRM_MUSTERI_SEGMENT", "segment"),
     ("NCE_DEVRE_TIPI", "nce_tipi"),
+    ("MUSTERI_ADI", "musteri_adi"),  # kartsiz toptan musterinin Fark'taki unvani (toptan alarmlarinda unvan bos gelir)
 )
 TOPTAN_SEGMENT = "TOPTAN"
 SEGMENT_AYARI = "musteri.onent_segment"  # {Musteri No anahtari: CRM_MUSTERI_SEGMENT}: Fark listesinde kartsiz numaranin segmenti
@@ -83,6 +84,17 @@ _SEGMENT_SORGU = (
     'SELECT m."CLASS_ITEM_VALUE", s."CLASS_ITEM_VALUE", COUNT(DISTINCT m."CI_NO") FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" m '
     'JOIN "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" s ON s."CI_NO" = m."CI_NO" AND s."CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_SEGMENT\' '
     'WHERE m."CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_NO\' AND m."CLASS_ITEM_VALUE" = ANY(%s) GROUP BY 1, 2'
+)
+# Kartsiz toptan musteriler (2026-11-25 kullanici: "karti olmayan toptan musterilerini de kartsiz olarak fark listesine getir"):
+# toptan isaretli CI'lar, sonra onlarin Musteri No'su (iki indeksli sorgu ~1 sn; tek JOIN tum tabloyu tarar, 10 dk+).
+_TOPTAN_CI_SORGU = (
+    'SELECT DISTINCT "CI_NO" FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" '
+    'WHERE ("CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_SEGMENT\' AND "CLASS_ITEM_VALUE" = ANY(%s)) '
+    'OR ("CI_CLASS_SPEC_NAME" = \'NCE_DEVRE_TIPI\' AND "CLASS_ITEM_VALUE" = ANY(%s))'
+)
+_TOPTAN_NO_SORGU = (
+    'SELECT DISTINCT "CLASS_ITEM_VALUE" FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" '
+    'WHERE "CI_NO" = ANY(%s) AND "CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_NO\''
 )
 _OZELLIK_SORGU = (
     'SELECT "CI_NO", "CI_CLASS_SPEC_NAME", "CLASS_ITEM_VALUE" FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" '
@@ -132,6 +144,11 @@ def _panel_numaralari(db: Session) -> list[str]:
     return sorted(sonuc)
 
 
+def _yazimlar(deger: str) -> list[str]:
+    """ONENT degeri buyuk / kucuk harf karisik girilebilir; = ANY indeksi kullanir (UPPER() kullanmaz)."""
+    return [deger.upper(), deger.capitalize(), deger.lower()]
+
+
 def _kayit_numaralari(db: Session) -> list[str]:
     """Panel kayitlarindaki (TEMIP / OneDesk) Musteri No'lar; ONENT degeri bastaki sifirli ya da sifirsiz olabilir."""
     from app.models import OnedeskRecord
@@ -159,7 +176,8 @@ def segment_haritasi(db: Session) -> dict[str, str]:
 
 
 def yenile(db: Session) -> dict[str, Any]:
-    """ONENT'ten panel musterilerinin envanterini ceker ve customer_ci'yi bastan yazar. Hata durumu kaydina yazilir."""
+    """ONENT'ten panel musterilerinin ve karti olmayan toptan musterilerin (Fark / toptan alarm eslesmesi) envanterini ceker,
+    customer_ci'yi bastan yazar. Hata durumu kaydina yazilir."""
     from app.tampon import postgres
 
     t0 = time.time()
@@ -167,6 +185,10 @@ def yenile(db: Session) -> dict[str, Any]:
     try:
         numaralar = _panel_numaralari(db)
         with a.baglan(SORGU_SN) as conn, conn.cursor() as cur:
+            cur.execute(_TOPTAN_CI_SORGU, (_yazimlar(TOPTAN_SEGMENT), _yazimlar(TOPTAN_DEVRE_TIPI)))
+            cur.execute(_TOPTAN_NO_SORGU, ([r[0] for r in cur.fetchall()],))
+            toptan_nolar = {k for (mno,) in cur.fetchall() if (k := anahtar(mno))}
+            numaralar = sorted(set(numaralar) | {v for k in toptan_nolar for v in (k, k.zfill(8))})
             cur.execute(_CI_SORGU, (numaralar,))
             cis: dict[str, dict[str, Any]] = {}
             for ci_no, ad, servis, durum, mno in cur.fetchall():
@@ -184,11 +206,13 @@ def yenile(db: Session) -> dict[str, Any]:
                     if deger not in (None, ""):
                         ozellik[str(ci_no)][adlar[ad]] = " ".join(str(deger).split())[:300]
             # 2026-11-25 kullanici: "Fark ... ham data sutununa segment alanini da ekle"
-            cur.execute(_SEGMENT_SORGU, (_kayit_numaralari(db),))
+            cur.execute(_SEGMENT_SORGU, (sorted(set(_kayit_numaralari(db)) | {v for k in toptan_nolar for v in (k, k.zfill(8))}),))
             segmentler: dict[str, Counter] = defaultdict(Counter)
             for mno, seg, adet in cur.fetchall():
                 if (k := anahtar(mno)) and seg:
                     segmentler[k][" ".join(str(seg).split())[:40]] += int(adet)
+            for k in toptan_nolar - set(segmentler):  # yalniz devre tipi WHOLESALE olan numara
+                segmentler[k][TOPTAN_SEGMENT] += 1
         an = simdi()
         satirlar = [{**v, "attrs": ozellik.get(v["ci_no"], {}), "refreshed_at": an} for v in cis.values()]
         _segment_yaz(db, segmentler)
