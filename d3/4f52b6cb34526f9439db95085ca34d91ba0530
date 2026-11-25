@@ -1,0 +1,76 @@
+backend/tests/test_radar_analiz.py
+  s_35f59806ed5eb5::t_e2c0a04bbede19 37-46,49-53,57,59-64
+backend/app/db.py
+  s_35f59806ed5eb5::t_d45b66a47b22fd 78-86
+backend/tests/test_temip_kayit.py
+  s_35f59806ed5eb5::t_45717aa8113a3c 83,86,89-98
+  s_35f59806ed5eb5::t_62f7e62ee2fe9c 50,53,56
+backend/app/musteri/servis.py
+  s_35f59806ed5eb5::t_14ace600319810 38
+backend/app/radar/analiz.py
+  s_35f59806ed5eb5::t_3e7df962a37c5f 311
+backend/app/rapor/eposta.py
+  s_35f59806ed5eb5::t_0b55467d0bf542 15
+backend/app/rapor/trafik.py
+  s_35f59806ed5eb5::t_59cb1110bc1910 254
+backend/app/session.py
+  s_35f59806ed5eb5::t_889e0eeaee9193 156-161
+backend/app/sunum/tanitim.py
+  s_35f59806ed5eb5::t_184b47196b00c1 37-38
+backend/app/tampon/temip_kayit.py
+  s_35f59806ed5eb5::t_ba8d9fcb999cbe 375,661
+backend/app/topoloji/envanter.py
+  s_35f59806ed5eb5::t_2d683f15dae073 45,435
+backend/tests/skor_golden.json
+  s_35f59806ed5eb5::t_23d1c1aa627125 12,41,70,99,128,157,186,215,244,396,403,425,432,454,461,512,519,613,627-657,673,687-717,733,747-777,838-841,847,868-872,877-878,899-903,908-909,930-934,939-940,961-965,970-971,992-996,1001-1002,1023-1027,1032-1033,1053-1178,1188-1216,1364-1369,1430-1433,1436-1438,1440,1452,1468,1509-1512,1515-1517,1519,1533,1549,1629,1653,1689-1692,1737-1740,1785-1788,1820,1852,1887-1915,1930-2081,2096-2123,2131,2244-2248,2253-2254,2374,2379-2381,2384,2390-2392,2430-2433,2437-2446,2449,2461,2466-2467,2577-2580,2585-2590,2611,2620-2621
+backend/tests/test_ad.py
+  s_35f59806ed5eb5::t_43c00bdd113aea 132-134,137,139-143,294,299-300,343,345-346,348
+backend/tests/test_akislar.py
+  s_35f59806ed5eb5::t_e9d6d701d0d04a 11,28,45,48-55,58-59,62,68-74,77
+backend/tests/test_auth_security.py
+  s_35f59806ed5eb5::t_0d92a11d5925a0 105-109,112,114,162,165-166
+backend/tests/test_guvenlik_sinir.py
+  s_35f59806ed5eb5::t_699ae92df73bd8 21-23,57,61-65,76-79
+backend/tests/test_kimlik_siniri.py
+  s_35f59806ed5eb5::t_43603a68204f30 64-66
+backend/tests/test_kullanici_silme.py
+  s_35f59806ed5eb5::t_9609df87f0a60b 303-308,312,341,343-347
+backend/tests/test_musteri.py
+  s_35f59806ed5eb5::t_cd349ad7887485 254-256
+backend/tests/test_ozellikler.py
+  s_35f59806ed5eb5::t_d7b65316d5af25 86-87,90,100,135-136,139-140,148,214-215,223,236-238,250-254,257-259,261-269,271-272,275-282
+backend/tests/test_postgres.py
+  s_35f59806ed5eb5::t_64fe6effef7be2 64-65,138-139,142-153
+backend/tests/test_radar.py
+  s_35f59806ed5eb5::t_c8a953f48911fd 1-2,11,14-16,18-19,21-23,32-34,37,39-41,44
+backend/tests/test_rapor_sla.py
+  s_35f59806ed5eb5::t_ddacd3a68e322a 125-127,154,157-160,173,177,181-182,186-191,193-194,196
+backend/tests/test_reportdb.py
+  s_35f59806ed5eb5::t_efcd4d2883ee9e 1,4-6,13,19,24-25,255,261-264,266-277,285-286,288-292,308-316,318,320-325,327,341-347,349,352,355,357-364,367,369-370,373,378
+backend/tests/test_roller.py
+  s_35f59806ed5eb5::t_703a9a419f875c 32
+backend/tests/test_skor.py
+  s_35f59806ed5eb5::t_3683c7efb50c8b 5-8,51,53,57,59-60,64-65,68-73
+backend/tests/test_skor_api.py
+  s_35f59806ed5eb5::t_a0eb5fda8f869f 8-9,57-58,60-66,91-93,106-108,110,112-114,116,118-121,123,125-128,130-139,143,145,149-151,153-161,163,165,167-180,192-193,198-199
+backend/tests/test_tampon.py
+  s_35f59806ed5eb5::t_23b7d6f54d5d82 36,38,55-56,62,217,219,265-268,280,305,312,316-317,330,333,337,383
+backend/tests/test_utilizasyon.py
+  s_35f59806ed5eb5::t_ccaf349230fa71 12-13,90-103,105-112,116-119,122,132-134,137-139,142-148,208,219,221,225,243-244,262-263,307-308,311,315,319-324,330-331
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d34f52b6cb34526f9439db95085ca34d91ba0530",
+  "prompts": {},
+  "sessions": {
+    "s_35f59806ed5eb5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c8a155aa-0cf9-488b-8eb1-7f2136ea09ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "giraysav <giray.sav@turkcell.com.tr>"
+    }
+  }
+}
