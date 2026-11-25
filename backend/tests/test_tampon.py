@@ -33,9 +33,9 @@ def veri(client):
             [
                 Customer(id=1, external_key="t1", name="Alfa A.S.", customer_no="00012345"),
                 Customer(id=2, external_key="t2", name="Beta Ltd", customer_no="222, 333"),
-                Customer(id=3, external_key="t3", name="Gama", customer_no="444", alarm_count=7),
+                Customer(id=3, external_key="t3", name="Gama", customer_no="444", inventory_count=7),
                 Customer(id=4, external_key="t4", name="Delta", customer_no="444"),
-                Customer(id=5, external_key="t5", name="Epsilon", customer_no="555", alarm_count=4),
+                Customer(id=5, external_key="t5", name="Epsilon", customer_no="555", inventory_count=4),
             ]
         )
         db.commit()
@@ -52,12 +52,14 @@ def _alan(client, no):
         return db.get(Customer, no)
 
 
+# 2026-11-23 (8d90b8f): alarm / sikayet / talep sayaclari dagitim hedefi degil (tek yazan kayitlar); genel dagitim akisi
+# sayisal hedef customer.inventory_count uzerinden sinanir.
 KURAL_ALARM = {
     "name": "Aktif alarm",
     "source_key": "csv_alarm",
     "match_field": "customer_no",
     "key_column": "Müşteri No",
-    "target": "customer.alarm_count",
+    "target": "customer.inventory_count",
     "operation": "say",
     "conditions": [{"kolon": "Kayıt Türü", "islec": "esit", "deger": "alarm"}, {"kolon": "Durum", "islec": "esit", "deger": "açık"}],
 }
@@ -212,8 +214,9 @@ def test_kaynaklar_listesi(veri):
     hdr = login_ok(veri)
     _yukle(veri, hdr)
     k = {x["anahtar"]: x for x in veri.get("/api/v1/tampon/kaynaklar").json()["data"]}
-    assert "ornek" not in k and "csv" not in k and {"musteri_ham", "oracle_reportdb", "oracle_galapagos", "pg_onedesk", "pg_onent", "csv_alarm"} <= set(k)
+    assert "ornek" not in k and "csv" not in k and {"musteri_ham", "oracle_reportdb", "pg_onedesk", "pg_onent", "csv_alarm"} <= set(k)
     assert "oracle_onent" not in k  # eski Oracle ONENTDB yuvasi gizli (ONENTDB PostgreSQL)
+    assert "oracle_galapagos" not in k  # Galapagos kaldirildi (2026-11-19)
     assert k["csv_alarm"]["son"]["durum"] == "ready" and k["csv_alarm"]["parti_sayisi"] == 1
     assert k["oracle_reportdb"]["hazir"] is False and "kapalı" in k["oracle_reportdb"]["neden"]
     assert all("password" not in str(v).lower() for v in k.values())
@@ -259,7 +262,10 @@ def test_analiz_musteri_yokken_uyarir(client):
 def test_hedef_katalogu_sabit(veri):
     login_ok(veri)
     k = veri.get("/api/v1/tampon/hedefler").json()["data"]
-    assert {h["anahtar"] for h in k["hedefler"]} >= {"customer.alarm_count", "customer.sector"}
+    hedefler = {h["anahtar"] for h in k["hedefler"]}
+    assert hedefler >= {"customer.inventory_count", "customer.sector"}
+    sayaclar = {f"customer.{t}_{d}" for t in ("alarm", "complaint", "request") for d in ("count", "closed_count")}
+    assert not hedefler & sayaclar  # alarm / sikayet / talep sayaclarini yalniz kayitlar yazar (2026-11-23)
     assert {i["anahtar"] for i in k["islemler"]} == {"say", "farkli_say", "topla", "ortalama", "en_buyuk", "en_kucuk", "ilk", "en_cok"}
     assert {a["anahtar"] for a in k["eslesme_alanlari"]} == {"customer_no", "ncst", "name"}
 
@@ -271,6 +277,7 @@ def test_kural_dogrulama(veri):
         return veri.post("/api/v1/tampon/kurallar", json={**KURAL_ALARM, **ek}, headers=hdr)
 
     assert dene(target="customer.yok").status_code == 400  # serbest hedef yok
+    assert dene(target="customer.alarm_count").status_code == 400  # sayaclar dagitim hedefi degil (2026-11-23)
     assert dene(target="customer.sector").status_code == 400  # say -> metin hedefine olmaz
     assert dene(operation="topla").status_code == 400  # topla icin deger sutunu zorunlu
     assert dene(operation="ilk", value_column="Durum").status_code == 400  # metin islemi sayisal hedefe olmaz
@@ -295,19 +302,19 @@ def test_onizle_uygula_geri_al_akisi(veri):
     assert on["degisecek"] == 2 and on["eslesmeyen_satir"] == 2 and on["belirsiz_satir"] == 1 and on["degismeyen"] == 0
     assert {(o["ad"], o["eski"], o["yeni"]) for o in on["ornek"]} == {("Alfa A.S.", 0, 1), ("Beta Ltd", 0, 2)}  # c2: 222 ve 333 TOPLANIR
     assert "belirsiz" in " ".join(on["uyarilar"])
-    assert _alan(veri, 1).alarm_count == 0  # onizleme yazmaz
+    assert _alan(veri, 1).inventory_count == 0  # onizleme yazmaz
 
     assert (
         veri.post(f"/api/v1/tampon/kurallar/{kid}/uygula", json={"parti_id": pid, "onay": True}, headers=hdr).status_code == 409
     )  # kapali
     assert veri.post(f"/api/v1/tampon/kurallar/{kid}/etkin", json={"etkin": True}, headers=hdr).json()["data"]["etkin"] is True
     assert veri.post(f"/api/v1/tampon/kurallar/{kid}/uygula", json={"parti_id": pid}, headers=hdr).status_code == 400  # onaysiz
-    assert _alan(veri, 1).alarm_count == 0
+    assert _alan(veri, 1).inventory_count == 0
 
     u = veri.post(f"/api/v1/tampon/kurallar/{kid}/uygula", json={"parti_id": pid, "onay": True}, headers=hdr).json()["data"]
     assert u["yazilan"] == 2 and len(u["run_id"]) == 32
-    assert (_alan(veri, 1).alarm_count, _alan(veri, 2).alarm_count) == (1, 2)
-    assert (_alan(veri, 3).alarm_count, _alan(veri, 4).alarm_count) == (7, 0)  # belirsiz kartlara dokunulmaz
+    assert (_alan(veri, 1).inventory_count, _alan(veri, 2).inventory_count) == (1, 2)
+    assert (_alan(veri, 3).inventory_count, _alan(veri, 4).inventory_count) == (7, 0)  # belirsiz kartlara dokunulmaz
     with Session(engine()) as db:
         kayitlar = db.scalars(select(DistributionLog).where(DistributionLog.run_id == u["run_id"])).all()
         assert {(k.customer_id, k.old_value, k.new_value) for k in kayitlar} == {(1, "0", "1"), (2, "0", "2")}
@@ -320,14 +327,14 @@ def test_onizle_uygula_geri_al_akisi(veri):
 
     liste = veri.get("/api/v1/tampon/uygulamalar").json()["data"]
     assert liste[0]["run_id"] == u["run_id"] and liste[0]["yazilan"] == 2 and liste[0]["geri_alinan"] == 0
-    assert liste[0]["kural"] == "Aktif alarm" and liste[0]["hedef_adi"] == "Aktif alarm" and liste[0]["kullanici"] == "admin"
+    assert liste[0]["kural"] == "Aktif alarm" and liste[0]["hedef_adi"] == "Envanter / lokasyon" and liste[0]["kullanici"] == "admin"
 
     with Session(engine()) as db:  # c2 sonradan elle degisti
-        db.get(Customer, 2).alarm_count = 99
+        db.get(Customer, 2).inventory_count = 99
         db.commit()
     g = veri.post(f"/api/v1/tampon/uygulamalar/{u['run_id']}/geri-al", headers=hdr).json()["data"]
     assert g == {"geri_alinan": 1, "korunan": 1}  # yalniz hala yazilan degerde duran geri doner
-    assert (_alan(veri, 1).alarm_count, _alan(veri, 2).alarm_count) == (0, 99)
+    assert (_alan(veri, 1).inventory_count, _alan(veri, 2).inventory_count) == (0, 99)
     assert veri.post(f"/api/v1/tampon/uygulamalar/{u['run_id']}/geri-al", headers=hdr).status_code == 200  # korunan kalir
     assert veri.get("/api/v1/tampon/uygulamalar").json()["data"][0]["geri_alinan"] == 1
     assert veri.post("/api/v1/tampon/uygulamalar/zzz/geri-al", headers=hdr).status_code == 400
@@ -373,7 +380,7 @@ def test_eslesmeyeni_sifirla_belirsizi_korur(veri):
     assert not any(o["ad"] in ("Gama", "Delta") for o in on["ornek"])  # c3 (7) belirsiz numarada: sifirlanmaz
     veri.post(f"/api/v1/tampon/kurallar/{kural['id']}/etkin", json={"etkin": True}, headers=hdr)
     veri.post(f"/api/v1/tampon/kurallar/{kural['id']}/uygula", json={"parti_id": pid, "onay": True}, headers=hdr)
-    assert (_alan(veri, 5).alarm_count, _alan(veri, 3).alarm_count) == (0, 7)
+    assert (_alan(veri, 5).inventory_count, _alan(veri, 3).inventory_count) == (0, 7)
 
 
 def test_eslesme_alani_unvan_ve_metin_hedefi(veri):

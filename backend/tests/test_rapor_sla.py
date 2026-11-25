@@ -122,8 +122,9 @@ def test_taslak_iki_dilli_hazir_metin_ve_panel_dili(veri):
     assert set(t["varsayilanlar"]) == {"tr", "en"}
     en = t["varsayilanlar"]["en"]
     assert en["olumlu"] == rapor_metin.VARSAYILAN_METINLER["en"]["olumlu"] and en["bilgi"] == rapor_metin.BASLANGIC_METINLERI["en"]["bilgi"]
-    assert en["konu"].startswith("TAM Monthly Report") and "Technical Account Manager" in en["imza"]
-    assert t["varsayilanlar"]["tr"]["konu"].startswith("TAM Aylık Rapor")
+    # e0eab36 (2026-11-24): konu 'Musteri - TAM Aylik Rapor - Ay Yil'; unvan 'Technical Account Manager' (iki dilde)
+    assert en["konu"] == f"Alfa Test A.S. - TAM Monthly Report - {rapor_metin.ay_adi(ay, 'en')} {yil}" and "Technical Account Manager" in en["imza"]
+    assert t["varsayilanlar"]["tr"]["konu"] == f"Alfa Test A.S. - TAM Aylık Rapor - {rapor_metin.ay_adi(ay, 'tr')} {yil}"
     # kayitli taslak yokken panel Ingilizce ise rapor da Ingilizce acilir
     t_en = veri.get(f"{URL}/taslak", headers={"X-Dil": "en"}).json()["data"]
     assert t_en["alanlar"]["dil"] == "en" and t_en["alanlar"]["kritik"] == rapor_metin.VARSAYILAN_METINLER["en"]["kritik"]
@@ -150,16 +151,13 @@ def test_sla_excel_grafikleri_sinirsiz_ve_donem_sayilari(veri):
     assert veri.get(f"{URL}/taslak").json()["data"]["sla"]["dosya"] == "OneDesk SLA.xlsx"
 
 
-def test_gorsel_ekle_sil_ve_gonderimde_ekler(veri):
+def test_gorsel_ekleme_yolu_yok_sla_gonderimde_ekler(veri):
     hdr = login_ok(veri)
     yil, ay = rapor_servis.donem()
-    assert veri.post(f"{URL}/gorsel", content=b"metin", headers=hdr).status_code == 400  # gorsel degil
-    r = veri.post(f"{URL}/gorsel", params={"baslik": "MRTG  Ana hat"}, content=PNG, headers=hdr)
-    assert r.status_code == 200 and r.json()["data"]["ekler"][0]["baslik"] == "MRTG Ana hat"
-    no = r.json()["data"]["ekler"][0]["no"]
-    assert veri.post(f"{URL}/gorsel", content=PNG, headers=hdr).json()["data"]["ekler"][1]["no"] == no + 1
-    assert veri.delete(f"{URL}/gorsel/{no}", headers=hdr).json()["data"]["ekler"][0]["no"] == no + 1
-    assert veri.delete(f"{URL}/gorsel/{no}", headers=hdr).status_code == 404
+    # e735628 (2026-11-19): elle grafik gorseli ekleme / LOOKOUTEYES ice alma kaldirildi; yollar yok
+    assert veri.post(f"{URL}/gorsel", content=PNG, headers=hdr).status_code == 404
+    assert veri.delete(f"{URL}/gorsel/1", headers=hdr).status_code == 404
+    assert veri.post(f"{URL}/lookouteyes", json={"metin": "x"}, headers=hdr).status_code in (404, 405)
     xlsx = _sla_excel(f"{yil}-{ay:02d}")
     assert veri.put(f"{URL}/sla", params={"dosya": "sla.xlsx"}, content=xlsx, headers=hdr).status_code == 200
 
@@ -172,22 +170,30 @@ def test_gorsel_ekle_sil_ve_gonderimde_ekler(veri):
     assert set(ekler) == set(d["ekler"]) == {d["eml_adi"][:-4] + ".pdf", "sla.xlsx"}
     assert ekler["sla.xlsx"].get_content_type() == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     assert ekler["sla.xlsx"].get_content() == xlsx
-    assert msg["Subject"].startswith("TAM Monthly Report")  # konu bos: rapor dilinde hazir konu
+    assert msg["Subject"].startswith("Alfa Test A.S. - TAM Monthly Report - ")  # konu bos: rapor dilinde hazir konu (e0eab36 sirasi)
     # gonderilen donemin ekleri degismez
     assert veri.put(f"{URL}/sla", content=xlsx, headers=hdr).status_code == 409
     assert veri.delete(f"{URL}/sla", headers=hdr).status_code == 409
-    assert veri.post(f"{URL}/gorsel", content=PNG, headers=hdr).status_code == 409
+    assert veri.post(f"{URL}/dosya", params={"ad": "gec.txt"}, content=b"x", headers=hdr).status_code == 409
 
 
 def test_sla_sil_ekleri_korur(veri):
+    from app.rapor import sla
+
     hdr = login_ok(veri)
     yil, ay = rapor_servis.donem()
     veri.put(f"{URL}/sla", content=_sla_excel(f"{yil}-{ay:02d}"), headers=hdr)
-    veri.post(f"{URL}/gorsel", content=PNG, headers=hdr)
+    # e735628: gorsel ekleme yolu kalkti; eski kayitlardaki 'ekler' yalniz okunur ve SLA silinince korunur. Ek dosyalar da korunur.
+    _, js = sla._yollar(1, yil, ay)
+    kayit = sla.oku(1, yil, ay)
+    kayit["ekler"] = [{"no": 1, "baslik": "Eski MRTG", "gorsel": "data:image/png;base64,AA=="}]
+    sla._yaz_json(js, kayit)
+    assert veri.post(f"{URL}/dosya", params={"ad": "not.txt"}, content=b"merhaba", headers=hdr).status_code == 200
     d = veri.delete(f"{URL}/sla", headers=hdr).json()["data"]
-    assert d["analiz"] is None and len(d["ekler"]) == 1 and d["ozet"]["dosya"] is None
+    assert d["analiz"] is None and d["ozet"]["dosya"] is None
+    assert [e["baslik"] for e in d["ekler"]] == ["Eski MRTG"] and [x["ad"] for x in d["dosyalar"]] == ["not.txt"]
     r = veri.post(f"{URL}/gonder", json={"onay": True}, headers=hdr)
-    assert r.status_code == 200 and r.json()["data"]["ekler"] == []  # SLA yok, PDF gonderilmedi
+    assert r.status_code == 200 and r.json()["data"]["ekler"] == ["not.txt"]  # SLA yok, PDF gonderilmedi; ek dosya gider
 
 
 def test_ek_dosya_ekle_sil_ve_iletide(veri):

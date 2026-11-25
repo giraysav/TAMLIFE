@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
@@ -19,7 +20,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
 from functools import cache
-import unicodedata
 from pathlib import Path
 from string import Template
 

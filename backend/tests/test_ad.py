@@ -129,12 +129,18 @@ def test_pasif_ve_otomatik_acma_kapali(client, sahte_ad, monkeypatch):
     assert _giris(client, "pasif.kisi", "Dogru-Parola-1").status_code == 401
     assert sahte_ad["bind"] == once  # pasif kisi icin AD'ye gidilmez
     # 2026-10-15: yalniz tc/ng/te ile baslayan kullanici adlarina hesap acilir (AD dogrulasa da)
-    assert _giris(client, "yeni.kisi", "Dogru-Parola-1").status_code == 401
+    # 2026-11-18 (02c6199): AD parolasi DOGRU ama hesap acilamiyorsa 403 'Giris yetkiniz yok' ('parola hatali' algisi olmasin)
+    r = _giris(client, "yeni.kisi", "Dogru-Parola-1")
+    assert r.status_code == 403 and r.json()["detail"] == "Giris yetkiniz yok" and "tamlife_session" not in r.cookies
     with Session(engine()) as db:
         assert kullanicilar.bul(db, "yeni.kisi") is None
+    assert _giris(client, "yeni.kisi", "Yanlis-Parola-1").status_code == 401  # yanlis parola yine 401
     monkeypatch.setenv("AD_OTOMATIK_AC", "false")
-    assert _giris(client, "tcyeni", "Dogru-Parola-1").status_code == 401
-    assert _giris(client, "yeni.kisi", "Dogru-Parola-1").status_code == 401
+    assert _giris(client, "tcyeni", "Dogru-Parola-1").status_code == 403
+    assert _giris(client, "yeni.kisi", "Dogru-Parola-1").status_code == 403
+    assert client.get("/api/v1/session/me").status_code == 401  # 403 ile oturum acilmaz
+    with Session(engine()) as db:
+        assert kullanicilar.bul(db, "tcyeni") is None
     with Session(engine()) as db:
         assert kullanicilar.bul(db, "yeni.kisi") is None
 
@@ -285,12 +291,13 @@ def test_kurum_baglantilari_ucu_sir_vermez_ad_testi_admin_ve_csrf(client, monkey
         monkeypatch.setenv(k, v)
     r = client.get("/api/v1/yonetim/kurum")
     b = r.json()["data"]["baglantilar"]
-    assert [x["id"] for x in b] == ["ad", "oracle_reportdb", "oracle_galapagos", "pg_onent", "pg_onedesk"]  # 2026-10-19: ONENTDB PostgreSQL
+    assert [x["id"] for x in b] == ["ad", "oracle_reportdb", "pg_onent", "pg_onedesk"]  # 2026-10-19: ONENTDB PostgreSQL; 2026-11-19 Galapagos yok
     assert b[0]["state"] == "ready" and b[0]["missing"] == [] and b[0]["tur"] == "dizin"
     assert b[0]["bilgiler"] == {"sunucu": "dc.ornek.local", "port": 636, "ldaps": True, "ssl": True, "alan": "ornek.local",
                                 "ca_dosyasi": True, "grup_kisiti": True, "otomatik_ac": True}  # fmt: skip
     assert "kurum-zinciri" not in r.text and "TAM-Grubu" not in r.text and "cok-gizli-parola" not in r.text
-    assert "GALAPAGOSDB_DB_IMPORT_QUERY" in source_key_names() and not any(k.startswith("URUNTUTAR") for k in source_key_names())
+    # e735628: GALAPAGOSDB kaldirildi; 763662d: *_IMPORT_QUERY (iceri alma sorgusu) yolu kaldirildi
+    assert not any(k.startswith(("URUNTUTAR", "GALAPAGOS")) or k.endswith("_IMPORT_QUERY") for k in source_key_names())
 
     from app.yonetim import router as yonetim_router
 
@@ -333,11 +340,12 @@ def test_kurum_oracle_kartlari_sir_vermez(client, monkeypatch):
     b = {x["id"]: x for x in r.json()["data"]["baglantilar"]}
     rdb = b["oracle_reportdb"]
     assert rdb["tur"] == "oracle" and rdb["state"] == "ready" and rdb["label"] == "REPORTDB" and rdb["acma_anahtari"] == "ORACLE_REPORTDB_ENABLED"
+    # 763662d / 834d541: iceri alma sorgusu (sorgu_tamam/sorgu_hata), son parti ve ReportDB ozet dagitimi karti kaldirildi
     assert rdb["bilgiler"] == {"sunucu": "rapor-db.ornek.invalid", "port": 1522, "servis": "GIZLISERVIS", "kullanici": "gizli_kullanici", "parola": True, "zaman_asimi": 10,
-                               "oracle_istemci": False, "sorgu_tamam": False, "sorgu_hata": rdb["bilgiler"]["sorgu_hata"]}  # fmt: skip
-    assert "SELECT" in rdb["bilgiler"]["sorgu_hata"] and rdb["son_parti"] is None and rdb["reportdb"]["kartlara_yaz"] is False
+                               "oracle_istemci": False}  # fmt: skip
+    assert "son_parti" not in rdb and "reportdb" not in rdb
     assert "oracle_onent" not in b and b["pg_onent"]["tur"] == "postgres" and b["pg_onent"]["state"] == "incomplete" and "ONENTDB_PG_HOST" in b["pg_onent"]["missing"]
-    assert b["oracle_galapagos"]["state"] == "disabled" and b["oracle_galapagos"]["bilgiler"]["sunucu"] == ""
+    assert "oracle_galapagos" not in b  # e735628: Galapagos kaldirildi
     for gizli in ("cok-gizli-parola", "DELETE"):  # parola ve sorgu metni hic verilmez
         assert gizli not in r.text
 

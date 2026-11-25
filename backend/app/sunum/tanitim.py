@@ -34,7 +34,8 @@ KOKLER = ("backend", "ekran-react", "kurulum")
 DISLANAN = frozenset({"node_modules", "dist", "public", "var", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".vite", ".git", "coverage", "playwright-report", "test-results"})
 HAZIR_BILESEN = ("ekran-react", "src", "components", "ui")  # shadcn/ui: kopyalanan hazir bilesenler
 DIL_UZANTILARI = {".py": "Python", ".ts": "TypeScript", ".tsx": "TypeScript", ".ps1": "PowerShell", ".css": "CSS"}
-UC_DESENI = re.compile(r"^\s*@(?:router|app)\.(?:get|post|put|patch|delete)\(")
+# her APIRouter adi sayilir (router, utilizasyon_router ...) ve app; 2026-11-25: utilizasyon_router uclari sayilmiyordu
+UC_DESENI = re.compile(r"^\s*@(?:\w*router|app)\.(?:get|post|put|patch|delete)\(")
 
 # dil -> (ne yapar TR, EN)
 DIL_GOREVI = {

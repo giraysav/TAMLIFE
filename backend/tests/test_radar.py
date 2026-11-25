@@ -1,4 +1,5 @@
-"""Musteri Radar: panelde karti olmayan (numara ya da unvan cekirdegi eslesmeyen) musteriler, alarm toplamina gore ilk 10."""
+"""Musteri Radar: bos durum, eski ReportDB ozet yedeginin kalktigi ve rol gorunurlugu. TEMIP kayitli Radar akisi
+test_temip_kayit.py / test_fark.py'de."""
 
 from __future__ import annotations
 
@@ -7,14 +8,19 @@ from sqlalchemy.orm import Session
 
 from app.db import engine
 from app.models import Customer, RoleView
-from app.tampon import reportdb
+from app.tampon import depo, reportdb
 from tests.conftest import login_ok
-from tests.test_reportdb import BASLIK, satir
+
+# Eski ReportDB alarm ozeti partisi (2026-11-23 oncesi bicim; uydurma veri).
+BASLIK = ["Musteri No", "Musteri Unvani", "Aktif Alarm", "Biletli Aktif Alarm", "Kapanan Alarm", "Biletli Kapanan Alarm",
+          "En Eski Alarm", "Son Kapanis", "Veri Zamani"]  # fmt: skip
 
 
-def _parti(*satirlar) -> None:
+def _ozet_partisi(*satirlar) -> None:
     with Session(engine()) as db:
-        reportdb.tampona_yaz(db, BASLIK, list(satirlar), 1.0)
+        p = depo.parti_olustur(db, reportdb.KAYNAK, "eski ozet", "test")
+        db.commit()
+        assert depo.ice_al(db, p, BASLIK, [list(s) for s in satirlar]).status == "ready"
 
 
 def test_veri_yoksa_bos_ve_aciklamali(client):
@@ -23,33 +29,19 @@ def test_veri_yoksa_bos_ve_aciklamali(client):
     assert veri == {"var": False, "taze": False, "veri_zamani": None, "kaynak": "", "satirlar": [], "toplam_musteri": 0, "toplam_kayit": 0, "sayfa": 1, "adet": 10}
 
 
-def test_panelde_olanlar_numara_ya_da_unvanla_dislanir_siralama_toplam(client):
+def test_eski_reportdb_ozeti_radara_yedek_olmaz(client):
+    """2026-11-23 (834d541): Radar yalniz TEMIP kayitlarindan (Fark'ta Radar'a atanan kartsiz numaralar); eski ReportDB ozet partisi
+    yedegi kaldirildi. Hazir bir ozet partisi dursa bile kayit yokken liste bos kalir."""
     login_ok(client)
     with Session(engine()) as db:
-        db.add_all(
-            [
-                Customer(id=1, external_key="k1", name="Kartli Numara A.S.", customer_no="10000001; 10000009"),
-                Customer(id=2, external_key="k2", name="Doğuş Teknoloji Hiz. ve Tic. A.Ş."),
-            ]
-        )
+        db.add(Customer(id=1, external_key="k1", name="Kartli Numara A.S.", customer_no="10000001"))
         db.commit()
-    _parti(
-        satir("10000001", "KARTLI NUMARA", 50, 50),  # numarayla kartta
-        satir("10000009", "IKINCI NUMARA", 40, 0),  # kartin ikinci numarasi
-        satir("10000002", "DOGUS TEKNOLOJI HIZMETLERI AS", 30, 30),  # unvan cekirdegi kartla ayni
-        satir("10000003", "ALFA LOJISTIK", 5, 20),
-        satir("10000004", "BETA ENERJI", 30, 0),
-        satir("10000005", "SIFIR KAYIT", 0, 0),
-        *[satir(f"2000000{i}", f"DIGER {i}", 1, i) for i in range(10)],
+    _ozet_partisi(
+        ["10000004", "BETA ENERJI", 30, 0, 0, 0, "2026-05-14 15:00:00", "2026-10-06 12:00:00", "2026-10-06 12:30:00"],
+        ["10000003", "ALFA LOJISTIK", 5, 0, 20, 0, "2026-05-14 15:00:00", "2026-10-06 12:00:00", "2026-10-06 12:30:00"],
     )
     veri = client.get("/api/v1/radar").json()["data"]
-    assert veri["var"] is True and veri["taze"] is True and veri["veri_zamani"] == "2026-10-06 12:30:00"
-    satirlar = veri["satirlar"]
-    assert len(satirlar) == 10 and [s["sira"] for s in satirlar] == list(range(1, 11))
-    assert satirlar[0] == {"sira": 1, "musteri_no": "10000004", "unvan": "BETA ENERJI", "aktif": 30, "kapanan": 0, "toplam": 30}
-    assert satirlar[1]["unvan"] == "ALFA LOJISTIK" and satirlar[1]["toplam"] == 25
-    adlar = {s["unvan"] for s in satirlar}
-    assert adlar.isdisjoint({"KARTLI NUMARA", "IKINCI NUMARA", "DOGUS TEKNOLOJI HIZMETLERI AS", "SIFIR KAYIT"})
+    assert veri == {"var": False, "taze": False, "veri_zamani": None, "kaynak": "", "satirlar": [], "toplam_musteri": 0, "toplam_kayit": 0, "sayfa": 1, "adet": 10}
 
 
 def test_rol_kaydi_radari_gizler_veya_acar(client, monkeypatch):

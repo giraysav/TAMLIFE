@@ -8,7 +8,7 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from app.db import engine
-from app.models import AppSetting, AuditEvent, Customer, IngestBatch
+from app.models import AppSetting, AuditEvent, Customer
 from app.tampon import akislar, kaynak, reportdb
 from tests.conftest import login_ok
 from tests.test_temip_kayit import SahteTemip, calistir, eslesme_satirlari, kart, kisi, sahip
@@ -25,9 +25,8 @@ def test_akislar_bos_panelde_yok_csv_ve_denetimden_son_gelis(client):
     r = client.get("/api/v1/tampon/akislar")
     assert r.status_code == 200
     veri = r.json()["data"]
-    assert {a["anahtar"] for a in veri["akislar"]} == {
+    assert {a["anahtar"] for a in veri["akislar"]} == {  # 834d541: 'ReportDB alarm ozeti' akisi kaldirildi
         "musteri_ham",
-        "oracle_reportdb",
         "temip",
         "onedesk",
         "urun_tutar",
@@ -43,26 +42,39 @@ def test_akislar_bos_panelde_yok_csv_ve_denetimden_son_gelis(client):
         == 200
     )
     with Session(engine()) as db:
-        db.add(AuditEvent(at=datetime.now(UTC), actor="admin", action="onedesk.ice_al", outcome="allow", module_key="onedesk", detail=""))
+        db.add(AuditEvent(at=datetime.now(UTC), actor="admin", action="gelir_uretim.ice_al", outcome="allow", module_key="tampon", detail=""))
         db.commit()
     veri = client.get("/api/v1/tampon/akislar").json()["data"]
-    assert (_akis(veri, "csv")["durum"], _akis(veri, "onedesk")["durum"]) == ("bilgi", "bilgi")  # elle gelen dosya: tazelik beklentisi yok
+    # elle gelen dosya: tazelik beklentisi yok (son gelis denetim kaydindan)
+    assert (_akis(veri, "csv")["durum"], _akis(veri, "gelir_uretim")["durum"]) == ("bilgi", "bilgi")
+    # 16f170d / 763662d: OneDesk elle parti aktarimi kalkti; akis isci turunun durumundan (onedesk.kayit_durum), PG kapaliyken bilgi
+    assert _akis(veri, "onedesk")["durum"] == "yok"
+    with Session(engine()) as db:
+        db.add(AppSetting(key=akislar.ONEDESK_DURUM, value={"son_basari": (datetime.now(UTC) - timedelta(days=3)).isoformat()}))
+        db.commit()
+    assert _akis(client.get("/api/v1/tampon/akislar").json()["data"], "onedesk")["durum"] == "bilgi"
 
 
-def test_akislar_reportdb_bayat_uyarir_kapaliyken_uyarmaz(client, monkeypatch):
+def test_akislar_temip_bayat_uyarir_kapaliyken_uyarmaz_hatayi_soyler(client, monkeypatch):
+    # 834d541: ReportDB alarm ozeti akisi kalkti; ReportDB baglantisinin tek isci akisi TEMIP alarm kayitlari (bayat esigi BAYAT_DK)
     login_ok(client)
     with Session(engine()) as db:
-        db.add(IngestBatch(source_key=reportdb.KAYNAK, label="ReportDB", status="ready", row_count=1, created_by="reportdb",
-                           received_at=datetime.now(UTC) - timedelta(days=3)))  # fmt: skip
+        db.add(AppSetting(key=akislar.TEMIP_SURUM, value={"an": (datetime.now(UTC) - timedelta(days=3)).isoformat(), "kip": "artimli"}))
         db.commit()
     monkeypatch.setenv("ORACLE_REPORTDB_ENABLED", "true")
     for k in ("HOST", "SERVICE_NAME", "USER", "PASSWORD"):
         monkeypatch.setenv(f"ORACLE_REPORTDB_{k}", "x")
     veri = client.get("/api/v1/tampon/akislar").json()["data"]
-    assert _akis(veri, "oracle_reportdb")["durum"] == "bayat" and veri["uyarilar"] == ["ReportDB alarm özeti: veri bayat"]
+    assert _akis(veri, "temip")["durum"] == "bayat" and veri["uyarilar"] == ["TEMIP alarm kayıtları: Son tur: artimli, +0 yeni, 0 güncel."]
+    with Session(engine()) as db:
+        reportdb.durum_yaz(db, "Oracle bağlantısı kurulamadı.")
+    veri = client.get("/api/v1/tampon/akislar").json()["data"]
+    assert _akis(veri, "temip")["durum"] == "hata" and veri["uyarilar"] == ["TEMIP alarm kayıtları: Oracle bağlantısı kurulamadı."]
+    with Session(engine()) as db:
+        reportdb.durum_yaz(db)  # sonraki basarili tur hatayi siler
     monkeypatch.setenv("ORACLE_REPORTDB_ENABLED", "false")
     veri = client.get("/api/v1/tampon/akislar").json()["data"]
-    assert _akis(veri, "oracle_reportdb")["durum"] == "bilgi" and veri["uyarilar"] == []
+    assert _akis(veri, "temip")["durum"] == "bilgi" and veri["uyarilar"] == []
 
 
 def test_kaynak_listesi_sorgu_sayisi_kaynak_sayisindan_bagimsiz(client):

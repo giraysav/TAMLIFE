@@ -1,38 +1,32 @@
-"""Oracle kaynak katmani, ReportDB alarm senkronu ve veri iscisi (uretim test_reportdb_tampon.py uyarlamasi).
+"""Oracle kaynak katmani, ReportDB tur durumu ve veri iscisi (uretim test_reportdb_tampon.py uyarlamasi).
 
 oracledb hic yuklenmez: oracle._oracledb sahte modulle degistirilir; gercek Oracle'a baglanilmaz. Veri uydurmadir (ORNEK-*).
+2026-11-23 (834d541, 8d90b8f): eski alarm OZET sorgusu, tampon partisi ve kartlara dagitimi kaldirildi; 30 dk'lik isci turu yalniz TEMIP
+alarm kayitlarini (tampon/temip_kayit; kendi testleri test_temip_kayit.py) calistirir ve sonucu reportdb.durum_yaz ile kaydeder.
+2026-11-21 (763662d): 'cek' (<ON EK>_IMPORT_QUERY -> tampon partisi) komutu kaldirildi.
 """
 
 import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import isci
 from app.db import engine
-from app.models import Customer, IngestBatch, OnedeskRecord
-from app.onedesk import ice_al
-from app.ortak import simdi
-from app.tampon import dagitim, depo, oracle, reportdb, temip_kayit
-from app.tampon.models import DistributionLog, DistributionRule
+from app.models import Customer, IngestBatch
+from app.tampon import oracle, reportdb, temip_kayit
 from app.yonetim.models import FaultEvent
 from tests.conftest import login_ok
 
-BASLIK = ["Musteri No", "Musteri Unvani", "Aktif Alarm", "Biletli Aktif Alarm", "Kapanan Alarm", "Biletli Kapanan Alarm",
-          "En Eski Alarm", "Son Kapanis", "Veri Zamani"]  # fmt: skip
 GIZLI = {"HOST": "ornek-host.invalid", "SERVICE_NAME": "ORNEKSRV", "USER": "ornek_kullanici", "PASSWORD": "ornek-parola-123"}
-
-
-def satir(no, unvan, aktif=0, kapanan=0, b_aktif=0, b_kapanan=0):
-    return [no, unvan, aktif, b_aktif, kapanan, b_kapanan, "2026-05-14 15:00:00", "2026-10-06 12:00:00", "2026-10-06 12:30:00"]
 
 
 # --- sahte oracledb -------------------------------------------------------------------------------------------------
@@ -126,25 +120,6 @@ def sayilar(cid):
     with Session(engine()) as db:
         c = db.get(Customer, cid)
         return c.alarm_count, c.alarm_closed_count
-
-
-def doldur(*satirlar):
-    with Session(engine()) as db:
-        p = reportdb.tampona_yaz(db, BASLIK, list(satirlar), 1.5)
-        return p.id, p.status
-
-
-def uygula():
-    with Session(engine()) as db:
-        son = db.scalar(select(func.max(IngestBatch.id)).where(IngestBatch.source_key == reportdb.KAYNAK, IngestBatch.status == "ready"))
-        return reportdb.kartlara_uygula(db, son)
-
-
-def kurallari_ac(etkin=True):
-    with Session(engine()) as db:
-        for k in reportdb.kurallari_hazirla(db):
-            k.enabled = etkin
-        db.commit()
 
 
 # --- Oracle katmani -------------------------------------------------------------------------------------------------
@@ -277,168 +252,44 @@ def test_kaynak_listesi_hazir_ve_sir_yok(client, acik):
     r = client.get("/api/v1/tampon/kaynaklar")
     k = {x["anahtar"]: x for x in r.json()["data"]}["oracle_reportdb"]
     assert (k["hazir"], k["yapilandirma"], k["eksik"]) == (True, "tamam", [])
-    assert k["reportdb"] == {"kartlara_yaz": False, "kural": 0, "yas_dk": None, "taze": False, "tazelik_dk": 20}
+    assert "reportdb" not in k  # ozet yasi / 'Kartlara yaz' gostergesi kalkti (834d541, 8d90b8f)
     assert all(v not in r.text for v in GIZLI.values())
     ozet = client.get("/api/v1/yonetim/ozet").json()["data"]
     assert next(b for b in ozet["baglantilar"] if b["id"] == "oracle_reportdb")["configured"] is True
 
 
-# --- ReportDB: sorgular ---------------------------------------------------------------------------------------------
-def test_sorgu_yalniz_tek_select_ve_kurumsal_kapsamli():
-    s = oracle.sorgu_temizle(reportdb.SORGU)
-    for parca in ("TEMIP.ACTIVEALARMS_5DK", "TEMIP.VIEW_REPORT_ACTIVE", "IN ('NOC DESTECH')", "TRUNC(SYSDATE, 'YYYY')",
-                  "EVENTTIME < TRUNC(SYSDATE) + 1", "REGEXP_LIKE(INFORMATION1,'^[0-9]{8}$')"):  # fmt: skip
-        assert parca in s
-    assert sum(s.upper().count(k) for k in ("INSERT", "UPDATE", "DELETE")) == 0
-    assert all(f'"{kolon}"' in s for kolon in reportdb.GEREKLI)
-    assert "EVENTTIME < TRUNC(SYSDATE) + 1" in reportdb.SORGU.split("FROM TEMIP.VIEW_REPORT_ACTIVE")[1]  # kapanan taraf ust sinirli
-
-
-# --- ReportDB: tampon -----------------------------------------------------------------------------------------------
-def test_tampona_yaz_tekillestirir(client):
-    pid, durum = doldur(satir("10000001", "ORNEK-A", 3, 100), satir("10000001", "ORNEK-A TEKRAR", 9, 9),
-                        satir(" 05 ", "ORNEK-SIFIR", 1, 2), satir("", "ORNEK-NOSUZ", 1, 1), satir("10000002", None, "x", -4))  # fmt: skip
-    assert durum == "ready"
+# --- ReportDB: tur durumu (eski hata partisi yerine; Veri Ozeti / Veri Akisi bunu okur) ------------------------------------
+def test_durum_yaz_basari_ve_yalniz_son_hata(client, monkeypatch):
+    zaman = iter(datetime(2026, 11, 23, 9, d, tzinfo=UTC) for d in range(30))
+    monkeypatch.setattr(reportdb, "simdi", lambda: next(zaman))
     with Session(engine()) as db:
-        p = db.get(IngestBatch, pid)
-        rows = list(depo.satirlari_oku(db, pid))
-    assert p.row_count == 3 and p.columns == BASLIK and "veri 2026-10-06 12:30:00" in p.label
-    assert rows[0][:5] == ["10000001", "ORNEK-A", 3, 0, 100] and rows[1][0] == "05"
-    assert rows[2][:5] == ["10000002", "10000002", 0, 0, 0]  # unvansiz: numara; okunamayan/negatif sayi 0
+        assert reportdb.durum_oku(db) == {} and reportdb.son_hata({}) == ""
+        reportdb.durum_yaz(db)
+        basari = reportdb.durum_oku(db)["son_basari"]
+        reportdb.durum_yaz(db, "ORA-20099: erisim yok")
+        reportdb.durum_yaz(db, "ORA-12541: dinleyici yok " + "x" * 600)
+        d = reportdb.durum_oku(db)
+        assert d["son_basari"] == basari and d["son_deneme"] > basari  # hata son basariyi silmez
+        assert d["hata"].startswith("ORA-12541") and len(d["hata"]) == 500 and reportdb.son_hata(d) == d["hata"]  # yalniz son hata
+        reportdb.durum_yaz(db)
+        d = reportdb.durum_oku(db)
+        assert d["hata"] == "" and d["son_basari"] == d["son_deneme"] and reportdb.son_hata(d) == ""
+        assert db.scalar(select(IngestBatch.id).limit(1)) is None  # tampon partisi yazilmaz
 
 
-def test_eksik_sutun_ve_bos_sonuc_hata(client):
-    for basliklar, satirlar in ((["Musteri No"], [["1"]]), (BASLIK, []), (BASLIK, [satir("", "x")])):
-        with pytest.raises(reportdb.ReportdbHata), Session(engine()) as db:
-            reportdb.tampona_yaz(db, basliklar, satirlar)
-    with Session(engine()) as db:
-        assert db.scalar(select(func.count()).select_from(IngestBatch)) == 0
-
-
-def test_yarim_sonuc_reddedilir_kartlara_yazilmaz(client):
-    c = kart("ORNEK-A", "10000000", 7, 70)
-    doldur(*[satir(str(10000000 + i), f"M{i}", 1, 1) for i in range(300)])
-    kurallari_ac()
-    pid, durum = doldur(*[satir(str(10000000 + i), f"M{i}", 5, 5) for i in range(100)])
-    assert durum == "rejected"
-    with Session(engine()) as db:
-        assert reportdb.kartlara_uygula(db, pid) == {"uygulandi": False, "neden": "tampon_bos"}
-    assert sayilar(c) == (7, 70)
-    assert doldur(*[satir(str(10000000 + i), f"M{i}", 5, 5) for i in range(200)])[1] == "ready"  # %50 ve ustu kabul
-
-
-def test_hata_yaz_yalniz_son_hata_kalir_hazir_parti_korunur(client):
-    hazir, _ = doldur(satir("10000001", "A", 1, 1))
-    with Session(engine()) as db:
-        reportdb.hata_yaz(db, "ORA-20099: erisim yok")
-        son = reportdb.hata_yaz(db, "ORA-12541: dinleyici yok")
-        partiler = {p.id: (p.status, p.error) for p in db.scalars(select(IngestBatch))}
-    assert partiler == {hazir: ("ready", ""), son.id: ("failed", "ORA-12541: dinleyici yok")}
-
-
-# --- ReportDB: kartlara yaz (dagitim) -------------------------------------------------------------------------------
-def test_kartlara_yaz_varsayilan_kapali(client):
-    c = kart("A", "11111111", 7, 70)
-    doldur(satir("11111111", "A", 1, 2))
-    kurallari_ac(etkin=False)
-    with Session(engine()) as db:
-        kurallar = db.scalars(select(DistributionRule).where(DistributionRule.source_key == reportdb.KAYNAK)).all()
-        assert {(k.target, k.operation, k.value_column, k.zero_unmatched, k.max_age_minutes, k.enabled) for k in kurallar} == {
-            ("customer.alarm_count", "topla", "Aktif Alarm", True, 20, False),
-            ("customer.alarm_closed_count", "topla", "Kapanan Alarm", True, 20, False),
-        }
-        reportdb.kurallari_hazirla(db)  # ikinci cagri yeni kural acmaz
-        assert db.scalar(select(func.count()).select_from(DistributionRule)) == 2
-    assert uygula() == {"uygulandi": False, "neden": "kapali"}
-    assert sayilar(c) == (7, 70)
-
-
-def test_acinca_yazar_numarasizlara_dokunmaz_eksige_sifir(client):
-    a = kart("A", "11111111", 7, 70)
-    b = kart("B", "22222222", 4, 40)  # partide yok -> 0
-    z = kart("Z", None, 9, 90)  # numarasiz -> dokunma
-    y = kart("Y", "N-33333333", 1, 1)  # rakam disi yok sayilir
-    doldur(satir("11111111", "A", 5, 50), satir("33333333", "Y", 2, 3), satir("44444444", "KARTSIZ", 8, 8))
-    kurallari_ac()
-    assert uygula() == {"uygulandi": True, "kural": 2, "guncellenen": 6, "sifirlanan": 2}
-    assert (sayilar(a), sayilar(b), sayilar(z), sayilar(y)) == ((5, 50), (0, 0), (9, 90), (2, 3))
-    doldur(satir("11111111", "A", 5, 50), satir("33333333", "Y", 2, 3), satir("44444444", "KARTSIZ", 8, 8))
-    assert uygula()["guncellenen"] == 0  # degisen yok
-    doldur(satir("11111111", "A", 0, 51))  # aktif alarm azaldi, kapanan artti; Y artik yok -> 0
-    assert uygula()["guncellenen"] == 4
-    assert (sayilar(a), sayilar(y)) == ((0, 51), (0, 0))
-
-
-def test_eski_parti_kartlara_yazilmaz(client):
-    c = kart("A", "11111111", 7, 70)
-    kurallari_ac()
-    pid, _ = doldur(satir("11111111", "A", 1, 2))
-    with Session(engine()) as db:
-        db.get(IngestBatch, pid).received_at = simdi() - timedelta(minutes=reportdb.TAZELIK_DAKIKA + 1)
-        db.commit()
-        assert reportdb.kartlara_uygula(db, pid)["neden"] == "eski"
-        assert reportdb.durum(db)["taze"] is False
-    assert sayilar(c) == (7, 70)
-
-
-def test_birikimli_uygulama_geri_alinca_ilk_degere_doner_elle_degisen_korunur(client, monkeypatch):
-    monkeypatch.setenv("TAMLIFE_INGEST_KEEP_BATCHES", "1")
-    a = kart("A", "11111111", 7, 70)
-    b = kart("B", "22222222", 4, 40)
-    kurallari_ac()
-    doldur(satir("11111111", "A", 5, 50), satir("22222222", "B", 6, 60))
-    uygula()
-    doldur(satir("11111111", "A", 9, 90), satir("22222222", "B", 6, 60))
-    uygula()  # A ikinci kez degisti; ILK deger (7, 70) saklanmali
-    with Session(engine()) as db:
-        db.get(Customer, b).alarm_count = 123  # elle degistirildi
-        db.commit()
-        kayitlar = db.scalars(select(DistributionLog).where(DistributionLog.reverted.is_(False))).all()
-        assert len({k.run_id for k in kayitlar}) == 2 and len(kayitlar) == 4  # kural basina TEK uygulama, kart+hedef basina tek kayit
-        assert {(k.customer_id, k.target, k.old_value, k.new_value) for k in kayitlar if k.customer_id == a} == {
-            (a, "customer.alarm_count", "7", "9"), (a, "customer.alarm_closed_count", "70", "90")}
-        assert db.scalar(select(func.count()).select_from(IngestBatch)) == 1  # eski parti serbest kaldi, silindi
-        sonuc = [dagitim.geri_al(db, run, "admin") for run in {k.run_id for k in kayitlar}]
-        db.commit()
-    assert sum(s["geri_alinan"] for s in sonuc) == 3 and sum(s["korunan"] for s in sonuc) == 1
-    assert (sayilar(a), sayilar(b)) == ((7, 70), (123, 40))  # elle degisen dokunulmadi
-
-
-def test_birden_cok_numara_sayilar_toplanir(client):
-    a = kart("MLP", "11111111, 22222222", 1, 1)
-    b = kart("TEK", "33333333")
-    c = kart("YOK", "44444444, 55555555", 9, 9)
-    doldur(satir("11111111", "MLP 1", 5, 50), satir("22222222", "MLP 2", 7, 70), satir("33333333", "TEK", 1, 2),
-           satir("66666666", "KARTSIZ", 4, 4))  # fmt: skip
-    kurallari_ac()
-    uygula()
-    assert (sayilar(a), sayilar(b), sayilar(c)) == ((12, 120), (1, 2), (0, 0))
-
-
-def test_onedesk_aktarimi_once_numarayla_belirsizse_unvanla(client):
-    a = kart("ORNEK-UNVAN-FARKLI", "10000001")
-    kart("ORNEK-IKIZ-1", "20000002")
-    ikiz = kart("ORNEK-IKIZ-2", "20000002")
-    with Session(engine()) as db:
-        p = depo.parti_olustur(db, "csv_ornek", "test", "admin")
-        db.commit()
-        depo.ice_al(db, p, ["Çağrı No", "Müşteri No", "Müşteri Adı", "Kayıt Türü"],
-                    [["K1", "10000001", "BASKA AD", "Alarm"], ["K2", "20000002", "ORNEK-IKIZ-2", "Alarm"]])  # fmt: skip
-        ice_al.parti_aktar(db, p.id)
-        db.commit()
-        assert {r.external_key: r.customer_id for r in db.scalars(select(OnedeskRecord))} == {"K1": a, "K2": ikiz}
-
-
-# --- Veri iscisi (python -m app.isci) -------------------------------------------------------------------------------
 def _partiler():
     with Session(engine()) as db:
         return [(p.source_key, p.status, p.error) for p in db.scalars(select(IngestBatch).order_by(IngestBatch.id))]
 
 
-def test_isci_kapaliyken_hicbir_sey_yapmaz(client, sahte, kapali):
+def test_isci_kapaliyken_hicbir_sey_yapmaz(client, sahte, kapali, monkeypatch):
+    cagrilar = _sahte_temip(monkeypatch)
     assert isci.main(["reportdb"]) == 1
-    assert isci.main(["cek", "oracle_onent"]) == 1
-    assert sahte.baglantilar == [] and _partiler() == []
+    assert sahte.baglantilar == [] and _partiler() == [] and cagrilar == []
+    with Session(engine()) as db:
+        assert reportdb.durum_oku(db) == {}
+    with pytest.raises(SystemExit):
+        isci.main(["cek", "oracle_onent"])  # 'cek' komutu kaldirildi (763662d)
 
 
 def _sahte_temip(monkeypatch):
@@ -454,18 +305,26 @@ def _sahte_temip(monkeypatch):
     return cagrilar
 
 
-def test_isci_senkron_tamponu_yazar_kartlara_yalniz_kural_aciksa_kayitlar_her_turda(client, acik, monkeypatch):
+def _yan_isler(monkeypatch):
+    """reportdb turunun ayni turda cagirdigi LOE / envanter / OneDesk isleri (kendi testleri ayri): yalniz cagrildiklari kaydedilir."""
+    cagrilar = []
+    for ad in ("rapor_devre", "envanter_turu", "onedesk_kayit_turu"):
+        monkeypatch.setattr(isci, ad, lambda *a, _ad=ad, **k: cagrilar.append(_ad) or 0)
+    return cagrilar
+
+
+def test_isci_turu_yalniz_kayit_turunu_calistirir_kart_sayaclarina_dokunmaz(client, sahte, acik, monkeypatch):
     c = kart("A", "11111111", 7, 70)
-    monkeypatch.setattr(reportdb, "cek", lambda: (BASLIK, [satir("11111111", "A", 5, 50)]))
-    cagrilar = _sahte_temip(monkeypatch)
+    cagrilar, yan = _sahte_temip(monkeypatch), _yan_isler(monkeypatch)
     assert isci.main(["reportdb"]) == 0
-    assert _partiler() == [("oracle_reportdb", "ready", "")] and sayilar(c) == (7, 70)  # kurallar kapali: sayilar yazilmaz
-    assert cagrilar == ["artimli"]  # alarm kayitlari 'Kartlara yaz'dan bagimsiz (2026-10-17)
-    kurallari_ac()
-    assert isci.main(["reportdb"]) == 0
-    assert sayilar(c) == (5, 50) and cagrilar == ["artimli", "artimli"]
+    assert cagrilar == ["artimli"] and yan == ["rapor_devre", "envanter_turu", "onedesk_kayit_turu"]
+    assert _partiler() == [] and sayilar(c) == (7, 70)  # ozet partisi yok; sayaclari yalniz kayitlar yazar (sahte tur yazmadi)
+    assert sahte.baglantilar == []  # ozet sorgusu yok: Oracle'a yalniz kayit turu baglanir
+    with Session(engine()) as db:
+        d = reportdb.durum_oku(db)
+    assert d["son_basari"] == d["son_deneme"] and d["hata"] == ""
     gunluk = (Path(os.environ["TAMLIFE_LOG_DIR"]) / "isci.log").read_text(encoding="utf-8")
-    assert "reportdb OK" in gunluk and "kartlara yazildi" in gunluk and "alarm kayitlari (artimli): +1 yeni" in gunluk
+    assert "reportdb OK" in gunluk and "alarm kayitlari (artimli): +1 yeni" in gunluk
 
 
 def test_isci_temip_kayit_komutu_kapaliyken_baglanmaz_aciksa_kipi_calistirir(client, sahte, kapali, monkeypatch):
@@ -479,93 +338,44 @@ def test_isci_temip_kayit_komutu_kapaliyken_baglanmaz_aciksa_kipi_calistirir(cli
     assert "temip-kayit OK" in gunluk
 
 
-def test_isci_kuru_calisma_yazmaz(client, acik, monkeypatch, capsys):
-    monkeypatch.setattr(reportdb, "cek", lambda: (BASLIK, [satir("11111111", "A", 5, 50)]))
-    assert isci.main(["reportdb", "--kuru"]) == 0
-    assert "KURU: 1 satir" in capsys.readouterr().out and _partiler() == []
+def test_isci_tur_hatasi_maskeli_durum_ve_ariza_yazar_kartlari_korur(client, sahte, acik, monkeypatch, capsys):
+    c = kart("A", "11111111", 5, 50)
+    _yan_isler(monkeypatch)
+    _sahte_temip(monkeypatch)
+    assert isci.main(["reportdb"]) == 0
+    with Session(engine()) as db:
+        basari = reportdb.durum_oku(db)["son_basari"]
 
-
-def test_isci_oracle_hatasi_partiyi_ve_kartlari_korur(client, acik, monkeypatch, capsys):
-    c = kart("A", "11111111", 7, 70)
-    doldur(satir("11111111", "A", 5, 50))
-    kurallari_ac()
-    uygula()
-
-    def bozuk():
+    def bozuk(db, kip="artimli", gun=30):
         raise RuntimeError("ORA-12541: no listener at host ornek-host.invalid 10.1.2.3 password=ornek-parola-123")
 
-    monkeypatch.setattr(reportdb, "cek", bozuk)
+    monkeypatch.setattr(temip_kayit, "calistir", bozuk)
     assert isci.main(["reportdb"]) == 1
-    partiler = _partiler()
-    assert [p[:2] for p in partiler] == [("oracle_reportdb", "ready"), ("oracle_reportdb", "failed")]
-    assert "ORA-12541" in partiler[1][2] and "Dinleyiciye ulaşılamadı" in partiler[1][2]
-    cikti = capsys.readouterr().err
-    assert all(v not in partiler[1][2] + cikti for v in (*GIZLI.values(), "10.1.2.3"))
-    assert sayilar(c) == (5, 50)
-
-
-def test_isci_kart_yazimi_hatasi_partiyi_korur_ariza_yazar(client, acik, monkeypatch):
-    c = kart("A", "11111111", 7, 70)
-    monkeypatch.setattr(reportdb, "cek", lambda: (BASLIK, [satir("11111111", "A", 5, 50)]))
-
-    def bozuk(db, parti_id):
-        raise RuntimeError("db kilitli")
-
-    monkeypatch.setattr(reportdb, "kartlara_uygula", bozuk)
-    assert isci.main(["reportdb"]) == 1
-    assert _partiler() == [("oracle_reportdb", "ready", "")] and sayilar(c) == (7, 70)
     with Session(engine()) as db:
+        d = reportdb.durum_oku(db)
         ariza_ = db.scalars(select(FaultEvent)).one()
-    assert ariza_.code == "TL-TAM-01" and "kartlar/kayitlar yazilamadi" in ariza_.message
+    assert d["son_basari"] == basari and "ORA-12541" in d["hata"] and "Dinleyiciye ulaşılamadı" in d["hata"]
+    assert reportdb.son_hata(d) == d["hata"]
+    assert ariza_.code == "TL-TAM-01" and "alarm kayit turu" in ariza_.message
+    cikti = capsys.readouterr().err
+    assert all(v not in d["hata"] + cikti + ariza_.message for v in (*GIZLI.values(), "10.1.2.3"))
+    assert _partiler() == [] and sayilar(c) == (5, 50)
+    with pytest.raises(SystemExit):
+        isci.main(["reportdb", "--kuru"])  # reportdb --kuru kalkti (834d541); kuru deneme: temip-kayit --kuru
 
 
-def test_isci_istemci_yoksa_hata_ve_tek_calisma(client, acik, tmp_path, monkeypatch):
+def test_isci_istemci_yoksa_hata_ve_tek_calisma(client, sahte, acik, tmp_path, monkeypatch):
     monkeypatch.setenv("ORACLE_CLIENT_DIR", "")  # isci ortami degistirir; test sonunda geri alinsin
-    assert isci.main(["reportdb", "--client", str(tmp_path / "yok")]) == 1
+    cagrilar, _ = _sahte_temip(monkeypatch), _yan_isler(monkeypatch)
+    assert isci.main(["reportdb", "--client", str(tmp_path / "yok")]) == 1 and cagrilar == []
     (tmp_path / "ic").mkdir()
     (tmp_path / "ic" / "oci.dll").write_bytes(b"")
-    monkeypatch.setattr(reportdb, "cek", lambda: (BASLIK, [satir("11111111", "A", 5, 50)]))
-    assert isci.main(["reportdb", "--client", str(tmp_path / "ic"), "--kuru"]) == 0
+    assert isci.main(["reportdb", "--client", str(tmp_path / "ic")]) == 0 and cagrilar == ["artimli"]
     assert os.environ["ORACLE_CLIENT_DIR"] == str(tmp_path / "ic")
     monkeypatch.setenv("ORACLE_CLIENT_DIR", "")
     kilit = Path(os.environ["TAMLIFE_LOG_DIR"]) / "isci_reportdb.kilit"
     assert isci.kilit_al(kilit) and not isci.kilit_al(kilit)  # taze kilit: ikinci calisma atlanir
-    assert isci.main(["reportdb"]) == 2
+    assert isci.main(["reportdb"]) == 2 and cagrilar == ["artimli"]
     eski = time.time() - isci.KILIT_BAYAT_SN - 5
     os.utime(kilit, (eski, eski))
     assert isci.kilit_al(kilit)  # cokme artigi kilit yeniden alinir
-
-
-def test_isci_cek_import_query_partisi(client, sahte, monkeypatch):
-    monkeypatch.setenv("ONENTDB_DB_ENABLED", "true")
-    for ad, deger in GIZLI.items():
-        monkeypatch.setenv(f"ONENTDB_DB_{ad}", deger)
-    monkeypatch.setenv("ONENTDB_DB_IMPORT_QUERY", "DELETE FROM ORNEK_TABLO")
-    assert isci.main(["cek", "oracle_onent"]) == 1 and _partiler() == []  # yalniz SELECT / WITH
-    monkeypatch.setenv("ONENTDB_DB_IMPORT_QUERY", "SELECT NO, AD, TUTAR, TARIH FROM ORNEK_TABLO;")
-    sahte.sutunlar = ["NO", "AD", "TUTAR", "TARIH"]
-    sahte.satirlar = [(Decimal(1), " ORNEK-A ", Decimal("12.5"), datetime(2026, 10, 1, 9, 30)), (Decimal(2), "ORNEK-B", None, None)]
-    assert isci.main(["cek", "oracle_onent"]) == 0
-    with Session(engine()) as db:
-        p = db.scalars(select(IngestBatch)).one()
-        assert (p.source_key, p.status, p.columns) == ("oracle_onent_import", "ready", ["NO", "AD", "TUTAR", "TARIH"])
-        assert list(depo.satirlari_oku(db, p.id)) == [[1, "ORNEK-A", 12.5, "2026-10-01 09:30:00"], [2, "ORNEK-B", None, None]]
-    assert sahte.sorgular[0] == ("SELECT * FROM (SELECT NO, AD, TUTAR, TARIH FROM ORNEK_TABLO) WHERE ROWNUM <= :kaynak_limit",
-                                 {"kaynak_limit": 300_001})  # fmt: skip
-    sahte.hata = Exception("DPY-6005: cannot connect to ornek-host.invalid")
-    assert isci.main(["cek", "oracle_onent"]) == 1
-    son = _partiler()[-1]
-    assert son[:2] == ("oracle_onent_import", "failed") and "DPY-6005" in son[2] and "ornek-host" not in son[2]
-    login_ok(client)
-    k = {x["anahtar"]: x for x in client.get("/api/v1/tampon/kaynaklar").json()["data"]}
-    assert k["oracle_onent_import"]["son"]["durum"] == "failed" and k["oracle_onent_import"]["tur"] == "oracle_parti"
-
-
-def test_dilimsiz_kaynak_saati_turkiye_saati_sayilir():
-    from datetime import UTC, datetime
-
-    from app.onedesk.ice_al import tarih_oku
-
-    assert tarih_oku("10.10.2026 12:00:00") == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)  # Onedesk/Oracle yerel saat -> UTC
-    assert tarih_oku(datetime(2026, 10, 10, 12, 0)) == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)
-    assert tarih_oku(datetime(2026, 10, 10, 12, 0, tzinfo=UTC)) == datetime(2026, 10, 10, 12, 0, tzinfo=UTC)  # dilimli dokunulmaz

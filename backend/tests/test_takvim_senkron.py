@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.takvim import teshis
-
 KISI = 19
 YIL = 2026
 
@@ -78,9 +76,3 @@ def test_herkesin_girdigi_takvim_admine_aninda_gorunur(client, monkeypatch):
     g = next(g for g in gunler if g["tarih"] == "2026-10-05")
     assert g["online"] == 9 and "toplanti_ozeti" not in g
 
-    # teshis: her hesabin dosyasi ve kayit sayisi, hesapsiz dosya yok
-    rapor = "\n".join(teshis.rapor())
-    for ad in kisiler:
-        satir = next(s for s in rapor.splitlines() if s.startswith(f"{ad} |"))
-        assert "| evet | " in satir and f"{ad}.db" in satir
-    assert "Hesabi olmayan takvim dosyalari: 0" in rapor

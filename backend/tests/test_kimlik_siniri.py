@@ -61,7 +61,9 @@ GOVDE_UCLARI = [
 ]
 
 # Kimlik olmayan sayisal alanlar: aralik servis katmaninda 400 ile denetlenir (dagitim.dogrula, skor_servis._gecerli_skor)
-SINIRSIZ_ALAN_ISTISNALARI = {"KuralGovde.max_age_minutes", "MusteriSkoru.score"}
+# 9b7d3f8 (TopoMaker kural seti) app/topoloji/api.py'ye ikinci bir 'KuralGovde' ekledi; FastAPI ayni adli iki semayi modul yoluyla
+# adlandirir (app__tampon__router__KuralGovde). Istisna yine YALNIZ tampon kuralinin yas alanidir.
+SINIRSIZ_ALAN_ISTISNALARI = {"KuralGovde.max_age_minutes", "app__tampon__router__KuralGovde.max_age_minutes", "MusteriSkoru.score"}
 
 
 @pytest.fixture

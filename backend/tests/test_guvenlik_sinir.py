@@ -18,6 +18,9 @@ from app.security import LoginLimiter, client_ip
 from tests.conftest import login_ok
 
 ACIK = {("POST", "/api/v1/session/login"), ("POST", "/api/v1/session/logout"), ("GET", "/api/v1/health")}
+# Demo ornegi (92dd3cd, TAMLIFE_DEMO=1) parolasiz misafir girisi: oturum henuz yok, CSRF muaf (Origin denetlenir). Gercek panelde
+# (demo kapali) yol hic yokmus gibi 404 doner; testler bunu ayrica sinar (asagida). Demo acik davranis bu dosyanin kapsami disinda.
+DEMO_GIRIS = ("POST", "/api/v1/session/misafir")
 GUVENSIZ = {"POST", "PUT", "PATCH", "DELETE"}
 
 
@@ -51,8 +54,14 @@ def test_uc_listesi_bos_degil(client):
 
 
 def test_kimliksiz_hicbir_uc_veri_dondurmez(client):
+    assert DEMO_GIRIS in _uclar(client.app)
     for yontem, yol in _uclar(client.app):
         if (yontem, yol) in ACIK:
+            continue
+        if (yontem, yol) == DEMO_GIRIS:  # demo kapali: oturum acmaz, cerez vermez, 404
+            r = client.request(yontem, yol, json={})
+            assert r.status_code == 404 and "success" not in r.text and "tamlife_session" not in r.cookies, r.status_code
+            assert client.get("/api/v1/session/me").status_code == 401
             continue
         r = client.request(yontem, yol, json={})
         assert r.status_code in {401, 403}, (yontem, yol, r.status_code)
@@ -63,6 +72,10 @@ def test_csrf_basligi_olmadan_hicbir_yazma_ucu_calismaz(client):
     login_ok(client)
     for yontem, yol in _uclar(client.app):
         if yontem not in GUVENSIZ or (yontem, yol) in ACIK:
+            continue
+        if (yontem, yol) == DEMO_GIRIS:  # CSRF muaf (oturum oncesi); demo kapaliyken hicbir baslikla calismaz
+            for baslik in ({}, {"X-CSRF-Token": "sahte"}):
+                assert client.request(yontem, yol, json={}, headers=baslik).status_code == 404
             continue
         for baslik in ({}, {"X-CSRF-Token": "sahte"}, {"X-CSRF-Token": client.cookies.get("tamlife_session") or ""}):
             r = client.request(yontem, yol, json={}, headers=baslik)

@@ -102,15 +102,16 @@ def test_bosta_arka_plan_istegi_oturumu_uzatmaz(client, monkeypatch):
     real = time.monotonic
     ileri = [0.0]
     monkeypatch.setattr(sess, "_now", lambda: real() + ileri[0])
-    dk = 60.0
-    ileri[0] += 20 * dk
-    assert client.get("/api/v1/session/me", headers={"X-Son-Hareket-Sn": "1500"}).status_code == 200  # bosta yoklama: tazelemez
-    ileri[0] += 11 * dk  # girisin 31. dakikasi: son GERCEK hareketten bu yana > 30 dk
+    # Bosta suresi ayardan (92dd3cd / 2026-11-13 kullanici karari: varsayilan 120 dk; eskiden 30 dk sabit yaziliydi)
+    bosta = get_settings().session_idle_minutes * 60.0
+    ileri[0] += bosta * 2 / 3
+    assert client.get("/api/v1/session/me", headers={"X-Son-Hareket-Sn": str(int(bosta))}).status_code == 200  # bosta yoklama: tazelemez
+    ileri[0] += bosta / 3 + 60  # son GERCEK hareketten (giris) bu yana bosta sureyi asti
     assert client.get("/api/v1/session/me").status_code == 401
     login_ok(client)
-    ileri[0] += 20 * dk
+    ileri[0] += bosta * 2 / 3
     assert client.get("/api/v1/session/me", headers={"X-Son-Hareket-Sn": "5"}).status_code == 200  # etkin istek: tazeler
-    ileri[0] += 20 * dk
+    ileri[0] += bosta * 2 / 3
     assert client.get("/api/v1/session/me").status_code == 200
 
 
@@ -158,10 +159,11 @@ def test_me_returns_navigation_by_role(client, monkeypatch):
     data = client.get("/api/v1/session/me").json()["data"]
     ids = {item["id"] for item in data["navigation"]}
     assert {"musteri", "utilizasyon", "yonetim"} <= ids
-    assert not ids & {"roller", "admin", "integrations", "veri"}  # admin icin tek giris: Yonetim (sekiz bolum); eski kimlikler yok
+    assert not ids & {"roller", "admin", "integrations", "veri"}  # admin icin tek giris: Yonetim (yedi bolum); eski kimlikler yok
     yonetim = next(i for i in data["navigation"] if i["id"] == "yonetim")
     assert [c["id"] for c in yonetim["children"]] == [
-        f"yonetim/{b}" for b in ("durum", "utilizasyon", "tampon", "kurum", "veritabani", "roller", "arizalar", "gunlukler")
+        # 00a9587 / 002ab55 (2026-11-21 sadelestirme): Veri Girisi -> Veri Kaynaklari (veri); Gunlukler, Arizalar ('Kayitlar') icinde
+        f"yonetim/{b}" for b in ("durum", "utilizasyon", "veri", "kurum", "veritabani", "roller", "arizalar")
     ]
     assert yonetim["group"] == "admin"
     assert data["idle_timeout_minutes"] == get_settings().session_idle_minutes

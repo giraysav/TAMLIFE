@@ -34,13 +34,34 @@ def _kur(monkeypatch):
         assert temip_atama.radara_gonder(db, ["30000003", "40000004"], "admin")["atanan"] == 2
 
 
+def _bilet(no: str, tur: str, durum: str, konu: str, kart_id: int | None = None) -> None:
+    from app.models import OnedeskRecord
+    from app.onedesk import canli
+
+    with Session(engine()) as db:
+        n = db.query(OnedeskRecord).count()
+        db.add(OnedeskRecord(source=canli.KAYNAK_ADI, external_key=f"OD-{n}", customer_no=no, customer_id=kart_id, kind=tur, status=durum, category=konu))
+        db.commit()
+
+
 def test_portfoy_ariza_profili_hizmet_oneri_ve_skor(client, monkeypatch):
     _kur(monkeypatch)
+    # 3c9e5e2 (karar A): Radar numaralarinin kartsiz sikayet / talep kayitlari musteri basina ozetlenir (eskiden 'erisim yok')
+    _bilet("30000003", "sikayet", "open", "Hız")
+    _bilet("30000003", "sikayet", "closed", "Hız")
+    _bilet("30000003", "talep", "closed", "Nakil")
+    _bilet("50000005", "sikayet", "open", "Hız")  # Radar'a atanmamis: sayilmaz
     login_ok(client)
     d = client.get(f"{URL}/sunum").json()["data"]
     assert d["musteri_sayisi"] == 2 and d["toplam_alarm"] == 6 and d["acik_alarm"] == 2
-    assert d["sikayet_talep"]["erisim"] is False and d["yz"]["hazir"] is False
+    assert "sikayet_talep" not in d and d["yz"]["hazir"] is False
     m = next(x for x in d["musteriler"] if x["musteri_no"] == "30000003")
+    assert m["sikayet_talep"] == {
+        "sikayet": 2, "talep": 1, "sikayet_acik": 1, "talep_acik": 0,
+        "konular": [{"ad": "Hız", "adet": 2, "sikayet": 2, "talep": 0}, {"ad": "Nakil", "adet": 1, "sikayet": 0, "talep": 1}],
+    }  # fmt: skip
+    m2 = next(x for x in d["musteriler"] if x["musteri_no"] == "40000004")
+    assert m2["sikayet_talep"]["sikayet"] == 0 and m2["sikayet_talep"]["konular"] == []
     assert {x["anahtar"]: x["adet"] for x in m["sure_profili"]} == {"anlik": 1, "kisa": 1, "uzun": 1, "cok_uzun": 1}
     assert [x["anahtar"] for x in m["sure_profili"]] == ["anlik", "kisa", "uzun", "cok_uzun"]  # sabit sira
     assert m["uzun_oran"] == 50.0 and m["anlik_oran"] == 25.0 and m["kalite_oran"] == 20.0 and m["medyan_cozum_dk"] == 75

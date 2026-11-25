@@ -251,8 +251,9 @@ def test_taslak_varsayilanlari_kayit_ve_dil(veri):
     t = veri.get("/api/v1/musteri/1/rapor/taslak").json()["data"]
     assert (t["yil"], t["ay"]) == AY and t["kayitli"] is False and t["birim"] is True and t["gonderim"] is None
     a = t["alanlar"]
-    assert a["dil"] == "tr" and a["konu"].startswith("TAM Aylık Rapor - ") and a["konu"].endswith("| Alfa Test A.S.")
-    assert "Sayın Müşterimiz" in a["govde"] and a["imza"].startswith("Admin Kisi\nTeknik Müşteri Yöneticisi")  # gorunen ad (2026-10-26)
+    # e0eab36 (2026-11-24): konu 'Musteri - TAM Aylik Rapor - Ay Yil'; unvan iki dilde 'Technical Account Manager'
+    assert a["dil"] == "tr" and a["konu"].startswith("Alfa Test A.S. - TAM Aylık Rapor - ") and "|" not in a["konu"]
+    assert "Sayın Müşterimiz" in a["govde"] and a["imza"].startswith("Admin Kisi\nTechnical Account Manager\n")  # gorunen ad (2026-10-26)
     assert a["olumlu"].startswith("Bu dönem") and "Erişim & Arıza Takibi" in a["bilgi"]
     assert veri.put("/api/v1/musteri/1/rapor/taslak", json={"alanlar": {"dil": "de"}}, headers=hdr).status_code == 400
     assert veri.put("/api/v1/musteri/1/rapor/taslak", json={"alanlar": {"dil": "en", "olumlu": "Iyi gecti", "bilinmeyen": "at", "konu": "k" * 500}}, headers=hdr).status_code == 200

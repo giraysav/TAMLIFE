@@ -17,7 +17,6 @@ from sqlalchemy import Column, Table, delete, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app import gorunurluk, musteri_alani
-from app.musteri import envanter
 from app.authz import is_admin, yonetici_mi
 from app.bildirim import servis as bildirim
 from app.gelir.servis import tum_gelirler, unvan_tasi
@@ -36,6 +35,7 @@ from app.models import (
     UrunTutarOzet,
     UserNotification,
 )
+from app.musteri import envanter
 from app.ortak import UygulamaHatasi, eslestirme_anahtari
 from app.session import Principal
 

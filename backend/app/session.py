@@ -153,3 +153,9 @@ def kullanici_oturumlarini_kapat(username: str) -> int:
         for t in kapanacak:
             _STORE.pop(t, None)
     return len(kapanacak)
+
+
+def reset_for_tests() -> None:
+    """Yalniz testler kullanir (tests/conftest.py): bellekteki oturumlari temizler. Silmeyin."""
+    with _LOCK:
+        _STORE.clear()

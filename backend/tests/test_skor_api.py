@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.db import engine
 from app.models import AppUser, Customer, ScoreApprovalRequest, ScoreHistory
-from app.skor import servis
+from app.skor import gunluk, servis
+from app.skor.motor import SERVIS_PUANLARI
 from tests.conftest import login_ok
 
 KRITER = [{"title": "Musteri segmenti", "weight": 100, "b50": "SMB", "b70": "MA", "b100": "SA, PA, WHOLESALE"}]
@@ -53,8 +54,16 @@ def test_yetki_matrisi(veri, monkeypatch, rol):
 
 @pytest.fixture
 def otomatik(monkeypatch):
-    """Otomatik (veri kaynakli) puanlama: 2026-10-20'den beri kapali (servis.OTOMATIK_PUANLAMA); kod ve testleri korunur."""
+    """Karma puanlama (2026-11-21, 1100f9a: servis.OTOMATIK_PUANLAMA=True): verisi olan kriter kaynaktan, olmayan dokum secimine duser.
+    Varsayilan artik bu; fixture acikca sabitler. Gunluk ozet (06:00 turu) bir kez calistirilir ki kaynaklar 'hazir' olsun."""
     monkeypatch.setattr(servis, "OTOMATIK_PUANLAMA", True)
+    gunluk_turu()
+
+
+def gunluk_turu():
+    """Gunluk utilizasyon turu (skor/gunluk.py) yalniz ozet yazar; skor yazimi test edilen uclara birakilir."""
+    with Session(engine()) as db:
+        gunluk.calistir(db, skor_yaz=False)
 
 
 def test_kriter_surumleri_onizleme_ve_toplu_uygulama(veri, otomatik):
@@ -79,7 +88,9 @@ def test_kriter_surumleri_onizleme_ve_toplu_uygulama(veri, otomatik):
     m1 = next(m for m in on["musteriler"] if m["id"] == 1)
     assert (m1["mevcut"], m1["yeni"], m1["fark"], m1["tam"]) == (70.0, 70.0, 0.0, "Admin")
     assert m1["son_atama"]["kaynak"] == "kriter_degisikligi" and m1["kriterler"][0]["kaynak"].startswith("Panel")
-    assert {k["ad"] for k in on["kaynaklar"]} >= {"Panel (kart + aylık rapor)", "Ürün-Tutar (Excel)", "REPORTDB"} and on["uyarilar"] == []
+    # 1100f9a / 02e22aa: REPORTDB / ONENTDB yerine gunluk ozet kaynaklari (Kayit hacmi, ONENT envanteri)
+    kaynak_adlari = {"Panel (kart + aylık rapor)", "Ürün-Tutar (Excel)", "Kayıt hacmi (alarm + talep + şikayet)", "ONENT (aktif CI envanteri)"}
+    assert {k["ad"] for k in on["kaynaklar"]} >= kaynak_adlari and on["uyarilar"] == []
     only2 = veri.post("/api/v1/skor/toplu/onizleme", json={"tam_id": 2}, headers=hdr).json()["data"]
     assert [m["id"] for m in only2["musteriler"]] == [2]
     # toplu uygula: istirak ve olmayan kimlik atlanir
@@ -92,62 +103,81 @@ def test_kriter_surumleri_onizleme_ve_toplu_uygulama(veri, otomatik):
         assert h.old_score == 70.0 and h.detail[0]["kaynak"].startswith("Panel") and h.detail[0]["deger"] == "MA"  # dokum kaynak/deger tutar
 
 
-def test_manuel_puanlama_kriter_dokumunden(veri):
-    """2026-10-20: otomatik puanlama kapali; her kriter Toplu atama > Kriter dokumunde secilir, skor sunucuda hesaplanir."""
+def test_manuel_puanlama_kriter_dokumunden(veri, otomatik):
+    """Karma puanlama (2026-11-21, 1100f9a): verisi olan kriter kaynaktan gelir; verisi olmayan kriter Toplu atama > Kriter dokumunde
+    secilir, skor sunucuda hesaplanir. Eksik kriterde ara skor yazilir, dolu kriterlerle orantili (08ab686). Raporlama elle (7a9fb1a)."""
     hdr = login_ok(veri)
-    kriterler = [KRITER[0] | {"weight": 50}, {"title": "Raporlama", "type": "auto_rapor", "weight": 50, "b50": "X"}]
+    kriterler = [KRITER[0] | {"weight": 50}, {"title": "Raporlama", "type": "auto_rapor", "weight": 50}]
     uyg = veri.put("/api/v1/skor/kriterler/parent", json={"criteria": kriterler}, headers=hdr).json()["data"]["uygulama"]
-    assert uyg["uygulanan"] == [] and {a["id"] for a in uyg["atlanan"]} == {1, 2, 3}  # kaynak okunmaz: segment kartta olsa da secilmedi
+    # segment kartta olan cati: segment kaynaktan, Raporlama secilmedi -> ara skor (kismi); hic dolu kriteri olmayan atlanir
+    assert {u["id"]: u["yeni"] for u in uyg["uygulanan"]} == {1: 70.0, 2: 50.0} and uyg["kismi"] == 2
+    assert [a["id"] for a in uyg["atlanan"]] == [3] and "eksik kriter" in uyg["atlanan"][0]["neden"]
     on = veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]
-    assert on["manuel"] is True and on["kaynaklar"] == [] and on["ozet"]["hazir"] == 0
+    assert on["manuel"] is True and on["ozet"]["hazir"] == 0
     m1 = next(m for m in on["musteriler"] if m["id"] == 1)
-    segment, rapor = m1["kriterler"]
-    assert segment["durum"] == "eksik" and segment["deger"] is None and m1["eksik"] == ["Musteri segmenti"]
+    assert (m1["kriterler"][0]["durum"], m1["kriterler"][0]["deger"], m1["kriterler"][0]["puan"]) == ("otomatik", "MA", 70)
+    m3 = next(m for m in on["musteriler"] if m["id"] == 3)
+    segment, rapor = m3["kriterler"]
+    assert segment["durum"] == "eksik" and segment["deger"] is None and m3["eksik"] == ["Musteri segmenti", "Raporlama"]
     assert [(s["puan"], s["etiket"]) for s in segment["secenekler"]] == [(50, "SMB"), (70, "MA"), (100, "SA, PA, WHOLESALE")]  # 0 yok, bos 30 hucresi yok
-    assert rapor["durum"] == "otomatik" and rapor["puan"] == 50  # X sabit puani tablo kuralidir, secim gerekmez
+    assert rapor["durum"] == "eksik" and [s["puan"] for s in rapor["secenekler"]] == [30, 50, 70, 100]
     yaz = lambda mid, s: veri.put(f"/api/v1/skor/toplu/manuel/{mid}", json={"secimler": s}, headers=hdr)
-    assert yaz(1, {}).status_code == 400  # her kriter secilmeli
-    assert yaz(1, {"Musteri segmenti": 55}).status_code == 400
-    assert yaz(1, {"Musteri segmenti": 0}).status_code == 400  # 0 puan kriteri yok
-    assert yaz(1, {"Musteri segmenti": 30}).status_code == 400  # 30 hucresinde kural yok
+    assert yaz(3, {}).status_code == 400  # en az bir kriter dolu olmali
+    assert yaz(3, {"Musteri segmenti": 55}).status_code == 400
+    assert yaz(3, {"Musteri segmenti": 0}).status_code == 400  # 0 puan kriteri yok
+    assert yaz(3, {"Musteri segmenti": 30}).status_code == 400  # 30 hucresinde kural yok
     assert yaz(4, {"Musteri segmenti": 100}).status_code == 404  # istirak
-    r = yaz(1, {"Musteri segmenti": 100})
-    assert r.status_code == 200 and r.json()["data"] == {"id": 1, "ad": "Cati MA", "eski": None, "yeni": 75.0, "kriter_surumu": None}
-    m1 = next(m for m in veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]["musteriler"] if m["id"] == 1)
-    assert m1["tamam"] and (m1["mevcut"], m1["yeni"]) == (75.0, 75.0) and m1["kriterler"][0]["durum"] == "manuel" and m1["kriterler"][0]["puan"] == 100
-    sonuc = veri.post("/api/v1/skor/toplu/uygula", json={"customer_ids": [1, 2]}, headers=hdr).json()["data"]
-    assert [u["id"] for u in sonuc["uygulanan"]] == [1] and [a["id"] for a in sonuc["atlanan"]] == [2]
+    r = yaz(3, {"Musteri segmenti": 100})
+    assert r.status_code == 200 and r.json()["data"] == {"id": 3, "ad": "Cati Segmentsiz", "eski": None, "yeni": 100.0}  # ara skor
+    r = yaz(3, {"Musteri segmenti": 100, "Raporlama": 50})
+    assert r.status_code == 200 and r.json()["data"] == {"id": 3, "ad": "Cati Segmentsiz", "eski": 100.0, "yeni": 75.0}
+    # verisi olan kriterde kaynak onceliklidir: kart segmenti MA (70) secilen 100'un onune gecer
+    assert yaz(1, {"Musteri segmenti": 100, "Raporlama": 70}).json()["data"]["yeni"] == 70.0
+    m3 = next(m for m in veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]["musteriler"] if m["id"] == 3)
+    assert m3["tamam"] and (m3["mevcut"], m3["yeni"]) == (75.0, 75.0) and m3["kriterler"][0]["durum"] == "manuel" and m3["kriterler"][0]["puan"] == 100
+    sonuc = veri.post("/api/v1/skor/toplu/uygula", json={"customer_ids": [3, 2]}, headers=hdr).json()["data"]
+    assert {u["id"] for u in sonuc["uygulanan"]} == {2, 3} and sonuc["atlanan"] == [] and sonuc["kismi"] == 1  # 2: Raporlama secilmedi
     # agirlik degisince kayitli secimlerle yeniden hesaplanir
     kriterler[0]["weight"] = 150
     uyg = veri.put("/api/v1/skor/kriterler/parent", json={"criteria": kriterler}, headers=hdr).json()["data"]["uygulama"]
-    assert uyg["uygulanan"] == [{"id": 1, "ad": "Cati MA", "eski": 75.0, "yeni": 87.5}]
+    assert uyg["uygulanan"] == [{"id": 3, "ad": "Cati Segmentsiz", "eski": 75.0, "yeni": 87.5}] and uyg["degismeyen"] == 2
     with Session(engine()) as db:
-        h = db.query(ScoreHistory).filter_by(customer_id=1, source="toplu").order_by(ScoreHistory.id).first()
+        h = db.query(ScoreHistory).filter_by(customer_id=3, source="toplu").order_by(ScoreHistory.id).first()
         assert h.detail[0]["kaynak"].startswith("Manuel") and h.detail[0]["puan"] == 100
 
 
-def test_manuel_servis_cesitliligi_alt_kriter(veri):
-    """2026-10-20: Servis Cesitliligi dokumde alt kriter: alinan servisler isaretlenir, kriterin agirligi servislere puanlariyla
-    orantili dagilir (alinan puan / toplam puan); servis puanlari dokumden duzenlenir ve kriter tablosuna yazilir."""
+def test_manuel_servis_cesitliligi_alt_kriter(veri, otomatik):
+    """Servis Cesitliligi dokumde alt kriter: alinan servisler isaretlenir. fe9b96c (2026-11-24): veriyle AYNI kural - alinan servislerin
+    puanlari toplanir, satirin baremi uygulanir (eski oran kurali kalkti); servis puanlari YALNIZ kriter tablosunda degisir."""
     hdr = login_ok(veri)
-    servis = {"title": "2. Servis Çeşitliliği", "type": "servis_cesitliligi", "weight": 20, "servis_puanlari": {"Cloud": 10, "Data": 30}}
-    veri.put("/api/v1/skor/kriterler/parent", json={"criteria": [KRITER[0] | {"weight": 80}, servis]}, headers=hdr)
-    m1 = next(m for m in veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]["musteriler"] if m["id"] == 1)
-    satir = m1["kriterler"][1]
-    assert satir["durum"] == "eksik" and satir["servisler"] == [{"ad": "Cloud", "puan": 10.0}, {"ad": "Data", "puan": 30.0}] and "secenekler" not in satir
-    yaz = lambda govde: veri.put("/api/v1/skor/toplu/manuel/1", json=govde, headers=hdr)
+    servis_satiri = {"title": "2. Servis Çeşitliliği", "type": "servis_cesitliligi", "weight": 20, "servis_puanlari": {"Cloud": 10, "Data": 30}}
+    veri.put("/api/v1/skor/kriterler/parent", json={"criteria": [KRITER[0] | {"weight": 80}, servis_satiri]}, headers=hdr)
+    m3 = next(m for m in veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]["musteriler"] if m["id"] == 3)
+    satir = m3["kriterler"][1]
+    servisler = {s["ad"]: s["puan"] for s in satir["servisler"]}
+    assert satir["durum"] == "eksik" and "secenekler" not in satir
+    assert (servisler["Cloud"], servisler["Data"]) == (10.0, 30.0) and set(servisler) == set(SERVIS_PUANLARI)  # eksik servis varsayilanla
+    assert [(k["puan"], k["alt"]) for k in satir["kurallar"]] == [(30, 1), (50, 20), (70, 30), (100, 40)]  # satirin varsayilan baremi
+    yaz = lambda govde: veri.put("/api/v1/skor/toplu/manuel/3", json=govde, headers=hdr)
     assert yaz({"secimler": {"Musteri segmenti": 100, "2. Servis Çeşitliliği": 50}}).status_code == 400  # puan degil servis listesi
-    assert yaz({"secimler": {"Musteri segmenti": 100, "2. Servis Çeşitliliği": ["Ses"]}}).status_code == 400  # listede olmayan servis
+    assert yaz({"secimler": {"Musteri segmenti": 100, "2. Servis Çeşitliliği": ["Uydurma"]}}).status_code == 400  # listede olmayan servis
     r = yaz({"secimler": {"Musteri segmenti": 100, "2. Servis Çeşitliliği": ["Data"]}}).json()["data"]
-    assert r["yeni"] == 95.0  # segment 80 + servis 20 x 30/40 = 15
+    assert r["yeni"] == 94.0  # segment 80 + servis toplami 30 -> barem 30-39 = 70 puan -> 20 x 0,7 = 14
     assert yaz({"secimler": {"Musteri segmenti": 100, "2. Servis Çeşitliliği": []}}).json()["data"]["yeni"] == 80.0  # hic servis yok: 0
-    # servis puani dokumden duzenlenir: kriter tablosu yeni surum, oran yeniden (Data 30 / 60 = %50 -> 10)
-    assert yaz({"secimler": {"2. Servis Çeşitliliği": ["Data"], "Musteri segmenti": 100}, "servis_puanlari": {"Cloud": -1}}).status_code == 400
-    r = yaz({"secimler": {"Musteri segmenti": 100, "2. Servis Çeşitliliği": ["Data"]}, "servis_puanlari": {"Cloud": 30, "Data": 30}}).json()["data"]
-    assert r["yeni"] == 90.0 and r["kriter_surumu"] == 2
-    assert veri.get("/api/v1/skor/kriterler/parent").json()["data"]["criteria"][1]["servis_puanlari"] == {"Cloud": 30, "Data": 30}
-    m1 = next(m for m in veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]["musteriler"] if m["id"] == 1)
-    assert m1["tamam"] and m1["kriterler"][1]["deger"] == ["Data"] and m1["kriterler"][1]["puan"] == 50.0  # kayitli secim geri gelir
+    # dokum govdesindeki servis puanlari yok sayilir: kriter tablosu degismez
+    assert yaz({"secimler": {"Musteri segmenti": 100, "2. Servis Çeşitliliği": ["Data"]}, "servis_puanlari": {"Data": 40}}).json()["data"]["yeni"] == 94.0
+    assert veri.get("/api/v1/skor/kriterler/parent").json()["data"]["version"] == 1
+    # servis puani kriter tablosunda duzenlenir: yeni surum, kayitli secimle yeniden hesap (Data 40 -> barem 40+ = 100)
+    put = lambda puanlar: veri.put(
+        "/api/v1/skor/kriterler/parent", json={"criteria": [KRITER[0] | {"weight": 80}, servis_satiri | {"servis_puanlari": puanlar}]}, headers=hdr
+    )
+    assert put({"Cloud": -1}).status_code == 400 and put({"Cloud": 101}).status_code == 400 and put({"Uydurma": 5}).status_code == 400
+    r = put({"Cloud": 10, "Data": 40}).json()["data"]
+    assert r["version"] == 2 and r["uygulama"]["uygulanan"] == [{"id": 3, "ad": "Cati Segmentsiz", "eski": 94.0, "yeni": 100.0}]
+    kayit = veri.get("/api/v1/skor/kriterler/parent").json()["data"]["criteria"][1]["servis_puanlari"]
+    assert kayit["Data"] == 40 and kayit["Cloud"] == 10 and set(kayit) == set(SERVIS_PUANLARI)
+    m3 = next(m for m in veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]["musteriler"] if m["id"] == 3)
+    assert m3["tamam"] and m3["kriterler"][1]["deger"] == ["Data"] and m3["kriterler"][1]["puan"] == 100  # kayitli secim geri gelir
 
 
 def test_tek_musteri_skoru_kurallari(veri):
@@ -159,12 +189,14 @@ def test_tek_musteri_skoru_kurallari(veri):
     assert put(1, tam_id=2, score=50).status_code == 400  # musteri-personel eslesmiyor
     assert put(4, tam_id=1, score=50).status_code == 400  # istirak
     assert put(99, tam_id=1, score=50).status_code == 404
-    assert put(1, tam_id=1, score=88.5, detay=[{"baslik": "k", "puan": 70, "agirlik": 10}, {"baslik": "gecersiz", "puan": 55}]).status_code == 200
+    detay = [{"baslik": "k", "puan": 70, "agirlik": 10}, {"baslik": "alt kriter", "puan": 85}, {"baslik": "gecersiz", "puan": 155}, {"baslik": "eksi", "puan": -5}]
+    assert put(1, tam_id=1, score=88.5, detay=detay).status_code == 200
     with Session(engine()) as db:
         c = db.get(Customer, 1)
         assert c.score == 88.5
         h = db.query(ScoreHistory).filter_by(customer_id=1, source="sayfa").one()
-        assert h.score == 88.5 and h.old_score is None and len(h.detail) == 1  # gecersiz puanli satir atildi
+        # 0-100 disi puanli satir atilir; 5885c1c'den beri ara puanlar (Sozlesme alt kriterleri 15 / 85) gecerli
+        assert h.score == 88.5 and h.old_score is None and [d["baslik"] for d in h.detail] == ["k", "alt kriter"]
 
 
 def test_onay_talebi_akisi(veri, monkeypatch):

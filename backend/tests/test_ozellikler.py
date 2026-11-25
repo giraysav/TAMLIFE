@@ -83,11 +83,11 @@ def test_rol_yetkileri_kaydedilir_ve_korunur(veri):
     hdr = login_ok(veri)
     ilk = veri.get("/api/v1/roller").json()["data"]
     katalog = {y["id"]: y for y in ilk["permission_catalog"]}  # her ek yetki duz dilde ne sagladigini ve nerede kullanildigini tasir (TR+EN)
-    assert list(katalog) == ["sunum.gonder", "talep.yonet"]
-    assert katalog["sunum.gonder"]["area"] == "sunum" and katalog["talep.yonet"]["area"] == ""
+    assert list(katalog) == ["sunum.gonder", "talep.yonet", "utilizasyon.yonet"]  # 857d201: Utilizasyon erisim yetkisi
+    assert katalog["sunum.gonder"]["area"] == "" and katalog["talep.yonet"]["area"] == "" and katalog["utilizasyon.yonet"]["area"] == "utilizasyon"
     assert all(y[k] for y in katalog.values() for k in ("label", "label_en", "description", "description_en", "where", "where_en"))
     assert next(r for r in ilk["roles"] if r["role"] == "TeamMember")["permissions"] == []  # varsayilan kapali
-    assert next(r for r in ilk["roles"] if r["role"] == "admin")["permissions"] == ["sunum.gonder", "talep.yonet"]
+    assert next(r for r in ilk["roles"] if r["role"] == "admin")["permissions"] == ["sunum.gonder", "talep.yonet", "utilizasyon.yonet"]
     assert _rol_ver(veri, hdr, yetkiler=["sunum.gonder"])["permissions"] == ["sunum.gonder"]
     assert _rol_ver(veri, hdr)["permissions"] == ["sunum.gonder"]  # permissions verilmezse mevcut yetki korunur
     assert _rol_ver(veri, hdr, yetkiler=[])["permissions"] == []
@@ -97,7 +97,7 @@ def test_rol_yetkileri_kaydedilir_ve_korunur(veri):
 
 def test_me_eylem_yetkilerini_dondurur(veri, monkeypatch):
     hdr = login_ok(veri)
-    assert veri.get("/api/v1/session/me").json()["data"]["permissions"]["actions"] == ["sunum.gonder", "talep.yonet"]  # admin hepsine sahip
+    assert veri.get("/api/v1/session/me").json()["data"]["permissions"]["actions"] == ["sunum.gonder", "talep.yonet", "utilizasyon.yonet"]  # admin hepsine sahip
     _rol_ver(veri, hdr, yetkiler=["sunum.gonder"])
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")
@@ -132,9 +132,12 @@ def test_onedesk_acik_ve_yil_boyu_kapanan(veri):
 def test_onedesk_top10_musteri_ve_lokasyon(veri):
     login_ok(veri)
     with Session(engine()) as db:
+        # 3c9e5e2: kartsiz kayit (Musteri Radar'in) Kayit Takibi'ne girmez -> firmalar kartli
+        db.add_all([Customer(id=100 + i, external_key=f"t-f{i}", name=f"Firma {i:02d}", owner_id=1) for i in range(12)])
         for i in range(12):  # 12 musteri; i. musterinin (12-i) kaydi var
             for n in range(12 - i):
-                _kayit(db, customer_id=None, customer_label=f"Firma {i:02d}", location="Ana Ofis" if n % 3 else "Depo", external_key=f"{i}-{n}", kind=("alarm", "talep", "sikayet")[n % 3])
+                _kayit(db, customer_id=100 + i, customer_label=f"Firma {i:02d}", location="Ana Ofis" if n % 3 else "Depo", external_key=f"{i}-{n}", kind=("alarm", "talep", "sikayet")[n % 3])
+        _kayit(db, customer_id=None, customer_label="Kartsiz Firma", external_key="k-0")
         db.commit()
     d = veri.get("/api/v1/onedesk/top10").json()["data"]
     assert len(d["musteriler"]) == 10 and [m["ad"] for m in d["musteriler"]][:3] == ["Firma 00", "Firma 01", "Firma 02"]
@@ -142,6 +145,7 @@ def test_onedesk_top10_musteri_ve_lokasyon(veri):
     assert ilk["sira"] == 1 and ilk["toplam"] == 12 and ilk["alarm"] + ilk["talep"] + ilk["sikayet"] == 12
     assert ilk["lokasyon"] == "Ana Ofis" and ilk["lokasyonlar"][0]["adet"] == 8 and ilk["lokasyonlar"][1] == {"ad": "Depo", "adet": 4}
     assert "Firma 11" not in {m["ad"] for m in d["musteriler"]}
+    assert d["toplam"]["hepsi"] == sum(range(1, 13))  # kartsiz kayit sayilmaz
 
 
 def test_onedesk_rca_ortak_noktalar_ve_oneriler(veri):
@@ -207,7 +211,8 @@ def test_onedesk_yonetici_hepsini_personel_kendi_kartlarini_gorur(veri, monkeypa
         _kayit(db, status="open", closed_at=None, customer_id=3, customer_label="Beta Test Ltd", external_key="b1")
         _kayit(db, status="open", closed_at=None, customer_id=None, customer_label="Eslesmeyen", external_key="e1")
         db.commit()
-    assert veri.get("/api/v1/onedesk/durum", params={"kapsam": "acik"}).json()["data"]["toplam"]["hepsi"] == 4  # yonetici hepsi
+    # yonetici tum KART kayitlarini gorur; 3c9e5e2: kartsiz kayit (Musteri Radar'in) Kayit Takibi'ne girmez
+    assert veri.get("/api/v1/onedesk/durum", params={"kapsam": "acik"}).json()["data"]["toplam"]["hepsi"] == 3
     _cikis(veri, hdr)
     _giris(veri, monkeypatch, "TeamMember")  # 2026-10-26 (app.gorunurluk): personel yalniz kendi kartlarinin kayitlarini gorur
     d = veri.get("/api/v1/onedesk/durum", params={"kapsam": "acik"}).json()["data"]
@@ -215,7 +220,7 @@ def test_onedesk_yonetici_hepsini_personel_kendi_kartlarini_gorur(veri, monkeypa
     assert veri.get("/api/v1/onedesk/top10").json()["data"]["toplam"]["hepsi"] == 2  # onbellek kisiye ozel (yoneticinin sonucu gelmez)
 
 
-def test_onedesk_modul_yetkisi_ve_kaynak_yalniz_admin(veri, monkeypatch):
+def test_onedesk_modul_yetkisi_ve_elle_aktarim_yolu_yok(veri, monkeypatch):
     hdr = login_ok(veri)
     _rol_ver(veri, hdr, moduller=["musteri"])  # onedesk verilmedi
     _cikis(veri, hdr)
@@ -228,8 +233,9 @@ def test_onedesk_modul_yetkisi_ve_kaynak_yalniz_admin(veri, monkeypatch):
     _cikis(veri, admin_hdr)
     _giris(veri, monkeypatch, "TeamMember")
     assert veri.get("/api/v1/onedesk/durum").status_code == 200
-    assert veri.get("/api/v1/onedesk/kaynak").status_code == 403  # kaynak ve ice alma yalniz admin
-    assert veri.post("/api/v1/onedesk/ice-al/1", json={}, headers=login_hdr(veri)).status_code == 403
+    # 763662d: kaynak ve elle ice alma uclari kaldirildi (eskiden yalniz admin); modul yetkilisine de yol yok
+    assert veri.get("/api/v1/onedesk/kaynak").status_code == 404
+    assert veri.post("/api/v1/onedesk/ice-al/1", json={}, headers=login_hdr(veri)).status_code == 404
 
 
 def _parti(db, basliklar, satirlar, durum="ready"):
@@ -241,50 +247,39 @@ def _parti(db, basliklar, satirlar, durum="ready"):
     return p.id
 
 
-def test_onedesk_veri_girisi_partisi_aktarilir_ve_sayaclar_yenilenir(veri):
+def test_onedesk_elle_aktarim_yok_sayaclar_kayitlardan_yenilenir(veri):
+    """763662d (2026-11-21): Kayit Takibi elle parti aktarimi (kaynak / ice-al uclari, Veri Girisi partisi -> kayit) kaldirildi; kayitlar
+    yalniz isci aktarimlariyla gelir. Kart sayaclari kayitlardan yenilenir (onedesk.sayac.sayaclari_yenile)."""
+    from app.onedesk import sayac
+
     hdr = login_ok(veri)
-    basliklar = ["Çağrı No", "Tür", "Durum", "Müşteri Adı", "Lokasyon", "Kategori", "Açılış Tarihi", "Kapanış Tarihi", "Kök Sebep", "Çözüm Açıklaması"]
-    bugun = SIMDI.strftime("%d.%m.%Y %H:%M")
-    satirlar = [
-        ["INC1", "Alarm", "Açık", "ALFA TEST A.S.", "Gebze", "Hat", bugun, "", "", ""],
-        ["INC2", "Alarm", "Kapalı", "Alfa Test A.S.", "Gebze", "Hat", bugun, bugun, "Fiber kablo kesildi", "Ek yapıldı"],
-        ["INC3", "Talep", "Kapalı", "Bilinmeyen Firma", "Ankara", "Yeni hat", bugun, bugun, "", ""],
-        ["INC4", "Şikayet", "Açık", "Beta Test Ltd", "Izmir", "Yavaşlık", bugun, "", "", ""],
-        ["", "Alarm", "Açık", "", "", "", "", "", "", ""],  # musterisiz: atlanir
-    ]
     with Session(engine()) as db:
-        pid = _parti(db, basliklar, satirlar)
-        taslak = _parti(db, basliklar, satirlar, durum="receiving")
-    assert veri.post(f"/api/v1/onedesk/ice-al/{taslak}", json={}, headers=hdr).status_code == 409  # hazir degil
-    r = veri.post(f"/api/v1/onedesk/ice-al/{pid}", json={}, headers=hdr)
-    assert r.status_code == 200, r.text
-    d = r.json()["data"]
-    assert (d["eklenen"], d["guncellenen"], d["atlanan"], d["musteri_eslesmeyen"], d["etkilenen_musteri"]) == (4, 0, 1, 1, 2)
-    assert d["sutunlar"]["kok"] == "Kök Sebep" and d["sutunlar"]["tur"] == "Tür"
+        pid = _parti(db, ["Çağrı No", "Tür", "Müşteri Adı"], [["INC1", "Alarm", "Alfa Test A.S."]])
+    assert veri.post(f"/api/v1/onedesk/ice-al/{pid}", json={}, headers=hdr).status_code == 404  # admin icin de yol yok
+    assert veri.get("/api/v1/onedesk/kaynak").status_code == 404
     with Session(engine()) as db:
+        assert db.scalar(select(func.count()).select_from(OnedeskRecord)) == 0  # parti kayda donusmez
+        _kayit(db, kind="alarm", status="open", closed_at=None, external_key="a1")
+        _kayit(db, kind="alarm", external_key="a2")  # bu yil kapandi
+        _kayit(db, kind="alarm", closed_at=datetime(YIL - 1, 12, 30, tzinfo=UTC), opened_at=datetime(YIL - 1, 12, 29, tzinfo=UTC), external_key="a3")  # gecen yil
+        _kayit(db, kind="sikayet", status="open", closed_at=None, customer_id=3, customer_label="Beta Test Ltd", external_key="b1")
+        _kayit(db, kind="talep", status="open", closed_at=None, customer_id=None, customer_label="Bilinmeyen Firma", external_key="e1")
+        db.commit()
+        sayac.sayaclari_yenile(db, {1, 3})
+        db.commit()
         a, b = db.get(Customer, 1), db.get(Customer, 3)
-        assert (a.alarm_count, a.alarm_closed_count) == (1, 1) and (b.complaint_count, b.request_count) == (1, 0)
-        inc3 = db.scalar(select(OnedeskRecord).where(OnedeskRecord.external_key == "INC3"))
-        assert inc3.customer_id is None and inc3.customer_label == "Bilinmeyen Firma" and inc3.status == "closed"
-    r2 = veri.post(f"/api/v1/onedesk/ice-al/{pid}", json={}, headers=hdr).json()["data"]  # ayni numara guncellenir, cogalmaz
-    assert (r2["eklenen"], r2["guncellenen"]) == (0, 4)
-    with Session(engine()) as db:
-        assert db.scalar(select(func.count()).select_from(OnedeskRecord)) == 4
-    kaynak = veri.get("/api/v1/onedesk/kaynak").json()["data"]
-    assert kaynak["kayit"] == 4 and kaynak["canli_baglanti"]["acik"] is False and {p["id"] for p in kaynak["partiler"]} == {pid}
+        assert (a.alarm_count, a.alarm_closed_count, a.request_count) == (1, 1, 0)
+        assert (b.complaint_count, b.request_count, b.alarm_count) == (1, 0, 0)
 
 
-def test_onedesk_aktarim_tur_sutunu_yoksa_tur_secilmeli(veri):
-    hdr = login_ok(veri)
-    with Session(engine()) as db:
-        pid = _parti(db, ["Çağrı No", "Müşteri", "Kapanış Tarihi"], [["1", "Alfa Test A.S.", "01.02.2026 10:00"]])
-    assert veri.post(f"/api/v1/onedesk/ice-al/{pid}", json={}, headers=hdr).status_code == 400
-    assert veri.post(f"/api/v1/onedesk/ice-al/{pid}", json={"tur": "x"}, headers=hdr).status_code == 400
-    r = veri.post(f"/api/v1/onedesk/ice-al/{pid}", json={"tur": "alarm"}, headers=hdr)
-    assert r.status_code == 200 and r.json()["data"]["eklenen"] == 1
-    with Session(engine()) as db:
-        k = db.scalar(select(OnedeskRecord))
-        assert k.status == "closed" and k.closed_at.year == 2026 and k.kind == "alarm"
+def test_onedesk_dilimsiz_kaynak_saati_turkiye_saati_sayilir():
+    """ice_al.tarih_oku 763662d ile onedesk.sayac'a tasindi; davranis ayni (Onedesk/Oracle yerel saat -> UTC)."""
+    from app.onedesk.sayac import tarih_oku
+
+    assert tarih_oku("10.10.2026 12:00:00") == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)
+    assert tarih_oku(datetime(2026, 10, 10, 12, 0)) == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)
+    assert tarih_oku(datetime(2026, 10, 10, 12, 0, tzinfo=UTC)) == datetime(2026, 10, 10, 12, 0, tzinfo=UTC)  # dilimli dokunulmaz
+    assert tarih_oku("") is None and tarih_oku("gecersiz") is None
 
 
 # --- ICT SMS & APN -------------------------------------------------------------------------------------

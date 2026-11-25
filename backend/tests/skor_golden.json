@@ -9,7 +9,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 0,
      "kaynak": "test"
     }
@@ -38,7 +38,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 1,
      "kaynak": "test"
     }
@@ -67,7 +67,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 49,
      "kaynak": "test"
     }
@@ -96,7 +96,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 50,
      "kaynak": "test"
     }
@@ -125,7 +125,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 199,
      "kaynak": "test"
     }
@@ -154,7 +154,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 200,
      "kaynak": "test"
     }
@@ -183,7 +183,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 499,
      "kaynak": "test"
     }
@@ -212,7 +212,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 500,
      "kaynak": "test"
     }
@@ -241,7 +241,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 5000,
      "kaynak": "test"
     }
@@ -393,14 +393,14 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 50.0,
+    "skor": 70.0,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 20.0,
     "puanlar": [
      [
       "auto_servis_sayisi",
-      50,
+      70,
       "otomatik"
      ]
     ]
@@ -422,14 +422,14 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 70.0,
+    "skor": 100.0,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 20.0,
     "puanlar": [
      [
       "auto_servis_sayisi",
-      70,
+      100,
       "otomatik"
      ]
     ]
@@ -451,14 +451,14 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 70.0,
+    "skor": 100.0,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 20.0,
     "puanlar": [
      [
       "auto_servis_sayisi",
-      70,
+      100,
       "otomatik"
      ]
     ]
@@ -509,14 +509,14 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 50.0,
+    "skor": 70.0,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_segment",
-      50,
+      70,
       "otomatik"
      ]
     ]
@@ -610,11 +610,42 @@
    }
   },
   {
-   "ad": "segment=WHOLESALE",
+   "ad": "segment=WHOLESALE (varsayilan barem)",
    "kriterler": [
     {
      "title": "Müşteri segmenti",
      "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "WHOLESALE",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=WHOLESALE (tabloda WHOLESALE)",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15,
+     "b70": "SMB, MA",
+     "b100": "SA, PA, WHOLESALE"
     }
    ],
    "metrikler": {
@@ -639,11 +670,42 @@
    }
   },
   {
-   "ad": "segment=toptan",
+   "ad": "segment=toptan (varsayilan barem)",
    "kriterler": [
     {
      "title": "Müşteri segmenti",
      "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "toptan",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=toptan (tabloda WHOLESALE)",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15,
+     "b70": "SMB, MA",
+     "b100": "SA, PA, WHOLESALE"
     }
    ],
    "metrikler": {
@@ -668,11 +730,42 @@
    }
   },
   {
-   "ad": "segment=WS",
+   "ad": "segment=WS (varsayilan barem)",
    "kriterler": [
     {
      "title": "Müşteri segmenti",
      "weight": 15
+    }
+   ],
+   "metrikler": {
+    "segment": {
+     "deger": "WS",
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_segment",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "segment=WS (tabloda WHOLESALE)",
+   "kriterler": [
+    {
+     "title": "Müşteri segmenti",
+     "weight": 15,
+     "b70": "SMB, MA",
+     "b100": "SA, PA, WHOLESALE"
     }
    ],
    "metrikler": {
@@ -742,14 +835,16 @@
    "manuel": null,
    "beklenen": {
     "skor": 0.0,
-    "eksik": [],
-    "tamam": true,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
       0,
-      "otomatik"
+      "eksik"
      ]
     ]
    }
@@ -770,15 +865,17 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 30.0,
-    "eksik": [],
-    "tamam": true,
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
-      30,
-      "otomatik"
+      0,
+      "eksik"
      ]
     ]
    }
@@ -799,15 +896,17 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 50.0,
-    "eksik": [],
-    "tamam": true,
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
-      50,
-      "otomatik"
+      0,
+      "eksik"
      ]
     ]
    }
@@ -828,15 +927,17 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 50.0,
-    "eksik": [],
-    "tamam": true,
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
-      50,
-      "otomatik"
+      0,
+      "eksik"
      ]
     ]
    }
@@ -857,15 +958,17 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 70.0,
-    "eksik": [],
-    "tamam": true,
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
-      70,
-      "otomatik"
+      0,
+      "eksik"
      ]
     ]
    }
@@ -886,15 +989,17 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 70.0,
-    "eksik": [],
-    "tamam": true,
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
-      70,
-      "otomatik"
+      0,
+      "eksik"
      ]
     ]
    }
@@ -915,15 +1020,17 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 100.0,
-    "eksik": [],
-    "tamam": true,
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
-      100,
-      "otomatik"
+      0,
+      "eksik"
      ]
     ]
    }
@@ -944,6 +1051,132 @@
    },
    "manuel": null,
    "beklenen": {
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      0,
+      "eksik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor_elle=30",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 12,
+     "kaynak": "test"
+    }
+   },
+   "manuel": {
+    "aylik rapor": 30
+   },
+   "beklenen": {
+    "skor": 30.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      30,
+      "manuel"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor_elle=50",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 12,
+     "kaynak": "test"
+    }
+   },
+   "manuel": {
+    "aylik rapor": 50
+   },
+   "beklenen": {
+    "skor": 50.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      50,
+      "manuel"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor_elle=70",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 12,
+     "kaynak": "test"
+    }
+   },
+   "manuel": {
+    "aylik rapor": 70
+   },
+   "beklenen": {
+    "skor": 70.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      70,
+      "manuel"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor_elle=100",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {
+    "rapor_sayisi": {
+     "deger": 12,
+     "kaynak": "test"
+    }
+   },
+   "manuel": {
+    "aylik rapor": 100
+   },
+   "beklenen": {
     "skor": 100.0,
     "eksik": [],
     "tamam": true,
@@ -952,7 +1185,35 @@
      [
       "auto_rapor",
       100,
-      "otomatik"
+      "manuel"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "rapor_elle=gecersiz",
+   "kriterler": [
+    {
+     "title": "Aylık rapor",
+     "weight": 15
+    }
+   ],
+   "metrikler": {},
+   "manuel": {
+    "aylik rapor": 40
+   },
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [
+     "Aylık rapor"
+    ],
+    "tamam": false,
+    "agirlik_toplami": 15.0,
+    "puanlar": [
+     [
+      "auto_rapor",
+      0,
+      "eksik"
      ]
     ]
    }
@@ -1100,7 +1361,12 @@
    ],
    "metrikler": {},
    "manuel": {
-    "servis cesitliligi": 70
+    "servis cesitliligi": [
+     "Güvenlik",
+     "Cloud",
+     "Data",
+     "DWDM"
+    ]
    },
    "beklenen": {
     "skor": 70.0,
@@ -1141,10 +1407,6 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
-     "deger": 250,
-     "kaynak": "test"
-    },
     "lokasyon_sayisi": {
      "deger": 120,
      "kaynak": "test"
@@ -1165,11 +1427,17 @@
     "rapor_sayisi": {
      "deger": 8,
      "kaynak": "test"
+    },
+    "kayit_hacmi": {
+     "deger": 250,
+     "kaynak": "test"
     }
    },
-   "manuel": null,
+   "manuel": {
+    "aylik rapor": 70
+   },
    "beklenen": {
-    "skor": 70.0,
+    "skor": 76.0,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 100.0,
@@ -1181,7 +1449,7 @@
      ],
      [
       "auto_servis_sayisi",
-      70,
+      100,
       "otomatik"
      ],
      [
@@ -1197,7 +1465,7 @@
      [
       "auto_rapor",
       70,
-      "otomatik"
+      "manuel"
      ]
     ]
    }
@@ -1227,10 +1495,6 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
-     "deger": 250,
-     "kaynak": "test"
-    },
     "lokasyon_sayisi": {
      "deger": 120,
      "kaynak": "test"
@@ -1242,11 +1506,17 @@
     "rapor_sayisi": {
      "deger": 8,
      "kaynak": "test"
+    },
+    "kayit_hacmi": {
+     "deger": 250,
+     "kaynak": "test"
     }
    },
-   "manuel": null,
+   "manuel": {
+    "aylik rapor": 70
+   },
    "beklenen": {
-    "skor": 56.0,
+    "skor": 77.5,
     "eksik": [
      "Servis çeşitliliği"
     ],
@@ -1260,7 +1530,7 @@
      ],
      [
       "auto_servis_sayisi",
-      70,
+      100,
       "otomatik"
      ],
      [
@@ -1276,7 +1546,7 @@
      [
       "auto_rapor",
       70,
-      "otomatik"
+      "manuel"
      ]
     ]
    }
@@ -1356,7 +1626,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 100,
      "kaynak": "test"
     }
@@ -1380,7 +1650,7 @@
    "ad": "bos_kriter",
    "kriterler": [],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 100,
      "kaynak": "test"
     }
@@ -1413,12 +1683,12 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
-     "deger": 2500,
-     "kaynak": "test"
-    },
     "segment": {
      "deger": "MA",
+     "kaynak": "test"
+    },
+    "kayit_hacmi": {
+     "deger": 2500,
      "kaynak": "test"
     }
    },
@@ -1461,12 +1731,12 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
-     "deger": 600,
-     "kaynak": "test"
-    },
     "segment": {
      "deger": "smb",
+     "kaynak": "test"
+    },
+    "kayit_hacmi": {
+     "deger": 600,
      "kaynak": "test"
     }
    },
@@ -1509,12 +1779,12 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
-     "deger": 10,
-     "kaynak": "test"
-    },
     "segment": {
      "deger": "SA",
+     "kaynak": "test"
+    },
+    "kayit_hacmi": {
+     "deger": 10,
      "kaynak": "test"
     }
    },
@@ -1547,7 +1817,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 5,
      "kaynak": "test"
     }
@@ -1579,7 +1849,7 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
+    "kayit_hacmi": {
      "deger": 60,
      "kaynak": "test"
     }
@@ -1615,6 +1885,35 @@
    },
    "manuel": null,
    "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sozlesme_fatura_esik",
+   "kriterler": [
+    {
+     "title": "Sözleşme bedeli",
+     "weight": 10
+    }
+   ],
+   "metrikler": {
+    "fatura_bedeli": {
+     "deger": 1000000,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
     "skor": 70.0,
     "eksik": [],
     "tamam": true,
@@ -1624,6 +1923,158 @@
       "auto_sozlesme",
       70,
       "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sozlesme_fatura_alti",
+   "kriterler": [
+    {
+     "title": "Sözleşme bedeli",
+     "weight": 10
+    }
+   ],
+   "metrikler": {
+    "fatura_bedeli": {
+     "deger": 999999,
+     "kaynak": "test"
+    }
+   },
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      0,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sozlesme_fatura_ve_alt_kriterler",
+   "kriterler": [
+    {
+     "title": "Sözleşme bedeli",
+     "weight": 10
+    }
+   ],
+   "metrikler": {
+    "fatura_bedeli": {
+     "deger": 2000000,
+     "kaynak": "test"
+    }
+   },
+   "manuel": {
+    "sozlesme bedeli": [
+     "Kritik Madde",
+     "SLA"
+    ]
+   },
+   "beklenen": {
+    "skor": 100.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      100,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sozlesme_veri_varken_fatura_isareti_yok_sayilir",
+   "kriterler": [
+    {
+     "title": "Sözleşme bedeli",
+     "weight": 10
+    }
+   ],
+   "metrikler": {
+    "fatura_bedeli": {
+     "deger": 10,
+     "kaynak": "test"
+    }
+   },
+   "manuel": {
+    "sozlesme bedeli": [
+     "Fatura",
+     "SLA"
+    ]
+   },
+   "beklenen": {
+    "skor": 15.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      15,
+      "otomatik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sozlesme_verisiz_elle",
+   "kriterler": [
+    {
+     "title": "Sözleşme bedeli",
+     "weight": 10
+    }
+   ],
+   "metrikler": {},
+   "manuel": {
+    "sozlesme bedeli": [
+     "Fatura",
+     "Kritik Madde"
+    ]
+   },
+   "beklenen": {
+    "skor": 85.0,
+    "eksik": [],
+    "tamam": true,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      85,
+      "manuel"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "sozlesme_verisiz_secimsiz",
+   "kriterler": [
+    {
+     "title": "Sözleşme bedeli",
+     "weight": 10
+    }
+   ],
+   "metrikler": {},
+   "manuel": null,
+   "beklenen": {
+    "skor": 0.0,
+    "eksik": [
+     "Sözleşme bedeli"
+    ],
+    "tamam": false,
+    "agirlik_toplami": 10.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      0,
+      "eksik"
      ]
     ]
    }
@@ -1643,13 +2094,41 @@
    "metrikler": {},
    "manuel": null,
    "beklenen": {
+    "skor": 0.0,
+    "eksik": [
+     "Sözleşme"
+    ],
+    "tamam": false,
+    "agirlik_toplami": 20.0,
+    "puanlar": [
+     [
+      "auto_sozlesme",
+      0,
+      "eksik"
+     ]
+    ]
+   }
+  },
+  {
+   "ad": "X: raporlama b70, metrik yok",
+   "kriterler": [
+    {
+     "title": "Raporlama",
+     "weight": 20,
+     "b30": "1-3",
+     "b70": "X"
+    }
+   ],
+   "metrikler": {},
+   "manuel": null,
+   "beklenen": {
     "skor": 70.0,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 20.0,
     "puanlar": [
      [
-      "auto_sozlesme",
+      "auto_rapor",
       70,
       "otomatik"
      ]
@@ -1762,15 +2241,17 @@
    },
    "manuel": null,
    "beklenen": {
-    "skor": 100.0,
-    "eksik": [],
-    "tamam": true,
+    "skor": 0.0,
+    "eksik": [
+     "Raporlama"
+    ],
+    "tamam": false,
     "agirlik_toplami": 15.0,
     "puanlar": [
      [
       "auto_rapor",
-      100,
-      "otomatik"
+      0,
+      "eksik"
      ]
     ]
    }
@@ -1890,28 +2371,25 @@
    "ad": "X: X ve puan eki",
    "kriterler": [
     {
-     "title": "Sözleşme",
+     "title": "Raporlama",
      "weight": 20,
      "b100": "X (100p)"
     }
    ],
-   "metrikler": {
-    "fatura_bedeli": {
-     "deger": 2000000,
-     "kaynak": "test"
-    }
+   "metrikler": {},
+   "manuel": {
+    "raporlama": 50
    },
-   "manuel": null,
    "beklenen": {
-    "skor": 100.0,
+    "skor": 50.0,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 20.0,
     "puanlar": [
      [
-      "auto_sozlesme",
-      100,
-      "otomatik"
+      "auto_rapor",
+      50,
+      "manuel"
      ]
     ]
    }
@@ -1946,20 +2424,29 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
-     "deger": 250,
-     "kaynak": "test"
-    },
     "segment": {
      "deger": "SMB",
+     "kaynak": "test"
+    },
+    "kayit_hacmi": {
+     "deger": 250,
      "kaynak": "test"
     }
    },
    "manuel": {
-    "servis cesitliligi": 70
+    "servis cesitliligi": [
+     "Güvenlik",
+     "Cloud",
+     "Data",
+     "DWDM"
+    ],
+    "sozlesme": [
+     "Kritik Madde",
+     "SLA"
+    ]
    },
    "beklenen": {
-    "skor": 62.2,
+    "skor": 61.1,
     "eksik": [],
     "tamam": true,
     "agirlik_toplami": 90.0,
@@ -1971,13 +2458,13 @@
      ],
      [
       "auto_segment",
-      50,
+      70,
       "otomatik"
      ],
      [
       "auto_sozlesme",
-      50,
-      "otomatik"
+      30,
+      "manuel"
      ],
      [
       "auto_rapor",
@@ -2067,10 +2554,6 @@
     }
    ],
    "metrikler": {
-    "sikayet_talep": {
-     "deger": 10,
-     "kaynak": "test"
-    },
     "segment": {
      "deger": "PA",
      "kaynak": "test"
@@ -2091,13 +2574,20 @@
       "ME"
      ],
      "kaynak": "test"
+    },
+    "kayit_hacmi": {
+     "deger": 10,
+     "kaynak": "test"
     }
    },
    "manuel": null,
    "beklenen": {
-    "skor": 58.5,
-    "eksik": [],
-    "tamam": true,
+    "skor": 59.3,
+    "eksik": [
+     "4. Bağlantı Tipi",
+     "6. Sözleşme"
+    ],
+    "tamam": false,
     "agirlik_toplami": 100.0,
     "puanlar": [
      [
@@ -2118,7 +2608,7 @@
      [
       "auto_baglanti",
       0,
-      "otomatik"
+      "eksik"
      ],
      [
       "auto_segment",
@@ -2127,8 +2617,8 @@
      ],
      [
       "auto_sozlesme",
-      70,
-      "otomatik"
+      0,
+      "eksik"
      ],
      [
       "auto_rapor",

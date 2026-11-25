@@ -307,9 +307,8 @@ def _topla(musteriler: list[dict[str, Any]], alan: str) -> list[dict[str, Any]]:
 def portfoy(db: Session) -> dict[str, Any]:
     """Radar'a atanan tum musterilerin analizi (firsat skoruna gore) ve portfoy toplamlari. Surum + Radar listesi izine gore onbellekte."""
     global _ONBELLEK
-    from app.tampon import temip_kayit
-
     from app.radar import servis
+    from app.tampon import temip_kayit
 
     nolar = _numaralar(db)
     iz = (temip_kayit.surum(db), servis.bilet_surumu(db), frozenset(nolar))

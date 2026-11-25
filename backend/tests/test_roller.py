@@ -29,7 +29,7 @@ def test_toptan_kaldirildi_ve_yeni_adlar():
     assert basliklar["tamapn"] == "APN Gelir ve Kurulum"
     assert basliklar["gelir_uretim"] == "Gelir Faydası Sağlanan İşler"
     assert basliklar["sunum"] == "Çeyrek Sunum"  # 2026-10-20 kullanici: "Çeyrek Bazlı Sunum" -> "Çeyrek Sunum"
-    assert basliklar["onedesk"] == "Onedesk"
+    assert basliklar["onedesk"] == "Kayıt Takibi"  # 7df4093 (2026-11-20): ekranda kaynak adi yazilmaz
     assert not any("TAM Toptan" in t or "OneDesk" in t for t in basliklar.values())
 
 

@@ -251,7 +251,7 @@ def getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None 
         "yil": yil,
         "ay": ay,
         "aralik": {"bas": bas.strftime(ZAMAN_BICIMI), "bit": bit.strftime(ZAMAN_BICIMI), "bas_ms": bas_ms, "bit_ms": bit_ms,
-                   "ozel": bool(ayar["aralik"])},  # fmt: skip
+                   "ozel": bool(ayar["aralik"])},
         "duzenleyebilir": duzenleyebilir_mi(db, user, musteri),
         "trafik_var": loe.trafik_sutunlari() is not None,
         "ayar": ayar,

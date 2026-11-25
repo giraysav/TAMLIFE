@@ -75,6 +75,15 @@ def engine(url: str | None = None) -> Engine:
         return _ENGINES[hedef]
 
 
+def dispose_engines() -> None:
+    """Yalniz testler kullanir (tests/conftest.py): her testte motorlar ve hazirlik onbellegi sifirlanir. Silmeyin."""
+    with _LOCK:
+        for e in _ENGINES.values():
+            e.dispose()
+        _ENGINES.clear()
+        _HAZIR.clear()
+
+
 def oturum() -> Session:
     """Panel DB oturumu (istek disi kullanim: arka plan yazici, ariza kaydi, ornek veri). `with oturum() as db:`"""
     return Session(engine(), autoflush=False)

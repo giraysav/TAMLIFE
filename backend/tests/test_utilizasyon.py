@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import engine
-from app.models import AppUser, Customer, Report, ScoreDetail, UrunTutarOzet
-from app.skor import kaynak_secimi, kaynaklar, servis, urun_tutar
+from app.models import AppUser, Customer, OnedeskRecord, Report, ScoreDetail, UrunTutarOzet
+from app.skor import gunluk, kaynak_secimi, kaynaklar, servis, urun_tutar
 from app.tampon import depo
 from tests.conftest import login_ok
 
@@ -87,16 +87,39 @@ def _metrikler(kriterler=None):
         return kaynaklar.birlesik_metrikler(db, liste, kriterler)
 
 
+KAYIT_HACMI = "Kayıt hacmi (alarm + talep + şikayet)"
+ONENT = "ONENT (aktif CI envanteri)"
+
+
+def _gunluk_tur():
+    """Gunluk utilizasyon turu (06:00, skor/gunluk.py): yalniz veri ozeti yazilir."""
+    with Session(engine()) as db:
+        gunluk.calistir(db, skor_yaz=False)
+
+
+def _kayit(cid, tur, durum, kapanis=None):
+    return OnedeskRecord(kind=tur, external_key=f"k-{cid}-{tur}-{durum}-{kapanis}", customer_id=cid, status=durum, closed_at=kapanis)
+
+
 def test_panel_kaynagi_dev_veritabanindan(veri):
+    """Panel: segment, aylik rapor, Envanter (lokasyon yedegi). 02e22aa / 1100f9a: Kayit Hacmi (bu yil kapanan + su an acik alarm +
+    talep + sikayet) gunluk ozetten, cati = cati + istirakler; 5885c1c: fatura bedeli yalniz Urun-Tutar (kart FT Hacim yedegi kalkti)."""
+    bu_yil, gecen_yil = datetime(YIL, 1, 2, tzinfo=UTC), datetime(YIL - 1, 6, 1, tzinfo=UTC)
+    with Session(engine()) as db:
+        db.add_all([_kayit(1, "sikayet", "open"), _kayit(1, "talep", "closed", bu_yil), _kayit(1, "alarm", "open"),
+                    _kayit(1, "sikayet", "closed", gecen_yil), _kayit(5, "talep", "open")])  # fmt: skip
+        db.commit()
+    _gunluk_tur()
     m, uyarilar = _metrikler()
     assert uyarilar == []
     c1 = m[1]
-    assert c1["sikayet_talep"] == {"deger": 10, "kaynak": "Panel (kart + aylık rapor)"}  # acik + bu yil kapanan sikayet ve talep
-    assert c1["lokasyon_sayisi"]["deger"] == 25 and c1["segment"]["deger"] == "MA"
-    assert c1["fatura_bedeli"]["deger"] == 1234567.89  # FT Hacim (Turkce bicim)
+    assert c1["kayit_hacmi"] == {"deger": 4, "kaynak": KAYIT_HACMI}  # 3 kendi + 1 istirak; gecen yil kapanan sayilmaz
+    assert m[5]["kayit_hacmi"]["deger"] == 1 and m[2]["kayit_hacmi"]["deger"] == 0
+    assert c1["lokasyon_sayisi"] == {"deger": 25, "kaynak": "Panel (kart + aylık rapor)"} and c1["segment"]["deger"] == "MA"  # ONENT bos
+    assert "fatura_bedeli" not in c1  # FT Hacim artik veri degil
     assert c1["rapor_sayisi"]["deger"] == 3  # 2 ay kendi + 1 ay dahil istirak; ayri raporlu istirak ve gecen yil sayilmaz
     assert m[6]["rapor_sayisi"]["deger"] == 1 and m[5]["rapor_sayisi"]["deger"] == 0
-    assert "segment" not in m[2] and "fatura_bedeli" not in m[2]  # SEGMENTLER disi / 0 TL = veri yok
+    assert "segment" not in m[2] and "fatura_bedeli" not in m[2]  # SEGMENTLER disi
     assert "servisler" not in c1 and "baglanti" not in c1  # yalniz Urun-Tutar
 
 
@@ -106,17 +129,23 @@ def test_segmentler_musteri_paketiyle_ayni():
     assert kaynaklar.SEGMENTLER == SEGMENTLER
 
 
-def test_db_kaynagi_ayarliysa_uyari_ayarli_degilse_sessiz(veri, monkeypatch):
+def test_gunluk_ozet_kaynaklari_tur_calismadan_uyarir(veri):
+    """1100f9a: REPORTDB / ONENTDB (Oracle) skor kaynaklari yerine gunluk ozet kaynaklari (Kayit hacmi, ONENT envanteri); tur hic
+    calismadiysa 'hazir degil' ve uyari, hazir olmayan kaynak atlanir, siradaki besler."""
     with Session(engine()) as db:
         durum = {k["ad"]: k for k in kaynaklar.kaynak_durumlari(db, [])}
-    assert durum["REPORTDB"]["hazir"] is False and "ORACLE_REPORTDB_ENABLED" in durum["REPORTDB"]["neden"]
-    assert "Ürün-Tutar" not in durum  # Urun-Tutar DB kaldirildi (2026-10-10); Excel kalir
+    for ad in (KAYIT_HACMI, ONENT):
+        assert durum[ad]["hazir"] is False and "günlük veri turu henüz çalışmadı" in durum[ad]["neden"]
+    assert "REPORTDB" not in durum and "ONENTDB" not in durum and "Ürün-Tutar" not in durum  # Urun-Tutar DB kaldirildi (2026-10-10); Excel kalir
     assert durum["Panel (kart + aylık rapor)"]["hazir"] is True and durum["Seçilen veri kaynağı"]["hazir"] is False
-    for ad, deger in (("ENABLED", "true"), ("HOST", "ornek.invalid"), ("SERVICE_NAME", "ORNEK"), ("USER", "ornek"), ("PASSWORD", "ornek-parola")):
-        monkeypatch.setenv(f"ORACLE_REPORTDB_{ad}", deger)
     m, uyarilar = _metrikler()
-    assert any("REPORTDB" in u and "sorgu henüz yazılmadı" in u for u in uyarilar)
-    assert m[1]["sikayet_talep"]["kaynak"].startswith("Panel")  # hata veren kaynak atlanir, siradaki besler
+    assert sorted(uyarilar) == sorted(f"{ad}: günlük veri turu henüz çalışmadı." for ad in (KAYIT_HACMI, ONENT))
+    assert "kayit_hacmi" not in m[1]  # yedegi yok: kriter dokum secimine duser
+    assert m[1]["lokasyon_sayisi"]["kaynak"].startswith("Panel")  # hazir olmayan ONENT atlanir, siradaki besler
+    _gunluk_tur()
+    with Session(engine()) as db:
+        durum = {k["ad"]: k for k in kaynaklar.kaynak_durumlari(db, [])}
+    assert durum[KAYIT_HACMI]["hazir"] is True and durum[ONENT]["hazir"] is True
 
 
 def test_urun_tutar_ozeti_ve_eslemeler():
@@ -176,6 +205,7 @@ SIKAYET_SECIMI = {"kaynak": "csv_ornek_olay", "eslesme": [{"sutun": "Musteri No"
 
 def test_kriter_veri_kaynagi_secimi_tampondan(veri):
     hdr = login_ok(veri)
+    _gunluk_tur()
     satirlar = [["0100", "Açık", "MPLS"], ["100", "acik", "VOIP"], ["100", "Kapali", "BULUT"], ["555", "Acik", "MPLS"]]
     pid = _parti("csv_ornek_olay", ["Musteri No", "Durum", "Grup"], satirlar)
     kriterler = [
@@ -186,13 +216,13 @@ def test_kriter_veri_kaynagi_secimi_tampondan(veri):
     ]  # fmt: skip
     m, uyarilar = _metrikler(kriterler)
     assert uyarilar == []
-    assert m[1]["sikayet_talep"] == {"deger": 2, "kaynak": f"csv_ornek_olay #{pid}"}  # secim Panel'in (10) onune gecer; kosul normalize
+    assert m[1]["kayit_hacmi"] == {"deger": 2, "kaynak": f"csv_ornek_olay #{pid}"}  # secim gunluk ozetin (0) onune gecer; kosul normalize
     assert m[1]["servisler"]["deger"] == ["Cloud", "Data", "Ses"]
-    assert m[2]["sikayet_talep"]["kaynak"].startswith("Panel")  # partide olmayan musteri siradaki kaynaga duser
+    assert m[2]["kayit_hacmi"]["kaynak"] == KAYIT_HACMI  # partide olmayan musteri siradaki kaynaga duser
     # yeni parti gelince sonuc kendiliginden yenilenir (onbellek anahtari parti)
     pid2 = _parti("csv_ornek_olay", ["Musteri No", "Durum", "Grup"], [*satirlar, ["100", "Acik", "SOC"]])
     m, _ = _metrikler(kriterler)
-    assert m[1]["sikayet_talep"] == {"deger": 3, "kaynak": f"csv_ornek_olay #{pid2}"}
+    assert m[1]["kayit_hacmi"] == {"deger": 3, "kaynak": f"csv_ornek_olay #{pid2}"}
     # kayit: secim dogrulanir (partide olmayan sutun / tipi uymayan islem 400), gecerli secim saklanir
     yanlis = {**SIKAYET_SECIMI, "filtreler": [{"sutun": "Yok", "islec": "esit", "deger": "x"}]}
     r = veri.put("/api/v1/skor/kriterler/parent", json={"criteria": [{"title": "Şikayet", "weight": 1, "kaynak_secimi": yanlis}]}, headers=hdr)
@@ -210,7 +240,8 @@ def test_kriter_veri_kaynagi_secimi_tampondan(veri):
     assert yok.status_code == 400
     meta = veri.get("/api/v1/skor/meta").json()["data"]
     assert meta["partiler"][0]["kaynak"] == "csv_ornek_olay" and meta["partiler"][0]["sutunlar"] == ["Musteri No", "Durum", "Grup"]
-    assert meta["sabit_puan_turleri"] == ["auto_sozlesme", "auto_rapor"] and "esle_liste" in meta["tur_islemleri"]["servis_cesitliligi"]
+    # 5885c1c: X sabit puani yalniz Raporlama'da (Sozlesme alt kriterlerle)
+    assert meta["sabit_puan_turleri"] == ["auto_rapor"] and "esle_liste" in meta["tur_islemleri"]["servis_cesitliligi"]
 
 
 def test_kaynak_secimi_dogrulama():
@@ -228,7 +259,8 @@ def test_kaynak_secimi_dogrulama():
 
 @pytest.fixture
 def otomatik(monkeypatch):
-    """Otomatik (veri kaynakli) puanlama: 2026-10-20'den beri kapali (servis.OTOMATIK_PUANLAMA); kod ve testleri korunur."""
+    """Karma puanlama (2026-11-21, 1100f9a: servis.OTOMATIK_PUANLAMA=True varsayilan): verisi olan kriter kaynaktan, olmayan dokum
+    secimine duser. Fixture bu kipi acikca sabitler."""
     monkeypatch.setattr(servis, "OTOMATIK_PUANLAMA", True)
 
 
@@ -272,22 +304,31 @@ def test_dagilim_ve_ozet_formulleri():
 
 
 def test_x_kurali_ve_tam_tablo_ile_toplu_atama(veri, otomatik):
-    """Urun-Tutar + panel + X sabit puan: varsayilan 7 kriterde musteri TAMAM olur ve toplu atama yazar."""
+    """Urun-Tutar + panel + gunluk ozet + X sabit puan + dokum secimi: varsayilan 7 kriterde musteri TAMAM olur ve toplu atama yazar.
+    Baglanti Tipi veriden puanlanmaz, dokumde secilir (a37d4ae); eksik kriterli musteriye ara skor yazilir (08ab686)."""
     hdr = login_ok(veri)
     assert veri.put("/api/v1/skor/urun-tutar/1", content=_excel(), headers=hdr).status_code == 200
+    _gunluk_tur()
     kriterler = veri.get("/api/v1/skor/kriterler/parent").json()["data"]["criteria"]
     for k in kriterler:
         if k["type"] == "auto_baglanti":
-            k.update(b30="DSL", b50="MPLS", b70="ME")
+            k.update(b30="DSL", b50="MPLS", b70="ME", b100="")
         if k["type"] == "auto_rapor":
             k.update(b30="", b50="X", b70="", b100="")
     r = veri.put("/api/v1/skor/kriterler/parent", json={"criteria": kriterler}, headers=hdr).json()["data"]
-    assert [u["id"] for u in r["uygulama"]["uygulanan"]] == [1]
+    assert {u["id"] for u in r["uygulama"]["uygulanan"]} == {1, 2, 3, 4} and r["uygulama"]["kismi"] == 4  # hepsinde Baglanti secilmedi
+    on = veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]
+    m1 = next(m for m in on["musteriler"] if m["id"] == 1)
+    assert m1["eksik"] == ["4. Bağlantı Tipi"]
+    assert next(k for k in m1["kriterler"] if k["tur"] == "auto_baglanti")["durum"] == "eksik"  # Urun-Tutar baglanti verisi olsa da
+    assert veri.put("/api/v1/skor/toplu/manuel/1", json={"secimler": {"4. Bağlantı Tipi": 70}}, headers=hdr).status_code == 200
     on = veri.post("/api/v1/skor/toplu/onizleme", json={}, headers=hdr).json()["data"]
     m1 = next(m for m in on["musteriler"] if m["id"] == 1)
     rapor = next(k for k in m1["kriterler"] if k["tur"] == "auto_rapor")
     assert (rapor["puan"], rapor["kaynak"], rapor["deger"]) == (50, "Sabit puan (X işareti)", "X")
     assert m1["tamam"] and m1["mevcut"] == m1["yeni"] and m1["fark"] == 0.0
+    sonuc = veri.post("/api/v1/skor/toplu/uygula", json={"customer_ids": [1]}, headers=hdr).json()["data"]
+    assert [u["id"] for u in sonuc["uygulanan"]] == [1] and sonuc["kismi"] == 0
 
 
 def test_urun_tutar_yuklemesi_geri_alinir_onceki_ozete_doner(veri, monkeypatch):

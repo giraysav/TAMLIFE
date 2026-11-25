@@ -47,12 +47,13 @@ class SahteTemip:
     """Sorgu metnine gore satir: VIEW_REPORT_ACTIVE (kapali), ACTIVEALARMS_5DK (acik), IDENTIFIER IN (dusen aciklarin kapanisi)."""
 
     def __init__(self, monkeypatch):
-        self.kapali, self.acik, self.kimlikle, self.sorgular = [], [], {}, []
+        self.kapali, self.acik, self.kimlikle, self.sorgular, self.binds = [], [], {}, [], []
         monkeypatch.setattr(temip_kayit, "_cek", self._cek)
 
-    def _cek(self, sorgu):
+    def _cek(self, sorgu, binds=None):  # 50d6ab0/129bb47: toptan kapsami CI adlarini bind koleksiyonuyla gonderir
         oracle.sorgu_temizle(sorgu)  # gercek akista da temizlenir: tek SELECT
         self.sorgular.append(sorgu)
+        self.binds.append(binds)
         if " AND IDENTIFIER IN (" in sorgu:
             return [s for k, s in self.kimlikle.items() if f"{k}" in sorgu.split(" AND IDENTIFIER IN (")[1]]
         return list(self.acik if "ACTIVEALARMS_5DK" in sorgu else self.kapali)
@@ -79,11 +80,22 @@ def test_sorgular_tek_select_kurumsal_iki_yonlu_sinirli_kisisel_veri_yok():
     acik = oracle.sorgu_temizle(temip_kayit.acik_sorgusu(date(2026, 1, 1)))
     kapali = oracle.sorgu_temizle(temip_kayit.kapali_sorgusu("DATE '2026-01-01'", "SYSDATE + 1"))
     kimlik = oracle.sorgu_temizle(temip_kayit.kimlik_sorgusu(["43581308", "1"], datetime(2026, 10, 1), datetime(2026, 10, 3)))
-    for s in (acik, kapali, kimlik):
+    for s in (acik, kapali):
         assert "IN ('NOC DESTECH')" in s and "REGEXP_LIKE(INFORMATION1, '^[0-9]{8}$')" in s
         assert "INSTR(LOWER(MANAGEDOBJECT), 'nw_li_cust') > 0 OR INSTR(LOWER(NODE1), 'nw_li_cust') > 0" in s
+    for s in (acik, kapali, kimlik):
         assert "CIName:[[:space:]]*" in s and "REGEXP_SUBSTR(ALARMOBJECTOPERATORNO, '^[0-9]+')" in s
         assert sum(s.upper().count(k) for k in (" INSERT ", " UPDATE ", " DELETE ")) == 0
+    # 129bb47: kimlik sorgusu panelde zaten olan kayitlarin kapanisini arar, kapsam kosulu (kurumsal / toptan) yerine '1 = 1';
+    # IDENTIFIER listesi ve EVENTTIME araligi yine iki yonlu sinirli.
+    assert "AND 1 = 1 AND IDENTIFIER IN (" in kimlik and "NOC DESTECH" not in kimlik
+    # Toptan kapsami: CI adlari SQL metnine gomulmez, bind koleksiyonuyla gider; kontrol karakterli ad alinmaz.
+    kosul, binds = temip_kayit.toptan_kapsami(["nw_ws_ornek_1", "x'); DROP TABLE t; --", "kotu\nad"])
+    assert "nw_ws_ornek_1" not in kosul and "DROP" not in kosul and kosul.startswith("LOWER(NODE1) IN (")
+    assert [list(v) for v in binds.values()] == [["nw_ws_ornek_1", "x'); DROP TABLE t; --"]]
+    with pytest.raises(reportdb.ReportdbHata):
+        temip_kayit.toptan_kapsami(["\x00"])
+    assert temip_kayit.kosullar() == [(temip_kayit._KOSUL, {})]  # toptan CI yoksa yalniz kurumsal kosul
     assert "TEMIP.ACTIVEALARMS_5DK" in acik and "EVENTTIME >= DATE '2026-01-01'" in acik
     assert "TEMIP.VIEW_REPORT_ACTIVE" in kapali and "EVENTTIME >= DATE '2026-01-01' AND EVENTTIME < SYSDATE + 1" in kapali
     assert (

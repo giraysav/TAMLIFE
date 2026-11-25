@@ -300,11 +300,16 @@ def test_kisi_rolu_admin_atar_oturum_kapanir_kendi_rolu_degismez(client, monkeyp
     kullanici = {u["username"]: u for u in client.get("/api/v1/roller").json()["data"]["users"]}
     assert kullanici["ayse.demir"]["role"] == "TeamMngr" and kullanici["admin"]["self"] is True
 
-    assert client.put(adr, json={"role": "admin"}, headers=hdr).status_code == 400  # admin rolu panelden verilmez
+    # 968e663 (2026-11-12 kullanici karari): admin rolu de Rol Yonetimi'nden verilir; is_admin rolden turetilir
+    # (AD girisinde KTS_TEAM_ADMIN eslesmesi yine sart - test_ad rol kontrolu testleri)
+    r = client.put(adr, json={"role": "admin"}, headers=hdr)
+    assert r.status_code == 200 and r.json()["data"]["role"] == "admin"
+    with Session(engine()) as db:
+        assert (db.get(AppUser, hedef).role, db.get(AppUser, hedef).is_admin) == ("admin", True)
     assert client.put(adr, json={"role": "Pending"}, headers=hdr).status_code == 400  # rolsuze geri alinmaz
     assert client.put(adr, json={"role": "TeamMember"}, headers=hdr).status_code == 200
     with Session(engine()) as db:
-        assert db.get(AppUser, hedef).is_admin is False
+        assert db.get(AppUser, hedef).is_admin is False  # admin isareti rolle birlikte duser
 
     _cikis(client, hdr)
     hdr2 = _giris(client, monkeypatch, "ikinci", "TeamMember")  # admin olmayan: rol atayamaz
@@ -333,8 +338,13 @@ def test_kisi_onceden_ekle_rolle_acilir_cakisma_ve_gecersiz_reddedilir(client, m
         assert (k.role, k.is_admin, k.is_ad_user, k.active, k.permissions) == ("TeamMngr", False, True, True, ["sunum.gonder"])
     assert client.post("/api/v1/roller/kisiler", json={"username": "TC99999", "role": "TeamMember"}, headers=hdr).status_code == 409
     assert client.post("/api/v1/roller/kisiler", json={"username": "admin", "role": "TeamMember"}, headers=hdr).status_code == 409
-    for kotu in ({"username": "a", "role": "TeamMember"}, {"username": "x y", "role": "TeamMember"}, {"username": "tc1", "role": "admin"}, {"username": "tc1", "role": "Pending"}, {"username": "tc1", "role": "TeamMember", "permissions": ["x"]}):
+    for kotu in ({"username": "a", "role": "TeamMember"}, {"username": "x y", "role": "TeamMember"}, {"username": "tc1", "role": "root"}, {"username": "tc1", "role": "Pending"}, {"username": "tc1", "role": "TeamMember", "permissions": ["x"]}):
         assert client.post("/api/v1/roller/kisiler", json=kotu, headers=hdr).status_code == 400, kotu
+    # 968e663: admin rolu ile onceden eklenebilir; is_admin rolden gelir
+    assert client.post("/api/v1/roller/kisiler", json={"username": "tc88888", "role": "admin"}, headers=hdr).status_code == 200
+    with Session(engine()) as db:
+        k = db.scalar(select(AppUser).where(AppUser.username == "tc88888"))
+        assert (k.role, k.is_admin, k.is_ad_user) == ("admin", True, True)
     assert client.post("/api/v1/roller/kisiler", json={"username": "tc1", "role": "TeamMember"}).status_code == 403  # CSRF'siz
     _cikis(client, hdr)
     hdr2 = _giris(client, monkeypatch, "ikinci", "TeamMember")

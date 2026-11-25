@@ -61,8 +61,8 @@ class _Sahte:
 
 
 def test_durum_bilgiler_parolayi_vermez_eksikleri_adla_soyler(pg_ayar, monkeypatch):
-    assert postgres.durum("pg_onent") == {"acik": True, "eksik": [], "hazir": True, "state": "ready",
-                                          "sorgu_hata": "İçeri alma sorgusu tanımlı değil (.env: ONENTDB_PG_IMPORT_QUERY)."}  # fmt: skip
+    # 2026-11-21 (763662d): <ON EK>_IMPORT_QUERY yolu kaldirildi; durumda sorgu alani yok
+    assert postgres.durum("pg_onent") == {"acik": True, "eksik": [], "hazir": True, "state": "ready"}
     b = postgres.bilgiler("pg_onent")
     assert b == {"sunucu": "pg.ornek.test", "port": 5433, "veritabani": "ONENT", "kullanici": "okuyucu", "parola": True, "ssl": "prefer", "zaman_asimi": 10}
     monkeypatch.delenv(f"{ON}_PASSWORD")
@@ -135,119 +135,19 @@ def test_kurum_baglantilari_postgres_karti(client, pg_ayar):
     assert "gizli-parola-1" not in str(b)
 
 
-# --- veri hatti: <ON EK>_IMPORT_QUERY -> tampon partisi (2026-10-25) --------------------------------------------------------
-class _AkisImleci:
-    def __init__(self, sahte):
-        self.sahte = sahte
-        self.description = [SimpleNamespace(name=a) for a in sahte.sutunlar]
-        self._kalan = list(sahte.satirlar)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-    def execute(self, q):
-        self.sahte.sorgular.append(q.as_string(None))
-        if self.sahte.hata:
-            raise self.sahte.hata
-
-    def fetchmany(self, n):
-        blok, self._kalan = self._kalan[:n], self._kalan[n:]
-        return blok
-
-
-class _AkisBaglanti:
-    def __init__(self):
-        self.sorgular: list[str] = []
-        self.imlec_adlari: list[str] = []
-        self.sutunlar = ["no", "unvan", "tutar", "tarih"]
-        self.satirlar: list[tuple] = []
-        self.hata: Exception | None = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-    def transaction(self):
-        return self
-
-    def cursor(self, name=None):
-        self.imlec_adlari.append(name)
-        return _AkisImleci(self)
-
-
-def _partiler():
-    from sqlalchemy import select
-
-    from app.models import IngestBatch
-
-    with Session(engine()) as db:
-        return [(p.source_key, p.status, p.error, p.columns) for p in db.scalars(select(IngestBatch).order_by(IngestBatch.id))]
-
-
-def test_pg_parti_sorgu_sonucunu_tampona_yazar_hata_maskeli(client, pg_ayar, monkeypatch):
-    from datetime import datetime
-    from decimal import Decimal
-
-    from app.tampon import depo, kaynak
-
-    sahte = _AkisBaglanti()
-    with Session(engine()) as db:
-        with pytest.raises(postgres.UygulamaHatasi):
-            kaynak.pg_parti(db, "pg_onent", "isci", baglanti=lambda: sahte)  # sorgu tanimsiz: parti olusmaz
-        assert _partiler() == []
-        monkeypatch.setenv(f"{ON}_IMPORT_QUERY", "DELETE FROM musteri")
-        with pytest.raises(postgres.UygulamaHatasi):
-            kaynak.pg_parti(db, "pg_onent", "isci", baglanti=lambda: sahte)  # yalniz SELECT / WITH
-        monkeypatch.setenv(f"{ON}_IMPORT_QUERY", "SELECT no, unvan, tutar, tarih FROM public.musteri WHERE unvan LIKE 'A%';")
-        sahte.satirlar = [(Decimal(1), " ALFA ", Decimal("12.5"), datetime(2026, 10, 1, 9, 30)), (2, "BETA", None, None)]
-        p = kaynak.pg_parti(db, "pg_onent", "isci", baglanti=lambda: sahte)
-        assert (p.source_key, p.status, p.row_count) == ("pg_onent_import", "ready", 2)
-        assert list(depo.satirlari_oku(db, p.id)) == [[1, "ALFA", 12.5, "2026-10-01 09:30:00"], [2, "BETA", None, None]]
-    assert sahte.imlec_adlari == ["tamlife_import"]  # sunucu tarafi imlec
-    assert sahte.sorgular[0].startswith("SELECT * FROM (SELECT no, unvan, tutar, tarih FROM public.musteri WHERE unvan LIKE 'A%') AS kaynak LIMIT ")
-    sahte.hata = RuntimeError("connection to server at pg.ornek.test failed for user okuyucu password=gizli-parola-1")
-    with Session(engine()) as db, pytest.raises(postgres.PgHata) as h:
-        kaynak.pg_parti(db, "pg_onent", "isci", baglanti=lambda: sahte)
-    son = _partiler()[-1]
-    assert son[:2] == ("pg_onent_import", "failed") and h.value.kod == 502
-    assert all(g not in son[2] + h.value.mesaj for g in ("pg.ornek.test", "okuyucu", "gizli-parola-1"))
-    login_ok(client)
-    k = {x["anahtar"]: x for x in client.get("/api/v1/tampon/kaynaklar").json()["data"]}
-    assert k["pg_onent"]["tur"] == "postgres" and k["pg_onent"]["hazir"] and k["pg_onent"]["sorgu_tamam"]
-    assert k["pg_onedesk"]["yapilandirma"] == "kapalı" and k["pg_onedesk"]["sorgu_anahtari"] == "ONEDESKDB_PG_IMPORT_QUERY"
-    assert k["pg_onent_import"]["tur"] == "pg_parti" and k["pg_onent_import"]["parti_sayisi"] == 2 and k["pg_onent_import"]["son"]["durum"] == "failed"
-    a = {x["anahtar"]: x for x in client.get("/api/v1/tampon/akislar").json()["data"]["akislar"]}
-    assert a["pg_onent_import"]["durum"] == "hata" and "pg_onedesk_import" not in a  # kapali kaynak akista yok
-    assert "gizli-parola-1" not in str(k) + str(a)
-
-
-def test_pg_cek_ucu_hazir_degilse_409_sorgu_varsa_isciyi_baslatir(client, pg_ayar, monkeypatch):
-    hdr = login_ok(client)
-    assert client.post("/api/v1/tampon/pg/pg_onedesk/cek", headers=hdr).status_code == 409  # kapali kaynak
-    r = client.post("/api/v1/tampon/pg/pg_onent/cek", headers=hdr)
-    assert r.status_code == 409 and "ONENTDB_PG_IMPORT_QUERY" in r.text  # sorgu tanimsiz
-    assert client.post("/api/v1/tampon/pg/yok/cek", headers=hdr).status_code == 404
-    monkeypatch.setenv(f"{ON}_IMPORT_QUERY", "SELECT 1 AS bir")
-    basladi = []
-    monkeypatch.setattr("app.tampon.katalog._ayri_baslat", lambda komut, *a: basladi.append(komut))
-    r = client.post("/api/v1/tampon/pg/pg_onent/cek", headers=hdr).json()["data"]
-    assert r["basladi"] is True and basladi[0][-5:] == ["pg-cek", "--kaynak", "pg_onent", "--kullanici", "admin"]
-
-
-def test_isci_pg_cek_kapaliyken_baglanmaz_aciksa_parti_yazar(client, pg_ayar, monkeypatch):
+# --- eski veri hatti (<ON EK>_IMPORT_QUERY -> tampon partisi) 2026-11-21 kaldirildi (763662d): veriyi isciler dogrudan ceker -------
+def test_pg_kaynak_satiri_parola_vermez_iceri_alma_yolu_yok(client, pg_ayar, monkeypatch):
     from app import isci
 
-    sahte = _AkisBaglanti()
-    sahte.satirlar = [(1, "ALFA", 5, None)]
-    monkeypatch.setattr(postgres.PgKaynak, "baglan", lambda self, sorgu_sn=15: sahte)
-    assert isci.main(["pg-cek", "--kaynak", "pg_onedesk"]) == 1 and sahte.sorgular == []  # kapali
-    assert isci.main(["pg-cek", "--kaynak", "pg_onent"]) == 1 and _partiler() == []  # sorgu tanimsiz
-    monkeypatch.setenv(f"{ON}_IMPORT_QUERY", "SELECT no, unvan, tutar, tarih FROM public.musteri")
-    assert isci.main(["pg-cek", "--kaynak", "pg_onent", "--kuru"]) == 0 and _partiler() == []
-    assert isci.main(["pg-cek", "--kaynak", "pg_onent"]) == 0
-    assert _partiler() == [("pg_onent_import", "ready", "", ["no", "unvan", "tutar", "tarih"])]
+    monkeypatch.setenv(f"{ON}_IMPORT_QUERY", "SELECT 1 AS bir")  # eski anahtar artik okunmaz
+    hdr = login_ok(client)
+    k = {x["anahtar"]: x for x in client.get("/api/v1/tampon/kaynaklar").json()["data"]}
+    assert k["pg_onent"]["tur"] == "postgres" and k["pg_onent"]["hazir"] and k["pg_onent"]["yapilandirma"] == "tamam"
+    assert "panel PostgreSQL'e bağlanmaz" in k["pg_onent"]["neden"] and "sorgu_anahtari" not in k["pg_onent"]
+    assert k["pg_onedesk"]["yapilandirma"] == "kapalı" and k["pg_onedesk"]["hazir"] is False
+    assert "pg_onent_import" not in k and "pg_onedesk_import" not in k
+    a = client.get("/api/v1/tampon/akislar").json()["data"]["akislar"]
+    assert "gizli-parola-1" not in str(k) + str(a) and "pg.ornek.test" not in str(a)
+    assert client.post("/api/v1/tampon/pg/pg_onent/cek", headers=hdr).status_code in (404, 405)  # elle cekim ucu yok
+    with pytest.raises(SystemExit):
+        isci.main(["pg-cek", "--kaynak", "pg_onent"])  # isci komutu yok

@@ -372,7 +372,7 @@ def onizle(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dict[
 
     if kip == "tam":
         for alt, ust in _aylar(bas, simdi().astimezone(TR_SAATI).date()):
-            satirlar = _cek_hepsi(lambda k: kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)", k), ks)
+            satirlar = _cek_hepsi(lambda k: kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)", k), ks)  # noqa: B023 (ayni turda hemen cagrilir)
             kapali(satirlar)
             ozet["aylar"].append({"ay": f"{alt:%Y-%m}", "satir": len(satirlar)})
     else:
@@ -658,7 +658,7 @@ def calistir(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dic
         ozet["kapali_satir"] = len(satirlar)
     elif kip == "tam":
         for alt, ust in _aylar(bas, simdi().astimezone(TR_SAATI).date()):
-            satirlar = _cek_hepsi(lambda k: kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)", k), ks)
+            satirlar = _cek_hepsi(lambda k: kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)", k), ks)  # noqa: B023 (ayni turda hemen cagrilir)
             topla(yaz(db, (a for s in satirlar if (a := alanlar(s, False, h, toptan))), etkilenen, parca_commit=True))
             ozet.setdefault("aylar", []).append({"ay": f"{alt:%Y-%m}", "satir": len(satirlar)})
     else:

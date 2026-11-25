@@ -42,7 +42,7 @@ AZAMI_CI = 600  # cizilen CI dugumu siniri
 SAHA_BASI_CI = 40  # tek saha cizimi doldurmasin
 BELIRSIZ = "Belirsiz"
 # CI adindaki PE / BB router adi: 'nw_rt_ne40_01.34mslk', 'asr9_01.06sogz' -> 'ne40_01.34mslk', 'asr9_01.06sogz'
-_PE = re.compile(r"(?<![a-z0-9])([a-z]+[0-9]+[a-z0-9]*_\d{2}\.\d{2}[a-z]{2,8})", re.I)
+_PE = re.compile(r"(?<![a-z0-9])([a-z]+[0-9]+[a-z0-9]*_\d{2}\.\d{2}[a-z]{2,8})", re.IGNORECASE)
 # Servis adi -> (etiket, dugumdeki kisaltma). Sira onemli; eslesmeyen servis ilk iki kelimesiyle yazilir, kisaltmasi CI.
 KISA_SERVIS = (
     ("MOBILE BACKUP", "Mobil Yedek", "MBB"), ("CPE DATA", "CPE", "CPE"), ("MPLS", "MPLS VPN", "MPLS"), ("SDH", "SDH", "SDH"),
@@ -432,7 +432,7 @@ def ciz(satirlar: list[Any], baglam: dict | None = None, ara: str = "", en_fazla
         "sehirler": sehirler,
         "konumsuz_iller": [],
         "kolonlar": {"loc": "Açık adres", "il": "İl / İlçe", "ci": "CI adı", "c_no_primary": "Devre No", "bb_host": "BB router",
-                     "devre_alt": "Devre tipi"},  # fmt: skip
+                     "devre_alt": "Devre tipi"},
         "satir": len(tum_satirlar),
         "cizime_giren": len(satirlar),
         "lokasyon": len(sahalar),
