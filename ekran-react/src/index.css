@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @source ".";
+/* dist git'te izlenir (2026-11-25): Tailwind kendi onceki derleme ciktisini taramasin (derleme deterministik kalsin) */
+@source not "../dist";
 
 @theme {
   /* Eski panelin (Turkcell) renkleri: musteri karti ve aylik rapor bu paletle cizilir */
