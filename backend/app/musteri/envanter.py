@@ -225,11 +225,13 @@ def kart_ozeti(db: Session, musteriler: list[Customer], musteri_id: int) -> dict
 
 
 def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: str = "", duzenleyebilir: bool = False,
-              kural: str = "") -> dict[str, Any]:  # fmt: skip
+              kural: str = "", lok: str = "") -> dict[str, Any]:  # fmt: skip
     """CI listesi: kart (ve istirakleri) Musteri No'larinin envanteri; kritik isaretli once, sonra aktif, servis ve ad. Arama sunucuda
     (tum sutunlarda parca eslesmesi, kelimeler VE; "evet"/"hayir" kritik durumunu da arar); en fazla EN_COK_SATIR satir.
     kural: CI adi oneki filtresi (TopoMaker kural seti; 'nw_li,nw_mbl,diger'; bos = tumu) - 2026-11-24 kullanici: "musteri
-    kartindaki bu alanda nw_li gibi olanlari secebilecegimiz filtreleme yapalim". Kural sayilari arama metninden bagimsizdir."""
+    kartindaki bu alanda nw_li gibi olanlari secebilecegimiz filtreleme yapalim". Kural sayilari arama metninden bagimsizdir.
+    lok: yalniz Lokasyon adi sutununda (duzeltilmis ad onceliklidir) parca eslesmesi, kelimeler VE; '-' = lokasyon adi bos olanlar
+    (2026-11-25 kullanici: "lokasyon adi sutununu da filtrelenebilir yap"). lokasyonlar: secili kurala uyan CI'larin adlari (oneri)."""
     from app.topoloji import kurallar as ci_kurallari
 
     anahtarlar = _anahtarlar(musteriler)
@@ -252,6 +254,11 @@ def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: s
     kural_listesi.append({"onek": ci_kurallari.DIGER, "ad": m("Diğer", "Other"), "ci": sayilar.get(ci_kurallari.DIGER, 0),
                           "secili": ci_kurallari.DIGER in secili})  # fmt: skip
     kural_listesi = [k for k in kural_listesi if k["ci"]]
+    lok = " ".join((lok or "").split())[:200].casefold()
+    lok_bos = lok == "-"
+    lok_parca = [] if lok_bos else [p for p in lok.split(" ") if p]
+    lok_sutun = LOKASYON_ADI_SUTUNU + (1 if coklu else 0)
+    lok_adlari: Counter = Counter()
     sonuc = []
     eslesen = 0
     for r in kayitlar:
@@ -262,6 +269,11 @@ def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: s
             r.ci_name, a.get("devre", ""), r.service, _durum_adi(r.status), a.get("bw", ""), a.get("imt", ""), a.get("lokasyon", ""),
             duzeltme.get(r.ci_no) or a.get("lok_adi", ""), _altyapi(a), a.get("saat", ""), (a.get("kurulum", "") or "")[:10],
         ]  # fmt: skip
+        lok_adi = hucreler[lok_sutun]
+        if lok_adi:
+            lok_adlari[lok_adi] += 1
+        if (lok_bos and lok_adi) or (lok_parca and not all(p in lok_adi.casefold() for p in lok_parca)):
+            continue
         k = r.ci_no in kritik
         if parcalar:
             metin_ = (" ".join(hucreler) + " " + (etiket["evet"] if k else etiket["hayir"])).casefold()
@@ -273,8 +285,10 @@ def kritik_ci(db: Session, musteriler: list[Customer], musteri_id: int, metin: s
                           "lokasyon_ilk": a.get("lok_adi", "")})  # fmt: skip
     toplam, ozet = _ozet(db, anahtarlar, len(kritik))
     return {"basliklar": _basliklar(coklu), "satirlar": [x["hucreler"] for x in sonuc], "kayitlar": sonuc, "toplam": toplam,
-            "eslesen": eslesen, "ozet": ozet, "lokasyon_sutun": LOKASYON_ADI_SUTUNU + (1 if coklu else 0),
+            "eslesen": eslesen, "ozet": ozet, "lokasyon_sutun": lok_sutun,
             "kurallar": kural_listesi, "kural_baslik": m("CI adı filtresi", "CI name filter"), "kural_tumu": m("Tümü", "All"),
+            "lokasyonlar": [ad for ad, _ in lok_adlari.most_common(500)], "lok_baslik": m("Lokasyon adı", "Location name"),
+            "lok_ipucu": m("Lokasyon adında ara… (- = boş olanlar)", "Search location name… (- = empty)"),
             "lokasyon_ipucu": m("Lokasyon adını düzeltin (boş bırakılırsa envanterdeki ad kullanılır). TopoMaker aynı adlı CI'ları tek sahada çizer.",
                                 "Correct the location name (empty = inventory name). TopoMaker draws CIs with the same name as one site."),
             **etiket}  # fmt: skip

@@ -303,9 +303,10 @@ def sla_sil(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = Depe
 
 @router.get("/musteri/{musteri_id:int}/kritik-ci")
 def kritik_ci(musteri_id: KimlikTipi, q: str = Query(default="", max_length=200), kural: str = Query(default="", max_length=2000),
-              e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):  # fmt: skip
-    """Kritik CI (musteri envanteri): sunucuda arama + CI adi oneki filtresi (kural='nw_li,nw_mbl'; bos = tumu), en fazla 500 satir."""
-    return _yap(db, lambda: ms.kritik_ci_listesi(db, e.user, musteri_id, q, kural))
+              lok: str = Query(default="", max_length=200), e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):  # fmt: skip
+    """Kritik CI (musteri envanteri): sunucuda arama + CI adi oneki filtresi (kural='nw_li,nw_mbl'; bos = tumu) + Lokasyon adi
+    filtresi (lok; parca eslesmesi, '-' = lokasyon adi bos), en fazla 500 satir."""
+    return _yap(db, lambda: ms.kritik_ci_listesi(db, e.user, musteri_id, q, kural, lok))
 
 
 class KritikCiGovde(BaseModel):

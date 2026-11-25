@@ -378,11 +378,11 @@ def envanter_cileri(db: Session, user: Principal, musteri_id: int) -> tuple[Cust
     return musteri, satirlar, baglam
 
 
-def kritik_ci_listesi(db: Session, user: Principal, musteri_id: int, metin: str = "", kural: str = "") -> dict:
+def kritik_ci_listesi(db: Session, user: Principal, musteri_id: int, metin: str = "", kural: str = "", lok: str = "") -> dict:
     """Kartin Kritik CI penceresi: kart ve istiraklerinin envanteri (sunucuda arama + CI adi oneki filtresi, en fazla 500 satir)."""
     musteri = musteri_getir(db, user, musteri_id)
     istirakler = list(db.scalars(select(Customer).where(Customer.parent_id == musteri.id)))
-    return envanter.kritik_ci(db, [musteri, *istirakler], musteri.id, metin, duzenleyebilir_mi(db, user, musteri), kural)
+    return envanter.kritik_ci(db, [musteri, *istirakler], musteri.id, metin, duzenleyebilir_mi(db, user, musteri), kural, lok)
 
 
 def kritik_ci_isaretle(db: Session, user: Principal, musteri_id: int, ci_no: str, kritik: bool) -> dict:
