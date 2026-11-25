@@ -1,0 +1,87 @@
+ekran-react/dist/assets/apn-sayfasi-DJ40P8Mu.js
+  s_35f59806ed5eb5::t_87d87d3b62ec54 1
+ekran-react/dist/assets/arizalar-DhdCB844.js
+  s_35f59806ed5eb5::t_dfd9577c11e939 1
+ekran-react/dist/assets/cekmece-CA69aegR.js
+  s_35f59806ed5eb5::t_09f3f60a2f3ec6 1
+ekran-react/dist/assets/durum-D3-EJ9pq.js
+  s_35f59806ed5eb5::t_1e7d25408a504f 1
+ekran-react/dist/assets/ekip-ozeti-OJlIAxCT.js
+  s_35f59806ed5eb5::t_c50acee8ddaeed 1
+ekran-react/dist/assets/gelir-metin-CZIQxEwH.js
+  s_35f59806ed5eb5::t_ee2c9b9fc6f15d 1
+ekran-react/dist/assets/gelir-uretim-sayfasi-DkiGKRxT.js
+  s_35f59806ed5eb5::t_f2f89854538132 1
+ekran-react/dist/assets/grafik-BuKRxTil.js
+  s_35f59806ed5eb5::t_098fc3359cc54b 1
+ekran-react/dist/assets/gunlukler-D35VWXEt.js
+  s_35f59806ed5eb5::t_a8e01858ea30db 1
+ekran-react/dist/assets/index-BOc29V6i.js
+  s_35f59806ed5eb5::t_80acecb6917eee 1,52
+ekran-react/dist/assets/index-DVwhHSN1.css
+  s_35f59806ed5eb5::t_846eadc1613fda 2
+ekran-react/dist/assets/izin-takvim-DzqXDhrQ.js
+  s_35f59806ed5eb5::t_febd5811c205d8 1
+ekran-react/dist/assets/kurum-CXmu0gtw.js
+  s_35f59806ed5eb5::t_c7e5b2a1e2e2e0 1
+ekran-react/dist/assets/metin-BqGvifFK.js
+  s_35f59806ed5eb5::t_da408311aa63b5 1
+ekran-react/dist/assets/musteri-sayfasi-CHg_JOp7.js
+  s_35f59806ed5eb5::t_9852de46f93247 1
+ekran-react/dist/assets/onedesk-sayfasi-CzuO903-.js
+  s_35f59806ed5eb5::t_dd37640d302bc4 1
+ekran-react/dist/assets/ortak-CkJz4kak.js
+  s_35f59806ed5eb5::t_c8a57c4277801a 1
+ekran-react/dist/assets/proje-sayfasi-D1zxop4h.js
+  s_35f59806ed5eb5::t_824b3dd98d1703 1
+ekran-react/dist/assets/radar-sayfasi-CW5wURUF.js
+  s_35f59806ed5eb5::t_c8ffef61ec4909 1
+ekran-react/dist/assets/rapor-sayfasi-CXlvOImV.js
+  s_35f59806ed5eb5::t_e505bec2dc5363 1
+ekran-react/dist/assets/roller-CpgD-4Ud.js
+  s_35f59806ed5eb5::t_3eeeac01bc7d1e 1
+ekran-react/dist/assets/sms-sayfasi-DfWtFalf.js
+  s_35f59806ed5eb5::t_11a63780e6bf7b 1
+ekran-react/dist/assets/sunum-sayfasi-CQzZSSWi.js
+  s_35f59806ed5eb5::t_fcc13351ef25b6 1
+ekran-react/dist/assets/takvim-grafigi-Bc2ObjNo.js
+  s_35f59806ed5eb5::t_fba4331da2de97 1
+ekran-react/dist/assets/talep-sayfasi-GfktipK2.js
+  s_35f59806ed5eb5::t_2f6eea14aeb40e 1
+ekran-react/dist/assets/tam-takvim-BzLsYcZq.js
+  s_35f59806ed5eb5::t_a664a2f98d122f 1
+ekran-react/dist/assets/tampon-BJiTQc7t.js
+  s_35f59806ed5eb5::t_cdbfb9dc5dff4e 1
+ekran-react/dist/assets/temip-atama-BsAG-9Bc.js
+  s_35f59806ed5eb5::t_83c6ee3d418c33 1
+ekran-react/dist/assets/urun-tutar-C6ZODkL0.js
+  s_35f59806ed5eb5::t_a7043de6b4df42 1
+ekran-react/dist/assets/useMutation-C1HboO10.js
+  s_35f59806ed5eb5::t_d32e52624d82d1 1
+ekran-react/dist/assets/utilizasyon-BMZ3jmns.js
+  s_35f59806ed5eb5::t_d55514790369ec 1
+ekran-react/dist/assets/veritabani-CjsEQt_f.js
+  s_35f59806ed5eb5::t_bf2da965983d90 1
+ekran-react/dist/assets/yonetim-sayfasi-DK4gDHep.js
+  s_35f59806ed5eb5::t_b00fb8c8bebacf 1-2
+ekran-react/dist/index.html
+  s_35f59806ed5eb5::t_e5e28b917cf991 12,14
+ekran-react/src/index.css
+  s_35f59806ed5eb5::t_ca8185ac7d9f18 3-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8687f748bcb9b1d7859e860ea8b3f5aaa583f1bb",
+  "prompts": {},
+  "sessions": {
+    "s_35f59806ed5eb5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c8a155aa-0cf9-488b-8eb1-7f2136ea09ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "giraysav <giray.sav@turkcell.com.tr>"
+    }
+  }
+}
