@@ -8,7 +8,7 @@ import { musteriMetin } from "@/musteri/musteri-metin"
 import { RaporOnizleme } from "@/musteri/rapor-onizleme"
 import type { RaporGrafigi } from "@/musteri/rapor-onizleme"
 import { blobBase64, dosyaIndir, raporPdfOlustur, seriGrafigi } from "@/musteri/rapor-pdf"
-import { EkDosyaKarti, GalapagosKarti, SlaKarti } from "@/musteri/sla-paneli"
+import { EkDosyaKarti, SlaKarti } from "@/musteri/sla-paneli"
 import type { SlaVeri } from "@/musteri/sla-paneli"
 import { SlaAnalizi } from "@/musteri/sla-analizi"
 import type { AnalizMetni } from "@/musteri/sla-analizi"
@@ -206,6 +206,14 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
     [sla, raporDili],
   )
   const ekGorseller = useMemo<RaporGrafigi[]>(() => (sla?.ekler ?? []).map((e) => ({ anahtar: `ek-${e.no}`, baslik: e.baslik, gorsel: e.gorsel })), [sla])
+  // Devre performansi grafikleri (ReportDB LOE): cizim public/rapor-trafik.js'te (ECharts); betik yoksa liste bos, rapor etkilenmez.
+  // Sunucu veriyi hazirlarken (bekliyor) 30 sn'de bir yeniden sorulur.
+  const trafikQ = useQuery({
+    queryKey: ["musteri", "rapor", musteriId, "trafik", secim, raporDili],
+    queryFn: () => (window.TamlifeTrafik ? window.TamlifeTrafik.gorseller(oku, adres("/trafik"), raporDili) : []),
+    staleTime: 300_000,
+    refetchInterval: () => (window.TamlifeTrafik && window.TamlifeTrafik.bekliyor(adres("/trafik")) ? 30_000 : false),
+  })
 
   const yukle = () => Promise.all([taslakQ.refetch(), gecmisQ.refetch()])
   const bildir = (anahtar: string, metin: string) => setMesaj((m) => ({ ...m, [anahtar]: metin }))
@@ -501,6 +509,7 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
                   alanlar={alanlar}
                   grafikler={grafikler}
                   ekler={ekGorseller}
+                  loe={trafikQ.data ?? []}
                 />
               </div>
             </div>
@@ -562,7 +571,13 @@ export function AylikRapor({ musteriId, musteriAdi, dil, geriAlabilir }: { muste
 
         <SlaKarti {...slaOrtak} />
         <SlaAnalizi adres={adres} t={t} dil={raporDili} slaVar={!!sla?.ozet?.dosya} yzHazir={!!sla?.araclar?.yz} kilitli={!!g} onYaz={ozetiYaz} geriAlinabilir={!!analizOncesi} onGeriAl={analiziGeriAl} />
-        <GalapagosKarti {...slaOrtak} />
+        {/* Devre grafikleri bolumu (veri secimi, saat araligi, devre arama / secimi): public/rapor-trafik.js cizer. */}
+        <div
+          ref={(kap) => {
+            if (kap && window.TamlifeTrafik && window.TamlifeTrafik.devreKutusu)
+              window.TamlifeTrafik.devreKutusu(kap, { taban, adres: adres("/trafik"), dil: raporDili, getir: oku, istek: yaz, yenile: () => trafikQ.refetch() })
+          }}
+        />
         <EkDosyaKarti {...slaOrtak} />
       </div>
     </div>

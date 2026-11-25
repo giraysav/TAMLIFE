@@ -117,7 +117,7 @@ const TR = {
   herZaman: "her zaman",
   // Kisi bazinda yetki (Rol Yonetimi > Ceyrek Sunum yaninda acilir liste)
   kisiYetkisi: "Yetkili personel",
-  kisiYetkisiAciklama: "Sunumu yönetebilecek kişileri işaretleyin. Admin her zaman yetkilidir; role verilen yetki o roldeki herkese geçer.",
+  kisiYetkisiAciklama: "Yetkili olacak kişileri işaretleyin. Admin her zaman yetkilidir; role verilen yetki o roldeki herkese geçer.",
   kisiAra: "Personel ara…",
   kisiYok: "Eşleşen personel yok.",
   kisiSayisi: (n: number) => `${n} kişi yetkili`,
@@ -235,7 +235,7 @@ const EN: typeof TR = {
   kimYonetir: "Roles that can manage the presentation",
   herZaman: "always",
   kisiYetkisi: "Authorised staff",
-  kisiYetkisiAciklama: "Tick the people who can manage the presentation. Admin always can; a permission given to a role applies to everyone in that role.",
+  kisiYetkisiAciklama: "Tick the people who should have this permission. Admin always can; a permission given to a role applies to everyone in that role.",
   kisiAra: "Search staff…",
   kisiYok: "No matching staff.",
   kisiSayisi: (n: number) => `${n} ${n === 1 ? "person" : "people"} authorised`,

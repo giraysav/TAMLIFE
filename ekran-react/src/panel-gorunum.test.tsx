@@ -174,7 +174,7 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     expect(within(kimlik).getByText(/Hafta sonu ulaşılamaz/)).toBeInTheDocument()
   })
 
-  it("Aylik Rapor dugmesi buyuk sari baglanti; Kritik CI ve Topo Maker Duzenle / Iştirak ekle / Sil ile ayni satirda", async () => {
+  it("Aylik Rapor dugmesi buyuk sari baglanti; CI NAME ve Topo Maker Duzenle / Iştirak ekle / Sil ile ayni satirda", async () => {
     sahteSunucu({ "/api/v1/musteri/9": KART })
     sarmala(<MusteriKarti id={9} dil="tr" />)
     await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
@@ -185,7 +185,7 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     const duzenle = screen.getByRole("button", { name: "Düzenle" })
     const satir = duzenle.parentElement as HTMLElement
     expect(within(satir).getByRole("button", { name: /İştirak ekle/ })).toBeInTheDocument()
-    expect(within(satir).getByRole("button", { name: /Kritik CI/ })).toBeInTheDocument()
+    expect(within(satir).getByRole("button", { name: /CI NAME/ })).toBeInTheDocument()
     expect(within(satir).getByRole("link", { name: /Topo Maker/ })).toHaveAttribute("href", "#/musteri?m=9&sekme=topoloji")
     expect(within(satir).getByRole("button", { name: /Müşteriyi sil/ })).toBeInTheDocument()
   })
@@ -279,12 +279,12 @@ describe("Musteri karti: tek cerceve, dugmeler, Operasyon penceresi", () => {
     await waitFor(() => expect(cagrilar.find((c) => c.yontem === "PUT" && c.yol.endsWith("/kimlik"))?.govde).toMatchObject({ parent_id: null }))
   })
 
-  it("Kritik CI dugmesi tabloyu cekmecede acar", async () => {
+  it("CI NAME dugmesi CI listesini cekmecede acar", async () => {
     sahteSunucu({ "/api/v1/musteri/9": KART })
     sarmala(<MusteriKarti id={9} dil="tr" />)
     await screen.findByRole("heading", { name: "112 ACIL SERVIS", level: 2 })
     expect(screen.queryByText("Core Router 1")).toBeNull()
-    fireEvent.click(screen.getByRole("button", { name: /Kritik CI/ }))
+    fireEvent.click(screen.getByRole("button", { name: /CI NAME/ }))
     const pencere = await screen.findByRole("dialog")
     expect(within(pencere).getByText("Core Router 1")).toBeInTheDocument()
     fireEvent.click(within(pencere).getByRole("button", { name: "Kapat" }))

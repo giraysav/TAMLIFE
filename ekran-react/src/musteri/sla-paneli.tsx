@@ -158,44 +158,6 @@ export function SlaKarti({ adres, t, veri, kilitli, onDegisti }: Ortak) {
   )
 }
 
-/** GALAPAGOS grafikleri (MRTG vb.; GALAPAGOS DB baglanana kadar elle). Birden cok gorsel; baslik dosya adindan. */
-export function GalapagosKarti({ adres, t, veri, kilitli, onDegisti }: Ortak) {
-  const { mesaj, mesgul, calistir } = useIslem({ t, onDegisti })
-  const ekler = veri?.ekler ?? []
-  function sec(dosyalar: File[]) {
-    void calistir(
-      dosyalar.map((d) => () => yukle<SlaVeri>(adres("/gorsel", { baslik: d.name.replace(/\.[^.]+$/, "") }), d, d.type || "application/octet-stream", "POST")),
-      t.gorselYuklendi,
-    )
-  }
-  return (
-    <KucukKart baslik={t.gorseller} aciklama={t.gorselAciklama} mesaj={mesaj}>
-      {ekler.length > 0 ? (
-        <ul className="grid grid-cols-2 gap-2">
-          {ekler.map((e) => (
-            <li key={e.no} className="space-y-1 rounded-lg border border-slate-200 p-1.5 text-[0.6875rem]">
-              <img src={e.gorsel} alt={e.baslik} className="h-16 w-full rounded object-contain" />
-              <div className="flex items-center gap-1">
-                <span className="min-w-0 flex-1 truncate font-bold text-slate-600" title={e.baslik}>
-                  {e.baslik || "—"}
-                </span>
-                {!kilitli ? (
-                  <button type="button" className="text-[0.6875rem] font-bold text-rose-600 hover:underline" disabled={mesgul} onClick={() => void calistir([() => yaz<SlaVeri>("DELETE", adres(`/gorsel/${e.no}`))])}>
-                    {t.gorselSil}
-                  </button>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[0.6875rem] font-bold text-slate-400">{t.gorselYok}</p>
-      )}
-      {!kilitli ? <DosyaDugmesi etiket={t.gorselYukle} kabul="image/png,image/jpeg,image/gif" coklu mesgul={mesgul} onSec={sec} /> : null}
-    </KucukKart>
-  )
-}
-
 /** Rapor iletisine eklenecek diger dosyalar. */
 export function EkDosyaKarti({ adres, t, veri, kilitli, onDegisti }: Ortak) {
   const { mesaj, mesgul, calistir } = useIslem({ t, onDegisti })

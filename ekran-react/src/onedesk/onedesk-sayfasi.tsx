@@ -6,7 +6,6 @@ import { BosKutu, GIRDI, HataKutu, Kpi, Panel, SayfaKabi, Sekmeler, Yukleniyor }
 import { sayi } from "@/lib/bicim"
 import { oku } from "@/lib/sorgu"
 import { OneriPaneli, RcaPaneli, Top10Paneli } from "@/onedesk/analiz"
-import { KaynakPaneli } from "@/onedesk/kaynak"
 import { onedeskMetin } from "@/onedesk/onedesk-metin"
 import { turSerileri } from "@/onedesk/tipler"
 import type { Durum } from "@/onedesk/tipler"
@@ -16,10 +15,10 @@ import { varsayilanYil, yilSecenekleri } from "@/lib/yillar"
 type Kapsam = "acik" | "kapali"
 
 /**
- * Onedesk: iki ana gorunum (Aktif A/T/S, Yil boyu kapatilan) + yil boyu analiz (Top10, RCA ortak noktalari, cozum tavsiyeleri).
- * Veri admin Veri Girisi hattindan beslenir; admin icin kaynak/aktarim paneli en altta.
+ * Kayit Takibi (eski adi Onedesk): iki ana gorunum (Aktif A/T/S, Yil boyu kapatilan) + yil boyu analiz (Top10, RCA ortak noktalari, cozum tavsiyeleri).
+ * Veri admin Veri Girisi hattindan beslenir (kaynak/aktarim paneli 2026-11 canlida kaldirildi; backend onedesk.ice_al yok).
  */
-export function OnedeskSayfasi({ dil, admin }: { dil: Dil; admin: boolean }) {
+export function OnedeskSayfasi({ dil }: { dil: Dil }) {
   const t = onedeskMetin(dil)
   const [kapsam, setKapsam] = useState<Kapsam>("acik")
   const [yil, setYil] = useState(varsayilanYil())
@@ -99,7 +98,6 @@ export function OnedeskSayfasi({ dil, admin }: { dil: Dil; admin: boolean }) {
         <OneriPaneli yil={yil} t={t} />
       </div>
 
-      {admin ? <KaynakPaneli t={t} /> : null}
     </div>
   )
 }

@@ -279,46 +279,46 @@ describe("Ceyrek Sunum: kisa ozet duzeni", () => {
   })
 })
 
-describe("Rol Yonetimi: ek yetkiler ve Ceyrek Sunum bolumu", () => {
+describe("Rol Yonetimi: ozel alan karti (2026-11-12: TAM Utilizasyon erisimi)", () => {
   const ROLLER = {
     catalog: [{ id: "sunum", label: "Çeyrek Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] }],
     permission_catalog: [
       {
-        id: "sunum.gonder",
-        label: "Çeyrek sunumu yönet",
-        label_en: "Manage the quarterly presentation",
+        id: "utilizasyon.yonet",
+        label: "TAM Utilizasyon'u yönet",
+        label_en: "Manage TAM Utilization",
         description: "Sunuma öğe gönderebilir",
         description_en: "Can send items",
         where: "TAM Takvim › grafik",
         where_en: "TAM Calendar › chart",
-        area: "sunum",
+        area: "utilizasyon",
       },
     ],
     roles: [
-      { role: "admin", label: "Admin", editable: false, modules: ["sunum"], landing: "ozet", permissions: ["sunum.gonder"], saved: false },
+      { role: "admin", label: "Admin", editable: false, modules: ["sunum"], landing: "ozet", permissions: ["utilizasyon.yonet"], saved: false },
       { role: "TeamMngr", label: "Manager", editable: true, modules: ["sunum"], landing: "ozet", permissions: [], saved: true },
     ],
   }
 
   it("yetki duz dilde anlatilir; rol isareti aninda kaydedilir; sunum icerigi secimi artik burada degil", async () => {
     const cagrilar = sahteSunucu({
-      "/api/v1/roller/TeamMngr": { role: "TeamMngr", modules: ["sunum"], landing: "ozet", permissions: ["sunum.gonder"] },
+      "/api/v1/roller/TeamMngr": { role: "TeamMngr", modules: ["sunum"], landing: "ozet", permissions: ["utilizasyon.yonet"] },
       "/api/v1/roller": ROLLER,
       "/api/v1/sunum/kaynaklar": KAYNAKLAR,
     })
     sarmala(<RollerSayfasi dil="tr" />)
-    expect(await screen.findByText("Sunumu yönetebilecek roller")).toBeInTheDocument()
+    expect(await screen.findByText("TAM Utilizasyon sekmesine erişebilecek roller")).toBeInTheDocument()
     expect(screen.getAllByText("Ne sağlar:").length).toBeGreaterThan(0)
     expect(screen.getByText("Sunuma öğe gönderebilir")).toBeInTheDocument()
     expect(screen.queryByText("Ek yetkiler")).toBeNull() // rol kartindaki "Ek yetkiler" kaldirildi
 
-    const alan = screen.getByText("Sunumu yönetebilecek roller").closest("section") as HTMLElement
+    const alan = screen.getByText("TAM Utilizasyon sekmesine erişebilecek roller").closest("section") as HTMLElement
     const admin = within(alan).getByRole("checkbox", { name: /Admin/ })
     expect(admin).toBeChecked()
     expect(admin).toBeDisabled()
     fireEvent.click(within(alan).getByRole("checkbox", { name: /Manager/ }))
     await waitFor(() => expect(within(alan).getByRole("checkbox", { name: /Manager/ })).toBeChecked())
-    expect(cagrilar.find((c) => c.yontem === "PUT" && c.yol.includes("/roller/TeamMngr"))?.govde).toEqual({ permissions: ["sunum.gonder"] })
+    expect(cagrilar.find((c) => c.yontem === "PUT" && c.yol.includes("/roller/TeamMngr"))?.govde).toEqual({ permissions: ["utilizasyon.yonet"] })
     expect(screen.queryByText("Giriş sayfası")).toBeNull() // giris sayfasi secimi kalkti (2026-10-14)
 
     expect(screen.queryByRole("checkbox", { name: /Müşteri portföy özeti/ })).toBeNull()

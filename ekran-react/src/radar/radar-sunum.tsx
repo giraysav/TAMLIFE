@@ -42,6 +42,15 @@ export type RadarMusterisi = {
   ozet: string[]
   oneriler: { baslik: string; gerekce: string }[]
   yz: YzYorumu | null
+  sikayet_talep?: SikayetTalep
+}
+/** Radar numarasinin kartsiz OneDesk sikayet / talep kayitlari (2026-11-23, karar A); konular en sik kategoriler. */
+type SikayetTalep = {
+  sikayet: number
+  talep: number
+  sikayet_acik: number
+  talep_acik: number
+  konular?: { ad: string; adet: number; sikayet: number; talep: number }[]
 }
 export type RadarPortfoyu = {
   veri_zamani: string | null
@@ -53,7 +62,6 @@ export type RadarPortfoyu = {
   sure_profili: Dagilim[]
   etki: Dagilim[]
   musteriler: RadarMusterisi[]
-  sikayet_talep: { erisim: boolean; kaynak: string; neden: string }
   yz: { hazir: boolean; eksik: string[] }
 }
 
@@ -359,16 +367,30 @@ function MusteriSlayti({ dil, m, p, yonetici }: { dil: Dil; m: RadarMusterisi; p
           <YzBolumu dil={dil} m={m} hazir={p.yz.hazir} yonetici={yonetici} />
         </Bolum>
       </div>
-      <div className="flex items-start gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-xs">
-        <Inbox aria-hidden className="mt-0.5 size-4 shrink-0" style={{ color: "#94a3b8" }} /* PDF: html2canvas SVG icinde oklch renk cizemez, hex */ />
-        <p className="min-w-0">
-          <span className="font-black text-tl-navy">{t.sikayetTalep}</span>
-          <span className="font-bold text-slate-500">
-            {" · "}
-            {t.sikayetYok}: {p.sikayet_talep.neden}
+      <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs">
+        <p className="flex min-w-0 items-start gap-3">
+          <Inbox aria-hidden className="mt-0.5 size-4 shrink-0 text-tl-blue" />
+          <span className="min-w-0">
+            <span className="font-black text-tl-navy">{t.sikayetTalep}</span>
+            <span className="font-bold text-slate-500">
+              {" · "}
+              {m.sikayet_talep?.sikayet || m.sikayet_talep?.talep
+                ? t.sikayetOzet(sayi(m.sikayet_talep.sikayet), sayi(m.sikayet_talep.sikayet_acik), sayi(m.sikayet_talep.talep), sayi(m.sikayet_talep.talep_acik))
+                : t.sikayetYok}
+            </span>
           </span>
         </p>
+        {m.sikayet_talep?.konular?.length ? (
+          <ul className="flex flex-wrap gap-1.5 pl-7">
+            {m.sikayet_talep.konular.map((k) => (
+              <li key={k.ad} className="rounded-full bg-white px-2.5 py-1 font-bold text-slate-600 ring-1 ring-slate-200" title={t.konuAyrinti(sayi(k.sikayet), sayi(k.talep))}>
+                {k.ad} <span className="font-mono font-black text-tl-navy">{sayi(k.adet)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
+
     </Slayt>
   )
 }

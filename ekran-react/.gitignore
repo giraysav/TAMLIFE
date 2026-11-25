@@ -8,7 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist git'te izlenir: canli arayuz derlemesi gelistirmede alinir, sunucu yalniz ceker (2026-11-25)
 dist-ssr
 *.local
 

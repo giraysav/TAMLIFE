@@ -14,7 +14,7 @@ const TR = {
   formul: (e: number) =>
     `Riskli utilizasyon = U × (1 + p). U: ağırlık puanı (0-100). p = R / (R + ${e}), R = Σ (açık alarm + açık şikayet) × müşteri skoru/100 (skorsuz müşteride 1). Risk = olasılık × etki (ISO 31000, NIST SP 800-30). Risk yoksa değer utilizasyona eşit, en fazla 2 katı.`,
   kolSkorRisk: "Riskli utilizasyon",
-  riskVeriYok: "ReportDB verisi yok",
+  riskVeriYok: "Alarm verisi yok",
 }
 
 const EN: typeof TR = {
@@ -30,7 +30,7 @@ const EN: typeof TR = {
   formul: (e: number) =>
     `Risk-weighted utilization = U × (1 + p). U: weight score (0-100). p = R / (R + ${e}), R = Σ (open alarms + open complaints) × customer score/100 (1 for unscored customers). Risk = likelihood × impact (ISO 31000, NIST SP 800-30). Without risk the value equals utilization, at most twice it.`,
   kolSkorRisk: "Risk-weighted utilization",
-  riskVeriYok: "No ReportDB data",
+  riskVeriYok: "No alarm data",
 }
 
 export const ekipMetin = (dil: Dil) => (dil === "en" ? EN : TR)

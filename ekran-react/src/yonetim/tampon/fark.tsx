@@ -278,6 +278,8 @@ export function FarkAlani({ dil }: { dil: Dil }) {
               { baslik: baslik("musteri_no", f.musteriNo), hucre: (m) => <code className="text-[0.6875rem]">{m.musteri_no}</code> },
               { baslik: baslik("unvan", f.unvan), hucre: (m) => <span className="line-clamp-1 max-w-64 font-normal">{m.temip_unvan || "—"}</span> },
               { baslik: f.kaynak, hucre: (m) => m.kaynak },
+              // Kartli numarada kart segmenti, kartsizda CMDB (ONENT) segmenti; sunucu doldurur.
+              { baslik: baslik("segment", f.segment), hucre: (m) => (m.segment ? <span className="font-bold">{m.segment}</span> : "—") },
               { baslik: baslik("durum", f.durum), hucre: (m) => <Rozet ton={TON[m.durum]}>{f.turAdi[m.durum]}</Rozet> },
               {
                 baslik: baslik("kart", f.kart),

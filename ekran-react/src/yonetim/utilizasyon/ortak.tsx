@@ -2,7 +2,7 @@ import { Fragment, useLayoutEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import type { ComponentProps } from "react"
 import { Bildirim, GIRDI, Rozet } from "@/components/sayfa-ui"
-import type { AgacMusterisi, KaynakDurumu, KriterSonucu, SkorAgaci } from "@/yonetim/api"
+import type { AgacMusterisi, AltKriter, KaynakDurumu, KriterSonucu, SkorAgaci } from "@/yonetim/api"
 import { adaGoreSirala } from "@/lib/bicim"
 import type { UYM } from "@/yonetim/utilizasyon/metin"
 
@@ -91,24 +91,27 @@ export function KaynakListesi({ kaynaklar, uyarilar, t }: { kaynaklar: KaynakDur
   )
 }
 
-/** Manuel puanlamada dokumun duzenlenebilir hali: baslik -> secilen puan (Servis Cesitliligi: alinan servis adlari); servis puanlari
- *  dokumde duzenlenir (ad -> puan, kriter tablosuna yazilir). */
+/** Manuel puanlamada dokumun duzenlenebilir hali: baslik -> secilen puan (Servis Cesitliligi: alinan servis adlari; Sozlesme: elle
+ *  saglanan alt kriter adlari). Servis puanlari dokumde degil, Kriterler tablosunda degisir. */
 export type DokumSecimi = {
   secim: Record<string, number | string[]>
   onSecim: (baslik: string, deger: number | string[]) => void
-  servisPuan: Record<string, number>
-  onServisPuan: (ad: string, puan: number) => void
   kilitli?: boolean
 }
 
 const yuvarla = (n: number) => Math.round(n * 100) / 100
 
-/** Servis Cesitliligi kriter puani (sunucu motor.servis_orani ile ayni): alinan servis puanlari / tum servis puanlari x 100. */
-export function servisOrani(servisler: { ad: string; puan: number }[], secilen: string[], puanlar: Record<string, number>) {
-  const p = (ad: string, yedek: number) => (Number.isFinite(puanlar[ad]) ? puanlar[ad] : yedek)
-  const toplam = servisler.reduce((t, s) => t + p(s.ad, s.puan), 0)
-  const alinan = servisler.filter((s) => secilen.includes(s.ad)).reduce((t, s) => t + p(s.ad, s.puan), 0)
-  return { toplam, alinan, puan: toplam > 0 ? yuvarla((alinan / toplam) * 100) : 0 }
+/** Servis Cesitliligi kriter puani (sunucuyla ayni): alinan servislerin puan toplami, kriterin baremine (alt..ust -> puan) gore. */
+function servisPuani(servisler: { ad: string; puan: number }[], kurallar: KriterSonucu["kurallar"], secilen: string[]) {
+  const alinan = servisler.filter((s) => secilen.includes(s.ad)).reduce((t, s) => t + s.puan, 0)
+  const kural = [...(kurallar ?? [])].sort((a, b) => b.puan - a.puan).find((r) => alinan >= r.alt && (r.ust === null || alinan <= r.ust))
+  return { alinan, puan: kural ? kural.puan : 0 }
+}
+
+/** Sozlesme kriter puani: saglanan alt kriterlerin puan toplami (en fazla 100). Otomatik alt kriter veriden, digerleri secimden. */
+function altKriterPuani(alt: AltKriter[], secilen: string[]) {
+  const saglanan = alt.filter((a) => (a.oto ? a.saglandi : secilen.includes(a.ad)))
+  return { puan: Math.min(100, saglanan.reduce((t, a) => t + a.puan, 0)), adlar: saglanan.map((a) => a.ad) }
 }
 
 /** Tek musterinin kriter dokumu: puan, katki, deger, kaynak, durum. `duzenle` verilirse (manuel puanlama) secenekli satirda puan secilir. */
@@ -119,8 +122,12 @@ export function KriterDokumu({ kriterler, t, duzenle }: { kriterler: KriterSonuc
   const canli = (k: KriterSonucu) => {
     const s = duzenle?.secim[k.baslik]
     if (!duzenle || s === undefined) return { puan: k.puan, katki: k.katki, deger: k.deger, oran: null }
+    if (k.alt_kriterler && Array.isArray(s)) {
+      const alt = altKriterPuani(k.alt_kriterler, s)
+      return { puan: alt.puan, katki: yuvarla((k.agirlik * alt.puan) / 100), deger: alt.adlar, oran: null }
+    }
     if (k.servisler && Array.isArray(s)) {
-      const oran = servisOrani(k.servisler, s, duzenle.servisPuan)
+      const oran = servisPuani(k.servisler, k.kurallar, s)
       return { puan: oran.puan, katki: yuvarla((k.agirlik * oran.puan) / 100), deger: u.servisDeger(s.length), oran }
     }
     return typeof s === "number" ? { puan: s, katki: yuvarla((k.agirlik * s) / 100), deger: k.deger, oran: null } : { puan: k.puan, katki: k.katki, deger: k.deger, oran: null }
@@ -143,7 +150,7 @@ export function KriterDokumu({ kriterler, t, duzenle }: { kriterler: KriterSonuc
         <tbody className="divide-y divide-slate-100">
           {kriterler.map((k, i) => {
             const c = canli(k)
-            const servisli = Boolean(duzenle && k.servisler)
+            const servisli = Boolean(duzenle && (k.servisler || k.alt_kriterler))
             const acik = servisli && acikServis === k.baslik
             const secilen = duzenle && Array.isArray(duzenle.secim[k.baslik]) ? (duzenle.secim[k.baslik] as string[]) : []
             return (
@@ -157,7 +164,7 @@ export function KriterDokumu({ kriterler, t, duzenle }: { kriterler: KriterSonuc
                         aria-expanded={acik}
                         onClick={() => {
                           setAcikServis(acik ? null : k.baslik)
-                          if (duzenle.secim[k.baslik] === undefined) duzenle.onSecim(k.baslik, [])
+                          if (duzenle.secim[k.baslik] === undefined) duzenle.onSecim(k.baslik, k.secim ?? [])
                         }}
                       >
                         {acik ? <ChevronDown aria-hidden className="size-3.5" /> : <ChevronRight aria-hidden className="size-3.5" />}
@@ -221,23 +228,48 @@ export function KriterDokumu({ kriterler, t, duzenle }: { kriterler: KriterSonuc
                                 />
                                 <span className="truncate">{s.ad}</span>
                               </label>
-                              <input
-                                type="number"
-                                min={0}
-                                max={1000}
-                                step="any"
-                                className={`${GIRDI} !w-20 !py-1 text-left font-mono`}
-                                aria-label={u.servisPuanEtiket(s.ad)}
-                                disabled={duzenle.kilitli}
-                                value={duzenle.servisPuan[s.ad] ?? s.puan}
-                                onChange={(e) => duzenle.onServisPuan(s.ad, e.target.value === "" ? 0 : Number(e.target.value))}
-                              />
+                              <span className="shrink-0 font-mono text-slate-400">{s.puan}</span>
                             </li>
                           )
                         })}
                       </ul>
-                      {c.oran ? <p className="mt-2 text-xs font-black text-tl-navy">{u.servisOzet(String(yuvarla(c.oran.alinan)), String(yuvarla(c.oran.toplam)), String(c.oran.puan))}</p> : null}
+                      {c.oran ? <p className="mt-2 text-xs font-black text-tl-navy">{u.servisOzet(String(yuvarla(c.oran.alinan)), String(c.oran.puan))}</p> : null}
                       <p className="mt-1 text-[0.6875rem] font-bold text-slate-400">{u.servisNot}</p>
+                    </td>
+                  </tr>
+                ) : acik && duzenle && k.alt_kriterler ? (
+                  <tr className="bg-slate-50/60">
+                    <td colSpan={7} className="px-3 py-2">
+                      <ul className="grid gap-1.5 sm:grid-cols-3">
+                        {k.alt_kriterler.map((a, j) => {
+                          const saglanir = a.oto ? a.saglandi : secilen.includes(a.ad)
+                          return (
+                            <li key={a.ad} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1">
+                              <label className={`flex min-w-0 flex-1 items-center gap-2 font-bold text-slate-700 ${a.oto ? "" : "cursor-pointer"}`}>
+                                <input
+                                  type="checkbox"
+                                  className={`size-4 accent-tl-navy ${a.oto ? "" : "cursor-pointer"}`}
+                                  aria-label={u.altKriterSaglanir(a.ad)}
+                                  disabled={duzenle.kilitli || a.oto}
+                                  checked={saglanir}
+                                  onChange={(e) => duzenle.onSecim(k.baslik, e.target.checked ? [...secilen, a.ad] : secilen.filter((x) => x !== a.ad))}
+                                />
+                                <span className="min-w-0">
+                                  <span className="block truncate">{a.ad}</span>
+                                  {"fatura_bedeli" in a ? (
+                                    <span className="block text-[0.625rem] font-bold text-slate-400">
+                                      {a.oto ? u.faturaOto(Number(a.fatura_bedeli).toLocaleString("tr-TR", { maximumFractionDigits: 0 })) : u.faturaYok}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </label>
+                              {/* Ilk alt kriter taban puan, digerleri ekler (Fatura 70, +15, +15). */}
+                              <span className="shrink-0 font-mono text-slate-400">{j === 0 ? a.puan : `+${a.puan}`}</span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                      <p className="mt-1 text-[0.6875rem] font-bold text-slate-400">{u.sozlesmeNot}</p>
                     </td>
                   </tr>
                 ) : null}

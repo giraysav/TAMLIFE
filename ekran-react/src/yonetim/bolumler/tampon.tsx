@@ -32,12 +32,12 @@ import { tm } from "@/yonetim/tampon/metin"
 
 const YOL = "yonetim/tampon"
 const SEKMELER = ["canli", "akis", "import", "eslesme", "fark"] as const
-const DBLER = ["reportdb", "onedesk", "onent", "galapagos"] as const
+const DBLER = ["reportdb", "onedesk", "onent"] as const
 type Sekme = (typeof SEKMELER)[number]
 type Db = (typeof DBLER)[number]
 
 /** Veri Girisi (2026-10-24 yeniden duzen, kullanici: "cok karisik ve yonetilmesi zor"). Bes sekme, secim adreste
- *  (#/yonetim/tampon?sekme=akis&parti=12): Canli DB (ReportDB / ONEDESKDB / ONENTDB / GALAPAGOSDB: baglanti + katalog) ·
+ *  (#/yonetim/tampon?sekme=akis&parti=12): Canli DB (ReportDB / ONEDESKDB / ONENTDB: baglanti + katalog) ·
  *  Veri Akisi (tek hat: kaynaklar -> tampon partiler -> analiz -> TEMIP eslesmesi -> dagitim) · Import (panelin TEK Excel/CSV
  *  giris noktasi; aylik rapor SLA/grafik ekleri simdilik istisna) · Musteri Eslesmesi (her veri TAM'a atanmis karta baglanmali) ·
  *  Fark (eslesmeyen numaralar: tek tek / toplu personele atama). */
@@ -88,8 +88,6 @@ function CanliDb({ dil, db, onDb }: { dil: Dil; db: Db; onDb: (d: Db) => void })
           <OracleKaynakKarti dil={dil} anahtar="oracle_reportdb" baslik={y.db.reportdb} yokMetni={y.kaynakYok(y.db.reportdb)} />
           <ReportdbKatalogu dil={dil} />
         </>
-      ) : db === "galapagos" ? (
-        <OracleKaynakKarti dil={dil} anahtar="oracle_galapagos" baslik={y.galapagos} yokMetni={y.kaynakYok(y.db.galapagos)} />
       ) : (
         <PgKataloglari dil={dil} kaynak={db === "onedesk" ? "pg_onedesk" : "pg_onent"} />
       )}

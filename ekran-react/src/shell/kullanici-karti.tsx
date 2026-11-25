@@ -31,6 +31,8 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
   const dugme = useRef<HTMLButtonElement>(null)
   // Yonetim konsolu yalniz admin rolune: dizin/yerel admin ya da elle olusturulup admin rolu verilen kullanici.
   const admin = kullanici.role === "admin"
+  // 2026-11 canli: Yonetim menusu, Yonetim alanindan bir sekmeye (ör. TAM Utilizasyon) erisim verilen admin disi rollere de acik
+  const yonetimErisimi = admin || !!kullanici.navigation?.some((m) => m.id === "yonetim")
   const hareket = useHareket()
   const yazi = useYazi()
 
@@ -66,12 +68,12 @@ export function KullaniciKarti({ kullanici, dil, onDil, onGit, onCikis, talepVar
     <div className="relative" ref={kutu}>
       {acik ? (
         <div role="menu" aria-label={t.hesapMenusu} className="absolute inset-x-0 bottom-full z-30 mb-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl shadow-tl-navy/20">
-          {admin ? (
+          {yonetimErisimi ? (
             <button
               type="button"
               role="menuitem"
               className="mb-1 flex w-full items-center gap-3 rounded-xl bg-gradient-to-r from-tl-yellow to-amber-300 px-3 py-2.5 text-left font-black text-tl-navy shadow-sm transition-transform hover:-translate-y-px focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-tl-navy"
-              onClick={() => git("yonetim/durum")}
+              onClick={() => git(admin ? "yonetim/durum" : "yonetim/utilizasyon")}
             >
               <ShieldCheck aria-hidden className="size-5 shrink-0" />
               <span className="grid leading-tight">

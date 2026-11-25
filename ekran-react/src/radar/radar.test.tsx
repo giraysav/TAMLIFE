@@ -22,14 +22,22 @@ function sunucu(veri: unknown) {
 }
 
 describe("Musteri Radar sayfasi", () => {
-  it("adaylar: sira, unvan, alarm acik/kapanan, toplam; bayat veri uyarisi ve veri zamani", async () => {
-    sunucu({ var: true, taze: false, veri_zamani: "2026-10-06 12:30:00", satirlar: [{ sira: 1, musteri_no: "10000004", unvan: "BETA ENERJI", aktif: 30, kapanan: 1200, toplam: 1230 }] })
+  it("adaylar: sira, unvan, alarm acik/kapanan, toplam, sikayet/talep (acik adedi baslikta); bayat veri uyarisi ve veri zamani", async () => {
+    sunucu({
+      var: true, taze: false, veri_zamani: "2026-10-06 12:30:00",
+      satirlar: [
+        { sira: 1, musteri_no: "10000004", unvan: "BETA ENERJI", aktif: 30, kapanan: 1200, toplam: 1230, sikayet: 7, sikayet_acik: 2, talep: 5, talep_acik: 1 },
+        { sira: 2, musteri_no: "10000005", unvan: "GAMA ENERJI", aktif: 1, kapanan: 2, toplam: 3 },
+      ],
+    }) // prettier-ignore
     expect(await screen.findByText("BETA ENERJI")).toBeInTheDocument()
     expect(screen.getByText("30 / 1.200")).toBeInTheDocument()
     expect(screen.getByText("1.230")).toBeInTheDocument()
     expect(screen.getByText(/güncel değil/)).toBeInTheDocument()
     expect(screen.getByText(/Veri zamanı: 2026-10-06 12:30:00/)).toBeInTheDocument()
-    expect(screen.getAllByTitle("OneDesk bilet şeması erişimi bekleniyor")).toHaveLength(2)
+    expect(screen.getByTitle("2 açık")).toHaveTextContent("7")
+    expect(screen.getByTitle("1 açık")).toHaveTextContent("5")
+    expect(screen.getAllByTitle("0 açık").map((e) => e.textContent)).toEqual(["0", "0"]) // alan gelmeyen satir: 0
   })
 
   it("TEMIP kayit kipi: ticketli/son kayit, kart adayi rozeti, ozet; Kayitlar dugmesi musterinin kayitlarini acar", async () => {
@@ -61,9 +69,9 @@ describe("Musteri Radar sayfasi", () => {
     expect(String(fetchSahte.mock.calls.at(-1)?.[0])).toContain("/api/v1/radar/23659267/kayitlar")
   })
 
-  it("ReportDB verisi yoksa aciklama", async () => {
+  it("alarm verisi yoksa aciklama", async () => {
     sunucu({ var: false, taze: false, veri_zamani: null, satirlar: [] })
-    expect(await screen.findByText(/ReportDB verisi henüz alınmadı/)).toBeInTheDocument()
+    expect(await screen.findByText(/Alarm verisi henüz alınmadı/)).toBeInTheDocument()
   })
 
   it("yonetici: Personele ata -> personel sec -> yeni kart ac; uye kullanicida dugme yok", async () => {
@@ -112,7 +120,7 @@ describe("Musteri Radar sayfasi", () => {
     await waitFor(() => expect(cagrilar.filter((c) => c.yol.startsWith("GET /api/v1/radar")).length).toBeGreaterThan(2)) // atama Radar listesini tazeler
   })
 
-  it("Yonetim sunumu: portfoy slayti (KPI, firsat siralamasi, tema), musteri slayti (kok neden, oneri, ozet, sikayet erisimi yok); YZ kapali notu", async () => {
+  it("Yonetim sunumu: portfoy slayti (KPI, firsat siralamasi, tema), musteri slayti (kok neden, oneri, ozet, sikayet/talep sayi + konu; kaydi olmayan musteri); YZ kapali notu", async () => {
     const musteri = {
       musteri_no: "30000003", unvan: "ORNEK LOJISTIK A.S.", toplam: 1257, acik: 23, kapanan: 1234, aylik_ortalama: 209.5, lokasyon_sayisi: 145, sdwan_oran: 45.5,
       yedek_oran: 33.6, kendiliginden_oran: 48.3, medyan_cozum_dk: 236, anlik_oran: 0.1, uzun_oran: 96.3, kalite_oran: 0, son30: 224, onceki30: 269, degisim: -16.7, aylar: [{ ay: "2026-09", toplam: 300 }, { ay: "2026-10", toplam: 224 }],
@@ -121,11 +129,13 @@ describe("Musteri Radar sayfasi", () => {
       hizmetler: [{ ad: "Mobil erişim (3G/4.5G)", adet: 734, lokasyon: 49, oran: 58.4 }],
       lokasyonlar: [{ ad: "nw_li_cust_a_sdwan", adet: 76 }],
       skor: 71, firsat: "yuksek", ozet: ["1.257 alarm (aylık ortalama 209,5)"], oneriler: [{ baslik: "Mevcut yedek hatların 4.5G/5G'ye yükseltilmesi", gerekce: "Kesintilerin %96,3'ü 1 saatten uzun" }], yz: null,
+      sikayet_talep: { sikayet: 3, talep: 2, sikayet_acik: 1, talep_acik: 0, konular: [{ ad: "Hat arızası", adet: 4, sikayet: 3, talep: 1 }] },
     }
+    const kayitsiz = { ...musteri, musteri_no: "30000004", unvan: "KAYITSIZ A.S.", sikayet_talep: { sikayet: 0, talep: 0, sikayet_acik: 0, talep_acik: 0, konular: [] } }
     const sunum = {
-      veri_zamani: "2026-10-25T15:02:50Z", musteri_sayisi: 1, toplam_alarm: 1257, acik_alarm: 23, lokasyon: 145, firsat: { yuksek: 1, orta: 0, dusuk: 0 },
-      sure_profili: [{ anahtar: "uzun", ad: "Uzun (1–8 sa)", adet: 900, oran: 96.3 }], etki: [{ anahtar: "AVAILABILITY", ad: "Erişilemezlik (devre kesintisi)", adet: 1257, oran: 100 }], musteriler: [musteri],
-      sikayet_talep: { erisim: false, kaynak: "OneDesk", neden: "Okuma yetkisi yok." }, yz: { hazir: false, eksik: ["ANTHROPIC_API_KEY"] },
+      veri_zamani: "2026-10-25T15:02:50Z", musteri_sayisi: 2, toplam_alarm: 2514, acik_alarm: 46, lokasyon: 290, firsat: { yuksek: 2, orta: 0, dusuk: 0 },
+      sure_profili: [{ anahtar: "uzun", ad: "Uzun (1–8 sa)", adet: 900, oran: 96.3 }], etki: [{ anahtar: "AVAILABILITY", ad: "Erişilemezlik (devre kesintisi)", adet: 1257, oran: 100 }], musteriler: [musteri, kayitsiz],
+      yz: { hazir: false, eksik: ["ANTHROPIC_API_KEY"] },
     }
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       new Response(JSON.stringify({ status: "success", data: url.includes("/radar/sunum") ? sunum : { var: true, taze: true, veri_zamani: null, kaynak: "kayit", satirlar: [] } }), { status: 200, headers: { "Content-Type": "application/json" } }),
@@ -137,12 +147,16 @@ describe("Musteri Radar sayfasi", () => {
     )
     fireEvent.click(await screen.findByRole("tab", { name: "Yönetim sunumu" }))
     expect(await screen.findByRole("region", { name: "Müşteri Radar · Satış Fırsatı Portföyü" })).toBeInTheDocument()
-    expect(screen.getByText(/1 TAM'sız kurumsal müşteri 1.257 ağ alarmı üretti; 1 müşteri yüksek fırsat sınıfında/)).toBeInTheDocument()
+    expect(screen.getByText(/2 TAM'sız kurumsal müşteri 2.514 ağ alarmı üretti; 2 müşteri yüksek fırsat sınıfında/)).toBeInTheDocument()
     const slayt = screen.getByRole("region", { name: "ORNEK LOJISTIK A.S." })
     expect(within(slayt).getByText("Önerilen fırsat: Mevcut yedek hatların 4.5G/5G'ye yükseltilmesi")).toBeInTheDocument()
     expect(within(slayt).getByText("Mobil erişim (3G/4.5G)")).toBeInTheDocument()
     expect(within(slayt).getByText("3,9 sa")).toBeInTheDocument() // medyan kesinti 236 dk
-    expect(within(slayt).getByText(/Veri bekleniyor: Okuma yetkisi yok./)).toBeInTheDocument()
+    expect(within(slayt).getByText(/3 şikayet \(1 açık\) · 2 talep \(0 açık\)/)).toBeInTheDocument()
+    expect(within(slayt).getByTitle("3 şikayet · 1 talep")).toHaveTextContent("Hat arızası 4")
+    const kayitsizSlayt = screen.getByRole("region", { name: "KAYITSIZ A.S." })
+    expect(within(kayitsizSlayt).getByText(/Bu müşteri için kayıt yok/)).toBeInTheDocument()
+    expect(within(kayitsizSlayt).queryByText("Hat arızası")).toBeNull()
     expect(within(slayt).getByText("Lokasyonların %45,5'i SD-WAN")).toBeInTheDocument()
     expect(screen.getByText(/YZ analizi kapalı/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText("Sunum kapsamı"), { target: { value: "portfoy" } })

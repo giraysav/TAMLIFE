@@ -1,9 +1,10 @@
-import { Component } from "react"
+import { Component, useEffect, useRef } from "react"
 import type { ReactNode } from "react"
 import { CircleCheck, CircleX, TriangleAlert } from "lucide-react"
 import { DUGME, Rozet } from "@/components/sayfa-ui"
 import type { Durum3 } from "@/yonetim/api"
 import type { YM } from "@/yonetim/metin"
+import type { Dil } from "@/shell/metin"
 
 /** Yonetime ozgu ogeler; ortak olanlar components/sayfa-ui'da. */
 
@@ -81,4 +82,30 @@ export class HataSiniri extends Component<{ children: ReactNode; mesaj: string }
       this.props.children
     )
   }
+}
+
+/** public/ altindaki React'tan bagimsiz betikler (index.html'de <script defer>): verilen kok ogeye kendi arayuzunu kurar. */
+type DisBetik = { kur: (kok: HTMLElement, ayar: { dil: Dil }) => void; kaldir: (kok: HTMLElement | null) => void }
+
+declare global {
+  interface Window {
+    /** public/veri-ozeti.js: Yonetim > Veri Kaynaklari ozeti. */
+    TamlifeVeriOzeti?: DisBetik
+    /** public/util-puanlama.js: TAM Utilizasyon > Puanlama. */
+    TamlifeUtilPuanlama?: DisBetik
+  }
+}
+
+/** Bagimsiz betigin arayuzunu bu alana kurar; dil degisince ya da alan kalkinca betigin kaldir'i cagrilir.
+ *  Betik yuklenmemisse (onbellek / ag) alanda `yuklenemedi` metni kalir. */
+export function DisBetikAlani({ betik, dil, yuklenemedi }: { betik: "TamlifeVeriOzeti" | "TamlifeUtilPuanlama"; dil: Dil; yuklenemedi: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const kok = ref.current
+    const arayuz = window[betik]
+    if (kok && arayuz) arayuz.kur(kok, { dil })
+    else if (kok) kok.textContent = yuklenemedi
+    return () => arayuz?.kaldir(kok)
+  }, [betik, dil, yuklenemedi])
+  return <div ref={ref} />
 }

@@ -28,4 +28,37 @@ describe("aylik rapor PDF onizlemesi (2026-10-31)", () => {
       birak()
     }
   })
+
+  it("sayfa sayfa bolumler (2026-11-24): bilgilendirmeler, grafik bolumleri ve oneriler zorunlu sayfa sonuyla (data-pdf-sayfa) baslar", () => {
+    const g = (anahtar: string) => ({ anahtar, baslik: anahtar, gorsel: "data:image/png;base64,AA==" })
+    render(
+      <RaporOnizleme
+        musteriAdi="X"
+        donem="Ekim 2026"
+        dil="tr"
+        alanlar={{ bilgi: "Bilgi metni", oneri: "Öneri metni" }}
+        grafikler={[g("sla-1"), g("sla-2")]}
+        ekler={[g("trafik-1")]}
+        loe={[g("devre-1")]}
+      />,
+    )
+    const sayfalar = [...screen.getByTestId("rapor-pdf").querySelectorAll("[data-pdf-sayfa]")]
+    expect(sayfalar.map((s) => s.querySelector("h3")?.textContent)).toEqual([
+      "BİLGİLENDİRMELER",
+      "ALARM, TALEP VE ŞİKAYET",
+      "AYLIK TRAFİK KULLANIMI",
+      "DEVRE PERFORMANSI",
+      "ÖNERİLER",
+    ])
+    expect(sayfalar[1]?.querySelectorAll("figure")).toHaveLength(2)
+    expect(sayfalar[3]?.querySelector("figcaption")).toHaveTextContent("devre-1")
+    expect(screen.getByText("Technical Account Manager")).toBeInTheDocument()
+    expect(screen.getByText("TURKCELL SUPERONLINE")).toBeInTheDocument()
+  })
+
+  it("grafik yoksa grafik bolumleri cizilmez", () => {
+    render(<RaporOnizleme musteriAdi="X" donem="Ekim 2026" dil="en" alanlar={{}} grafikler={[]} ekler={[]} />)
+    const basliklar = [...screen.getByTestId("rapor-pdf").querySelectorAll("h3")].map((h) => h.textContent)
+    expect(basliklar).toEqual(["POSITIVE DEVELOPMENTS", "ONGOING WORK", "CRITICAL ISSUES", "INFORMATION", "SUGGESTIONS"])
+  })
 })

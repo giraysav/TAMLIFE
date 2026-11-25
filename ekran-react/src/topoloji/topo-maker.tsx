@@ -1,15 +1,28 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Map as HaritaIkon, Network, TriangleAlert, Upload, ZoomIn, ZoomOut } from "lucide-react"
 import { Alan, Bildirim, BosKutu, DUGME, DUGME_SARI, GIRDI, HataKutu, Kpi, Panel, SayfaKabi, Sekmeler, Yukleniyor } from "@/components/sayfa-ui"
 import { sayi } from "@/lib/bicim"
-import { hataMesaji, oku, sorguMetni, yukle } from "@/lib/sorgu"
+import { hataMesaji, oku, sorguMetni, yaz, yukle } from "@/lib/sorgu"
 import type { Kart } from "@/musteri/musteri-karti"
 import type { Dil } from "@/shell/metin"
 import { topolojiMetin } from "@/topoloji/topoloji-metin"
 
-export type Dugum = { id: string; tur: "bulut" | "switch" | "router"; etiket: string; lokasyon: string; il: string }
+export type Dugum = {
+  id: string
+  tur: "bulut" | "switch" | "router"
+  etiket: string
+  lokasyon: string
+  il: string
+  /** Simgedeki kisa ad (envanter ciziminde servis kisaltmasi / DEVRE); yoksa SW / RT. */
+  kisa?: string
+  /** CI ayrintisi (ad, urun, model, hiz) ve hiz: ipucunda. */
+  ci?: string
+  bw?: string
+  /** Kartta Kritik CI isaretli: kirmizi cerceve. */
+  kritik?: boolean
+}
 export type Kenar = { id: string; kaynak: string; hedef: string; altyapi: string; etiket: string; yedek: boolean; devre: string; renk: string }
 type Sehir = { il: string; adet: number; enlem: number; boylam: number }
 export type Analiz = {
@@ -26,7 +39,21 @@ export type Analiz = {
   uyarilar: string[]
   musteri?: { id: number; unvan: string }
   renkler: Record<string, string>
+  /** Envanterden cizimde "envanter" (dosya analizinde yok). */
+  kaynak?: "envanter"
+  /** Envanter cizimi: secili il / ilce / saha (acik adres anahtari) ve kural onekleri ('-' = hicbiri). */
+  secim?: { il: string; ilce: string; saha: string; kural: string }
+  /** Envanter cizimi: il > ilce > saha secicileri (CI sayilariyla). */
+  adres_agaci?: { il: string; ci: number; ilceler: { ilce: string; ci: number; sahalar: { anahtar: string; baslik: string; adres: string; ci: number }[] }[] }[]
+  /** TopoMaker cizim kural seti (CI adi oneki; `sabit` = "Diger"). */
+  kurallar?: CizimKurali[]
+  /** Kural ekleme / silme / varsayilan kaydetme yetkisi (yonetici). */
+  kural_duzenler?: boolean
+  urun_tutar?: { yuklu?: boolean; devre?: number; eslesen_devre?: number; eslesen_ci?: number; il_farkli?: number }
+  cizime_giren?: number
+  duzeltilen_ci?: number
 }
+type CizimKurali = { onek: string; ad: string; ciz: boolean; ci: number; secili: boolean; sabit?: boolean }
 
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 const SUTUN = 112
@@ -172,12 +199,12 @@ function TopolojiCizimi({ veri, t }: { veri: Analiz; t: ReturnType<typeof topolo
                   </text>
                 </g>
               )
-            const ipucu = `${t.lokasyonEtiket}: ${d.lokasyon}${d.il ? ` · ${d.il}` : ""}${d.etiket ? ` · ${d.etiket}` : ""}`
+            const ipucu = `${t.lokasyonEtiket}: ${d.lokasyon}${d.il ? ` · ${d.il}` : ""}${d.etiket ? ` · ${d.etiket}` : ""}${d.ci ? ` · ${d.ci}` : ""}${d.bw ? ` · ${d.bw}` : ""}${d.kritik ? ` · ${t.kritikCi}` : ""}`
             return d.tur === "switch" ? (
               <g key={d.id} onClick={tikla} className="cursor-pointer" data-tur="switch">
                 <rect x={p.x - 48} y={p.y - 16} width={96} height={32} rx={6} fill="#FFD100" stroke={secili === d.id ? "#0A1628" : "#F39C12"} strokeWidth={2} />
                 <text x={p.x} y={p.y - 2} textAnchor="middle" className="text-[10px] font-black" fill="#0A1628">
-                  SW
+                  {d.kisa ?? "SW"}
                 </text>
                 <text x={p.x} y={p.y + 10} textAnchor="middle" className="text-[9px] font-bold" fill="#0A1628">
                   {kisalt(d.etiket || "—")}
@@ -186,9 +213,9 @@ function TopolojiCizimi({ veri, t }: { veri: Analiz; t: ReturnType<typeof topolo
               </g>
             ) : (
               <g key={d.id} onClick={tikla} className="cursor-pointer" data-tur="router">
-                <circle cx={p.x} cy={p.y} r={18} fill="#3498DB" stroke={secili === d.id ? "#0A1628" : "#2980B9"} strokeWidth={2} />
+                <circle cx={p.x} cy={p.y} r={18} fill="#3498DB" stroke={secili === d.id ? "#0A1628" : d.kritik ? "#DC2626" : "#2980B9"} strokeWidth={d.kritik ? 3.5 : 2} />
                 <text x={p.x} y={p.y + 4} textAnchor="middle" className="text-[10px] font-black" fill="#0A1628">
-                  RT
+                  {d.kisa ?? "RT"}
                 </text>
                 <text x={p.x} y={p.y + 32} textAnchor="middle" className="fill-slate-600 text-[9px] font-bold">
                   {kisalt(d.etiket || "—")}
@@ -246,7 +273,46 @@ function CografiHarita({ veri, t }: { veri: Analiz; t: ReturnType<typeof topoloj
   )
 }
 
-/** TopoMaker (uretim topoMakerModal): musteri kartindaki arac bolumunden acilir. Dosya sunucuda saklanmaz; cizim SVG (CDN yok). */
+type EnvanterIstegi = { ara: string; il: string; ilce: string; saha: string; kural?: string }
+
+/** Il haritasi: public/topo-harita.js (ECharts 6.1.0 + tr-iller.json il zemini; il renklendirme, sayili pinler, yakinlastirma,
+ *  ilce ipucu). Betik yoksa ya da il zemini yuklenemezse eski basit SVG haritaya (CografiHarita) duser. Envanter ciziminde ile
+ *  tiklamak o ili secer (onIl). Yukseklik satir ici: derlenmis CSS'te olmayan sinif harita kutusunu 0 px birakiyordu. */
+function IlHaritasi({ veri, t, dil, onIl }: { veri: Analiz; t: ReturnType<typeof topolojiMetin>; dil: Dil; onIl?: (il: string) => void }) {
+  const kap = useRef<HTMLDivElement>(null)
+  const [cizilebilir, setCizilebilir] = useState(true)
+  // onIl her cizimde yeni islev; haritayi yalniz veri ya da dil degisince yeniden cizmek icin bagimliliga alinmaz.
+  useEffect(() => {
+    const el = kap.current
+    if (!el || !window.TamlifeHarita) {
+      setCizilebilir(false)
+      return
+    }
+    let gecerli = true
+    window.TamlifeHarita.ciz(el, {
+      sehirler: veri.sehirler,
+      agac: veri.adres_agaci || null,
+      secili: veri.secim?.il || "",
+      dil,
+      birim: veri.kaynak === "envanter" ? "servis" : "cihaz",
+      onIl,
+    }).then((cizildi) => {
+      if (gecerli && !cizildi) setCizilebilir(false)
+    })
+    return () => {
+      gecerli = false
+      window.TamlifeHarita?.birak(el)
+    }
+  }, [veri, dil])
+  return cizilebilir ? (
+    <div ref={kap} role="img" aria-label={t.haritaAlt} className="w-full rounded-xl border border-slate-200 bg-white" style={{ height: "clamp(380px, 62vh, 640px)" }} />
+  ) : (
+    <CografiHarita veri={veri} t={t} />
+  )
+}
+
+/** TopoMaker (uretim topoMakerModal): musteri kartindaki arac bolumunden acilir. Iki kaynak: yuklenen devre envanteri dosyasi
+ *  (sunucuda saklanmaz) ya da musterinin CI envanteri (il > ilce > acik adres secimi, CI adi oneki kurallari). Cizim SVG (CDN yok). */
 export function TopoMaker({ dil, musteriId }: { dil: Dil; musteriId: number }) {
   const t = topolojiMetin(dil)
   const [dosya, setDosya] = useState<File | null>(null)
@@ -256,7 +322,16 @@ export function TopoMaker({ dil, musteriId }: { dil: Dil; musteriId: number }) {
   const m = useMutation({
     mutationFn: (d: File) => yukle<Analiz>(`/api/v1/topoloji/analiz${sorguMetni({ musteri: musteriId, dosya: d.name })}`, d, d.name.toLowerCase().endsWith(".xlsx") ? XLSX : "text/csv"),
   })
-  const v = m.data
+  const [envanterAra, setEnvanterAra] = useState("")
+  const [yeniOnek, setYeniOnek] = useState("")
+  const [yeniKuralAdi, setYeniKuralAdi] = useState("")
+  const envanter = useMutation({
+    mutationFn: (s: EnvanterIstegi) =>
+      oku<Analiz>(`/api/v1/topoloji/envanter${sorguMetni({ musteri: musteriId, ara: s.ara, il: s.il, ilce: s.ilce, saha: s.saha, kural: s.kural, en_fazla: 25 })}`),
+  })
+  // Gosterilen sonuc: en son calisan kaynak (dosya yuklemesi envanter sonucunu, envanter cizimi dosya sonucunu sifirlar).
+  const sonuc = envanter.isIdle ? m : envanter
+  const v = sonuc.data
 
   function gonder(e: FormEvent) {
     e.preventDefault()
@@ -269,8 +344,53 @@ export function TopoMaker({ dil, musteriId }: { dil: Dil; musteriId: number }) {
       return
     }
     setUyari("")
+    envanter.reset()
     m.mutate(dosya)
   }
+
+  function envanterCiz(e: FormEvent) {
+    e.preventDefault()
+    setUyari("")
+    m.reset()
+    envanter.mutate({ ara: envanterAra.trim(), il: v?.secim?.il ?? "", ilce: v?.secim?.ilce ?? "", saha: "", kural: v?.secim?.kural ?? "" })
+  }
+
+  /** Secimi degistirip yeniden cizer (verilmeyen alanlar son secimden). */
+  function sec(degisen: Partial<EnvanterIstegi>) {
+    setUyari("")
+    envanter.mutate({ ara: envanterAra.trim(), il: "", ilce: "", saha: "", ...v?.secim, ...degisen })
+  }
+
+  function kuralSec(onek: string) {
+    const secili = new Set((v?.kurallar ?? []).filter((k) => k.secili).map((k) => k.onek))
+    if (secili.has(onek)) secili.delete(onek)
+    else secili.add(onek)
+    sec({ kural: [...secili].join(",") || "-", ilce: "", saha: "" })
+  }
+
+  /** Kural setini kaydeder (yalniz yonetici; "Diger" sabit, gonderilmez) ve verilen secimle yeniden cizer. */
+  async function kurallariKaydet(kurallar: Pick<CizimKurali, "onek" | "ad" | "ciz" | "sabit">[], degisen?: Partial<EnvanterIstegi>) {
+    try {
+      await yaz("PUT", "/api/v1/topoloji/kurallar", { kurallar: kurallar.filter((k) => !k.sabit).map((k) => ({ onek: k.onek, ad: k.ad, ciz: k.ciz })) })
+      sec(degisen ?? {})
+    } catch (h) {
+      window.alert(hataMesaji(h, "!"))
+    }
+  }
+
+  /** Cizime giren CI sayisi, Urun-Tutar devre / adres eslesmesi ve elle duzeltilen lokasyonlar. */
+  function envanterOzeti(a: Analiz) {
+    const ut = a.urun_tutar || {}
+    const parcalar = [`${t.envCizimde}: ${(a.cizime_giren ?? 0).toLocaleString(dil)} / ${a.satir.toLocaleString(dil)} CI`]
+    if (ut.devre)
+      parcalar.push(`${t.envUt}: ${ut.eslesen_devre} / ${ut.devre} ${t.envUtDevre} (${ut.eslesen_ci} CI)` + (ut.il_farkli ? ` · ${ut.il_farkli} ${t.envUtFarkli}` : ""))
+    else if (!ut.yuklu) parcalar.push(t.envUtYok)
+    if (a.duzeltilen_ci) parcalar.push(`${t.envDuzeltilen}: ${a.duzeltilen_ci}`)
+    return parcalar.join(" · ")
+  }
+
+  const secilenIl = v?.adres_agaci?.find((x) => x.il === v.secim?.il)
+  const secilenIlce = secilenIl?.ilceler.find((x) => x.ilce === v?.secim?.ilce)
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -288,6 +408,114 @@ export function TopoMaker({ dil, musteriId }: { dil: Dil; musteriId: number }) {
             {t.baslat}
           </button>
         </form>
+        <form onSubmit={envanterCiz} className="mt-3 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
+          <Alan etiket={t.envanterEtiket} ipucu={t.envanterIpucu} sinif="min-w-[16rem] flex-1">
+            <input type="search" className={GIRDI} placeholder={t.envanterAra} value={envanterAra} maxLength={200} onChange={(e) => setEnvanterAra(e.target.value)} />
+          </Alan>
+          <button type="submit" className={DUGME_SARI} disabled={envanter.isPending || kart.isPending || kart.isError}>
+            <Network aria-hidden className="size-4" />
+            {t.envanterCiz}
+          </button>
+        </form>
+        {v && v.adres_agaci ? (
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <Alan etiket={t.envIl} sinif="min-w-48">
+              <select className={GIRDI} disabled={envanter.isPending} value={v.secim!.il} onChange={(e) => sec({ il: e.target.value, ilce: "", saha: "" })}>
+                {v.adres_agaci.map((x) => (
+                  <option key={x.il} value={x.il}>{`${x.il} (${x.ci})`}</option>
+                ))}
+              </select>
+            </Alan>
+            <Alan etiket={t.envIlce} sinif="min-w-48">
+              <select className={GIRDI} disabled={envanter.isPending || !secilenIl} value={v.secim!.ilce} onChange={(e) => sec({ ilce: e.target.value, saha: "" })}>
+                <option value="">{t.envTumIlceler}</option>
+                {(secilenIl?.ilceler ?? []).map((x) => (
+                  <option key={x.ilce} value={x.ilce}>{`${x.ilce} (${x.ci})`}</option>
+                ))}
+              </select>
+            </Alan>
+            <Alan etiket={t.envSaha} sinif="min-w-[16rem] flex-1">
+              <select className={GIRDI} disabled={envanter.isPending || !secilenIlce} value={v.secim!.saha} onChange={(e) => sec({ saha: e.target.value })}>
+                <option value="">{secilenIlce ? t.envTumSahalar : t.envOnceIlce}</option>
+                {(secilenIlce?.sahalar ?? []).map((x) => (
+                  <option key={x.anahtar} value={x.anahtar} title={x.adres}>{`${x.baslik} (${x.ci})`}</option>
+                ))}
+              </select>
+            </Alan>
+          </div>
+        ) : null}
+        {v && v.kurallar ? (
+          <div className="mt-3 grid gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-black text-tl-navy" title={t.envKuralIpucu}>
+                {t.envKural}
+              </span>
+              {...v.kurallar
+                .filter((k) => k.ci > 0 || v.kural_duzenler)
+                .map((k) => (
+                  <span
+                    key={k.onek}
+                    className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold"
+                    style={k.secili ? { borderColor: "#003DA5", background: "#EEF4FF", color: "#003DA5" } : { borderColor: "#CBD5E1", color: "#64748B" }}
+                    title={k.sabit ? t.envKuralDiger : `${k.onek}*`}
+                  >
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input type="checkbox" checked={k.secili} disabled={envanter.isPending} onChange={() => kuralSec(k.onek)} />
+                      {`${k.ad} (${k.ci.toLocaleString(dil)})`}
+                    </label>
+                    {v.kural_duzenler && !k.sabit ? (
+                      <button
+                        type="button"
+                        aria-label={`${t.envKuralSil}: ${k.onek}`}
+                        title={t.envKuralSil}
+                        disabled={envanter.isPending}
+                        onClick={() =>
+                          void kurallariKaydet(
+                            v.kurallar!.filter((x) => x.onek !== k.onek),
+                            { kural: v.kurallar!.filter((x) => x.secili && x.onek !== k.onek).map((x) => x.onek).join(",") || "-" },
+                          )
+                        }
+                        className="font-black"
+                        style={{ color: "#94A3B8" }}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </span>
+                ))}
+            </div>
+            {v.kural_duzenler ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input className={GIRDI} style={{ width: "10rem" }} placeholder={t.envKuralOnek} aria-label={t.envKuralOnek} value={yeniOnek} maxLength={40} onChange={(e) => setYeniOnek(e.target.value)} />
+                <input className={GIRDI} style={{ width: "13rem" }} placeholder={t.envKuralAd} aria-label={t.envKuralAd} value={yeniKuralAdi} maxLength={40} onChange={(e) => setYeniKuralAdi(e.target.value)} />
+                <button
+                  type="button"
+                  className={DUGME_SARI}
+                  disabled={envanter.isPending || !yeniOnek.trim()}
+                  onClick={() => {
+                    const onek = yeniOnek.trim().toLowerCase()
+                    void kurallariKaydet([...v.kurallar!, { onek, ad: yeniKuralAdi.trim() || onek, ciz: true }], {
+                      kural: [...v.kurallar!.filter((x) => x.secili).map((x) => x.onek), onek].join(","),
+                    })
+                    setYeniOnek("")
+                    setYeniKuralAdi("")
+                  }}
+                >
+                  {t.envKuralEkle}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-tl-navy"
+                  disabled={envanter.isPending}
+                  onClick={() => void kurallariKaydet(v.kurallar!.map((x) => ({ ...x, ciz: x.secili })))}
+                >
+                  {t.envKuralKaydet}
+                </button>
+              </div>
+            ) : null}
+            <p className="text-xs font-bold text-slate-500">{envanterOzeti(v)}</p>
+          </div>
+        ) : null}
         {uyari ? (
           <div className="mt-3">
             <Bildirim ton="amber">{uyari}</Bildirim>
@@ -295,12 +523,12 @@ export function TopoMaker({ dil, musteriId }: { dil: Dil; musteriId: number }) {
         ) : null}
       </Panel>
 
-      {m.isPending ? (
+      {sonuc.isPending ? (
         <Panel>
           <Yukleniyor metin={t.hesaplaniyor} />
         </Panel>
-      ) : m.isError ? (
-        <HataKutu metin={hataMesaji(m.error, t.hata)} />
+      ) : sonuc.isError ? (
+        <HataKutu metin={hataMesaji(sonuc.error, t.hata)} />
       ) : v ? (
         <>
           {v.spof ? (
@@ -340,7 +568,24 @@ export function TopoMaker({ dil, musteriId }: { dil: Dil; musteriId: number }) {
             }
             baslik={sekme === "topoloji" ? t.sekmeTopoloji : t.sekmeHarita}
           >
-            {sekme === "topoloji" ? <TopolojiCizimi veri={v} t={t} /> : <CografiHarita veri={v} t={t} />}
+            {sekme === "topoloji" ? (
+              <TopolojiCizimi veri={v} t={t} />
+            ) : (
+              <IlHaritasi
+                veri={v}
+                t={t}
+                dil={dil}
+                // Envanter ciziminde ile tiklamak o ili secip topolojiye doner.
+                onIl={
+                  v.kaynak === "envanter"
+                    ? (il) => {
+                        setSekme("topoloji")
+                        sec({ il, ilce: "", saha: "" })
+                      }
+                    : undefined
+                }
+              />
+            )}
             <p className="mt-3 text-[0.6875rem] font-bold text-slate-400">
               {t.eslesenKolonlar}:{" "}
               {Object.values(v.kolonlar).join(", ")}

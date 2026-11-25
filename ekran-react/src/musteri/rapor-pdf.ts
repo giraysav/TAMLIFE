@@ -66,7 +66,7 @@ function sonDoluSatir(ctx: CanvasRenderingContext2D, genislik: number, yukseklik
 
 /** Sayfa kesiminin icinden gecmemesi gereken bloklar (CSS pikseli, koke gore; [ust, alt]). KOPYADA olculur: html2canvas'in cizdigi
  *  kopyada gizlenen ogeler (dugmeler) ve kaldirilan stiller duzeni kaydirir; orijinalden olcmek kesimi yanlis yere koyuyordu. */
-function bolunmezBloklar(kok: HTMLElement): { bloklar: [number, number][]; yukseklik: number } {
+function bolunmezBloklar(kok: HTMLElement): { bloklar: [number, number][]; sayfalar: number[]; yukseklik: number } {
   const kokUst = kok.getBoundingClientRect().top
   const bloklar = [...kok.querySelectorAll<HTMLElement>("figure, [data-pdf-blok]")]
     .filter((b) => b.offsetHeight > 0)
@@ -75,7 +75,15 @@ function bolunmezBloklar(kok: HTMLElement): { bloklar: [number, number][]; yukse
       return [k.top - kokUst, k.bottom - kokUst] as [number, number]
     })
     .sort((a, b) => a[0] - b[0])
-  return { bloklar, yukseklik: kok.offsetHeight }
+  return {
+    bloklar,
+    // Zorunlu sayfa sonu: [data-pdf-sayfa] ogesi yeni sayfadan baslar (aylik rapor bolumleri sayfa sayfa).
+    sayfalar: [...kok.querySelectorAll<HTMLElement>("[data-pdf-sayfa]")]
+      .filter((s) => s.offsetHeight > 0)
+      .map((s) => s.getBoundingClientRect().top - kokUst)
+      .sort((a, b) => a - b),
+    yukseklik: kok.offsetHeight,
+  }
 }
 
 export type PdfSecenek = {
@@ -181,13 +189,17 @@ export async function raporPdfOlustur(el: HTMLElement, olcek = 2, kalite = 0.95,
   const kopyaOlcum = olcum as ReturnType<typeof bolunmezBloklar> | null
   const pikselOrani = canvas.height / (kopyaOlcum?.yukseklik || el.offsetHeight)
   const bloklar = (kopyaOlcum?.bloklar ?? []).map(([u, a]) => [Math.floor(u * pikselOrani), Math.ceil(a * pikselOrani)] as [number, number])
+  const sayfaBaslari = (kopyaOlcum?.sayfalar ?? []).map((u) => Math.floor(u * pikselOrani))
   let ust = 0
   for (let sayfa = 0; ust < bitis; sayfa++) {
     const ustMm = sayfa === 0 ? 0 : UST_KENAR_MM
     const sigan = Math.floor((sayfaY - ustMm - ALT_KENAR_MM) * mmPiksel)
     const kalanSigar = bitis - ust <= Math.floor((sayfaY - ustMm + 4) * mmPiksel)
     let alt = kalanSigar ? bitis : Math.min(ust + sigan, bitis)
-    if (alt < bitis) {
+    // Bu sayfanin icinde baslayan zorunlu sayfa bolumu varsa sayfa onun ustunde kesilir.
+    const zorunlu = sayfaBaslari.find((u) => u > ust + 2 && u < alt)
+    if (zorunlu !== undefined) alt = zorunlu - 2
+    else if (alt < bitis) {
       // sayfadan uzun blok (tanitim) zaten bolunur: bastan sonraki sayfaya itmek bos sayfa birakiyordu
       const bolunen = bloklar.find(([bUst, bAlt]) => bUst > ust + 2 && bUst < alt && bAlt > alt && bAlt - bUst <= sigan)
       alt = bolunen ? bolunen[0] - 2 : bosSatiraCek(ctx, canvas.width, ust + Math.floor(sigan * 0.6), alt)

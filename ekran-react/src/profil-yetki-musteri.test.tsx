@@ -49,7 +49,7 @@ describe("Profil: kisi kendi bilgilerini duzenler", () => {
     const onKaydedildi = vi.fn()
     sarmala(<ProfilSayfasi kullanici={KULLANICI} dil="tr" onKaydedildi={onKaydedildi} />)
 
-    const kullaniciAdi = screen.getByLabelText("Kullanıcı adı (AD/LDAP)")
+    const kullaniciAdi = screen.getByLabelText("Kullanıcı adı")
     expect(kullaniciAdi).toHaveValue("gsav")
     expect(kullaniciAdi).toBeDisabled()
     expect(screen.getByLabelText("Ad")).toHaveValue("Giray")
@@ -87,7 +87,7 @@ describe("Profil: kisi kendi bilgilerini duzenler", () => {
   it("hesap bilgileri karti salt okunur kalir", () => {
     sarmala(<ProfilSayfasi kullanici={KULLANICI} dil="tr" />)
     expect(screen.getByText("Hesap bilgileri")).toBeInTheDocument()
-    expect(screen.getByText("Member")).toBeInTheDocument()
+    expect(screen.getByText("MEMBER")).toBeInTheDocument()
     expect(screen.getByText("Standart")).toBeInTheDocument()
   })
 })
@@ -100,26 +100,26 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
     ],
     permission_catalog: [
       {
-        id: "sunum.gonder",
-        label: "Çeyrek sunumu yönet",
+        id: "utilizasyon.yonet",
+        label: "TAM Utilizasyon'u yönet",
         label_en: "Manage the quarterly presentation",
         description: "Sunuma öğe gönderebilir",
         description_en: "Can send items",
         where: "TAM Takvim › grafik",
         where_en: "TAM Calendar › chart",
-        area: "sunum",
+        area: "utilizasyon",
       },
     ],
     roles: [
-      { role: "admin", label: "Admin", editable: false, modules: ["sunum", "takvim"], landing: "ozet", permissions: ["sunum.gonder"], saved: false },
-      { role: "TeamMngr", label: "Manager", editable: true, modules: ["sunum"], landing: "ozet", permissions: ["sunum.gonder"], saved: true },
+      { role: "admin", label: "Admin", editable: false, modules: ["sunum", "takvim"], landing: "ozet", permissions: ["utilizasyon.yonet"], saved: false },
+      { role: "TeamMngr", label: "Manager", editable: true, modules: ["sunum"], landing: "ozet", permissions: ["utilizasyon.yonet"], saved: true },
       { role: "TeamMember", label: "Member", editable: true, modules: ["takvim"], landing: "ozet", permissions: [], saved: true },
     ],
     users: [
       { id: 1, username: "ladinadmin", display_name: "Ladin Admin", role: "admin", auth: "AD", ad_domain: "TURKCELL", last_login_at: "2026-10-12T08:30:00+00:00", permissions: [] },
       { id: 2, username: "mudur1", display_name: "Mehmet Müdür", role: "TeamMngr", auth: "AD", ad_domain: "TURKCELL", last_login_at: null, permissions: [] },
       { id: 3, username: "gsav", display_name: "Giray Sav", role: "TeamMember", auth: "AD", ad_domain: "TURKCELL", last_login_at: "2026-10-11T07:00:00+00:00", permissions: [] },
-      { id: 4, username: "yerel1", display_name: "Yerel Kişi", role: "TeamMember", auth: "Yerel", ad_domain: "", last_login_at: null, permissions: ["sunum.gonder"] },
+      { id: 4, username: "yerel1", display_name: "Yerel Kişi", role: "TeamMember", auth: "Yerel", ad_domain: "", last_login_at: null, permissions: ["utilizasyon.yonet"] },
     ],
   }
   const SUNUCU = { "/api/v1/sunum/kaynaklar": { duzenleyebilir: true, kaynaklar: [] } }
@@ -162,7 +162,7 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
 
   it("Ceyrek Sunum yanindaki acilir listede personel onay kutulariyla secilir ve kisiye ozel yetki kaydedilir", async () => {
     const cagrilar = sahteSunucu({
-      "/api/v1/roller/kisiler/3": { id: 3, permissions: ["sunum.gonder"] },
+      "/api/v1/roller/kisiler/3": { id: 3, permissions: ["utilizasyon.yonet"] },
       "/api/v1/roller": ROLLER,
       ...SUNUCU,
     })
@@ -180,7 +180,7 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
     const mudur = within(liste).getByRole("checkbox", { name: "Mehmet Müdür" })
     expect(mudur).toBeChecked()
     expect(mudur).toBeDisabled() // Manager rolune verilmis yetki role dahil herkese gecer
-    expect(within(liste).getByText("Rolden: Manager")).toBeInTheDocument()
+    expect(within(liste).getByText("Rolden: MANAGER")).toBeInTheDocument()
     expect(within(liste).getByRole("checkbox", { name: "Yerel Kişi" })).toBeChecked()
 
     fireEvent.change(within(liste).getByPlaceholderText("Personel ara…"), { target: { value: "giray" } })
@@ -192,7 +192,7 @@ describe("Roller: acilip kapanan rol kutulari, roldeki personel ve kisi bazli su
     await waitFor(() => expect(within(liste).getByRole("checkbox", { name: "Giray Sav" })).toBeChecked())
     const put = cagrilar.find((c) => c.yontem === "PUT")
     expect(put?.yol).toContain("/api/v1/roller/kisiler/3")
-    expect(put?.govde).toEqual({ permissions: ["sunum.gonder"] })
+    expect(put?.govde).toEqual({ permissions: ["utilizasyon.yonet"] })
     expect(within(dugme).getByText("4")).toBeInTheDocument()
 
     fireEvent.keyDown(document, { key: "Escape" })

@@ -124,10 +124,10 @@ describe("MusteriKarti: polling altinda form state izolasyonu ve render butcesi"
 const ROLLER = {
   catalog: [{ id: "sunum", label: "Çeyrek Sunum", label_en: "Quarterly Presentation", admin_only: false, children: [] }],
   permission_catalog: [
-    { id: "sunum.gonder", label: "Çeyrek sunumu yönet", label_en: "Manage", description: "", description_en: "", where: "", where_en: "", area: "sunum" },
+    { id: "utilizasyon.yonet", label: "TAM Utilizasyon'u yönet", label_en: "Manage", description: "", description_en: "", where: "", where_en: "", area: "utilizasyon" },
   ],
   roles: [
-    { role: "admin", label: "Admin", editable: false, modules: ["sunum"], landing: "ozet", permissions: ["sunum.gonder"], saved: false },
+    { role: "admin", label: "Admin", editable: false, modules: ["sunum"], landing: "ozet", permissions: ["utilizasyon.yonet"], saved: false },
     { role: "TeamMember", label: "Member", editable: true, modules: ["sunum"], landing: "ozet", permissions: [], saved: true },
   ],
   users: [{ id: 3, username: "gsav", display_name: "Giray Sav", role: "TeamMember", auth: "AD", ad_domain: "TURKCELL", last_login_at: null, permissions: [] as string[] }],
@@ -138,7 +138,7 @@ describe("Roller: TanStack Query onbellek gecersizlestirme yarisi", () => {
     let geciken: ((v: unknown) => void) | null = null
     let getSayisi = 0
     sunucu({
-      "/api/v1/roller/kisiler/3": () => ({ id: 3, permissions: ["sunum.gonder"] }),
+      "/api/v1/roller/kisiler/3": () => ({ id: 3, permissions: ["utilizasyon.yonet"] }),
       "/api/v1/roller": () => {
         getSayisi += 1
         if (getSayisi === 1) return ROLLER
@@ -162,7 +162,7 @@ describe("Roller: TanStack Query onbellek gecersizlestirme yarisi", () => {
 
     await act(async () => geciken!(ROLLER)) // eski yanit simdi geliyor
     expect(within(screen.getByRole("group", { name: "Yetkili personel" })).getByRole("checkbox", { name: "Giray Sav" })).toBeChecked()
-    expect(istemci.getQueryData<typeof ROLLER>(["roller"])?.users[0]!.permissions).toEqual(["sunum.gonder"])
+    expect(istemci.getQueryData<typeof ROLLER>(["roller"])?.users[0]!.permissions).toEqual(["utilizasyon.yonet"])
   })
 
   it("arka arkaya 20 gecersizlestirme istek firtinasi yaratmaz (tekillestirme)", async () => {

@@ -81,18 +81,11 @@ export function UtilOzet({ dil }: { dil: Dil }) {
             { baslik: u.musteri, hucre: (s) => s.musteri_sayisi, sinif: "text-right font-mono" },
             { baslik: u.istirakli, hucre: (s) => s.istirakli_musteri, sinif: "text-right font-mono" },
             { baslik: u.skorlu, hucre: (s) => s.skorlu_musteri, sinif: "text-right font-mono" },
-            { baslik: u.toplamPuan, hucre: (s) => s.toplam_puan, sinif: "text-right font-mono" },
             { baslik: u.agirlik, hucre: (s) => <span className="font-black text-tl-navy">{s.agirlik_puani ?? "—"}</span>, sinif: "text-right font-mono" },
-            {
-              baslik: u.hedefFarki,
-              hucre: (s) => <span className={s.hedef_fark > 0 ? "text-rose-600" : s.hedef_fark < 0 ? "text-emerald-600" : ""}>{s.hedef_fark > 0 ? `+${s.hedef_fark}` : s.hedef_fark}</span>,
-              sinif: "text-right font-mono",
-            },
-            { baslik: u.dengeleme, hucre: (s) => (s.dengeleme_musteri > 0 ? `+${s.dengeleme_musteri}` : s.dengeleme_musteri), sinif: "text-right font-mono" },
           ]}
         />
         <p className="mt-2 text-[0.6875rem] font-bold text-slate-400">
-          {u.toplamPuan}: {d.ozet.toplam_puan} · {u.musteri}: {d.ozet.musteri_sayisi} · {u.skorlu}: {d.ozet.skorlu_musteri}
+          {u.musteri}: {d.ozet.musteri_sayisi} · {u.skorlu}: {d.ozet.skorlu_musteri}
         </p>
       </Panel>
     </div>

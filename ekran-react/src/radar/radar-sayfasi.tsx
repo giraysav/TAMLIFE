@@ -21,6 +21,10 @@ type Aday = {
   ticketli?: number
   son_kayit?: string | null
   kart_adayi?: { id: number; ad: string } | null
+  sikayet?: number
+  talep?: number
+  sikayet_acik?: number
+  talep_acik?: number
 }
 type RadarVeri = {
   var: boolean
@@ -38,7 +42,8 @@ type Kayitlar = { musteri_no: string; unvan: string; toplam: number; sayfa: numb
 
 const ADET = 50
 
-/** TAM Radar: Musteri No'su hicbir kartla eslesmeyen TEMIP alarm kayitlari, musteri bazinda; elle giris yok. Sikayet/talep OneDesk'ten gelir (erisim bekleniyor). */
+/** TAM Radar: Musteri No'su hicbir kartla eslesmeyen TEMIP alarm kayitlari, musteri bazinda; elle giris yok. Sikayet / talep (2026-11-23, karar A):
+ *  Radar numarasinin kartsiz OneDesk kayitlari sayilir; hucre toplami, baslik (title) acik adedi gosterir. */
 /** yonetici (admin): her satirda "Personele ata" (TEMIP Musteri No'sunu personelin mevcut kartina ekle ya da personele yeni kart ac;
  *  Veri Girisi > TEMIP eslesmesi ile ayni bilesen ve ayni uclar), "Fark'a gonder" ve elle atamalar listesi. Liste yalniz Veri Girisi >
  *  Fark'ta Musteri Radar'a atanan kartsiz numaralardir (2026-10-25: Radar personel gibi). */
@@ -69,11 +74,6 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
   const v = q.data
   const kayitModu = v?.kaynak === "kayit"
   const toplamSayfa = v?.toplam_musteri && v.adet ? Math.max(1, Math.ceil(v.toplam_musteri / v.adet)) : 1
-  const bilet = (
-    <span className="text-slate-400" title={t.biletYok}>
-      —
-    </span>
-  )
   const sekmeler = (
     <Sekmeler
       etiket={s.sekmeEtiket}
@@ -152,8 +152,24 @@ export function RadarSayfasi({ dil, yonetici = false }: { dil: Dil; yonetici?: b
                 ...(kayitModu ? [{ baslik: t.kolTicket, hucre: (a: Aday) => sayi(a.ticketli ?? 0), sinif: "text-center" }] : []),
                 { baslik: t.kolToplam, hucre: (a) => <span className="font-black text-rose-600">{sayi(a.toplam)}</span>, sinif: "text-center" },
                 ...(kayitModu ? [{ baslik: t.kolSon, hucre: (a: Aday) => zaman(a.son_kayit), sinif: "whitespace-nowrap" }] : []),
-                { baslik: t.kolSikayet, hucre: () => bilet, sinif: "text-center" },
-                { baslik: t.kolTalep, hucre: () => bilet, sinif: "text-center" },
+                {
+                  baslik: t.kolSikayet,
+                  hucre: (a) => (
+                    <span className="font-black text-amber-600" title={t.acikAdet(sayi(a.sikayet_acik ?? 0))}>
+                      {sayi(a.sikayet ?? 0)}
+                    </span>
+                  ),
+                  sinif: "text-center",
+                },
+                {
+                  baslik: t.kolTalep,
+                  hucre: (a) => (
+                    <span className="font-black text-tl-blue" title={t.acikAdet(sayi(a.talep_acik ?? 0))}>
+                      {sayi(a.talep ?? 0)}
+                    </span>
+                  ),
+                  sinif: "text-center",
+                },
                 ...(kayitModu
                   ? [
                       {

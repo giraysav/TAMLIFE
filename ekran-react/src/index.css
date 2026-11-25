@@ -165,3 +165,156 @@ body {
 html[data-hareket="kapat"] .tl-hareket {
   animation: none !important;
 }
+
+/* Giris ekrani (2026-11-18 canli tasarim): arka plan gorseli uzerinde cam efektli form; 900 px altinda dikey yigin. */
+.giris-sahne {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  background: #fff;
+  overflow: hidden;
+}
+.giris-cerceve {
+  --gw: min(calc(100vw - 4rem), calc((100dvh - 4rem) * 1.7769));
+  --kw: clamp(15rem, calc(var(--gw) * 0.24), 21rem);
+  position: absolute;
+  inset: 2rem;
+  overflow: hidden;
+  border-radius: 1rem;
+  box-shadow: 0 10px 40px rgba(10, 30, 80, 0.22);
+  background: #06122e;
+}
+.giris-gorsel {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+.giris-kutu {
+  position: absolute;
+  left: calc(50% + var(--gw) / 2 - var(--kw) + 4ch);
+  bottom: calc((100dvh - 4rem - var(--gw) / 1.7769) / 2 + 3em);
+  width: var(--kw);
+}
+.giris-form {
+  width: 100%;
+  max-width: none;
+  background: rgba(255, 255, 255, 0.08);
+  /* sira onemli: once onekli, sonra oneksiz (tersi olursa kucultucu oneksizi atiyor; Chrome/Edge bulaniksiz kalir) */
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 1rem;
+  color: #fff;
+  box-shadow: 0 10px 40px rgba(0, 10, 40, 0.35);
+}
+.giris-baslik {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+.giris-logo {
+  display: block;
+  height: 2.4rem;
+  width: auto;
+  margin: 0.25rem 0;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff)
+    drop-shadow(0 0 4px rgba(255, 255, 255, 0.55));
+}
+.giris-form h1,
+.giris-form p,
+.giris-form label {
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 10, 40, 0.8);
+}
+.giris-form input {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+.giris-form input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+.giris-form button[type="submit"] {
+  background: #ffc900;
+  color: #0a2a5c;
+  font-weight: 800;
+}
+.giris-form button[type="submit"]:hover {
+  background: #ffd633;
+}
+.giris-form a {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: #fff;
+}
+.giris-form a:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.giris-form [role="alert"] {
+  color: #ffb4b4;
+  text-shadow: none;
+}
+@media (max-width: 899px) {
+  .giris-sahne {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1rem;
+  }
+  .giris-cerceve {
+    position: static;
+    width: 100%;
+    overflow: visible;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .giris-gorsel {
+    position: static;
+    height: auto;
+    aspect-ratio: 1672/941;
+    border-radius: 0.75rem;
+  }
+  .giris-kutu {
+    position: static;
+    width: 100%;
+    max-width: 24rem;
+    margin: 0 auto;
+  }
+  .giris-form {
+    border-radius: 0.75rem;
+    background: #0b1f4d;
+  }
+}
+
+.giris-misafir {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px dashed rgba(255, 255, 255, 0.65);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.15s;
+}
+.giris-misafir:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.giris-not {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: center;
+}

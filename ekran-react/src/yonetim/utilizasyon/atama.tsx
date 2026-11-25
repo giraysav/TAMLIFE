@@ -21,13 +21,9 @@ function kayitliSecim(kriterler: KriterSonucu[]): Record<string, number | string
   return sonuc
 }
 
-/** Dokumdeki servis puanlari: ad -> puan (kriter tablosundaki degerler). */
-function servisPuanlari(kriterler: KriterSonucu[]): Record<string, number> {
-  return Object.fromEntries(kriterler.flatMap((k) => k.servisler ?? []).map((s) => [s.ad, s.puan]))
-}
-
 /** Toplu atama (uretim skor_toplu onizleme / uygula): sunucu yeniden hesaplar, onizleme yazmaz; uygula yalniz TAMAM olanlara yazar.
- *  2026-10-20: puanlama manuel (sunucu `manuel`): her kriter Kriter dokumunde secilir, "Puanlari kaydet" o musterinin skorunu yazar. */
+ *  2026-10-20: puanlama manuel (sunucu `manuel`): her kriter Kriter dokumunde secilir, "Puanlari kaydet" o musterinin skorunu yazar.
+ *  Eksik kriterde de kaydedilir (ara skor, 2026-11-21); servis puanlari dokumde degil Kriterler tablosunda degisir. */
 export function TopluAtama({ dil }: { dil: Dil }) {
   const t = uym(dil)
   const u = t.util
@@ -36,7 +32,6 @@ export function TopluAtama({ dil }: { dil: Dil }) {
   const [secili, setSecili] = useState<Set<number>>(new Set())
   const [dokum, setDokum] = useState<number | null>(null)
   const [secim, setSecim] = useState<Record<string, number | string[]>>({})
-  const [servisPuan, setServisPuan] = useState<Record<string, number>>({})
   const [bilgi, setBilgi] = useState<{ ton: "yesil" | "amber"; metin: string } | null>(null)
   const agac = useQuery({ queryKey: ANAHTAR.skorAgac, queryFn: () => oku<SkorAgaci>(AGAC_YOLU) })
   const on = useQuery({
@@ -54,15 +49,10 @@ export function TopluAtama({ dil }: { dil: Dil }) {
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
   })
   const manuelKaydet = useMutation({
-    mutationFn: (g: { id: number; secimler: Record<string, number | string[]>; servis_puanlari?: Record<string, number> }) =>
-      yaz<{ id: number; ad: string; eski: number | null; yeni: number; kriter_surumu: number | null }>("PUT", `/api/v1/skor/toplu/manuel/${g.id}`, {
-        secimler: g.secimler,
-        servis_puanlari: g.servis_puanlari,
-      }),
+    mutationFn: (g: { id: number; secimler: Record<string, number | string[]> }) =>
+      yaz<{ id: number; ad: string; eski: number | null; yeni: number }>("PUT", `/api/v1/skor/toplu/manuel/${g.id}`, { secimler: g.secimler }),
     onSuccess: (s) => {
-      const metin = u.manuelKaydedildi(s.ad, skorYaz(s.yeni))
-      setBilgi({ ton: "yesil", metin: s.kriter_surumu ? `${metin} ${u.servisPuanGuncellendi(s.kriter_surumu)}` : metin })
-      if (s.kriter_surumu) void qc.invalidateQueries({ queryKey: ["skor", "kriterler"] })
+      setBilgi({ ton: "yesil", metin: u.manuelKaydedildi(s.ad, skorYaz(s.yeni)) })
       for (const anahtar of [["skor", "onizleme"], ANAHTAR.skorAgac, ANAHTAR.skorSiralama, ANAHTAR.skorTalepler]) void qc.invalidateQueries({ queryKey: anahtar })
     },
     onError: (e) => setBilgi({ ton: "amber", metin: hataMesaji(e, t.islemBasarisiz) }),
@@ -74,8 +64,6 @@ export function TopluAtama({ dil }: { dil: Dil }) {
   const acik = veri?.musteriler.find((m) => m.id === dokum) ?? null
   const manuel = veri?.manuel === true
   const secimsiz = acik ? acik.kriterler.filter((k) => (k.secenekler || k.servisler) && secim[k.baslik] === undefined).length : 0
-  const ilkPuanlar = acik ? servisPuanlari(acik.kriterler) : {}
-  const puanDegisti = Object.keys(ilkPuanlar).some((ad) => servisPuan[ad] !== undefined && servisPuan[ad] !== ilkPuanlar[ad])
   const sec = (id: number, evet: boolean) =>
     setSecili((once) => {
       const yeni = new Set(once)
@@ -171,7 +159,6 @@ export function TopluAtama({ dil }: { dil: Dil }) {
                       onClick={() => {
                         setDokum(dokum === m.id ? null : m.id)
                         setSecim(kayitliSecim(m.kriterler))
-                        setServisPuan(servisPuanlari(m.kriterler))
                       }}
                     >
                       {m.ad}
@@ -216,8 +203,6 @@ export function TopluAtama({ dil }: { dil: Dil }) {
                   ? {
                       secim,
                       onSecim: (baslik, deger) => setSecim((once) => ({ ...once, [baslik]: deger })),
-                      servisPuan,
-                      onServisPuan: (ad, puan) => setServisPuan((once) => ({ ...once, [ad]: puan })),
                       kilitli: manuelKaydet.isPending,
                     }
                   : undefined
@@ -229,8 +214,8 @@ export function TopluAtama({ dil }: { dil: Dil }) {
                 <button
                   type="button"
                   className={DUGME_ANA}
-                  disabled={secimsiz > 0 || manuelKaydet.isPending}
-                  onClick={() => manuelKaydet.mutate({ id: acik.id, secimler: secim, servis_puanlari: puanDegisti ? servisPuan : undefined })}
+                  disabled={manuelKaydet.isPending}
+                  onClick={() => manuelKaydet.mutate({ id: acik.id, secimler: secim })}
                 >
                   <Check aria-hidden className="size-3.5" />
                   {u.manuelKaydet}
@@ -241,7 +226,7 @@ export function TopluAtama({ dil }: { dil: Dil }) {
         </Panel>
       ) : null}
 
-      {veri && !manuel ? (
+      {veri?.kaynaklar?.length ? (
         <Bolum anahtar="yonetim-util-atama-kaynak" baslik={u.kaynaklar} varsayilanAcik={veri.uyarilar.length > 0}>
           <KaynakListesi kaynaklar={veri.kaynaklar} uyarilar={veri.uyarilar} t={t} />
         </Bolum>

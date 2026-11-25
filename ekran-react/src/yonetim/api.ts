@@ -236,7 +236,7 @@ export type TemipEslesme =
     }
 /** Fark (GET /tampon/fark): canli DB kayitlarinin kartla / TAM ile eslesmeyen numaralari. */
 export type FarkTuru = Exclude<TemipDurumu, "kart">
-export type FarkSatiri = TemipMusterisi & { durum: FarkTuru; kaynak: string }
+export type FarkSatiri = TemipMusterisi & { durum: FarkTuru; kaynak: string; segment?: string | null }
 export type FarkListesi =
   | { hazir: false; neden: string }
   | {
@@ -250,7 +250,7 @@ export type FarkListesi =
       adet: number
       satirlar: FarkSatiri[]
     }
-export type FarkSiralama = "toplam" | "acik" | "musteri_no" | "unvan" | "durum" | "kart"
+export type FarkSiralama = "toplam" | "acik" | "musteri_no" | "unvan" | "segment" | "durum" | "kart"
 export type FarkSilinen = { musteri_no: string; temip_unvan: string; durum: FarkTuru; toplam: number; kim: string; zaman: string }
 export type RadarAtamaSonucu = { atanan: number; atlanan: { musteri_no: string; neden: string }[] }
 export type TopluAtamaSonucu = { atanan: number; atlanan: { musteri_no: string; neden: string }[]; kartlar: string[]; yeniden_baglanan: number; etkilenen_kart: number }
@@ -408,9 +408,16 @@ export type KriterSonucu = {
   varsayilan_kural: boolean
   /** Manuel puanlamada (2026-10-20) dokumdeki secim listesi: barem puani + kural metni. X sabit puanli satirda yok. */
   secenekler?: { puan: number; etiket: string }[]
-  /** Manuel Servis Cesitliligi: alt kriter servisleri ve puanlari (kriter puani = alinan / toplam). */
+  /** Servis Cesitliligi: servisler ve puanlari (kriter tablosunda atanir); alinan puan toplami `kurallar` baremiyle kriter puanina doner. */
   servisler?: { ad: string; puan: number }[]
+  /** Servis Cesitliligi baremi: toplam alt..ust (ust null = sinirsiz) -> puan. */
+  kurallar?: { alt: number; ust: number | null; puan: number }[]
+  /** Sozlesme alt kriterleri (Fatura 70 + Kritik Madde 15 + SLA 15): `oto` ise veriden (Urun-Tutar fatura bedeli) saglanir, degilse dokumde isaretlenir. */
+  alt_kriterler?: AltKriter[]
+  /** Kayitli dokum secimi (servis / alt kriter adlari); dokum acilinca baslangic secimi. */
+  secim?: string[]
 }
+export type AltKriter = { ad: string; puan: number; oto: boolean; saglandi: boolean; fatura_bedeli?: number | string | null }
 export type SonAtama = { kaynak: string; atayan: string; zaman: string | null } | null
 export type SkorMusterisi = {
   id: number

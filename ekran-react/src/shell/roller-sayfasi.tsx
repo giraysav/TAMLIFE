@@ -137,7 +137,7 @@ function KisiSatiri({
             </option>
           ) : null}
           {roller
-            .filter((r) => r.editable)
+            .filter((r) => r.editable || r.role === "admin") /* 2026-11-12: admin rolu de Rol Yonetimi'nden atanabilir */
             .map((r) => (
               <option key={r.role} value={r.role}>
                 {r.label}
@@ -374,7 +374,7 @@ const ROLLER = ["roller"] as const
 /** Giris yapmasi beklenen kisiyi onceden acar: kullanici adi + rol (+ istenirse Ceyrek Sunum yetkisi). Kisi ilk AD girisinde hazir gelir. */
 function KisiEkle({ roller, sunumYetki, dil, onEklendi }: { roller: Rol[]; sunumYetki?: Yetki; dil: Dil; onEklendi: (k: Kisi) => void }) {
   const t = metin(dil)
-  const duzenlenebilir = roller.filter((r) => r.editable)
+  const duzenlenebilir = roller.filter((r) => r.editable || r.role === "admin")
   const [ad, setAd] = useState("")
   const [rol, setRol] = useState("TeamMember")
   const [sunum, setSunum] = useState(false)
@@ -597,7 +597,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
     }
     return kimlik
   }
-  const sunumYetkisi = veri.permission_catalog.find((y) => y.area === "sunum")
+  const erisimYetkisi = veri.permission_catalog.find((y) => y.area === "utilizasyon")
 
   return (
     <div className="grid gap-4">
@@ -611,7 +611,7 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
       ) : null}
       <KisiEkle
         roller={veri.roles}
-        sunumYetki={sunumYetkisi}
+        sunumYetki={erisimYetkisi}
         dil={dil}
         onEklendi={(k) => setVeri((v) => v && { ...v, users: [...(v.users ?? []), k] })}
       />
@@ -724,19 +724,19 @@ export function RollerSayfasi({ dil }: { dil: Dil }) {
           <div className="flex flex-wrap items-center gap-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Presentation aria-hidden className="size-4" />
-              {s.baslik}
+              {t.utilErisimBaslik}
             </CardTitle>
-            {sunumYetkisi ? (
-              <SunumKisiSecici kisiler={kisiler} roller={veri.roles} yetki={sunumYetkisi} dil={dil} mesgul={alanBilgi.bekliyor} onDegis={(k, secili) => void kisiYetkisiKaydet(k, sunumYetkisi.id, secili)} bilgi={alanBilgi.metin} />
+            {erisimYetkisi ? (
+              <SunumKisiSecici kisiler={kisiler} roller={veri.roles} yetki={erisimYetkisi} dil={dil} mesgul={alanBilgi.bekliyor} onDegis={(k, secili) => void kisiYetkisiKaydet(k, erisimYetkisi.id, secili)} bilgi={alanBilgi.metin} />
             ) : null}
           </div>
-          <CardDescription>{s.alanAciklama}</CardDescription>
+          <CardDescription>{t.utilErisimAciklama}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
           <section className="grid content-start gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{s.kimYonetir}</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.utilErisimKim}</h3>
             {veri.permission_catalog
-              .filter((y) => y.area === "sunum")
+              .filter((y) => y.area === "utilizasyon")
               .map((y) => (
                 <div key={y.id} className="grid gap-2 rounded-lg border border-tl-yellow/60 bg-tl-yellow/10 p-3">
                   <p className="text-sm font-medium">{ad(y)}</p>

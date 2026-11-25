@@ -104,13 +104,12 @@ function AdKarti({ b, t, tetik }: { b: AdBaglantisi; t: YM; tetik: number }) {
   )
 }
 
-/** Oracle karti (REPORTDB / ONENTDB / GALAPAGOSDB): AD karti ile ayni duzen; sunucu/servis/kullanici gorunur, parola yalniz tanimli mi. */
+/** Oracle karti (REPORTDB / ONENTDB): AD karti ile ayni duzen; sunucu/servis/kullanici gorunur, parola yalniz tanimli mi. */
 function OracleKarti({ b, t, tetik }: { b: OracleBaglantisi; t: YM; tetik: number }) {
   const k = t.kurum
   const test = useTest(`/api/v1/yonetim/kurum/${encodeURIComponent(b.id)}/test`, tetik, b.state === "ready")
   const i = b.bilgiler
   const tanimli = (v: boolean) => (v ? k.tanimli : k.tanimsiz)
-  const son = b.son_parti
   const satirlar: [string, string][] = [
     [k.sunucuAdresi, i.sunucu || k.tanimsiz],
     [k.port, String(i.port)],
@@ -119,8 +118,6 @@ function OracleKarti({ b, t, tetik }: { b: OracleBaglantisi; t: YM; tetik: numbe
     [k.parola, tanimli(i.parola)],
     [k.zamanAsimi, k.saniye(i.zaman_asimi)],
     [k.istemci, i.oracle_istemci ? k.thick : k.thin],
-    [k.sorgu, i.sorgu_tamam ? k.sorguTamam : (i.sorgu_hata ?? k.tanimsiz)],
-    [k.sonCekim, son ? `#${son.id} · ${t.partiDurum[son.durum] ?? son.durum} · ${zaman(son.zaman)}` : k.cekimYok],
   ]
   return (
     <Panel baslik={b.label} sag={<Rozet ton={DURUM_TON[b.state]}>{k.durum[b.state] ?? b.state}</Rozet>}>
@@ -132,14 +129,7 @@ function OracleKarti({ b, t, tetik }: { b: OracleBaglantisi; t: YM; tetik: numbe
             {k.eksik}: <code>{b.missing.join(", ")}</code>
           </Bildirim>
         ) : null}
-        {son?.hata ? <Bildirim ton="amber">{son.hata}</Bildirim> : null}
         <Ayarlar satirlar={satirlar} />
-        {b.reportdb ? (
-          <p className="text-[0.6875rem] font-bold text-slate-500">
-            {t.kartlaraYaz(b.reportdb.kartlara_yaz)}
-            {b.reportdb.yas_dk !== null ? ` · ${t.sonVeriYasi(b.reportdb.yas_dk, b.reportdb.taze)}` : ""}
-          </p>
-        ) : null}
         <p className="text-[0.625rem] font-bold text-slate-400">{k.gizlilik}</p>
         {b.state === "ready" ? <TestAlani test={test} t={t} etiket={k.test} bekliyor={k.oracleTestEdiliyor} notu={k.oracleTestNotu} tamam={k.oracleTamam} /> : null}
       </div>

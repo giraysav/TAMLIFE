@@ -1,10 +1,10 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import type { FormEvent, ReactNode } from "react"
+import type { CSSProperties, FormEvent, ReactNode } from "react"
 import { Activity, Building2, FileText, ListChecks, Mail, Network, Pencil, Phone, Plus, Trash2 } from "lucide-react"
 import { adaGoreSirala, sayi } from "@/lib/bicim"
 import { buyukHarf } from "@/lib/buyuk-harf"
-import { ApiHata, hataMesaji, oku, yaz } from "@/lib/sorgu"
+import { ApiHata, hataMesaji, oku, sorguMetni, yaz } from "@/lib/sorgu"
 import { Cekmece } from "@/components/cekmece"
 import { Alan, Bolum, Bos, DUGME, DUGME_ANA, GIRDI, Rozet, Satir, VeriTablosu } from "@/components/sayfa-ui"
 import type { Dil } from "@/shell/metin"
@@ -18,7 +18,39 @@ import { modulYolu, useMusteriYolu } from "@/musteri/musteri-yolu"
 import { sorguAyarla } from "@/shell/rota"
 
 type Sayilar = { envanter: number; alarm: number; sikayet: number; talep: number; alarm_kapanan: number; sikayet_kapanan: number; talep_kapanan: number }
-type Matris = { basliklar: string[]; satirlar: string[][] }
+type Matris = {
+  basliklar: string[]
+  satirlar: string[][]
+  /** CI listesi ucu (GET arama/filtre, PUT kritik, PUT /lokasyon); yoksa (kartta Musteri No yok) yalniz bu matris gosterilir. */
+  adres?: string | null
+  ozet?: string
+  toplam?: number
+  /** Arama kutusunun ipucu (10'dan cok CI varsa kutu gosterilir). */
+  ara?: string
+}
+type CiKaydi = { ci: string; kritik: boolean; hucreler: string[]; lokasyon_duzeltildi?: boolean; lokasyon_ilk?: string }
+type CiListesi = {
+  basliklar: string[]
+  kayitlar: CiKaydi[]
+  /** Filtreye uyan CI sayisi (gosterilen satirlar sinirli). */
+  eslesen: number
+  ozet?: string
+  kritik_baslik: string
+  evet: string
+  hayir: string
+  duzenleyebilir: boolean
+  /** Duzenlenebilir Lokasyon adi sutununun hucre sirasi. */
+  lokasyon_sutun: number
+  lokasyon_ipucu: string
+  /** CI adi oneki kurallari (TopoMaker kural seti + "diger"), musterideki CI sayilariyla. */
+  kurallar: { onek: string; ad: string; ci: number }[]
+  kural_baslik: string
+  kural_tumu: string
+  /** Lokasyon adi onerileri. */
+  lokasyonlar: string[]
+  lok_baslik: string
+  lok_ipucu: string
+}
 export type Kart = {
   /** Kartin modulunde secilebilir segmentler (Toptan: yalniz WHOLESALE; digerleri WHOLESALE'siz). */
   segmentler?: string[]
@@ -63,9 +95,205 @@ function Girdi({ id, etiket, ad, deger, onChange, uzun = 150, tip = "text", kapa
   )
 }
 
+/**
+ * CI listesi (CI NAME cekmecesi). `adres` varsa satirlar sunucudan gelir; arama, CI adi oneki (TopoMaker kural seti) ve Lokasyon adi
+ * filtresi sunucuda, birlikte calisir. Satir basina Kritik CI (Evet/Hayir) secimi ve duzenlenebilir Lokasyon adi (TopoMaker ayni ildeki
+ * ayni adli CI'lari tek sahada cizer). `adres` yoksa (kartta Musteri No yok) karttaki sabit matris gosterilir.
+ * Renkler satir ici stil: derlenmis CSS'te olmayan siniflar yerine.
+ */
 function MatrisTablo({ baslik, m, bos }: { baslik: string; m: Matris; bos: string }) {
-  const kolonlar = m.basliklar.map((b, i) => ({ baslik: b, hucre: (s: string[]) => s[i], sinif: "whitespace-nowrap" }))
-  return <VeriTablosu baslik={baslik} kolonlar={kolonlar} satirlar={m.satirlar} bos={<Bos>{bos}</Bos>} />
+  const [ara, setAra] = useState("")
+  /** Sunucuya giden Kritik CI secimleri (ci -> yeni deger): yanit gelene kadar satir bu degerle gosterilir, secici kilitlenir. */
+  const [kritikBekleyen, setKritikBekleyen] = useState<Record<string, boolean>>({})
+  const [lokasyonBekleyen, setLokasyonBekleyen] = useState<Record<string, boolean>>({})
+  /** Secili CI adi onekleri (bos = Tumu, filtre yok). */
+  const [kurallar, setKurallar] = useState<string[]>([])
+  const [lokasyon, setLokasyon] = useState("")
+  const lokasyonId = useId()
+  const aranan = ara.trim()
+  const ciQ = useQuery({
+    queryKey: ["musteri", "kritik-ci", m.adres, aranan, kurallar.join(","), lokasyon.trim()],
+    queryFn: () => oku<CiListesi>(`${m.adres}${sorguMetni({ q: aranan, kural: kurallar.join(","), lok: lokasyon.trim() })}`),
+    enabled: !!m.adres,
+    staleTime: 60_000,
+    placeholderData: (onceki) => onceki,
+  })
+  const adres = m.adres
+  if (!adres) {
+    const kolonlar = m.basliklar.map((b, i) => ({ baslik: b, hucre: (s: string[]) => s[i], sinif: "whitespace-nowrap" }))
+    return <VeriTablosu baslik={baslik} kolonlar={kolonlar} satirlar={m.satirlar} bos={<Bos>{bos}</Bos>} />
+  }
+  const veri = ciQ.data
+  const kayitlar = veri?.kayitlar ?? []
+  const cizgi: CSSProperties = { borderTop: "1px solid #eef2f6" }
+  const kritikSec = async (ci: string, kritik: boolean) => {
+    setKritikBekleyen((o) => ({ ...o, [ci]: kritik }))
+    try {
+      await yaz("PUT", adres, { ci, kritik })
+      await ciQ.refetch()
+    } catch (h) {
+      window.alert(hataMesaji(h, "!"))
+    } finally {
+      setKritikBekleyen((o) => {
+        const y = { ...o }
+        delete y[ci]
+        return y
+      })
+    }
+  }
+  /** Lokasyon adi duzeltmesi (bos = envanterdeki ad); deger degismediyse istek gitmez. */
+  const lokasyonKaydet = async (k: CiKaydi, yeni: string, eski: string) => {
+    const ad = yeni.trim()
+    if (ad === String(eski ?? "").trim()) return
+    setLokasyonBekleyen((o) => ({ ...o, [k.ci]: true }))
+    try {
+      await yaz("PUT", `${adres}/lokasyon`, { ci: k.ci, lokasyon: ad })
+      await ciQ.refetch()
+    } catch (h) {
+      window.alert(hataMesaji(h, "!"))
+    } finally {
+      setLokasyonBekleyen((o) => {
+        const y = { ...o }
+        delete y[k.ci]
+        return y
+      })
+    }
+  }
+  return (
+    <div className="grid gap-2">
+      {(veri?.ozet ?? m.ozet) ? <p className="text-sm font-bold text-slate-700">{veri?.ozet ?? m.ozet}</p> : null}
+      {(m.toplam ?? 0) > 10 ? (
+        <input
+          type="search"
+          value={ara}
+          onChange={(e) => setAra(e.target.value)}
+          placeholder={m.ara || ""}
+          aria-label={m.ara || ""}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+        />
+      ) : null}
+      {veri && (veri.kurallar ?? []).length > 1 ? (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={veri.kural_baslik}>
+          <span className="text-xs font-black text-tl-navy">{veri.kural_baslik}</span>
+          <label
+            className="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold"
+            style={kurallar.length === 0 ? { borderColor: "#003DA5", background: "#EEF4FF", color: "#003DA5" } : { borderColor: "#CBD5E1", color: "#64748B" }}
+          >
+            <input type="checkbox" checked={kurallar.length === 0} onChange={() => setKurallar([])} />
+            {veri.kural_tumu}
+          </label>
+          {...veri.kurallar.map((k) => {
+            const secili = kurallar.includes(k.onek)
+            return (
+              <label
+                key={k.onek}
+                title={k.onek === "diger" ? undefined : `${k.onek}*`}
+                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold"
+                style={secili ? { borderColor: "#003DA5", background: "#EEF4FF", color: "#003DA5" } : { borderColor: "#CBD5E1", color: "#64748B" }}
+              >
+                <input type="checkbox" checked={secili} onChange={() => setKurallar((o) => (o.includes(k.onek) ? o.filter((x) => x !== k.onek) : [...o, k.onek]))} />
+                {`${k.ad} (${k.ci})`}
+              </label>
+            )
+          })}
+        </div>
+      ) : null}
+      {veri && ((veri.lokasyonlar ?? []).length > 0 || lokasyon) ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor={lokasyonId} className="text-xs font-black text-tl-navy">
+            {veri.lok_baslik}
+          </label>
+          <input
+            id={lokasyonId}
+            type="search"
+            list={`${lokasyonId}-l`}
+            value={lokasyon}
+            onChange={(e) => setLokasyon(e.target.value)}
+            placeholder={veri.lok_ipucu || ""}
+            maxLength={200}
+            className="rounded-lg border bg-white px-3 py-1.5 text-sm"
+            style={{
+              color: "#1E293B",
+              width: "min(100%, 28rem)",
+              borderColor: lokasyon.trim() ? "#003DA5" : "#CBD5E1",
+              background: lokasyon.trim() ? "#EEF4FF" : undefined,
+            }}
+          />
+          <datalist id={`${lokasyonId}-l`}>
+            {(veri.lokasyonlar ?? []).map((ad) => (
+              <option key={ad} value={ad} />
+            ))}
+          </datalist>
+        </div>
+      ) : null}
+      {ciQ.isPending ? (
+        <p className="text-xs text-slate-500">…</p>
+      ) : !veri || kayitlar.length === 0 ? (
+        <Bos>{bos}</Bos>
+      ) : (
+        <div className="overflow-auto rounded-xl border border-slate-200" style={{ maxHeight: "calc(100vh - 270px)" }}>
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">{baslik}</caption>
+            <thead className="sticky top-0 bg-tl-navy text-white" style={{ zIndex: 1 }}>
+              <tr>
+                {[veri.kritik_baslik, ...veri.basliklar].map((b, i) => (
+                  <th key={i} scope="col" className="whitespace-nowrap px-3 py-3 font-black">
+                    {b}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {kayitlar.map((k) => {
+                const kritik = kritikBekleyen[k.ci] ?? k.kritik
+                return (
+                  <tr key={k.ci} style={kritik ? { backgroundColor: "#fef3c7" } : undefined}>
+                    <td className="whitespace-nowrap px-3 py-3" style={kritik ? { ...cizgi, boxShadow: "inset 4px 0 0 #d97706" } : cizgi}>
+                      <select
+                        value={kritik ? "1" : "0"}
+                        disabled={!veri.duzenleyebilir || k.ci in kritikBekleyen}
+                        onChange={(e) => void kritikSec(k.ci, e.target.value === "1")}
+                        aria-label={`${veri.kritik_baslik}: ${k.hucreler[0]}`}
+                        className="cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-bold"
+                        style={kritik ? { borderColor: "#d97706", color: "#92400e", fontWeight: 800 } : undefined}
+                      >
+                        <option value="1">{veri.evet}</option>
+                        <option value="0">{veri.hayir}</option>
+                      </select>
+                    </td>
+                    {...k.hucreler.map((h, i) => (
+                      <td key={i} className={`whitespace-nowrap px-3 py-3 font-bold ${kritik ? "text-amber-900" : "text-slate-700"}`} style={cizgi}>
+                        {i === veri.lokasyon_sutun && veri.duzenleyebilir ? (
+                          <input
+                            key={`${k.ci}|${h}`}
+                            defaultValue={h}
+                            maxLength={300}
+                            placeholder={k.lokasyon_ilk || ""}
+                            title={veri.lokasyon_ipucu}
+                            aria-label={`${veri.basliklar[i]}: ${k.hucreler[0]}`}
+                            disabled={k.ci in lokasyonBekleyen}
+                            onBlur={(e) => void lokasyonKaydet(k, e.target.value, h)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.currentTarget.blur()
+                            }}
+                            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-bold"
+                            style={k.lokasyon_duzeltildi ? { minWidth: "14rem", borderColor: "#003DA5", color: "#003DA5", background: "#EEF4FF" } : { minWidth: "14rem" }}
+                          />
+                        ) : (
+                          h
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {veri && veri.eslesen > kayitlar.length ? <p className="text-xs font-bold text-slate-500">{`${kayitlar.length} / ${veri.eslesen}`}</p> : null}
+    </div>
+  )
 }
 
 function Kutu({ children, ek = "" }: { children: ReactNode; ek?: string }) {
@@ -661,7 +889,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
         <button type="button" className={DUGME} aria-haspopup="dialog" onClick={() => setCiAcik(true)}>
           <ListChecks aria-hidden className="size-3.5" />
           {t.kritikCi}
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.625rem] text-slate-500">{kart.kritik_ci.satirlar.length}</span>
+          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.625rem] text-slate-500">{kart.kritik_ci.toplam ?? kart.kritik_ci.satirlar.length}</span>
         </button>
         <a href={`#/${yol}?m=${k.id}&sekme=topoloji`} className={DUGME} title={t.topoAciklama}>
           <Network aria-hidden className="size-3.5" />
@@ -698,7 +926,7 @@ export function MusteriKarti({ id, dil }: { id: number; dil: Dil }) {
       {/* Operasyon dugmesiyle acilan kayit listesi (secilen tur + acik / kapanan); acilinca sayfa uzar */}
       {secim ? <KartKayitlari key={`${secim.tur}-${secim.durum}`} dil={dil} id={k.id} tur={secim.tur} durum={secim.durum} onKapat={() => setSecim(null)} /> : null}
 
-      <Cekmece acik={ciAcik} onKapat={() => setCiAcik(false)} baslik={t.kritikCi} aciklama={k.unvan} kapatEtiketi={t.kapat} genis>
+      <Cekmece acik={ciAcik} onKapat={() => setCiAcik(false)} baslik={t.kritikCi} aciklama={k.unvan} kapatEtiketi={t.kapat} genis="ekran">
         <MatrisTablo baslik={t.kritikCi} m={kart.kritik_ci} bos={t.satirYok} />
       </Cekmece>
     </div>

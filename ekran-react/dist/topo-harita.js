@@ -125,15 +125,17 @@
           g.on("click", function (p) { var ad = p && p.name && AD[katla(p.name)]; if (ad && veri[ad]) ayar.onIl(ad); });
         }
 
+        // 2026-11-25 guvenlik: ipucu HTML olarak cizilir; veriden gelen metin (il/ilce adi, adres kaynakli) kacislanir.
+        function esc(x) { return String(x == null ? "" : x).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
         function ipucu(p) {
           var ad = p.name, v = veri[ad];
-          var s = "<b style='font-size:13px'>" + ad + "</b><br/>";
+          var s = "<b style='font-size:13px'>" + esc(ad) + "</b><br/>";
           if (!v) return s + "<span style='color:#94a3b8'>" + m.yok + "</span>";
           s += "<span style='color:#0A1628;font-weight:700'>" + v.adet.toLocaleString("tr-TR") + "</span> " + birim;
           var ilceler = agac[ad] || [];
           if (ilceler.length) {
             s += "<div style='margin-top:6px;color:#64748b;font-size:11px'>" + m.ilceler + "</div>";
-            ilceler.slice(0, 6).forEach(function (c) { s += "<div style='font-size:11px'>" + c.ilce + ": <b>" + c.ci + "</b></div>"; });
+            ilceler.slice(0, 6).forEach(function (c) { s += "<div style='font-size:11px'>" + esc(c.ilce) + ": <b>" + esc(c.ci) + "</b></div>"; });
             if (ilceler.length > 6) s += "<div style='font-size:11px;color:#94a3b8'>+" + (ilceler.length - 6) + " " + m.diger + "</div>";
           }
           if (ayar.onIl) s += "<div style='margin-top:6px;font-size:10px;color:#94a3b8'>" + m.tikla + "</div>";

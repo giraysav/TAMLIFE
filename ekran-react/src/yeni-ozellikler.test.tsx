@@ -154,7 +154,7 @@ describe("KullaniciKarti (sol alt)", () => {
     // Karttaki ad kisa kullanici adi (admin) degil personelin ad soyadi; bas harfleri de ondan turetilir.
     expect(screen.getByText("Ayşe Yılmaz")).toBeInTheDocument()
     expect(screen.getByText("AY")).toBeInTheDocument()
-    expect(screen.getByText("Admin")).toBeInTheDocument()
+    expect(screen.getByText("Sistem Yöneticisi")).toBeInTheDocument()
     fireEvent.click(dugme)
     expect(dugme).toHaveAttribute("aria-expanded", "true")
     for (const ad of ["Profil", "Geliştirme Talepleri", "Çıkış"]) expect(screen.getByRole("menuitem", { name: ad })).toBeInTheDocument()
@@ -171,10 +171,19 @@ describe("KullaniciKarti (sol alt)", () => {
     expect(screen.queryByRole("menuitem", { name: /Yönetim/ })).not.toBeInTheDocument()
   })
 
+  it("admin olmayan, Yonetim alanina erisimi verilmis rol: Yonetim kisayolu TAM Utilizasyon'a gider", () => {
+    const onGit = vi.fn()
+    const yonetim = { id: "yonetim", label: "Yönetim", description: "", ready: true, group: "admin" as const, icon: "shield", children: [] }
+    render(<KullaniciKarti kullanici={{ ...KULLANICI, username: "mudur", role: "TeamMngr", is_admin: false, navigation: [yonetim] }} dil="tr" onDil={vi.fn()} onGit={onGit} onCikis={vi.fn()} talepVar={false} />)
+    fireEvent.click(screen.getByRole("button", { name: /Hesap menüsü/ }))
+    fireEvent.click(screen.getByRole("menuitem", { name: /Yönetim/ }))
+    expect(onGit).toHaveBeenCalledWith("yonetim/utilizasyon")
+  })
+
   it("member: Yonetim kisayolu yok; Esc menuyu kapatir; dil secilir", () => {
     const onDil = vi.fn()
     render(<KullaniciKarti kullanici={{ ...KULLANICI, username: "ayse", role: "TeamMember", is_admin: false }} dil="tr" onDil={onDil} onGit={vi.fn()} onCikis={vi.fn()} talepVar={false} />)
-    expect(screen.getByText("Member")).toBeInTheDocument()
+    expect(screen.getByText("MEMBER")).toBeInTheDocument()
     const dugme = screen.getByRole("button", { name: /Hesap menüsü/ })
     fireEvent.click(dugme)
     expect(screen.queryByRole("menuitem", { name: /Yönetim/ })).not.toBeInTheDocument()
@@ -184,7 +193,7 @@ describe("KullaniciKarti (sol alt)", () => {
     fireEvent.click(dugme)
     fireEvent.keyDown(document, { key: "Escape" })
     expect(dugme).toHaveAttribute("aria-expanded", "false")
-    expect(metin("tr").rolEtiket.TeamMngr).toBe("Manager")
+    expect(metin("tr").rolEtiket.TeamMngr).toBe("MANAGER")
   })
 })
 

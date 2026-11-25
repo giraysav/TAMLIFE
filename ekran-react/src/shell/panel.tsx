@@ -324,12 +324,18 @@ export function Panel({ kullanici: oturum, dil, onDil, onCikis, onProfilDegisti 
             </div>
           ) : aktif === "profil" ? (
             <ProfilSayfasi kullanici={kullanici} dil={dil} onKaydedildi={onProfilDegisti} />
-          ) : ustId === "yonetim" && kullanici.is_admin ? (
-            <YonetimSayfasi dil={dil} bolum={altId ?? ""} digerleri={digerYonetim} />
+          ) : ustId === "yonetim" && (kullanici.is_admin || kullanici.navigation.some((o) => o.id === "yonetim")) ? (
+            // 2026-11 canli: admin olmayan rol, kendisine verilen Yonetim alt bolumlerini (orn. TAM Utilizasyon) acar
+            <YonetimSayfasi
+              dil={dil}
+              bolum={altId ?? ""}
+              digerleri={digerYonetim}
+              izinli={kullanici.is_admin ? undefined : (kullanici.navigation.find((o) => o.id === "yonetim")?.children ?? []).map((o) => o.id.split("/")[1])}
+            />
           ) : aktif === "musteri" || aktif === "baglantili" || aktif === "toptan" ? (
             <MusteriSayfasi key={aktif} dil={dil} yazabilir /* 2026-10-20: herkes gorur; yazma karta / alana gore sunucuda (erisim, duzenlenebilir, ekleyebilir) */ yol={aktif} />
           ) : aktif === "onedesk" ? (
-            <OnedeskSayfasi dil={dil} admin={kullanici.is_admin} />
+            <OnedeskSayfasi dil={dil} />
           ) : aktif === "takvim" ? (
             <IzinTakvim dil={dil} />
           ) : aktif === "takvim_ozet" ? (

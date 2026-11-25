@@ -27,14 +27,6 @@ export type Rca = {
 }
 export type YzDurum = { saglayici: string; hazir: boolean; model: string | null; eksik: string[] }
 export type Oneriler = { yil: number; kapsanan: number; gruplar: { kok_sebep: string; adet: number; oran: number; oneriler: string[] }[]; yz: YzDurum }
-export type Parti = { id: number; kaynak: string; etiket: string; satir: number; zaman: string | null; sutunlar: string[] }
-export type Kaynak = {
-  kayit: number
-  son_kayit: string | null
-  canli_baglanti: { yuva: string; yapilandirildi: boolean; acik: boolean }
-  partiler: Parti[]
-}
-export type AktarSonuc = { parti: number; eklenen: number; guncellenen: number; atlanan: number; musteri_eslesmeyen: number; etkilenen_musteri: number; sutunlar: Record<string, string | null> }
 
 export const TUR_RENK: Record<Tur, string> = { alarm: "#e11d48", talep: "#0055a5", sikayet: "#f59e0b" }
 

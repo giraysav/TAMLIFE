@@ -265,7 +265,7 @@ beforeEach(() => {
 })
 
 describe("Veri Girisi kaynaklari", () => {
-  it("yalniz hazir Oracle kaynaginda baglanti testi var; sonuc ve ReportDB durumu gorunur", async () => {
+  it("yalniz hazir Oracle kaynaginda baglanti testi var; sonuc gorunur (ReportDB 'Kartlara yaz' gostergesi kalkti)", async () => {
     const t = ym("tr")
     const kaynak = { neden: "", eksik: [], parti_sayisi: 0, son: null }
     const cagrilar = sahteSunucu({
@@ -279,7 +279,7 @@ describe("Veri Girisi kaynaklari", () => {
     sarmala(<Kaynaklar dil="tr" />)
     const dugmeler = await screen.findAllByRole("button", { name: t.baglantiTesti })
     expect(dugmeler).toHaveLength(1)
-    expect(screen.getByText(t.kartlaraYaz(false) + " · " + t.sonVeriYasi(3.5, true))).toBeTruthy()
+    expect(screen.queryByText(/Kartlara yaz/)).toBeNull()
     fireEvent.click(dugmeler[0])
     expect(await screen.findByText(/ORA-12541: \*\*\* — Dinleyiciye/)).toBeTruthy()
     expect(cagrilar.some((c) => c === "POST /api/v1/tampon/kaynaklar/oracle_reportdb/test")).toBe(true)
@@ -408,30 +408,33 @@ describe("Kurum Baglantilari", () => {
           AD,
           { ...ORACLE, id: "oracle_reportdb", label: "REPORTDB", state: "ready", acma_anahtari: "ORACLE_REPORTDB_ENABLED",
             son_parti: { id: 7, durum: "ready", satir: 120, zaman: null, hata: "" }, reportdb: { kartlara_yaz: true, kural: 2, yas_dk: 4, taze: true, tazelik_dk: 20 } },
-          { ...ORACLE, id: "oracle_galapagos", label: "GALAPAGOSDB", state: "disabled", acma_anahtari: "GALAPAGOSDB_DB_ENABLED",
+          { ...ORACLE, id: "oracle_onent", label: "ONENTDB", state: "disabled", acma_anahtari: "ORACLE_ONENT_ENABLED",
             bilgiler: { ...ORACLE.bilgiler, sunucu: "", oracle_istemci: false, sorgu_tamam: false, sorgu_hata: "İçeri alma sorgusu tanımlı değil." } },
         ],
       },
     })
     sarmala(<Kurum dil="tr" />)
     expect(await screen.findByRole("heading", { name: "REPORTDB" })).toBeInTheDocument()
-    expect(screen.getByText(t.kurum.oracleNe.oracle_galapagos)).toBeInTheDocument()
-    expect(screen.getAllByText("reportdb-scan.ornek")).toHaveLength(1) // REPORTDB sunucusu acik; GALAPAGOSDB'de "tanimli degil"
-    expect(screen.getByText(t.kurum.oracleKapali("GALAPAGOSDB_DB_ENABLED"))).toBeInTheDocument()
-    expect(screen.getByText("İçeri alma sorgusu tanımlı değil.")).toBeInTheDocument()
-    expect(screen.getByText(t.kartlaraYaz(true) + " · " + t.sonVeriYasi(4, true))).toBeInTheDocument()
-    expect(screen.getByText(/^#7 · Hazır/)).toBeInTheDocument()
-    expect(screen.getAllByRole("button", { name: t.kurum.test })).toHaveLength(2) // AD + REPORTDB; kapali GALAPAGOSDB yok
+    expect(screen.getByText(t.kurum.oracleNe.oracle_onent)).toBeInTheDocument()
+    expect(screen.getAllByText("reportdb-scan.ornek")).toHaveLength(1) // REPORTDB sunucusu acik; ONENTDB'de "tanimli degil"
+    expect(screen.getByText(t.kurum.oracleKapali("ORACLE_ONENT_ENABLED"))).toBeInTheDocument()
+    // 2026-11-21/23: Oracle kartinda iceri alma sorgusu ve son cekim satiri, son parti hatasi ve 'Kartlara yaz' gostergesi yok.
+    expect(screen.queryByText("İçeri alma sorgusu tanımlı değil.")).toBeNull()
+    expect(screen.queryByText(t.kurum.sorgu)).toBeNull()
+    expect(screen.queryByText(/^#7 · /)).toBeNull()
+    expect(screen.queryByText(/Kartlara yaz/)).toBeNull()
+    expect(screen.getAllByRole("button", { name: t.kurum.test })).toHaveLength(2) // AD + REPORTDB; kapali ONENTDB yok
     fireEvent.click(screen.getByRole("button", { name: t.kurum.tumunuTest }))
     expect(await screen.findByText(t.kurum.adim.oturum)).toBeInTheDocument()
     expect(screen.getByText(/parola hatalı/)).toBeInTheDocument()
     expect(cagrilar).toContain("POST /api/v1/yonetim/kurum/oracle_reportdb/test")
     expect(cagrilar).toContain("POST /api/v1/yonetim/kurum/ad-testi")
-    expect(cagrilar.some((c) => c.includes("oracle_galapagos/test"))).toBe(false)
+    expect(cagrilar.some((c) => c.includes("oracle_onent/test"))).toBe(false)
   })
 
-  it("Yonetim sekme sirasi: Kurum Baglantilari, Veri Girisi ile Veritabani arasinda (EN de var)", () => {
-    expect(Object.keys(ym("tr").bolumler)).toEqual(["durum", "utilizasyon", "tampon", "kurum", "veritabani", "roller", "arizalar", "gunlukler"])
+  it("Yonetim bolum metinleri: Kurum Baglantilari, Veri Kaynaklari ile Veritabani arasinda (EN de var; eski tampon/gunlukler adlari duruyor)", () => {
+    expect(Object.keys(ym("tr").bolumler)).toEqual(["durum", "utilizasyon", "tampon", "veri", "kurum", "veritabani", "roller", "arizalar", "gunlukler"])
+    expect(Object.keys(ym("en").bolumAciklama)).toEqual(Object.keys(ym("tr").bolumAciklama))
     expect(ym("en").bolumler.kurum).toBe("Corporate connections")
   })
 })
@@ -557,12 +560,12 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     return screen.getAllByRole("tablist")
   }
 
-  it("bes sekme; varsayilan Canli DB ve dort veritabani alt sekmesi", async () => {
+  it("bes sekme; varsayilan Canli DB ve uc veritabani alt sekmesi (GALAPAGOSDB kalkti)", async () => {
     sahteSunucu({})
     const [ana, dbler] = await ac("#/yonetim/tampon")
     expect(within(ana).getAllByRole("tab").map((s) => s.textContent)).toEqual([y.sekme.canli, y.sekme.akis, y.sekme.import, y.sekme.eslesme, y.sekme.fark])
     expect(within(ana).getByRole("tab", { name: y.sekme.canli })).toHaveAttribute("aria-selected", "true")
-    expect(within(dbler).getAllByRole("tab").map((s) => s.textContent)).toEqual(["ReportDB", "ONEDESKDB", "ONENTDB", "GALAPAGOSDB"])
+    expect(within(dbler).getAllByRole("tab").map((s) => s.textContent)).toEqual(["ReportDB", "ONEDESKDB", "ONENTDB"])
     expect(screen.queryByText(y.importAciklama)).toBeNull()
   })
 
@@ -623,7 +626,7 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
         satir("11111111", "radar"),
         satir("22222222", "radar"),
         satir("33333333", "belirsiz", { aday_kartlar: "ORNEK-B, ORNEK-C" }),
-        satir("44444444", "kart_personelsiz", { kart_id: 7, panel_unvan: "ORNEK-D" }),
+        satir("44444444", "kart_personelsiz", { kart_id: 7, panel_unvan: "ORNEK-D", segment: "TOPTAN" }),
       ],
     }
     const govdeler: { yol: string; govde: unknown }[] = []
@@ -647,6 +650,8 @@ describe("Veri Girisi yeni duzen (2026-10-24)", () => {
     await ac("#/yonetim/tampon?sekme=fark")
     expect(await screen.findByText(f.toplamKayit("12", "20"))).toBeInTheDocument()
     expect(screen.getByText("ORNEK-B, ORNEK-C")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: f.sirala(f.segment) })).toBeInTheDocument() // Segment sutunu siralanir
+    expect(screen.getByText("TOPTAN")).toBeInTheDocument()
     expect(screen.getByRole("checkbox", { name: f.sec("33333333") })).toBeInTheDocument()  // her satir secilir (silme icin)
     const ata = screen.getByRole("button", { name: f.topluAta })
     expect(ata).toBeDisabled()

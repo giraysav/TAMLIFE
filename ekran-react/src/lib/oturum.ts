@@ -53,7 +53,7 @@ const OLAYLAR = ["pointerdown", "keydown", "scroll"] as const
 
 class OturumYok extends Error {}
 
-export type GirisSonucu = "ok" | "red" | "kilit" | "ag"
+export type GirisSonucu = "ok" | "red" | "kilit" | "ag" | "yetki"
 
 export function useOturum() {
   const [durum, setDurum] = useState<OturumDurumu>("yukleniyor")
@@ -136,6 +136,7 @@ export function useOturum() {
           body: JSON.stringify({ username: ad.trim(), password: parola }),
         })
         if (cevap.status === 429) return "kilit"
+        if (cevap.status === 403) return "yetki"  // AD dogru ama panelde rolu yok (2026-11-18)
         if (!cevap.ok) return "red"
         hareketKaydet()
         return (await yukle()) ? "ok" : "red"
