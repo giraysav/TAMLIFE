@@ -11,6 +11,10 @@ Kural:
   TAM Radar'a duser (radar.servis). Kart numarasi degisince her turda yeniden baglanir.
 - Kipler: 'tam' (baslangictan bugune ay ay; ilk yukleme, dakikalar surer), 'artimli' (her 30 dk: son 1 gunde kapananlar + acik
   goruntu + goruntuden dusen aciklarin kapanisi IDENTIFIER ile), 'mutabakat' (son N gun yeniden; gece).
+- Toptan (2026-11-25 kullanici: "toptan segment olan Newroz Telecom ... kaydi filtrede cikmadi; toptan segmentleri panelde Toptan
+  modulune ata"): toptan alarmlari BACKBONE vb. domainde, Musteri No'suz ve ticketsiz gelir. Ikinci kapsam: CI adi (NODE1) panel
+  envanterindeki bir toptan CI'ina esitse (ONENT CRM_MUSTERI_SEGMENT = TOPTAN ya da NCE_DEVRE_TIPI = WHOLESALE, ya da karti Toptan
+  modulunde) domain / Musteri No aranmadan alinir; Musteri No CI'in kartindan gelir, kayit kartin moduline (Toptan) duser.
 - Kapali kayit yeniden acilmaz (anlik goruntu VIEW_REPORT_ACTIVE'den geri kalabilir). Kisisel veri alinmaz: kapatan kullanici
   yalniz atm / Auto-Clear / operator olarak yazilir.
 """
@@ -28,7 +32,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app import musteri_alani
-from app.models import AppSetting, Customer, OnedeskRecord
+from app.models import AppSetting, Customer, CustomerCi, OnedeskRecord
 from app.onedesk.sayac import TR_SAATI, sayaclari_yenile, tarih_oku
 from app.ortak import simdi
 from app.tampon import oracle, reportdb
@@ -55,6 +59,9 @@ _KOSUL = (
     "REPLACE(NETWORK, '\"', '') IN ('NOC DESTECH') AND REGEXP_LIKE(INFORMATION1, '^[0-9]{8}$') "
     "AND (INSTR(LOWER(MANAGEDOBJECT), 'nw_li_cust') > 0 OR INSTR(LOWER(NODE1), 'nw_li_cust') > 0)"
 )
+TOPTAN_PARCA = 5_000  # tek sorgudaki toptan CI adi (alt sorgu satiri; IN listesindeki 1000 sinirina tabi degil)
+AZAMI_TOPTAN_CI = 20_000  # tek sorgu ~1,2 MB'i asmasin (2026-11-25: 1.472 toptan CI; ustu alinmaz)
+SORGU_UZUNLUGU = 1_500_000  # kodun urettigi TEMIP sorgusu (toptan CI listesi) icin oracle.sorgu_temizle siniri
 KIPLER = ("tam", "artimli", "mutabakat", "katalogdan")
 _CI_ADI = re.compile(r"CIName:\s*(\S+)")
 _TICKET = re.compile(r"^[0-9]+")
@@ -98,24 +105,58 @@ def _kolonlar(acik: bool) -> str:
     )
 
 
-def acik_sorgusu(bas: date) -> str:
-    return f"SELECT {_kolonlar(True)} FROM TEMIP.ACTIVEALARMS_5DK WHERE EVENTTIME >= {_tarih(bas)} AND {_KOSUL}"
+_CI_ADI_GECERLI = re.compile(r"^[^\x00-\x1f\x7f]{3,200}$")  # sorguya sabit olarak giren CI adi: kontrol karakteri yok; tirnak kacirilir
 
 
-def kapali_sorgusu(alt: str, ust: str) -> str:
+def toptan_kosulu(adlar: list[str]) -> str:
+    """CI adi (NODE1, kucuk harf) listesi -> Oracle kosulu. Adlar panel envanterinden gelir; yine de yalniz guvenli karakterler."""
+    temiz = [a for a in adlar if _CI_ADI_GECERLI.match(a)]
+    if not temiz:
+        raise reportdb.ReportdbHata("Geçersiz toptan CI listesi.")
+    # Alt sorgu (DUAL satirlari): Oracle hash join ile eslestirir. Duz IN listesi her satirda tek tek karsilastiriyordu (2026-11-25:
+    # 1.472 ad, 30 gun 2 x ~185 sn); alt sorgu ayrica IN'in 1000 oge sinirina tabi degil.
+    satirlar = " UNION ALL ".join("SELECT '" + a.replace("'", "''") + "' FROM DUAL" for a in temiz)
+    return f"LOWER(NODE1) IN ({satirlar})"
+
+
+def kosullar(toptan: dict[str, str] | None = None) -> list[str]:
+    """Kapsam sorgulari: kurumsal kosul + toptan CI adlari (TOPTAN_PARCA'lik parcalar) ayri sorgu. 2026-11-25 olcum: kurumsal kosulla
+    tek sorguda OR ile birlestirmek Oracle planini bozuyor (1 gun 82 sn, 30 gun 20 dk+)."""
+    adlar = sorted(a for a in (toptan or {}) if _CI_ADI_GECERLI.match(a))[:AZAMI_TOPTAN_CI]
+    return [_KOSUL] + [toptan_kosulu(adlar[i : i + TOPTAN_PARCA]) for i in range(0, len(adlar), TOPTAN_PARCA)]
+
+
+def _cek_hepsi(sorgu: Any, kosul_listesi: list[str]) -> list[dict[str, Any]]:
+    """sorgu(kosul) -> SQL; her kosul icin ceker, IDENTIFIER tekil (ayni alarm iki kapsama girerse bir kez)."""
+    sonuc: dict[str, dict[str, Any]] = {}
+    for k in kosul_listesi:
+        for s in _cek(sorgu(k)):
+            sonuc.setdefault(str(s.get("KIMLIK")), s)
+    return list(sonuc.values())
+
+
+def acik_sorgusu(bas: date, kosul: str = _KOSUL) -> str:
+    return f"SELECT {_kolonlar(True)} FROM TEMIP.ACTIVEALARMS_5DK WHERE EVENTTIME >= {_tarih(bas)} AND {kosul}"
+
+
+def kapali_sorgusu(alt: str, ust: str, kosul: str = _KOSUL) -> str:
     """alt / ust: koddan uretilmis Oracle ifadesi (_tarih ya da SYSDATE aritmetigi). EVENTTIME iki yonlu sinirli (bolum budama)."""
-    return f"SELECT {_kolonlar(False)} FROM TEMIP.VIEW_REPORT_ACTIVE WHERE EVENTTIME >= {alt} AND EVENTTIME < {ust} AND {_KOSUL}"
+    return f"SELECT {_kolonlar(False)} FROM TEMIP.VIEW_REPORT_ACTIVE WHERE EVENTTIME >= {alt} AND EVENTTIME < {ust} AND {kosul}"
 
 
 def kimlik_sorgusu(kimlikler: list[str], alt: datetime, ust: datetime) -> str:
-    """Goruntuden dusen acik alarmlarin kapanisi: IDENTIFIER ile, bilinen acilis araligina sinirli (tum bolumler taranmaz)."""
+    """Goruntuden dusen acik alarmlarin kapanisi: IDENTIFIER ile, bilinen acilis araligina sinirli (tum bolumler taranmaz). Kimlik
+    zaten panelde olan kayittir: kapsam kosulu (kurumsal / toptan) aranmaz."""
     if not kimlikler or not all(_KIMLIK.match(k) for k in kimlikler):
         raise reportdb.ReportdbHata("Geçersiz TEMIP kimlik listesi.")
-    return kapali_sorgusu(_tarih(alt), _tarih(ust)) + f" AND IDENTIFIER IN ({', '.join(kimlikler)})"
+    return kapali_sorgusu(_tarih(alt), _tarih(ust), "1 = 1") + f" AND IDENTIFIER IN ({', '.join(kimlikler)})"
+
+
+
 
 
 def _cek(sorgu: str) -> list[dict[str, Any]]:
-    akis = oracle.ayar(reportdb.KAYNAK).akis(oracle.sorgu_temizle(sorgu), SORGU_SINIRI + 1)
+    akis = oracle.ayar(reportdb.KAYNAK).akis(oracle.sorgu_temizle(sorgu, SORGU_UZUNLUGU), SORGU_SINIRI + 1)
     kolonlar = [str(k).upper() for k in next(akis)]
     satirlar = [dict(zip(kolonlar, s, strict=True)) for blok in akis for s in blok]
     if len(satirlar) > SORGU_SINIRI:
@@ -134,6 +175,29 @@ def harita(db: Session) -> dict[str, set[int]]:
     for cid, no in db.execute(select(Customer.id, Customer.customer_no)):
         for k in musteri_anahtarlari(no):
             sonuc.setdefault(k, set()).add(cid)
+    return sonuc
+
+
+@musteri_alani.tum_alanlarda
+def toptan_cileri(db: Session) -> dict[str, str]:
+    """Toptan CI adi (kucuk harf) -> Musteri No anahtari. Kaynak panel envanteri (customer_ci): ONENT segmenti TOPTAN ya da devre
+    tipi WHOLESALE olan CI'lar + Toptan modulundeki kartlarin tum CI'lari. Iki karta duzen ad (farkli Musteri No) alinmaz."""
+    from app.musteri.envanter import TOPTAN_DEVRE_TIPI, TOPTAN_SEGMENT
+
+    toptan_no = {k for (no,) in db.execute(select(Customer.customer_no).where(Customer.modul == "toptan")) for k in musteri_anahtarlari(no)}
+    sonuc: dict[str, str] = {}
+    cift: set[str] = set()
+    for ad, mno, a in db.execute(select(CustomerCi.ci_name, CustomerCi.customer_key, CustomerCi.attrs)):
+        a = a or {}
+        if not ad or not (mno in toptan_no or str(a.get("segment", "")).upper() == TOPTAN_SEGMENT
+                          or str(a.get("nce_tipi", "")).upper() == TOPTAN_DEVRE_TIPI):  # fmt: skip
+            continue
+        k = ad.strip().lower()
+        if sonuc.get(k, mno) != mno:
+            cift.add(k)
+        sonuc[k] = mno
+    for k in cift:
+        sonuc.pop(k, None)
     return sonuc
 
 
@@ -276,39 +340,44 @@ def onizle(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dict[
         raise reportdb.ReportdbHata("Kip tam, artimli ya da mutabakat olmalı.")
     bas = baslangic()
     h = harita(db)
+    toptan = toptan_cileri(db)
+    ks = kosullar(toptan)
     e = Eslesme(h, kart_bilgisi(db))
     kapali_kimlik: set[str] = set()
-    ozet: dict[str, Any] = {"kip": kip, "baslangic": bas.isoformat(), "kapali_satir": 0, "acik_satir": 0, "aylar": []}
+    ozet: dict[str, Any] = {"kip": kip, "baslangic": bas.isoformat(), "kapali_satir": 0, "acik_satir": 0, "aylar": [], "toptan_ci": len(toptan)}
 
     def kapali(satirlar: list[dict[str, Any]]) -> None:
         for s in satirlar:
-            if (a := alanlar(s, False, h)) is not None and a["external_key"] not in kapali_kimlik:
+            if (a := alanlar(s, False, h, toptan)) is not None and a["external_key"] not in kapali_kimlik:
                 kapali_kimlik.add(a["external_key"])
                 e.ekle(a["customer_no"], a["customer_label"], False, bool(a["ticket_no"]))
         ozet["kapali_satir"] += len(satirlar)
 
     if kip == "tam":
         for alt, ust in _aylar(bas, simdi().astimezone(TR_SAATI).date()):
-            satirlar = _cek(kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)"))
+            satirlar = _cek_hepsi(lambda k: kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)", k), ks)
             kapali(satirlar)
             ozet["aylar"].append({"ay": f"{alt:%Y-%m}", "satir": len(satirlar)})
     else:
         geri = ARTIMLI_GUN if kip == "artimli" else max(1, int(gun))
-        kapali(_cek(kapali_sorgusu(f"GREATEST(SYSDATE - {geri}, {_tarih(bas)})", "SYSDATE + 1")))
-    for s in _cek(acik_sorgusu(bas)):
-        if (a := alanlar(s, True, h)) is not None and a["external_key"] not in kapali_kimlik:
+        kapali(_cek_hepsi(lambda k: kapali_sorgusu(f"GREATEST(SYSDATE - {geri}, {_tarih(bas)})", "SYSDATE + 1", k), ks))
+    for s in _cek_hepsi(lambda k: acik_sorgusu(bas, k), ks):
+        if (a := alanlar(s, True, h, toptan)) is not None and a["external_key"] not in kapali_kimlik:
             e.ekle(a["customer_no"], a["customer_label"], True, bool(a["ticket_no"]))
             ozet["acik_satir"] += 1
     db.rollback()
     return {**ozet, **e.sonuc()}
 
 
-def alanlar(satir: dict[str, Any], acik: bool, h: dict[str, set[int]]) -> dict[str, Any] | None:
-    """TEMIP satiri -> onedesk_record alanlari. Kimliksiz satir None."""
+def alanlar(satir: dict[str, Any], acik: bool, h: dict[str, set[int]], toptan: dict[str, str] | None = None) -> dict[str, Any] | None:
+    """TEMIP satiri -> onedesk_record alanlari. Kimliksiz satir None. Musteri No'su 8 hane degilse (toptan alarmlari bos gelir) CI adi
+    toptan CI'ina esitse Musteri No o CI'in kartindan."""
     kimlik = _metin(satir.get("KIMLIK"), 80)
     if not _KIMLIK.match(kimlik):
         return None
     mno = _metin(satir.get("MNO"), 20)
+    if toptan and not re.fullmatch(r"\d{8}", mno):
+        mno = toptan.get(_metin(satir.get("CI"), 200).lower()) or mno
     acilis = tarih_oku(satir.get("ACILIS")) or simdi()
     kapanis = None if acik else (tarih_oku(satir.get("KAPANIS")) or acilis)
     return {
@@ -388,7 +457,7 @@ def dusen_acik_kayitlar(db: Session, acik_kimlikler: set[str]) -> list[tuple[str
     ]
 
 
-def kapanislari_cek(dusenler: list[tuple[str, datetime]], h: dict[str, set[int]]) -> list[dict[str, Any]]:
+def kapanislari_cek(dusenler: list[tuple[str, datetime]], h: dict[str, set[int]], toptan: dict[str, str] | None = None) -> list[dict[str, Any]]:
     """Dusen aciklarin kapali satirlarini VIEW_REPORT_ACTIVE'den IDENTIFIER ile ceker. 2026-11-23 hizlandirma: acilislar gune gore
     kumelenir (ardisik acilis arasi KUME_BOSLUK_GUN'den fazlaysa yeni kume) ve her kume kendi araligiyla (+- 1 gun) sorgulanir; eskiden
     Haziran-Kasim'a yayilan ~80 kimlik tek aralikla tum bolumleri tarayip turu ~7 dk surduruyordu."""
@@ -398,7 +467,7 @@ def kapanislari_cek(dusenler: list[tuple[str, datetime]], h: dict[str, set[int]]
     def sorgula() -> None:
         alt, ust = _tr(kume[0][1]) - timedelta(days=1), _tr(kume[-1][1]) + timedelta(days=1)
         for s in _cek(kimlik_sorgusu([k for k, _ in kume], alt, ust)):
-            if (a := alanlar(s, False, h)) is not None:
+            if (a := alanlar(s, False, h, toptan)) is not None:
                 sonuc.append(a)
 
     for k, a in sorted(dusenler, key=lambda x: x[1]):
@@ -547,8 +616,11 @@ def calistir(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dic
         raise reportdb.ReportdbHata("Kip tam, artimli, mutabakat ya da katalogdan olmalı.")
     bas = baslangic()
     h = harita(db)
+    toptan = toptan_cileri(db)
+    ks = kosullar(toptan)
     etkilenen: set[int] = set()
-    ozet: dict[str, Any] = {"kip": kip, "baslangic": bas.isoformat(), "eklenen": 0, "guncellenen": 0, "atlanan": 0, "kapanan_sorgu": 0}
+    ozet: dict[str, Any] = {"kip": kip, "baslangic": bas.isoformat(), "eklenen": 0, "guncellenen": 0, "atlanan": 0, "kapanan_sorgu": 0,
+                            "toptan_ci": len(toptan)}  # fmt: skip
 
     def topla(s: dict[str, int]) -> None:
         for k in ("eklenen", "guncellenen", "atlanan"):
@@ -562,27 +634,27 @@ def calistir(db: Session, kip: str = "artimli", gun: int = MUTABAKAT_GUN) -> dic
             topla(yaz(db, (a for x in parca if (a := alanlar(x, False, h))), etkilenen, parca_commit=True))
             n += len(parca)
         ozet["katalog_satir"] = n
-        satirlar = _cek(kapali_sorgusu(f"GREATEST(SYSDATE - {ARTIMLI_GUN}, {alt_sinir})", "SYSDATE + 1"))
-        topla(yaz(db, (a for x in satirlar if (a := alanlar(x, False, h))), etkilenen, parca_commit=True))
+        satirlar = _cek_hepsi(lambda k: kapali_sorgusu(f"GREATEST(SYSDATE - {ARTIMLI_GUN}, {alt_sinir})", "SYSDATE + 1", k), ks)
+        topla(yaz(db, (a for x in satirlar if (a := alanlar(x, False, h, toptan))), etkilenen, parca_commit=True))
         ozet["kapali_satir"] = len(satirlar)
     elif kip == "tam":
         for alt, ust in _aylar(bas, simdi().astimezone(TR_SAATI).date()):
-            satirlar = _cek(kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)"))
-            topla(yaz(db, (a for s in satirlar if (a := alanlar(s, False, h))), etkilenen, parca_commit=True))
+            satirlar = _cek_hepsi(lambda k: kapali_sorgusu(_tarih(alt), f"LEAST({_tarih(ust)}, SYSDATE + 1)", k), ks)
+            topla(yaz(db, (a for s in satirlar if (a := alanlar(s, False, h, toptan))), etkilenen, parca_commit=True))
             ozet.setdefault("aylar", []).append({"ay": f"{alt:%Y-%m}", "satir": len(satirlar)})
     else:
         geri = ARTIMLI_GUN if kip == "artimli" else max(1, int(gun))
-        satirlar = _cek(kapali_sorgusu(f"GREATEST(SYSDATE - {geri}, {alt_sinir})", "SYSDATE + 1"))
-        topla(yaz(db, (a for s in satirlar if (a := alanlar(s, False, h))), etkilenen, parca_commit=True))
+        satirlar = _cek_hepsi(lambda k: kapali_sorgusu(f"GREATEST(SYSDATE - {geri}, {alt_sinir})", "SYSDATE + 1", k), ks)
+        topla(yaz(db, (a for s in satirlar if (a := alanlar(s, False, h, toptan))), etkilenen, parca_commit=True))
         ozet["kapali_satir"] = len(satirlar)
-    acik = [a for s in _cek(acik_sorgusu(bas)) if (a := alanlar(s, True, h))]
+    acik = [a for s in _cek_hepsi(lambda k: acik_sorgusu(bas, k), ks) if (a := alanlar(s, True, h, toptan))]
     topla(yaz(db, acik, etkilenen, parca_commit=True))
     ozet["acik_satir"] = len(acik)
     dusenler = dusen_acik_kayitlar(db, {a["external_key"] for a in acik})
     # Bir kez aranip kapanisi bulunamayanlar artimli turlarda yeniden aranmaz; gunluk mutabakat / tam hepsini arar.
     onceki = _bulunamayanlar(db)
     aranacak = [d for d in dusenler if d[0] not in onceki] if kip == "artimli" else dusenler
-    kapananlar = kapanislari_cek(aranacak, h) if aranacak else []
+    kapananlar = kapanislari_cek(aranacak, h, toptan) if aranacak else []
     ozet["kapanan_sorgu"] = len(kapananlar)
     topla(yaz(db, kapananlar, etkilenen, parca_commit=True))
     bulunan = {a["external_key"] for a in kapananlar}

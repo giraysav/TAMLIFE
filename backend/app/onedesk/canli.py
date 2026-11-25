@@ -6,7 +6,8 @@ Kural (TEMIP alarm aktarimiyla ayni: tampon/temip_kayit):
   ve Musteri Radar'a atanan Musteri No'lar (OneDesk tum Turkcell kayitlarini tutar; diger kartsiz numara cekilmez). Radar numarasinin
   kayitlari kartsiz kalir (Kayit Takibi'ne / kart sayaclarina girmez; yalniz Radar listesi ve analizi; 2026-11-23 kullanici karari A).
   Numara Radar'dan cikarsa kayitlari gunluk mutabakatta silinir; karta eklenirse sonraki turda o karta baglanir.
-- Eski sistem T_SOL_INCIDENT_TICKETS: TICKETTYPEID 1, TICKETSUBTYPEID 1 = sikayet, 2 = talep (3 = alarm; alarm ReportDB'den gelir).
+- Eski sistem T_SOL_INCIDENT_TICKETS: TICKETTYPEID 1 = kurumsal, 2 = toptan (2026-11-25 kullanici: "toptan segmentleri Toptan
+  modulune ata"; musteri tipi TOPTAN; ornek Newroz 10136427034); TICKETSUBTYPEID 1 = sikayet, 2 = talep (3 = alarm; ReportDB'den gelir).
   Yeni sistem T_OCT_CORPORATE_MAIN: TICKETTYPE_DESC Sikayet / Talep (tarih alanlari bos: acilis / kapanis icin UPDATEUSERTIME).
 - Durum: CLOSE / Kapatildi ve SOLUTION / Cozuldu (cozum verildi, musteri onayi bekleniyor; 2026-11-23 karari) = kapali, kapanis
   CLOSEDATE yoksa SOLUTIONDATE (yeniden acilirsa sonraki turda acik olur); CANCEL / REJECT / Reddedildi = sayilmaz (panelde varsa
@@ -62,7 +63,7 @@ _ESKI_KOLON = (
 )
 _ESKI = (
     f'SELECT {_ESKI_KOLON} FROM elysion_customdata_fix."T_SOL_INCIDENT_TICKETS" '
-    'WHERE "TICKETTYPEID" = 1 AND "TICKETSUBTYPEID" IN (1, 2) AND "CREATEDDATE" >= %(bas)s '
+    'WHERE "TICKETTYPEID" IN (1, 2) AND "TICKETSUBTYPEID" IN (1, 2) AND "CREATEDDATE" >= %(bas)s '
     "AND LTRIM(\"CUSTOMERNO\"::text, '0') = ANY(%(nolar)s)"
 )
 # artimli: kapanmamislar + son N gunde kapananlar + panelde acik gorunenler (kapanmis / iptal olmus olabilir)

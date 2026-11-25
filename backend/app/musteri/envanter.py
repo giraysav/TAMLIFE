@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy import delete, func, insert, select
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.dil import m
 from app.models import AppSetting, Customer, CustomerCi, CustomerCiFlag
 from app.ortak import simdi
@@ -59,7 +60,14 @@ OZELLIKLER = (
     ("KARSI_UC_DEVRE_NO", "karsi_devre"),
     ("ANA_HAT_SERVICE_ID", "ana_hat"),
     ("YEDEK_HAT_SERVICE_ID", "yedek_hat"),
+    # Toptan (2026-11-25 kullanici: "CRM_MUSTERI_SEGMENT = TOPTAN, NCE_DEVRE_TIPI = WHOLESALE"): Musteri No'suz toptan alarmlari CI
+    # adiyla karta baglanir (tampon/temip_kayit.toptan_cileri).
+    ("CRM_MUSTERI_SEGMENT", "segment"),
+    ("NCE_DEVRE_TIPI", "nce_tipi"),
 )
+TOPTAN_SEGMENT = "TOPTAN"
+SEGMENT_AYARI = "musteri.onent_segment"  # {Musteri No anahtari: CRM_MUSTERI_SEGMENT}: Fark listesinde kartsiz numaranin segmenti
+TOPTAN_DEVRE_TIPI = "WHOLESALE"
 DURUMLAR = {
     "ACTIVE": ("Aktif", "Active"), "INACTIVE": ("Pasif", "Inactive"), "CANCELLED": ("İptal", "Cancelled"),
     "REMOVED": ("Kaldırıldı", "Removed"), "PLANNED": ("Planlandı", "Planned"), "SUSPEND": ("Askıda", "Suspended"),
@@ -69,6 +77,12 @@ SIRA = {"ACTIVE": 0, "SUSPEND": 1, "PLANNED": 2, "INACTIVE": 3, "CANCELLED": 4, 
 _CI_SORGU = (
     'SELECT DISTINCT "CI_NO", "CI_NAME", "SERVICE_NAME", "CI_STATUS_NAME", "CLASS_ITEM_VALUE" '
     'FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" WHERE "CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_NO\' AND "CLASS_ITEM_VALUE" = ANY(%s)'
+)
+# Kayitlardaki (alarm / sikayet / talep) Musteri No'larin segmenti: numaranin CI'larinda en sik CRM_MUSTERI_SEGMENT
+_SEGMENT_SORGU = (
+    'SELECT m."CLASS_ITEM_VALUE", s."CLASS_ITEM_VALUE", COUNT(DISTINCT m."CI_NO") FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" m '
+    'JOIN "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" s ON s."CI_NO" = m."CI_NO" AND s."CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_SEGMENT\' '
+    'WHERE m."CI_CLASS_SPEC_NAME" = \'CRM_MUSTERI_NO\' AND m."CLASS_ITEM_VALUE" = ANY(%s) GROUP BY 1, 2'
 )
 _OZELLIK_SORGU = (
     'SELECT "CI_NO", "CI_CLASS_SPEC_NAME", "CLASS_ITEM_VALUE" FROM "NEMS_CMDB"."MTRL_CI_ATTRIBUTE_INFO" '
@@ -108,13 +122,40 @@ def gerekli_mi(db: Session) -> bool:
 
 
 # --- Cekim (isci) ----------------------------------------------------------------------------------------------------------------
+@musteri_alani.tum_alanlarda  # 2026-11-25: Toptan / Baglantili kartlari da (isci varsayilan alani 'musteri'; Newroz CI'lari gelmiyordu)
 def _panel_numaralari(db: Session) -> list[str]:
-    """Kartlardaki Musteri No'lar: hem yazildigi hali hem bastaki sifirsiz anahtari (ONENT degeri ikisinden biri olabilir)."""
+    """Kartlardaki Musteri No'lar (tum moduller): hem yazildigi hali hem bastaki sifirsiz anahtari (ONENT degeri ikisinden biri olabilir)."""
     sonuc: set[str] = set()
     for (no,) in db.execute(select(Customer.customer_no).where(Customer.customer_no.is_not(None))):
         for k in musteri_anahtarlari(no):
             sonuc.update({k, k.zfill(8)})
     return sorted(sonuc)
+
+
+def _kayit_numaralari(db: Session) -> list[str]:
+    """Panel kayitlarindaki (TEMIP / OneDesk) Musteri No'lar; ONENT degeri bastaki sifirli ya da sifirsiz olabilir."""
+    from app.models import OnedeskRecord
+
+    sonuc: set[str] = set()
+    for (no,) in db.execute(select(OnedeskRecord.customer_no).where(OnedeskRecord.customer_no != "").distinct()):
+        if k := anahtar(no):
+            sonuc.update({k, k.zfill(8)})
+    return sorted(sonuc)
+
+
+def _segment_yaz(db: Session, sayilar: dict[str, Counter]) -> None:
+    deger = {k: c.most_common(1)[0][0] for k, c in sayilar.items() if c}
+    k = db.get(AppSetting, SEGMENT_AYARI)
+    if k is None:
+        db.add(AppSetting(key=SEGMENT_AYARI, value=deger, updated_by="isci", updated_at=simdi()))
+    else:
+        k.value, k.updated_by, k.updated_at = deger, "isci", simdi()
+
+
+def segment_haritasi(db: Session) -> dict[str, str]:
+    """{Musteri No anahtari: ONENT segmenti} (envanter turunda yazilir)."""
+    k = db.get(AppSetting, SEGMENT_AYARI)
+    return dict(k.value) if k is not None and isinstance(k.value, dict) else {}
 
 
 def yenile(db: Session) -> dict[str, Any]:
@@ -142,8 +183,15 @@ def yenile(db: Session) -> dict[str, Any]:
                 for ci_no, ad, deger in cur.fetchall():
                     if deger not in (None, ""):
                         ozellik[str(ci_no)][adlar[ad]] = " ".join(str(deger).split())[:300]
+            # 2026-11-25 kullanici: "Fark ... ham data sutununa segment alanini da ekle"
+            cur.execute(_SEGMENT_SORGU, (_kayit_numaralari(db),))
+            segmentler: dict[str, Counter] = defaultdict(Counter)
+            for mno, seg, adet in cur.fetchall():
+                if (k := anahtar(mno)) and seg:
+                    segmentler[k][" ".join(str(seg).split())[:40]] += int(adet)
         an = simdi()
         satirlar = [{**v, "attrs": ozellik.get(v["ci_no"], {}), "refreshed_at": an} for v in cis.values()]
+        _segment_yaz(db, segmentler)
         db.execute(delete(CustomerCi))
         for i in range(0, len(satirlar), 5000):
             db.execute(insert(CustomerCi), satirlar[i : i + 5000])

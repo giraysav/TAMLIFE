@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import musteri_alani
@@ -38,6 +39,7 @@ SIRALAMALAR = {
     "unvan": lambda m: normal(m["temip_unvan"] or ""),
     "durum": lambda m: m["durum"],
     "kart": lambda m: normal(m["panel_unvan"] or m["aday_kartlar"] or ""),
+    "segment": lambda m: m.get("segment") or "~",
 }
 
 
@@ -64,11 +66,18 @@ def liste(db: Session, tur: str = "", q: str = "", sayfa: int = 1, sirala: str =
         o["musteri"] += 1
         o["kayit"] += m["toplam"]
         o["acik"] += m["acik"]
+    # Segment (2026-11-25 kullanici): kartli numarada kartin segmenti, kartsizda CMDB segmenti (envanter turu yazar)
+    from app.musteri.envanter import segment_haritasi
+    from app.tampon.eslestirme import anahtar as no_anahtari
+
+    harita = segment_haritasi(db)
+    kart_seg = {cid: s or "" for cid, s in db.execute(select(Customer.id, Customer.segment))}
+    fark = [{**m, "segment": (kart_seg.get(m["kart_id"]) if m["kart_id"] else "") or harita.get(no_anahtari(m["musteri_no"]), "")} for m in fark]
     if tur in FARK_DURUMLARI:
         fark = [m for m in fark if m["durum"] == tur]
     if aranan := normal(q.strip()):  # harf / Turkce karakter farksiz (kart aramasiyla ayni)
         fark = [
-            m for m in fark if aranan in m["musteri_no"] or aranan in normal(f"{m['temip_unvan']} {m['panel_unvan']} {m['aday_kartlar']}")
+            m for m in fark if aranan in m["musteri_no"] or aranan in normal(f"{m['temip_unvan']} {m['panel_unvan']} {m['aday_kartlar']} {m['segment']}")
         ]
     if anahtar := SIRALAMALAR.get(sirala):
         azalan = yon == "azalan" if yon in ("artan", "azalan") else sirala in ("toplam", "acik")

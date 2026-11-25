@@ -174,12 +174,13 @@ def ayar(anahtar: str) -> OracleKaynak:
     return OracleKaynak(KAYNAKLAR[anahtar])
 
 
-def sorgu_temizle(sorgu: str | None) -> str:
-    """Yalniz tek SELECT / WITH. Bos ya da gecersizse OracleHata."""
+def sorgu_temizle(sorgu: str | None, azami: int = AZAMI_SORGU_UZUNLUGU) -> str:
+    """Yalniz tek SELECT / WITH. Bos ya da gecersizse OracleHata. azami: yalniz kodun urettigi sorgular icin yukseltilir (TEMIP toptan
+    CI listesi); elle girilen sorgular varsayilan sinirdadir."""
     s = (sorgu or "").strip().rstrip(";").strip()
     if not s:
         raise OracleHata("Sorgu boş.")
-    if len(s) > AZAMI_SORGU_UZUNLUGU:
+    if len(s) > azami:
         raise OracleHata("Sorgu çok uzun.")
     if not _SORGU.match(s) or ";" in s:
         raise OracleHata("Sorgu yalnız tek bir SELECT / WITH ifadesi olabilir.")

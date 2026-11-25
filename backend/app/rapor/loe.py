@@ -29,6 +29,7 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.models import AppSetting, Customer, ReportCircuit, ReportCircuitData, ReportCmdb
 from app.ortak import simdi
 from app.tampon import oracle
@@ -220,6 +221,7 @@ def _aware(z: datetime | None) -> datetime | None:
 
 
 # --- Isci adimlari -----------------------------------------------------------------------------------------------------------
+@musteri_alani.tum_alanlarda  # tum modullerin kartlari (Toptan / Baglantili dahil)
 def musteri_anahtarlari_hepsi(db: Session) -> list[str]:
     sonuc: set[str] = set()
     for no in db.scalars(select(Customer.customer_no).where(Customer.customer_no.is_not(None))):
