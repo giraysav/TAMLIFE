@@ -1,0 +1,302 @@
+ekran-react/src/shell/giris.test.tsx
+  s_35f59806ed5eb5::t_5194f015d6da12 1-37
+  s_35f59806ed5eb5::t_e290665302aaca 38-39
+ekran-react/src/yonetim/yonetim-sayfasi.tsx
+  s_35f59806ed5eb5::t_d853918d0bef73 2,4,12,16-62,66,70-71,75-76,82-84,86-88,98
+ekran-react/src/index.css
+  s_35f59806ed5eb5::t_05f600278260aa 168-320
+ekran-react/src/components/cekmece.tsx
+  s_35f59806ed5eb5::t_6cb109eccc1eab 23-24,26,31
+ekran-react/src/musteri/rapor-trafik.d.ts
+  s_35f59806ed5eb5::t_2e6d946f8aa257 1-24
+ekran-react/src/musteri/rapor-onizleme.test.tsx
+  s_35f59806ed5eb5::t_a1c62c31efd474 54
+  s_35f59806ed5eb5::t_f53a99125fc1f7 31-53,55-63
+ekran-react/src/musteri/aylik-rapor-trafik.test.tsx
+  s_35f59806ed5eb5::t_550b7aa014595e 50-51
+  s_35f59806ed5eb5::t_6fd515159fe042 1-49,52-66
+ekran-react/src/radar/radar.test.tsx
+  s_35f59806ed5eb5::t_1f4bef6d51d131 132,134,136-138
+  s_35f59806ed5eb5::t_0019f6f27def02 150
+  s_35f59806ed5eb5::t_234070defac638 123
+  s_35f59806ed5eb5::t_e3f816513452ca 25-32,38-40
+  s_35f59806ed5eb5::t_372e469888fcf4 155-159
+  s_35f59806ed5eb5::t_3aa1bf1e0ef153 72,74
+ekran-react/src/radar/radar-sayfasi.tsx
+  s_35f59806ed5eb5::t_e6603942c9e309 45-46
+  s_35f59806ed5eb5::t_d015c0d3282a98 24-27
+  s_35f59806ed5eb5::t_458323cb6f6d9e 155-172
+ekran-react/src/radar/radar-metin.ts
+  s_35f59806ed5eb5::t_eb6b61d3d5f834 8,15,17-19,22
+  s_35f59806ed5eb5::t_f62387a463f6c4 42
+  s_35f59806ed5eb5::t_eb00021a8a83fc 28
+  s_35f59806ed5eb5::t_1441598e8d7a5b 90
+  s_35f59806ed5eb5::t_dc16a2bdc3f081 76
+  s_35f59806ed5eb5::t_53f9af8c560b64 56,63,65-67,70
+ekran-react/src/radar/radar-sunum.tsx
+  s_35f59806ed5eb5::t_e4db7530199697 370-380,383-391
+  s_35f59806ed5eb5::t_ff9b9e2a23cd30 393
+  s_35f59806ed5eb5::t_4cc04130bdd2c3 45-53
+ekran-react/src/musteri/rapor-pdf.ts
+  s_35f59806ed5eb5::t_83bbe3cef6c6ee 192,199-202
+  s_35f59806ed5eb5::t_5b728290e72247 69,78-86
+ekran-react/index.html
+  s_35f59806ed5eb5::t_05028a689d958c 8-11
+ekran-react/src/musteri/ci-listesi.test.tsx
+  s_35f59806ed5eb5::t_9bad57958d742c 1-134
+ekran-react/src/yeni-ozellikler.test.tsx
+  s_35f59806ed5eb5::t_a283b236641d15 174-182
+  s_35f59806ed5eb5::t_6432becc3d2b64 157,186,196
+ekran-react/.eslintignore
+  s_35f59806ed5eb5::t_b0e04825ddc359 1-3
+ekran-react/.gitignore
+  s_35f59806ed5eb5::t_b6c515c9c73f18 11
+ekran-react/dist/assets/activity-BTkiiAPU.js
+  s_35f59806ed5eb5::t_2d8a9d3485db2b 1
+ekran-react/dist/assets/apn-sayfasi-8YsoYX2V.js
+  s_35f59806ed5eb5::t_0e4caf0daa0a51 1
+ekran-react/dist/assets/arizalar-sYuoImlp.js
+  s_35f59806ed5eb5::t_16e403d4ee35b5 1
+ekran-react/dist/assets/badge-check-Ciymqi5H.js
+  s_35f59806ed5eb5::t_59f769849ddf91 1
+ekran-react/dist/assets/calendar-range-CVXzn9MS.js
+  s_35f59806ed5eb5::t_f38cfdee22a450 1
+ekran-react/dist/assets/cekmece-B-PWnJ6m.js
+  s_35f59806ed5eb5::t_6081703f710690 1
+ekran-react/dist/assets/chevron-left-BEKJom4o.js
+  s_35f59806ed5eb5::t_375f94c95f42dc 1
+ekran-react/dist/assets/chevron-right-BoKzJK1U.js
+  s_35f59806ed5eb5::t_69c1656ba4cb78 1
+ekran-react/dist/assets/circle-x-Df9ckwdZ.js
+  s_35f59806ed5eb5::t_4a706eef5d43e3 1
+ekran-react/dist/assets/download-Ci7indNu.js
+  s_35f59806ed5eb5::t_76725cc0e6463e 1
+ekran-react/dist/assets/durum-CIb70NJB.js
+  s_35f59806ed5eb5::t_c2ac3339bcd333 1
+ekran-react/dist/assets/ekip-ozeti-C5DCsqpQ.js
+  s_35f59806ed5eb5::t_dcfb37e4d9c32b 1
+ekran-react/dist/assets/eye-CqDyrspd.js
+  s_35f59806ed5eb5::t_2abed571bcb30f 1
+ekran-react/dist/assets/file-down-DCw679MN.js
+  s_35f59806ed5eb5::t_61b097ee4c2425 1
+ekran-react/dist/assets/file-spreadsheet-D7l1v2sw.js
+  s_35f59806ed5eb5::t_b607d4da63d237 1
+ekran-react/dist/assets/gauge-Jkzfp97A.js
+  s_35f59806ed5eb5::t_89f37370cc812c 1
+ekran-react/dist/assets/gelir-metin-U2ved95b.js
+  s_35f59806ed5eb5::t_8068f58b3671d9 1
+ekran-react/dist/assets/gelir-uretim-sayfasi-B0jyf4eQ.js
+  s_35f59806ed5eb5::t_64bc2ea083cf1c 1
+ekran-react/dist/assets/grafik-Df9Lb_GO.js
+  s_35f59806ed5eb5::t_15949c2104035c 1
+ekran-react/dist/assets/gunlukler-FJLXOK5P.js
+  s_35f59806ed5eb5::t_610452044ee1b5 1-2
+ekran-react/dist/assets/hourglass-CpFOANz1.js
+  s_35f59806ed5eb5::t_61a2e948d1f6e0 1
+ekran-react/dist/assets/index-DNsvr0Fi.js
+  s_35f59806ed5eb5::t_3c417964788223 1-2,9-11,15,28,32,36,40,44-45,47,50-52
+ekran-react/dist/assets/index-prdZ3-ES.css
+  s_35f59806ed5eb5::t_065065cbf38223 2
+ekran-react/dist/assets/izin-takvim-DzgW8djo.js
+  s_35f59806ed5eb5::t_42daeac555fce8 1
+ekran-react/dist/assets/kanca-OIthRFlC.js
+  s_35f59806ed5eb5::t_ae9b362380a8b0 1
+ekran-react/dist/assets/kurum-Cl5Tf6r1.js
+  s_35f59806ed5eb5::t_c79cf89ce2ccb5 1
+ekran-react/dist/assets/lightbulb-WhcAijig.js
+  s_35f59806ed5eb5::t_d2b32bf95ad72a 1
+ekran-react/dist/assets/list-checks-CFAHPmFL.js
+  s_35f59806ed5eb5::t_858c557c72c7fe 1
+ekran-react/dist/assets/metin-ACKfVdtZ.js
+  s_35f59806ed5eb5::t_83c61247c62ef1 1-3
+ekran-react/dist/assets/musteri-metin-DPKGJVEA.js
+  s_35f59806ed5eb5::t_bb3595ed8372cd 1
+ekran-react/dist/assets/musteri-sayfasi-BGJKttat.js
+  s_35f59806ed5eb5::t_efe6b5333ea54b 1-2,4,7,9
+ekran-react/dist/assets/onedesk-sayfasi-qzkHYRNk.js
+  s_35f59806ed5eb5::t_f9d2afe9ffb973 1
+ekran-react/dist/assets/ortak-B4qwP8d7.js
+  s_35f59806ed5eb5::t_5cde65b6ee2494 1
+ekran-react/dist/assets/pencil-C8I0AsFp.js
+  s_35f59806ed5eb5::t_080227764bed40 1
+ekran-react/dist/assets/plug-zap-B-jbDuui.js
+  s_35f59806ed5eb5::t_a123e703fce961 1
+ekran-react/dist/assets/plus-C9P6BSh6.js
+  s_35f59806ed5eb5::t_a56c11d1bf0e7e 1
+ekran-react/dist/assets/proje-metin-BrNjNQ6N.js
+  s_35f59806ed5eb5::t_2ec208250120a2 1
+ekran-react/dist/assets/proje-sayfasi-CH2q6DvG.js
+  s_35f59806ed5eb5::t_0ed51aa4a985aa 1
+ekran-react/dist/assets/radar-sayfasi-D3izzxg_.js
+  s_35f59806ed5eb5::t_99ee8e026fc23c 1
+ekran-react/dist/assets/rapor-pdf-Rh6WrUkP.js
+  s_35f59806ed5eb5::t_9beba3a882d597 1
+ekran-react/dist/assets/rapor-sayfasi-C8KNxHBA.js
+  s_35f59806ed5eb5::t_0b1a518f7675dc 1
+ekran-react/dist/assets/refresh-cw-Bk3Bog03.js
+  s_35f59806ed5eb5::t_7ea6e994a18ed5 1
+ekran-react/dist/assets/roller-D7vRaRMa.js
+  s_35f59806ed5eb5::t_d4929853e0473b 1
+ekran-react/dist/assets/search-x-DjYPsAPa.js
+  s_35f59806ed5eb5::t_c5bc65d2f011bd 1
+ekran-react/dist/assets/send-id7mgMf_.js
+  s_35f59806ed5eb5::t_d0d45a4ca3f37e 1
+ekran-react/dist/assets/siren-Ckc5xmrL.js
+  s_35f59806ed5eb5::t_7fe17cc3ea0b8c 1
+ekran-react/dist/assets/sms-sayfasi-Dk_8lWG-.js
+  s_35f59806ed5eb5::t_f89268c31b24c3 1
+ekran-react/dist/assets/sorgu-DWrsqZVR.js
+  s_35f59806ed5eb5::t_3a5d45a84ab7ca 3,5
+ekran-react/dist/assets/sunum-metin-D6Yv_VXu.js
+  s_35f59806ed5eb5::t_a24afd03b5e5f2 1
+ekran-react/dist/assets/sunum-sayfasi-CeyIVE1g.js
+  s_35f59806ed5eb5::t_58c5ca42746de9 1
+ekran-react/dist/assets/takvim-grafigi-CbdHSf2V.js
+  s_35f59806ed5eb5::t_c02c5058058ad5 1
+ekran-react/dist/assets/takvim-metin-BMFNg5Mi.js
+  s_35f59806ed5eb5::t_21c02ffca6a566 1
+ekran-react/dist/assets/talep-sayfasi-CZz9CX_u.js
+  s_35f59806ed5eb5::t_1b4c97443e878e 1
+ekran-react/dist/assets/tam-takvim-MoeCUaVh.js
+  s_35f59806ed5eb5::t_e26850de29660e 1
+ekran-react/dist/assets/tampon-BVahdEbL.js
+  s_35f59806ed5eb5::t_a699b75da8c460 1
+ekran-react/dist/assets/temip-atama-DNHiK39D.js
+  s_35f59806ed5eb5::t_ffc030c92e3742 1
+ekran-react/dist/assets/triangle-alert-4JW1Rw_b.js
+  s_35f59806ed5eb5::t_58e80d1782f296 1
+ekran-react/dist/assets/undo-2-KwAbBbZL.js
+  s_35f59806ed5eb5::t_faa5abaace1c10 1
+ekran-react/dist/assets/upload-Ch9dwAF3.js
+  s_35f59806ed5eb5::t_43466f14d0698c 1
+ekran-react/dist/assets/urun-tutar-DfdUyJus.js
+  s_35f59806ed5eb5::t_4f4fb9c84b12d8 1
+ekran-react/dist/assets/useMutation-NkzmJmfd.js
+  s_35f59806ed5eb5::t_223a385c80cacc 1
+ekran-react/dist/assets/user-plus-uGGgt3Jk.js
+  s_35f59806ed5eb5::t_fbfdbfd57c5a0b 1
+ekran-react/dist/assets/utilizasyon-r4HIlCjX.js
+  s_35f59806ed5eb5::t_29264a9b474471 1-2
+ekran-react/dist/assets/veritabani-j5JJEdR8.js
+  s_35f59806ed5eb5::t_8fd606ad84c2aa 1
+ekran-react/dist/assets/video-DYcgHRTi.js
+  s_35f59806ed5eb5::t_e2c00b01b27767 1
+ekran-react/dist/assets/wallet-OxTs7nbX.js
+  s_35f59806ed5eb5::t_0f4dae442cd852 1
+ekran-react/dist/assets/yonetim-sayfasi-BDYnUQYu.js
+  s_35f59806ed5eb5::t_24fbfe2a6ffc8e 1-2
+ekran-react/dist/index.html
+  s_35f59806ed5eb5::t_1f74814a0bd515 1-19
+ekran-react/dist/topo-harita.js
+  s_35f59806ed5eb5::t_7eb11a12d26528 128-129,132,138
+ekran-react/public/echarts-6.1.0.LICENSE.txt
+  s_35f59806ed5eb5::t_c335d97c3763f2 1-228
+ekran-react/public/echarts-6.1.0.min.js
+  s_35f59806ed5eb5::t_fff4750625c4d6 1-45
+ekran-react/public/rapor-trafik.js
+  s_35f59806ed5eb5::t_50680c7dad5159 1-596
+ekran-react/public/topo-harita.js
+  s_35f59806ed5eb5::t_a64c42fd6d8dd0 1-199
+ekran-react/public/tr-iller.json
+  s_35f59806ed5eb5::t_c23e4db6298771 1
+ekran-react/public/util-puanlama.js
+  s_35f59806ed5eb5::t_c641702dfdb11e 1-344
+ekran-react/public/veri-ozeti.js
+  s_35f59806ed5eb5::t_a8769e40a11117 1-285
+ekran-react/src/components/temip-atama.tsx
+  s_35f59806ed5eb5::t_82325b903c0318 40,72
+ekran-react/src/ekip/ekip-metin.ts
+  s_35f59806ed5eb5::t_bd453aa20d6cdd 17,33
+ekran-react/src/lib/oturum.ts
+  s_35f59806ed5eb5::t_20767fa62bf635 56,139
+ekran-react/src/musteri/aylik-rapor.tsx
+  s_35f59806ed5eb5::t_e5246f9f21217c 11,209-216,512,574-580
+ekran-react/src/musteri/musteri-karti.tsx
+  s_35f59806ed5eb5::t_f72f2a3aac826e 1,3,7,21-53,98-103,105-296,892,929
+ekran-react/src/musteri/musteri-metin.ts
+  s_35f59806ed5eb5::t_8643fb51c59058 60,132,136,279,349,353
+ekran-react/src/musteri/portfoy-metin.ts
+  s_35f59806ed5eb5::t_0c6d5dbd88e1a6 23,85
+ekran-react/src/musteri/rapor-onizleme.tsx
+  s_35f59806ed5eb5::t_f8410b94bab67d 2,7-8,25-28,37-40,50-56,62,66,78-79,82,88-107,128-135,146
+ekran-react/src/onedesk/onedesk-metin.ts
+  s_35f59806ed5eb5::t_800f12a70afad9 6,9,29,57-58,72,80,83,102,130-131,145
+ekran-react/src/onedesk/onedesk-sayfasi.tsx
+  s_35f59806ed5eb5::t_b641d071c8651f 18-19,21
+ekran-react/src/panel-gorunum.test.tsx
+  s_35f59806ed5eb5::t_0324f7d9755550 177,188,282,287
+ekran-react/src/profil-yetki-musteri.test.tsx
+  s_35f59806ed5eb5::t_818d62aa5a30ac 52,90,103-104,110,114-115,122,165,183,195
+ekran-react/src/radar/radar-sunum-metin.ts
+  s_35f59806ed5eb5::t_18a6410a0df51b 18,43,64-66,96,120,140-142
+ekran-react/src/shell/giris.tsx
+  s_35f59806ed5eb5::t_16862b49fa2c85 10-19,40,44-105,107
+ekran-react/src/shell/kullanici-karti.tsx
+  s_35f59806ed5eb5::t_77a2d0ca1ce147 34-35,71,76
+ekran-react/src/shell/metin.ts
+  s_35f59806ed5eb5::t_12f71e510dbe30 24-25,56,118,141-144,207,221-222,253,315,338-340,403
+ekran-react/src/shell/panel.tsx
+  s_35f59806ed5eb5::t_06b72aaf4fd1d2 327-334,338
+ekran-react/src/shell/roller-sayfasi.tsx
+  s_35f59806ed5eb5::t_cffcff3fc4a52d 140,377,600,614,727,729-730,733,737,739
+ekran-react/src/sunum/sunum-metin.ts
+  s_35f59806ed5eb5::t_b33b7f562125ce 120,238
+ekran-react/src/sunum/sunum.test.tsx
+  s_35f59806ed5eb5::t_05b96bd5e19fce 282,287-289,294,298,305,310,315,321
+ekran-react/src/topoloji/topo-harita.d.ts
+  s_35f59806ed5eb5::t_aff0d077ef00ee 1-27
+ekran-react/src/topoloji/topo-maker.tsx
+  s_35f59806ed5eb5::t_1bdee9d57a19e0 1,7,12-25,42-54,56,202,207,216,218,276-315,325-334,347,351-394,411-518,526,530-531,571-588
+ekran-react/src/topoloji/topoloji-metin.ts
+  s_35f59806ed5eb5::t_bfd7ef41e467fd 37-61,100-124
+ekran-react/src/yonetim/api.ts
+  s_35f59806ed5eb5::t_a1d6a15dac30cf 239,253,411,413-418,420
+ekran-react/src/yonetim/bolumler/kurum.tsx
+  s_35f59806ed5eb5::t_05c25e20acbd45 107
+ekran-react/src/yonetim/bolumler/tampon.tsx
+  s_35f59806ed5eb5::t_4881c5b087af7c 35,40
+ekran-react/src/yonetim/bolumler/utilizasyon.tsx
+  s_35f59806ed5eb5::t_e1710fd5672a99 1,6,12,15-19,21-22,25,30,41-49
+ekran-react/src/yonetim/metin.ts
+  s_35f59806ed5eb5::t_09c5ff95630521 8-18,20,22,24,27,30-33,134,327-337,339,341,343,346,349-351,445
+ekran-react/src/yonetim/tampon/fark.tsx
+  s_35f59806ed5eb5::t_7206287c86d25d 281-282
+ekran-react/src/yonetim/tampon/kaynaklar.tsx
+  s_35f59806ed5eb5::t_fd21656e740b0b 2,4,25,44-45,48,57,118
+ekran-react/src/yonetim/tampon/metin.ts
+  s_35f59806ed5eb5::t_f6228e3e91047e 153,163,193,237,239,506,516,546,590,592
+ekran-react/src/yonetim/ui.tsx
+  s_35f59806ed5eb5::t_440bf7d1d55b61 1,7,86-111
+ekran-react/src/yonetim/utilizasyon.test.tsx
+  s_35f59806ed5eb5::t_00e4d978d4f7a3 103,128-129,134-140,143,146-162,166,168,175,181,183-192,259,271,281-287,294,301-302,304-308,310-377
+ekran-react/src/yonetim/utilizasyon/atama.tsx
+  s_35f59806ed5eb5::t_28bb7999f795a8 25-26,52-53,55,217-218,229
+ekran-react/src/yonetim/utilizasyon/kriterler.tsx
+  s_35f59806ed5eb5::t_d2b63fbe05cd43 3,5,7,10,47-48,57,168,211-213,221-222,239,242-259,299-314,319-320,323-337,339-346,348
+ekran-react/src/yonetim/utilizasyon/metin.ts
+  s_35f59806ed5eb5::t_d659364af84e45 7-8,79,102,110,161-162,170-177,224-225,293,315,323,373-374,382-388
+ekran-react/src/yonetim/utilizasyon/ortak.tsx
+  s_35f59806ed5eb5::t_52ebf254a99dad 5,94-95,104-114,125-128,130,153,167,231,236,240-274
+ekran-react/src/yonetim/utilizasyon/ozet.tsx
+  s_35f59806ed5eb5::t_ab55b3aadbcafd 88
+ekran-react/src/yonetim/yonetim.test.tsx
+  s_35f59806ed5eb5::t_3cd00cf0f430ee 268,282,411,418-426,432,435-437,563,568,629,653-654
+ekran-react/src/yuk-render.test.tsx
+  s_35f59806ed5eb5::t_83559fd51cd43f 127,130,141,165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7ff60de24fd712898906f5934619822aadeac1ae",
+  "prompts": {},
+  "sessions": {
+    "s_35f59806ed5eb5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c8a155aa-0cf9-488b-8eb1-7f2136ea09ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "giraysav <giray.sav@turkcell.com.tr>"
+    }
+  }
+}
