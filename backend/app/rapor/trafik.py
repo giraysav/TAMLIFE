@@ -41,7 +41,7 @@ EN_AZ_ARAMA = 3
 EN_COK_ARAMA = 200
 EN_COK_SONUC = 100
 # Arama sonucunda CINAME yaninda gosterilecek sutunlar (adinda bu parcalar gecen, dolu olanlar)
-_GOSTER = ("DESC", "ACIKLAMA", "PORT", "ORG_ADI", "SERVICE", "HIZ", "SPEED", "BANDWIDTH", "EXCHOURS", "ADRES", "ADDRESS")
+_GOSTER = ("IMT", "DESC", "ACIKLAMA", "PORT", "ORG_ADI", "SERVICE", "HIZ", "SPEED", "BANDWIDTH", "EXCHOURS", "ADRES", "ADDRESS")
 
 
 METRIKLER = ("trafik", "kayip", "jitter", "gecikme")

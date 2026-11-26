@@ -30,7 +30,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app import musteri_alani
-from app.models import AppSetting, Customer, ReportCircuit, ReportCircuitData, ReportCmdb
+from app.models import AppSetting, Customer, CustomerCi, ReportCircuit, ReportCircuitData, ReportCmdb
 from app.ortak import simdi
 from app.tampon import oracle
 from app.tampon.eslestirme import anahtar, musteri_anahtarlari
@@ -242,9 +242,23 @@ def _arama_metni(alanlar: dict[str, Any]) -> str:
     return " ".join(str(v) for v in alanlar.values() if v not in (None, "")).casefold()[:4000]
 
 
+def _imt_haritasi(db: Session, anahtarlar: list[str]) -> dict[str, str]:
+    """Envanterdeki (customer_ci.attrs['imt']) IMT: kucuk harf CI adi -> IMT. ReportDB CMDB'de IMT sutunu yok; 2026-11-26 kullanici
+    devreyi IMT ile ariyor (ornek 100005049268), bu yuzden kopyaya IMT alani olarak eklenir ve aramaya girer."""
+    harita: dict[str, str] = {}
+    for i in range(0, len(anahtarlar), 5000):
+        for ad, attrs in db.execute(select(CustomerCi.ci_name, CustomerCi.attrs).where(CustomerCi.customer_key.in_(anahtarlar[i : i + 5000]))):
+            imt = str((attrs or {}).get("imt") or "").strip()
+            if ad and imt:
+                harita.setdefault(ad.strip().lower(), imt[:40])
+    return harita
+
+
 def cmdb_yenile(db: Session) -> int:
-    """Paneldeki musteri numaralarinin CMDB satirlarini ceker ve kopyayi bastan yazar. Donus: satir sayisi."""
+    """Paneldeki musteri numaralarinin CMDB satirlarini ceker ve kopyayi bastan yazar (envanterdeki IMT 'IMT' alani olarak eklenir).
+    Donus: satir sayisi."""
     anahtarlar = musteri_anahtarlari_hepsi(db)
+    imtler = _imt_haritasi(db, anahtarlar)
     a = oracle.ayar(KAYNAK)
     yeni: list[ReportCmdb] = []
     an = simdi()
@@ -258,6 +272,8 @@ def cmdb_yenile(db: Session) -> int:
                 ci = str(alanlar.get("CINAME") or "").strip()
                 if not ci:
                     continue
+                if imt := imtler.get(ci.lower()):
+                    alanlar["IMT"] = imt
                 yeni.append(ReportCmdb(customer_key=anahtar(alanlar.get("CUSTOMERNO")), ciname=ci[:200], fields=alanlar,
                                        search_text=_arama_metni(alanlar), refreshed_at=an))  # fmt: skip
     db.execute(delete(ReportCmdb))
