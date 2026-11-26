@@ -354,6 +354,7 @@ def devre_ara(musteri_id: KimlikTipi, q: str = Query(default="", max_length=200)
 def devre_ekle(musteri_id: KimlikTipi, body: DevreGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     sonuc = _yap(db, lambda: trafik.ekle(db, e.user, musteri_id, body.ci), yaz=True)
     _denetim(e.user, "rapor.devre_ekle", f"musteri={musteri_id} ci={body.ci[:80]}")
+    trafik.olcum_tetikle()
     return sonuc
 
 
@@ -366,7 +367,10 @@ class DevreAyarGovde(BaseModel):
 @router.put("/musteri/{musteri_id:int}/rapor/devre-ayar")
 def devre_ayar(musteri_id: KimlikTipi, body: DevreAyarGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
     """Devre grafiklerinin metrikleri (trafik, paket kaybi, jitter, gecikme) ve tarih-saat araligi; musteri basina kalici."""
-    return _yap(db, lambda: trafik.ayar_yaz(db, e.user, musteri_id, body.model_dump()), yaz=True)
+    sonuc = _yap(db, lambda: trafik.ayar_yaz(db, e.user, musteri_id, body.model_dump()), yaz=True)
+    if body.bas_zaman or body.bit_zaman:
+        trafik.olcum_tetikle()  # yeni aralik baska aylari isteyebilir
+    return sonuc
 
 
 @router.delete("/musteri/{musteri_id:int}/rapor/devreler/{devre_id:int}")

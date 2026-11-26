@@ -189,6 +189,25 @@ def ara(db: Session, user: Principal, musteri_id: int, metin: str) -> dict[str, 
     return sonuc
 
 
+def olcum_tetikle() -> None:
+    """Devre eklenince / aralik degisince olcumu bir sonraki isci turunu beklemeden ceker: `app.isci rapor-devre` ayri surecte
+    (panel Oracle'a baglanmaz; katalog._ayri_baslat). Calisan tur varsa isci kilit nedeniyle atlar, veri sonraki turda gelir.
+    2026-11-26 kullanici: "IMT'yi yazinca cizmesi uzun surdu" (veri saatlik isci turunu bekliyordu)."""
+    import logging
+    import sys
+    from pathlib import Path
+
+    from app.tampon import katalog
+
+    backend = Path(__file__).resolve().parents[2]
+    gunluk = backend / "var" / "logs"
+    try:
+        gunluk.mkdir(parents=True, exist_ok=True)
+        katalog._ayri_baslat([sys.executable, "-m", "app.isci", "rapor-devre"], backend, gunluk / "isci_rapor_devre.log")
+    except Exception:  # noqa: BLE001 - tetik basarisizsa veri saatlik isci turunda gelir
+        logging.getLogger("tamlife.trafik").warning("rapor-devre tetiklenemedi", exc_info=True)
+
+
 def ekle(db: Session, user: Principal, musteri_id: int, ci: str) -> dict[str, Any]:
     musteri = musteri_yaz_getir(db, user, musteri_id)
     ci = (ci or "").strip()[:200]
