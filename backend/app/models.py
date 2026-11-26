@@ -125,6 +125,7 @@ class AuditEvent(Base):
     outcome: Mapped[str] = mapped_column(String(40))
     module_key: Mapped[str] = mapped_column(String(80), default="")
     detail: Mapped[str] = mapped_column(String(500), default="")
+    ip: Mapped[str] = mapped_column(String(64), default="")  # 2026-11-26: giris olaylarinda istemci IP'si (security.client_ip)
 
 
 class Customer(Base):

@@ -47,6 +47,7 @@ class AuditLog:
         outcome: str,
         module_key: str = "",
         detail: str = "",
+        ip: str = "",
     ) -> dict[str, str]:
         row = {
             "actor": actor[:120],
@@ -54,6 +55,7 @@ class AuditLog:
             "outcome": outcome[:40],
             "module_key": module_key[:80],
             "detail": guard(detail),
+            "ip": (ip or "")[:64],  # giris olaylarinda istemci IP'si
         }
         if self.sink is not None:
             try:

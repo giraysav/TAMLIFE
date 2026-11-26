@@ -117,12 +117,12 @@ def open_session(body: LoginBody, request: Request, response: Response, db: Sess
     name = body.username.strip()
     wait = limiter.retry_after(ip, name)
     if wait:
-        audit_log.remember(actor=name, action="login", outcome="deny", detail="locked")
+        audit_log.remember(actor=name, action="login", outcome="deny", detail="locked", ip=ip)
         return JSONResponse({"detail": "Cok fazla deneme"}, status_code=429, headers={"Retry-After": str(wait)})
     kisi, sebep = _kimlik_dogrula(db, name, body.password)
     if kisi is None:
         limiter.failed(ip, name)
-        audit_log.remember(actor=name, action="login", outcome="deny", detail=sebep)
+        audit_log.remember(actor=name, action="login", outcome="deny", detail=sebep, ip=ip)
         if str(sebep).startswith(("ad_rol_", "ad_onayladi_")):  # AD parolasi DOGRU, yalniz KTS_ yetkisi/hesap yok: 'parola hatali' algisi olmasin
             raise HTTPException(status_code=403, detail="Giris yetkiniz yok")
         raise HTTPException(status_code=401, detail="Giris reddedildi")  # sebep kullaniciya donmez (hesap varligi sizmasin)
@@ -133,7 +133,7 @@ def open_session(body: LoginBody, request: Request, response: Response, db: Sess
     except SQLAlchemyError:
         db.rollback()
     try:
-        audit_log.remember(actor=kisi.username, action="login", outcome="allow", detail=sebep)
+        audit_log.remember(actor=kisi.username, action="login", outcome="allow", detail=sebep, ip=ip)
     except SecretAuditError:
         pass
     return ok({"username": kisi.username, "role": kisi.role})

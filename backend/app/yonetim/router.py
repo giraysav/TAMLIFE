@@ -172,6 +172,18 @@ def gunluk_listesi(
     return ok(gunlukler.sorgula(db, sayfa=sayfa, adet=adet, **filtre))
 
 
+@router.get("/gunlukler/kullanicilar")
+def gunluk_kullanicilari(
+    filtre: dict[str, Any] = Depends(_filtre),
+    sayfa: int = Query(default=1, ge=1),
+    adet: int = Query(default=50, ge=1, le=200),
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Denetim olaylari kullanici agaci: kullanici basina ozet + son giris IP'si (olaylar dugum acilinca /gunlukler?kullanici=)."""
+    return ok(gunlukler.kullanicilar(db, sayfa=sayfa, adet=adet, **filtre))
+
+
 @router.get("/gunlukler.csv")
 def gunluk_csv(
     filtre: dict[str, Any] = Depends(_filtre), admin: Principal = Depends(require_admin), db: Session = Depends(get_db)
