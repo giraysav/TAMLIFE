@@ -28,7 +28,7 @@
 
   var METIN = {
     tr: {
-      trafik: "Trafik", giris: "Inbound", cikis: "Outbound", son: "son",
+      trafik: "Trafik", giris: "Inbound", cikis: "Outbound", son: "son", maks: "maks",
       cozunurluk: function (a) { return "Trafik: " + (a >= 86400 ? "günlük" : a >= 3600 ? (a / 3600) + " saatlik" : (a / 60) + " dakikalık") + " ortalama (LookOutEyes ile aynı çözünürlük)"; }, gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", veriler: "Grafikte gösterilecek veriler",
       bolum: "Devre grafikleri", ara: "IMT, açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
@@ -47,7 +47,7 @@
       ay: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
     },
     en: {
-      trafik: "Traffic", giris: "Inbound", cikis: "Outbound", son: "last",
+      trafik: "Traffic", giris: "Inbound", cikis: "Outbound", son: "last", maks: "max",
       cozunurluk: function (a) { return "Traffic: " + (a >= 86400 ? "daily" : a >= 3600 ? (a / 3600) + "-hour" : (a / 60) + "-minute") + " average (same resolution as LookOutEyes)"; }, gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "avg", enYuksek: "peak", p95: "95th", veriler: "Data shown on the chart",
       bolum: "Circuit charts", ara: "Type an IMT, description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
@@ -121,7 +121,8 @@
   // her panel tek eksen. Trafik saatlik (gunluk desen gorunsun), kalite verileri gunluk ortalama (saatlik gurultu yerine egilim).
   // Hafta sonlari hafif gri, kesintiler kirmizi bant. Renkler dataviz dogrulayicisindan gecti (panel ici ciftler, acik zemin).
   var C = {
-    giris: "#3cc43c", cikis: "#1f3fd1",  // LookOutEyes renkleri: Inbound yesil alan, Outbound mavi cizgi gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948", erisim: "#0f766e",
+    // LookOutEyes renkleri: Inbound yesil alan, Outbound mavi cizgi
+    giris: "#3cc43c", cikis: "#1f3fd1", gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948", erisim: "#0f766e",
     metin: "#0b1f3a", ikincil: "#1f2a37", soluk: "#2f3b48", izgara: "#e3e8ee", kutu: "#f4f7fa", haftaSonu: "rgba(100,116,139,0.07)",
     kesinti: "rgba(227,73,72,0.14)"
   };
@@ -196,8 +197,10 @@
       seriler.push({ name: m.cikis, type: "line", xAxisIndex: p, yAxisIndex: p, showSymbol: false, connectNulls: false, sampling: "lttb",
         data: tn.map(function (n) { return [n[0], n[2] == null ? null : n[2] / bol]; }), lineStyle: { width: 1.4, color: C.cikis }, itemStyle: { color: C.cikis } });
       lejant.push(m.giris, m.cikis);
-      if (sg) kutular.push([m.giris + " " + m.ort, bps(sg.ort, dil), m.son + " " + bps(sg.son, dil) + " · " + m.enYuksek + " " + bps(sg.en_yuksek, dil)]);
-      if (sc) kutular.push([m.cikis + " " + m.ort, bps(sc.ort, dil), m.son + " " + bps(sc.son, dil) + " · " + m.enYuksek + " " + bps(sc.en_yuksek, dil)]);
+      // alt satir LookOutEyes kisaltmasiyla, buyuk degerin birimiyle (dar kutuda kesilmesin): "maks 288 · son 18,9"
+      var kisa = function (x) { return serbest(x / bol, dil); };
+      if (sg) kutular.push([m.giris + " " + m.ort, bps(sg.ort, dil), m.maks + " " + kisa(sg.en_yuksek) + " · " + m.son + " " + kisa(sg.son)]);
+      if (sc) kutular.push([m.cikis + " " + m.ort, bps(sc.ort, dil), m.maks + " " + kisa(sc.en_yuksek) + " · " + m.son + " " + kisa(sc.son)]);
       trafikNotu = m.cozunurluk(tr.adim);
     }
 
@@ -246,7 +249,7 @@
     }
 
     // Yerlesim
-    var SOL = 58, SAG = 24, UST_BASLIK = 54, KUTU_Y = UST_BASLIK + 6, KUTU_H = 72, PANEL_BASLIK = 22, ARA = 14;
+    var SOL = 58, SAG = 24, UST_BASLIK = 78, KUTU_Y = UST_BASLIK + 6, KUTU_H = 72, PANEL_BASLIK = 22, ARA = 14;
     var y = KUTU_Y + KUTU_H + 20, grids = [], graphic = [];
     paneller.forEach(function (p, i) {
       graphic.push({ type: "text", left: SOL - 46, top: y, style: { text: p.ad, fill: C.metin, font: "800 13px " + YAZI } });
@@ -259,7 +262,7 @@
     var yukseklik = y + EKSEN_ALT + DIP;
 
     // Baslik: devre + donem
-    graphic.push({ type: "text", left: 12, top: 12, style: { text: devre.baslik || devre.ci, fill: C.metin, font: "800 15px " + YAZI } });
+    graphic.push({ type: "text", left: 12, top: 12, style: { text: devre.baslik || devre.ci, fill: C.metin, font: "800 15px " + YAZI, width: GENISLIK - 24, overflow: "truncate" } });
     graphic.push({ type: "text", left: 12, top: 33, style: {
       text: (devre.baslik ? devre.ci + "   ·   " : "") + zamanMetni(r[0]) + "  –  " + zamanMetni(r[1]),
       fill: C.ikincil, font: "600 11.5px " + YAZI } });
@@ -285,7 +288,7 @@
       animation: false,
       backgroundColor: "#ffffff",
       textStyle: { fontFamily: YAZI, color: C.metin },
-      legend: { top: 14, right: SAG, icon: "roundRect", itemWidth: 12, itemHeight: 4, itemGap: 14, data: lejant,
+      legend: { top: 54, left: 12, icon: "roundRect", itemWidth: 12, itemHeight: 4, itemGap: 14, data: lejant,
         textStyle: { fontSize: 11.5, fontWeight: 700, color: C.metin } },
       graphic: graphic,
       grid: grids,
