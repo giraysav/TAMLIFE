@@ -338,7 +338,7 @@ class ReportCircuit(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), index=True)
     ciname: Mapped[str] = mapped_column(String(200))
-    label: Mapped[str] = mapped_column(String(300), default="")  # eklendigi andaki aciklama (grafik basligi)
+    label: Mapped[str] = mapped_column(String(300), default="")  # grafik adi: kullanici verir (2026-11-27; bos = CI adi), otomatik doldurulmaz
     added_by: Mapped[str] = mapped_column(String(120), default="")
     added_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

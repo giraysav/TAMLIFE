@@ -160,10 +160,6 @@ def _etiket(alanlar: dict[str, Any]) -> list[tuple[str, str]]:
     return sonuc
 
 
-def _baslik(alanlar: dict[str, Any]) -> str:
-    return " · ".join(v for _, v in _etiket(alanlar)[:2])[:300]
-
-
 def _kart_anahtarlari(db: Session, musteri: Customer) -> list[str]:
     """Kartin ve (cati ise) istiraklerinin Musteri No anahtarlari: IMT bir istirakin numarasinda olabilir."""
     numaralar = [musteri.customer_no, *db.scalars(select(Customer.customer_no).where(Customer.parent_id == musteri.id))]
@@ -236,12 +232,22 @@ def olcum_tetikle() -> None:
         logging.getLogger("tamlife.trafik").warning("rapor-devre tetiklenemedi", exc_info=True)
 
 
-def _devre_ekle(db: Session, user: Principal, musteri: Customer, ci: str, etiket: str) -> ReportCircuit:
+GRAFIK_ADI_UZUNLUK = 120
+
+
+def grafik_adi(ad: str | None) -> str:
+    """2026-11-27 kullanici: "grafige kullanici kendisi isim versin; ONENT ya da CMDB'den aldigi detaylari yazmasin". Bos: baslik CI adi."""
+    return " ".join((ad or "").split())[:GRAFIK_ADI_UZUNLUK]
+
+
+def _devre_ekle(db: Session, user: Principal, musteri: Customer, ci: str, ad: str) -> ReportCircuit:
     var = db.scalars(select(ReportCircuit).where(ReportCircuit.customer_id == musteri.id, ReportCircuit.ciname == ci)).first()
     if var is None:
-        var = ReportCircuit(customer_id=musteri.id, ciname=ci, label=etiket[:300], added_by=user.username, added_at=simdi())
+        var = ReportCircuit(customer_id=musteri.id, ciname=ci, label=ad, added_by=user.username, added_at=simdi())
         db.add(var)
         db.flush()
+    elif ad:
+        var.label = ad
     return var
 
 
@@ -254,15 +260,17 @@ def _tum_metrikler(db: Session, user: Principal, musteri_id: int, aralik_sifirla
         ayar_yaz(db, user, musteri_id, {"metrikler": list(METRIKLER), "bas_zaman": (ar or {}).get("bas"), "bit_zaman": (ar or {}).get("bit")})
 
 
-def ekle(db: Session, user: Principal, musteri_id: int, ci: str | None = None, imt: str | None = None) -> dict[str, Any]:
-    """Devre ekleme: CI adi (CMDB kopyasindan ya da ONENT envanterinden) ya da IMT (IMT'ye bagli tum envanter CI'lari)."""
+def ekle(db: Session, user: Principal, musteri_id: int, ci: str | None = None, imt: str | None = None, ad: str | None = None) -> dict[str, Any]:
+    """Devre ekleme: CI adi (CMDB kopyasindan ya da ONENT envanterinden) ya da IMT (IMT'ye bagli tum envanter CI'lari). ad: grafigin
+    kullanicinin verdigi adi (bos olabilir)."""
     musteri = musteri_yaz_getir(db, user, musteri_id)
     imt = (imt or "").strip()
+    ad = grafik_adi(ad)
     if imt:
         cis = _imt_cileri(db, _kart_anahtarlari(db, musteri), imt)
         if not cis:
             raise MusteriHata(404, m("Bu IMT müşterinin envanterinde bulunamadı.", "This IMT was not found in the customer's inventory."))
-        eklenen = [_devre_ekle(db, user, musteri, c.ci_name, " · ".join(v for _, v in _envanter_etiketi(c, imt))) for c in cis]
+        eklenen = [_devre_ekle(db, user, musteri, c.ci_name, ad) for c in cis]
         _tum_metrikler(db, user, musteri.id, aralik_sifirla=True)
         return {"imt": imt, "eklenen": [{"id": v.id, "ci": v.ciname} for v in eklenen]}
     ci = (ci or "").strip()[:200]
@@ -271,15 +279,23 @@ def ekle(db: Session, user: Principal, musteri_id: int, ci: str | None = None, i
     anahtarlar = musteri_anahtarlari(musteri.customer_no)
     satir = db.scalars(select(ReportCmdb).where(ReportCmdb.ciname == ci, ReportCmdb.customer_key.in_(anahtarlar)).limit(1)).first()
     if satir is not None:
-        var = _devre_ekle(db, user, musteri, ci, _baslik(satir.fields or {}))
+        var = _devre_ekle(db, user, musteri, ci, ad)
         return {"id": var.id, "ci": var.ciname}
     envanter = db.scalars(select(CustomerCi).where(CustomerCi.ci_name == ci, CustomerCi.customer_key.in_(_kart_anahtarlari(db, musteri))).limit(1)).first()
     if envanter is None:
         raise MusteriHata(404, m("Devre bu müşterinin CMDB kayıtlarında bulunamadı.", "Circuit not found in this customer's CMDB records."))
-    imt_ = str((envanter.attrs or {}).get("imt") or "").strip()
-    etiket = " · ".join(v for _, v in _envanter_etiketi(envanter, imt_ if loe.IMT_BICIMI.match(imt_) else ""))
-    var = _devre_ekle(db, user, musteri, ci, etiket)
+    var = _devre_ekle(db, user, musteri, ci, ad)
     return {"id": var.id, "ci": var.ciname}
+
+
+def adlandir(db: Session, user: Principal, musteri_id: int, devre_id: int, ad: str | None) -> dict[str, Any]:
+    """Secili devrenin grafik adini degistirir (bos: baslik CI adi)."""
+    musteri = musteri_yaz_getir(db, user, musteri_id)
+    var = db.get(ReportCircuit, devre_id)
+    if var is None or var.customer_id != musteri.id:
+        raise MusteriHata(404, m("Devre bulunamadı.", "Circuit not found."))
+    var.label = grafik_adi(ad)
+    return {"id": var.id, "ci": var.ciname, "ad": var.label}
 
 
 def kaldir(db: Session, user: Principal, musteri_id: int, devre_id: int) -> dict[str, Any]:

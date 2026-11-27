@@ -344,6 +344,11 @@ def trafik_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = D
 class DevreGovde(BaseModel):
     ci: str | None = Field(default=None, min_length=1, max_length=200)
     imt: str | None = Field(default=None, pattern=r"^\d{9,15}$")  # 2026-11-27: IMT ile grafik (envanterdeki tum CI'lari)
+    ad: str | None = Field(default=None, max_length=200)  # grafige kullanicinin verdigi ad
+
+
+class DevreAdGovde(BaseModel):
+    ad: str | None = Field(default=None, max_length=200)
 
 
 @router.get("/musteri/{musteri_id:int}/rapor/devre-ara")
@@ -354,7 +359,7 @@ def devre_ara(musteri_id: KimlikTipi, q: str = Query(default="", max_length=200)
 
 @router.post("/musteri/{musteri_id:int}/rapor/devreler")
 def devre_ekle(musteri_id: KimlikTipi, body: DevreGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    sonuc = _yap(db, lambda: trafik.ekle(db, e.user, musteri_id, body.ci, body.imt), yaz=True)
+    sonuc = _yap(db, lambda: trafik.ekle(db, e.user, musteri_id, body.ci, body.imt, body.ad), yaz=True)
     hedef = f"imt={body.imt}" if body.imt else f"ci={(body.ci or '')[:80]}"
     _denetim(e.user, "rapor.devre_ekle", f"musteri={musteri_id} {hedef}")
     trafik.olcum_tetikle()
@@ -374,6 +379,14 @@ def devre_ayar(musteri_id: KimlikTipi, body: DevreAyarGovde, e: Erisim = Depends
     sonuc = _yap(db, lambda: trafik.ayar_yaz(db, e.user, musteri_id, body.model_dump()), yaz=True)
     if body.bas_zaman or body.bit_zaman:
         trafik.olcum_tetikle()  # yeni aralik baska aylari isteyebilir
+    return sonuc
+
+
+@router.patch("/musteri/{musteri_id:int}/rapor/devreler/{devre_id:int}")
+def devre_adlandir(musteri_id: KimlikTipi, devre_id: KimlikTipi, body: DevreAdGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
+    """Grafigin adini kullanici verir (2026-11-27)."""
+    sonuc = _yap(db, lambda: trafik.adlandir(db, e.user, musteri_id, devre_id, body.ad), yaz=True)
+    _denetim(e.user, "rapor.devre_adlandir", f"musteri={musteri_id} devre={devre_id}")
     return sonuc
 
 

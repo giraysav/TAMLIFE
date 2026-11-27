@@ -31,6 +31,8 @@
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", veriler: "Grafikte gösterilecek veriler",
       bolum: "Devre grafikleri", ara: "IMT, açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
       uygula: "Uygula", uygulaNot: "Tarihleri seçip Uygula'ya basın",
+      grafikAdi: "Grafik adı", grafikAdiIpucu: "Grafiğe bir ad verin (örn. Merkez internet hattı) — boş bırakılırsa CI adı kullanılır",
+      adDegistir: "Adı değiştir", kaydet: "Kaydet", vazgec: "Vazgeç",
       imtOlustur: function (n) { return "Bu IMT ile grafik oluştur (" + n + " devre)"; }, imtEkli: "Bu IMT'nin devreleri ekli", imtNot: "IMT envanterde bulundu; trafik CI adı ve IMT ile eşleştirilir.",
       eslesme: { ci_imt: "trafik: CI adı + IMT eşleşti", ci: "trafik: CI adıyla eşleşti", imt: "trafik: IMT ile eşleşti" },
       kaldir: "Kaldır", secili: "Seçili devreler", seciliYok: "Henüz devre seçilmedi.", sonucYok: "Eşleşen devre bulunamadı.",
@@ -47,6 +49,8 @@
       ort: "avg", enYuksek: "peak", p95: "95th", veriler: "Data shown on the chart",
       bolum: "Circuit charts", ara: "Type an IMT, description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
       uygula: "Apply", uygulaNot: "Pick the dates and press Apply",
+      grafikAdi: "Chart name", grafikAdiIpucu: "Name the chart (e.g. HQ internet line) — the CI name is used if left empty",
+      adDegistir: "Rename", kaydet: "Save", vazgec: "Cancel",
       imtOlustur: function (n) { return "Create chart with this IMT (" + n + " circuit" + (n === 1 ? "" : "s") + ")"; }, imtEkli: "Circuits of this IMT are added", imtNot: "IMT found in inventory; traffic is matched by CI name and IMT.",
       eslesme: { ci_imt: "traffic: CI name + IMT matched", ci: "traffic: matched by CI name", imt: "traffic: matched by IMT" },
       kaldir: "Remove", secili: "Selected circuits", seciliYok: "No circuit selected yet.", sonucYok: "No matching circuit.",
@@ -340,7 +344,7 @@
           var cikti = [];
           liste.forEach(function (d) {
             var ar = veri.aralik || { bas_ms: aralik(veri.yil, veri.ay)[0], bit_ms: aralik(veri.yil, veri.ay)[1] };
-            var k = [d.id, d.cekildi, dil, ar.bas_ms, ar.bit_ms, ayar.metrikler.join(","), d.noktalar.length].join("|");
+            var k = [d.id, d.cekildi, dil, ar.bas_ms, ar.bit_ms, ayar.metrikler.join(","), d.noktalar.length, d.baslik || ""].join("|");
             if (!(k in pngOnbellek)) {
               var s = devreSecenek(d, ar, ayar, dil);
               pngOnbellek[k] = s ? ciz(ec, s) : null;
@@ -460,6 +464,20 @@
     girdi.maxLength = 200;
     girdi.setAttribute("aria-label", m.ara);
     aramaKap.appendChild(girdi);
+    // 2026-11-27 kullanici: grafigin adini kullanici verir (ONENT / CMDB ayrintisi yazilmaz); ekleme isteklerine gider
+    var adEtiket = el("label", S.etiket + ";display:block;margin:10px 0 4px", m.grafikAdi);
+    var adGirdi = el("input", S.girdi);
+    adGirdi.type = "text";
+    adGirdi.maxLength = 120;
+    adGirdi.placeholder = m.grafikAdiIpucu;
+    adGirdi.id = "tl-grafik-adi";
+    adEtiket.setAttribute("for", adGirdi.id);
+    aramaKap.appendChild(adEtiket);
+    aramaKap.appendChild(adGirdi);
+    function ekleIstegi(govde) {
+      govde.ad = adGirdi.value.trim();
+      islem(function () { return durum.p.istek("POST", durum.p.taban + "/devreler", govde); }, function () { adGirdi.value = ""; aramaYenile(); });
+    }
     var sonucKap = el("div", "");
     aramaKap.appendChild(sonucKap);
     kart.appendChild(aramaKap);
@@ -539,9 +557,38 @@
       var liste = (v && v.devreler) || [];
       if (!liste.length) seciliKap.appendChild(el("div", S.kucuk, m.seciliYok));
       liste.forEach(function (d) {
-        var satir = el("div", S.satir), sol = el("div", "min-width:0");
-        sol.appendChild(el("div", S.ci, d.ci));
-        if (d.baslik) sol.appendChild(el("div", S.kucuk, d.baslik));
+        var satir = el("div", S.satir), sol = el("div", "min-width:0;flex:1");
+        if (durum.adDuzenle === d.id) {
+          // satir ici ad duzenleme
+          var ag = el("input", S.girdi + ";margin-bottom:6px");
+          ag.type = "text";
+          ag.maxLength = 120;
+          ag.value = durum.adTaslak != null ? durum.adTaslak : (d.baslik || "");
+          ag.addEventListener("input", function () { durum.adTaslak = ag.value; });  // periyodik yenilemede yazilan kaybolmaz
+          ag.placeholder = m.grafikAdiIpucu;
+          ag.setAttribute("aria-label", m.grafikAdi);
+          var kd = el("button", S.dugme, m.kaydet), vz = el("button", S.dugme2 + ";margin-left:6px", m.vazgec);
+          kd.type = vz.type = "button";
+          kd.onclick = function () {
+            var yeni = ag.value.trim();
+            durum.adDuzenle = null;
+            durum.adTaslak = null;
+            islem(function () { return durum.p.istek("PATCH", durum.p.taban + "/devreler/" + d.id, { ad: yeni }); });
+          };
+          vz.onclick = function () { durum.adDuzenle = null; durum.adTaslak = null; ciz2(); };
+          ag.addEventListener("keydown", function (e) { if (e.key === "Enter") kd.onclick(); if (e.key === "Escape") vz.onclick(); });
+          sol.appendChild(ag);
+          var dg = el("div", "");
+          dg.appendChild(kd);
+          dg.appendChild(vz);
+          sol.appendChild(dg);
+          setTimeout(function () { ag.focus(); }, 0);
+        } else if (d.baslik) {
+          sol.appendChild(el("div", S.ci, d.baslik));
+          sol.appendChild(el("div", S.kucuk + ";word-break:break-all", d.ci));
+        } else {
+          sol.appendChild(el("div", S.ci, d.ci));
+        }
         var o = d.ozet || {};
         var ozet = d.durum === "hazir"
           ? m.aylikLoe + ": " + m.erisim + " " + yuzde(o.erisilebilirlik, dil, 3) + " · " + m.gecikme + " " + ms(o.gecikme == null ? null : o.gecikme * 1000, dil) + " · " + m.jitter + " " + ms(o.jitter == null ? null : o.jitter * 1000, dil) + " · " + m.kayip + " " + yuzde(o.kayip, dil, 3)
@@ -550,6 +597,14 @@
           (d.durum === "hazir" ? m.hazir : d.durum === "bekliyor" ? m.bekliyor : m.veriYok) + (ozet ? " — " + ozet : "")));
         if (d.trafik_eslesme && m.eslesme[d.trafik_eslesme]) sol.appendChild(el("div", S.kucuk, m.eslesme[d.trafik_eslesme]));
         satir.appendChild(sol);
+        if (v.duzenleyebilir && durum.adDuzenle !== d.id) {
+          var dugmeler = el("div", "display:flex;flex-direction:column;gap:6px;flex:none");
+          var ad = el("button", S.dugme2, m.adDegistir);
+          ad.type = "button";
+          ad.onclick = function () { durum.adDuzenle = d.id; durum.adTaslak = null; ciz2(); };
+          dugmeler.appendChild(ad);
+          satir.appendChild(dugmeler);
+        }
         if (v.duzenleyebilir) {
           var b = el("button", S.dugme2, m.kaldir);
           b.type = "button";
@@ -581,7 +636,7 @@
         var ib = el("button", hepsi ? S.pasif : S.dugme, hepsi ? m.imtEkli : m.imtOlustur(r.toplam));
         ib.type = "button";
         ib.disabled = hepsi;
-        if (!hepsi) ib.onclick = function () { islem(function () { return durum.p.istek("POST", durum.p.taban + "/devreler", { imt: r.imt }); }, aramaYenile); };
+        if (!hepsi) ib.onclick = function () { ekleIstegi({ imt: r.imt }); };
         imtSatir.appendChild(imtSol);
         imtSatir.appendChild(ib);
         sonucKap.appendChild(imtSatir);
@@ -595,7 +650,7 @@
         var b = el("button", ekli ? S.pasif : S.dugme, ekli ? m.ekli : m.ekle);
         b.type = "button";
         b.disabled = !!ekli;
-        if (!ekli) b.onclick = function () { islem(function () { return durum.p.istek("POST", durum.p.taban + "/devreler", { ci: s.ci }); }, aramaYenile); };
+        if (!ekli) b.onclick = function () { ekleIstegi({ ci: s.ci }); };
         satir.appendChild(b);
         sonucKap.appendChild(satir);
       });

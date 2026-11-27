@@ -272,4 +272,23 @@ def test_devre_etiketi_ve_arama_ip_gostermez():
     etiket = trafik._etiket(alanlar)
     assert ("SERVICE", "KURUMSAL INTERNET") in etiket and ("ADDRESS", "Vadi Istanbul") in etiket
     assert not any(a in ("IPADDRESS", "MAXIMO_IP_ADDRESS", "DESCRIPTION") for a, _ in etiket)
-    assert "10.58" not in trafik._baslik(alanlar)
+
+
+def test_grafik_adini_kullanici_verir(istemci):
+    from conftest import musteri_ekle
+
+    kullanici_ekle("yonetici", "admin")
+    mid = _imtli_musteri()
+    giris(istemci, "yonetici")
+    istemci.post(f"/api/v1/musteri/{mid}/rapor/devreler", json={"imt": "100005049268"})
+    devreler = istemci.get(f"/api/v1/musteri/{mid}/rapor/trafik").json()["data"]["devreler"]
+    assert all(d["baslik"] == "" for d in devreler)  # envanter / CMDB ayrintisi otomatik yazilmaz
+    istemci.post(f"/api/v1/musteri/{mid}/rapor/devreler", json={"imt": "100005049268", "ad": "  Merkez   internet  hatti "})
+    devreler = istemci.get(f"/api/v1/musteri/{mid}/rapor/trafik").json()["data"]["devreler"]
+    assert {d["baslik"] for d in devreler} == {"Merkez internet hatti"}
+    d = devreler[0]
+    r = istemci.patch(f"/api/v1/musteri/{mid}/rapor/devreler/{d['id']}", json={"ad": "Yedek hat"})
+    assert r.status_code == 200 and r.json()["data"]["ad"] == "Yedek hat"
+    assert istemci.patch(f"/api/v1/musteri/{mid}/rapor/devreler/{d['id']}", json={"ad": ""}).json()["data"]["ad"] == ""
+    baska = musteri_ekle("Baska Musteri")
+    assert istemci.patch(f"/api/v1/musteri/{baska}/rapor/devreler/{d['id']}", json={"ad": "x"}).status_code == 404
