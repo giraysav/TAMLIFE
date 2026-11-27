@@ -1,0 +1,188 @@
+import { expect, test } from "@playwright/test"
+import { buyukHarf as B } from "../src/lib/buyuk-harf"  // ekran sidebar disinda buyuk harf ve Turkce karaktersiz gosterir
+
+const KULLANICI = process.env.E2E_USER ?? "admin"
+const PAROLA = process.env.E2E_PASS ?? ""
+
+test("oturum yokken giris ekrani, menu ve veri yok", async ({ page }) => {
+  await page.goto("/#/admin")
+  await expect(page.getByRole("button", { name: B("Giriş") })).toBeVisible()
+  await expect(page.getByText("Genel Durum")).toHaveCount(0)
+})
+
+test("yanlis parola reddedilir", async ({ page }) => {
+  await page.goto("/")
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill("kesinlikle-yanlis")
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("alert")).toContainText(B("hatalı"))
+  await expect(page.getByLabel(B("Şifre"))).toHaveValue("")
+})
+
+test("giris, menu, yonetim ve cikis", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await page.goto("/")
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
+  await page.locator("button[aria-haspopup='menu']").click()
+  await page.getByRole("menuitem", { name: "Yönetim" }).click()
+  await expect(page).toHaveURL(/#\/yonetim\/durum$/)
+  await expect(page.getByText(/ORACLE_REPORTDB/)).toBeVisible()
+  await page.locator("button[aria-haspopup='menu']").click()
+  await page.getByRole("menuitem", { name: "Çıkış" }).click()
+  await expect(page.getByRole("button", { name: B("Giriş") })).toBeVisible()
+  await page.goto("/#/admin")
+  await expect(page.getByRole("button", { name: B("Giriş") })).toBeVisible()
+})
+
+test("Ctrl+K arama yonetim bolumlerini bulur", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await page.goto("/")
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
+  await page.keyboard.press("Control+k")
+  await page.getByPlaceholder("Modül ara…").fill("veri girişi")
+  await page.getByRole("button", { name: /Yönetim › Veri Girişi/ }).click()
+  await expect(page).toHaveURL(/#\/yonetim\/tampon$/)
+  await expect(page.getByText("Kaynaklar", { exact: true }).first()).toBeVisible()
+})
+
+test("eski /veri adresi Yonetim > Veritabani bolumune yonlenir ve tablolar listelenir", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await page.goto("/")
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
+  await page.goto("/#/veri")
+  await expect(page).toHaveURL(/#\/yonetim\/veritabani$/)
+  await expect(page.getByRole("heading", { name: "Yönetim › Veritabanı", level: 1 })).toBeVisible()
+  for (const ad of ["fault_event", "ingest_batch", "ingest_block", "distribution_rule", "audit_event"]) {
+    await expect(page.getByText(ad, { exact: true })).toBeVisible()
+  }
+})
+
+
+async function girisYap(page: import("@playwright/test").Page) {
+  await page.goto("/")
+  await page.getByLabel(B("Kullanıcı adı (AD/LDAP)")).fill(KULLANICI)
+  await page.getByLabel(B("Şifre")).fill(PAROLA)
+  await page.getByRole("button", { name: B("Giriş") }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
+}
+
+test("yan menu: grup sirasi, ok ile ac/kapat, Onedesk adi", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  const gruplar = await page.locator("nav[aria-label='TAM Life'] button[aria-expanded]").allTextContents()
+  expect(gruplar.map((g) => g.trim())).toEqual(["Genel", "Benim Yerim", "Raporlar"])
+  await expect(page.locator("nav[aria-label='TAM Life']").getByText("Yönetim", { exact: true })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "Onedesk", exact: true }).first()).toBeVisible()
+  await expect(page.getByText("OneDesk", { exact: true })).toHaveCount(0)
+  await expect(page.locator("nav a", { hasText: "Geliştirme Talepleri" })).toHaveCount(0)
+  const calisma = page.getByRole("button", { name: "Benim Yerim" })
+  await expect(calisma).toHaveAttribute("aria-expanded", "true")
+  await calisma.click()
+  await expect(calisma).toHaveAttribute("aria-expanded", "false")
+  await expect(page.locator("nav a", { hasText: "Müşteri Yönetimi" })).toHaveCount(0)
+  await calisma.click()
+  await expect(page.locator("nav a", { hasText: "Müşteri Yönetimi" })).toHaveCount(1)
+})
+
+test("kullanici karti sol altta: profil, yonetim, talepler, dil, cikis", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  await expect(page.locator("nav").getByText("Çıkış")).toHaveCount(0) // yan menude eski cikis cubugu yok
+  await page.locator("button[aria-haspopup='menu']").click()
+  for (const ad of ["Profil", "Yönetim", "Geliştirme Talepleri", "Çıkış"]) {
+    await expect(page.getByRole("menuitem", { name: ad })).toBeVisible()
+  }
+  await expect(page.getByRole("menuitemradio", { name: /Türkçe/ })).toHaveAttribute("aria-checked", "true")
+  await page.getByRole("menuitemradio", { name: /English/ }).click()
+  await expect(page.getByRole("heading", { name: `Welcome, ${KULLANICI}` })).toBeVisible()
+  await page.locator("button[aria-haspopup='menu']").click()
+  await page.getByRole("menuitemradio", { name: /Türkçe/ }).click()
+  await page.locator("button[aria-haspopup='menu']").click()
+  await page.getByRole("menuitem", { name: "Profil" }).click()
+  await expect(page.getByRole("heading", { name: "Profil", level: 1 })).toBeVisible()
+  await expect(page.getByText("Bilgilerinizi buradan güncelleyebilirsiniz.")).toBeVisible()
+  // Yalniz AD/LDAP kullanici adi kilitli; ad, soyad, telefon, sirket, adres ve web adresi duzenlenir.
+  await expect(page.getByLabel(B("Kullanıcı adı (AD/LDAP)"))).toBeDisabled()
+  for (const alan of ["Ad", "Soyad", "Telefon", "Şirket", "Web adresi", "Adres"]) {
+    await expect(page.getByLabel(alan, { exact: true })).toBeEditable()
+  }
+  await page.locator("button[aria-haspopup='menu']").click()
+  await page.getByRole("menuitem", { name: "Yönetim" }).click()
+  await expect(page).toHaveURL(/#\/yonetim\/durum$/)
+  await expect(page.getByRole("heading", { name: "Yönetim › Genel Durum", level: 1 })).toBeVisible()
+  const bolumler = page.getByRole("navigation", { name: "Yönetim bölümleri" })
+  for (const ad of ["Genel Durum", "Veri Girişi", "Veritabanı", "Roller", "Arızalar", "Günlükler"]) {
+    await expect(bolumler.getByRole("link", { name: ad })).toBeVisible()
+  }
+  await page.locator("button[aria-haspopup='menu']").click()
+  await page.getByRole("menuitem", { name: "Geliştirme Talepleri" }).click()
+  await expect(page).toHaveURL(/#\/talep$/)
+})
+
+test("genel bakis tek parca, yeni adlar, Toptan yok", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  const main = page.locator("main")
+  for (const kaldirilan of ["Modüller", "Ana sayfa kartı", "Panel tablosu", "Dış kaynak", "Rol yönetimi"]) {
+    await expect(main.getByText(kaldirilan, { exact: true })).toHaveCount(0)
+  }
+  await expect(main.getByRole("button", { name: "Yönetim", exact: true })).toHaveCount(0)
+  await expect(main.getByText("TAM Life tek panelde, tüm modüller bir arada.")).toHaveCount(0) // baslik cumlesi kaldirildi
+  await expect(page.getByRole("img", { name: "TAM Life" }).first()).toBeVisible() // sol ustte logo
+  await expect(main.getByRole("button", { name: "Onedesk" })).toBeVisible() // yaydaki kart
+  const nav = page.locator("nav[aria-label='TAM Life']")
+  for (const ad of ["ICT Sms & Gelir", "APN Gelir ve Kurulum", "Gelir Faydası Sağlanan İşler", "Çeyrek Bazlı Sunum", "Onedesk"]) {
+    await expect(nav.getByRole("link", { name: ad })).toBeVisible()
+  }
+  for (const eski of ["TAM Toptan", "TAM SMS", "TAM APN", "TAM GELIR&URETIM", "TAM Sunum", "OneDesk"]) {
+    await expect(nav.getByText(eski, { exact: true })).toHaveCount(0)
+  }
+})
+
+test("sayfa icinde geri oku: modulden genel bakisa doner", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  await expect(page.getByRole("button", { name: "Geri" })).toHaveCount(0) // genel bakista yok
+  await page.locator("nav a", { hasText: "Müşteri Yönetimi" }).click()
+  await expect(page.getByRole("heading", { name: "Müşteri Yönetimi", level: 1 })).toBeVisible()
+  await page.locator("nav a", { hasText: "Onedesk" }).click()
+  await expect(page.getByRole("heading", { name: "Onedesk", level: 1 })).toBeVisible()
+  await page.getByRole("button", { name: "Geri" }).click()
+  await expect(page.getByRole("heading", { name: "Müşteri Yönetimi", level: 1 })).toBeVisible()
+  await page.getByRole("button", { name: "Geri" }).click()
+  await expect(page.getByRole("heading", { name: B(`Hoş geldin, ${KULLANICI}`) })).toBeVisible()
+})
+
+test("rol yonetimi: uc rol, admin sabit, yonetim modulleri role verilemez", async ({ page }) => {
+  test.skip(!PAROLA, "E2E_PASS tanimli degil")
+  await girisYap(page)
+  await page.goto("/#/roller") // admin icin eski adres: Yonetim > Roller
+  await expect(page).toHaveURL(/#\/yonetim\/roller$/)
+  await expect(page.getByRole("heading", { name: "Yönetim › Roller", level: 1 })).toBeVisible()
+  // Rol kutulari asagi yukari acilir: baslikta rol adi, sayfa ve kisi sayisi; varsayilan kapali.
+  for (const rol of ["Admin", "Manager", "Member"]) {
+    const baslik = page.getByRole("button", { name: new RegExp(rol) })
+    await expect(baslik).toHaveAttribute("aria-expanded", "false")
+  }
+  await expect(page.getByLabel("Giriş sayfası")).toHaveCount(0)
+  await page.getByRole("button", { name: /Admin/ }).click()
+  await expect(page.getByText("Admin tüm sayfaları görür, tüm ek yetkilere sahiptir ve bu görünüm değiştirilemez.")).toBeVisible()
+  await expect(page.getByText("Bu roldeki personel", { exact: false }).first()).toBeVisible()
+  await page.getByRole("button", { name: /Admin/ }).click()
+  await page.getByRole("button", { name: /Manager/ }).click()
+  await page.getByRole("button", { name: /Member/ }).click()
+  // Yonetim alani yalniz admin: TAM Utilizasyon ve Rol Yonetimi role verilemez, listede yoktur.
+  await expect(page.getByRole("checkbox", { name: /^TAM Utilizasyon$/ })).toHaveCount(0)
+  await expect(page.getByRole("checkbox", { name: /^Rol Yönetimi$/ })).toHaveCount(0)
+  await expect(page.getByLabel("Giriş sayfası").first()).toBeVisible()
+  await expect(page.getByRole("button", { name: "Kaydet" })).toHaveCount(2)
+})

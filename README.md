@@ -22,7 +22,7 @@ MSSQL LOE trafik (giriş/çıkış) ┘   python -m app.isci utilizasyon ┘    
 
 - Kaynaklara **yalnız işçiler** bağlanır; panel yalnız kendi veritabanını okur. Kullanıcı sayısı kaynak yükünü artırmaz.
 - Panel yalnız `127.0.0.1:8117`'de dinler. Dışarıya TLS'i Windows (http.sys) sonlandıran `kurulum/tls_vekili.ps1` açar (443).
-- Arayüz derlenmiş halde `ekran-react/dist/` altındadır (bkz. §9).
+- Arayüz kaynağı `ekran-react/src`, canlıda sunulan derlenmiş paket `ekran-react/dist/` (bkz. §9).
 
 | Klasör | İçerik |
 |---|---|
@@ -131,8 +131,14 @@ Ayarlar `backend/.env` dosyasındadır (**git dışı; asla commit etmeyin, GitH
 
 ```powershell
 cd E:\TAMLIFE\backend
-..\.venv\Scripts\python -m pytest          # ~15 sn, 54 test
+..\.venv\Scripts\python -m pytest            # ~20 sn, 76 test (tests/)
+..\.venv\Scripts\python -m pytest tests_v35  # ~6 dk, v3.5 paketi: 734 geçer, 111 gerekçeli atlanır
+
+cd E:\TAMLIFE\ekran-react
+npm ci; npm test                             # arayüz birim testleri (vitest, 244)
 ```
+
+- `tests_v35/`: `prod-esit-2026-11-18` dalından alınan eski backend testleri. Güncel kodla geçmeyenler `tests_v35/bekleyen_gozden_gecirme.txt` listesinde; conftest bunları **skipped** olarak raporlar (silinmez). Bir test düzeltildiğinde ya da ait olduğu özellik kalktığında satırı listeden çıkarın. İki paket aynı geçici veritabanı ayarını kullanır; ayrı komutlarla çalıştırın.
 
 - Geçici bir SQLite üzerinde çalışır; **canlı veritabanına, AD'ye ve dış kaynaklara bağlanmaz** (`tests/conftest.py` ortamı uygulama yüklenmeden önce yazar).
 - Kapsam: giriş ve oturum, CSRF / Origin kapısı, giriş sınırlayıcı, rol yetkisi, denetim izi ve ağacı, CSV formül enjeksiyonu, X-Forwarded-For, Erken Uyarı kuralları / görünürlük / bildirim / yanıt, bütün göçlerin boş veritabanına baştan uygulanması.
@@ -152,16 +158,34 @@ Aynı kod + **sahte veri** + salt okunur + parolasız misafir girişi. Gerçek `
 
 ---
 
-## 9. Arayüz (derlenmiş paket)
+## 9. Arayüz: kaynak ve derlenmiş paket
 
-Arayüzün kaynak kodu bu depoda **yoktur**; yalnız derlenmiş `ekran-react/dist/` vardır. Değişiklikler derlenmiş JS dosyalarına yama olarak yapılır:
+Arayüz kaynağı `ekran-react/` altındadır (React 19 + TypeScript + Vite + Tailwind 4; `src/` 180 dosya, 244 arayüz testi, `e2e/` Playwright).
+Kaynak 2026-11-27'de `prod-esit-2026-11-18` dalından bu dala alındı: `npm ci`, `tsc -b` temiz, `vite build` başarılı, `vitest run` 244/244.
 
+```powershell
+cd E:\TAMLIFE\ekran-react
+npm ci                       # bağımlılıklar (node_modules git dışı)
+npx vitest run               # arayüz testleri
+npx vite build --outDir <GEÇİCİ KLASÖR> --emptyOutDir   # canlı dist'e DEĞİL
+```
+
+**Önemli: canlı `dist/` şu an kaynaktan ileride.** 18 Kasım'dan sonra yapılan değişiklikler derlenmiş dosyalara yama olarak yapıldı
+ve henüz `src/`'ye işlenmedi. Bu yamalar kaynağa taşınana kadar kaynaktan derlenen paket `dist/` yerine **konmamalıdır** (Erken Uyarı,
+denetim ağacı, MSSQL kartı, kazanç şeridi, bildirim yanıtı, telif notu gibi özellikler kaybolur). Kaynağa taşınacak 22 yamalı paket:
+`index`, `index.css`, `sorgu`, `musteri-sayfasi`, `musteri-metin`, `rapor-sayfasi`, `rapor-pdf`, `gunlukler`, `kurum`, `roller`,
+`yonetim-sayfasi`, `tampon`, `temip-atama`, `urun-tutar`, `utilizasyon`, `onedesk-sayfasi`, `radar-sayfasi`, `ekip-ozeti`,
+`cekmece`, `sunum-metin`, ve `index.html`. Ayrıntı: `git log -- ekran-react/dist` (her yama commit iletisinde ne değiştiğini yazar).
+
+Elle yazılmış dosyalar (`rapor-trafik.js`, `topo-harita.js`, `veri-ozeti.js`, `util-puanlama.js`, `tr-iller.json`, ECharts ve
+görseller) `public/` altındadır; derleme onları `dist/`'e aynen kopyalar.
+
+Taşıma bitene kadar derlenmiş pakete yama kuralları geçerli:
 - Önce dosyanın yedeği (`var\yedek\kod_once_<konu>_<zaman>\`), sonra yama betiği (her değişim tam bir kez eşleşmeli), sonra `node --check <dosya>`.
 - Yalnız **derlenmiş CSS'te bulunan** Tailwind sınıfları kullanılır (`ekran-react/dist/assets/index-*.css` içinde arayın); yoksa satır içi `style`.
 - Değişen dosya `dist-demo/` altına da kopyalanır (aynıysa). Commit: `git add -f ekran-react/dist/...`.
+- Elle yazılmış bir dosya değişince `public/` altındaki kopyası da güncellenir.
 - Sunucu tüm yanıtlarda `Cache-Control: no-store` gönderir; tarayıcı yenilemesi yeter.
-
----
 
 ## 10. Sorun giderme
 
@@ -181,7 +205,7 @@ Arayüzün kaynak kodu bu depoda **yoktur**; yalnız derlenmiş `ekran-react/dis
 ## 11. Yol haritası
 
 1. `LOE_REPORTING_MBINT` / `_MBVRF` okuma yetkisi (mobil devreler; bugün yalnız misafir erişimi var).
-2. Arayüz kaynak kodunun depoya alınması; test ortamının canlıdan ayrılması.
+2. Derlenmiş pakete yapılan 22 yamanın arayüz kaynağına (`src/`) işlenmesi, kaynaktan derlemeye dönülmesi; test ortamının canlıdan ayrılması.
 3. Panel veritabanının PostgreSQL'e taşınması (kod `psycopg` ile hazır), yük testi, diğer bölge ekiplerine açılış.
 
 ## 12. Depo
