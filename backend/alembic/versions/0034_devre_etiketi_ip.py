@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Rapor devre etiketlerinden IP adresi temizligi (2026-11-27): eski etiket uretimi 'ADDRESS' iceren alanlari gosterdigi icin
 IPADDRESS degeri etikete yaziliyordu (ekranda "KURUMSAL INTERNET · 10.58.240.34"). Envanter kurali: IP gosterilmez. Etiket
 " · " ile ayrilmis parcalardir; IPv4 iceren parca atilir. Geri alinmaz (silinen deger yeniden uretilmez).

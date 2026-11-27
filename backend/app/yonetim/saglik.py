@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Saglik kontrolleri: hafif, dis baglanti ACMAZ (uretim izleme.py'nin panel ici karsiligi). Her kontrol ok | uyari | hata."""
 
 from __future__ import annotations

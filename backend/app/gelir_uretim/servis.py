@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelir Faydasi Saglanan Isler is kurallari: kayit CRUD, liste + suzgec + ozet, ceyrek sunum ozeti.
 
 Gorme: modul_erisim("gelir_uretim") (rol gorunumune bagli). Excel ice aktarma: yalniz admin (deps.require_veri_yazma, API katmaninda).

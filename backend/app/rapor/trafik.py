@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapor devre grafikleri (panel tarafi): devre arama, musterinin secili devreleri ve donemin olcumleri.
 
 2026-11-20 kullanici: "grafigi aylik range'e gore olusturacagiz, sinirlama olmayacak; range secimi aylik rapor modulunde yapilacak;

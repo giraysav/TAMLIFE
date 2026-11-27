@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """onedesk_record: Musteri Yonetimi kayit listeleri icin iki bilesik indeks (2026-10-18; TEMIP ile ~350 bin kayit).
 
 Revision ID: 0015_onedesk_kayit_indeksleri

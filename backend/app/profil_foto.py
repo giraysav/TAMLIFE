@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Profil fotografi (2026-10-15 kullanici istegi: hesap kartindaki bas harf dairesine kisi kendi fotografini ekleyip kaydeder; yukleme
 profil sayfasindan). Dosya `<panel DB klasoru>/profil_foto/<kullanici>.jpg` (kisinin takvim dosyasi gibi; DB'ye yazilmaz, sema yok).
 Arayuz resmi 256 px kare JPEG'e kucultup ham govde olarak gonderir; sunucu JPEG imzasini ve boyutu dener (yeni bagimlilik yok)."""

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """MSSQL dis kaynagi: devre trafik olcumleri (2026-11-27; yetki 2026-11-27 geldi, bkz. app.rapor.loe_trafik).
 
 Ayarlar backend/.env: MSSQL_LOE_ENABLED (yalniz 'true' acar), _HOST, _PORT (1433), _DBNAME (virgulle birden cok veritabani; trafik

@@ -1,3 +1,4 @@
+/*! TAMLIFE (c) 2026 Giray Sav - Tum haklari saklidir. Izinsiz kopyalanamaz, dagitilamaz. */
 /* Utilizasyon > Puanlama (2026-11-21 sadelestirme): "Toplu atama", "Skor agaci" ve "Musteri Listesi" sekmelerinin yerine tek ekran.
    Personele gore gruplu tek musteri listesi; musteriye tiklayinca kriter dokumu acilir. Otomatik kriterler salt okunur, yalniz verisi
    olmayan (elle girilecek) kriterler secilir ve kaydedilir. Istirak "finale dahil" ve "puanlamaya girecek personel" ayarlari da burada.

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kaynaklar: tampona veri getiren yollar. CSV yukleme, Oracle kaynaklari (REPORTDB) ve PostgreSQL kaynaklari
 (ONEDESKDB, ONENTDB: yalniz baglanti durumu; veriyi isciler dogrudan ceker, tampon partisi uretmez).
 

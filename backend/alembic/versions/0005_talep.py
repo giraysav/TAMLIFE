@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelistirme talepleri: demand / demand_log iskeleti uretimdeki talep formu ve degisiklik gecmisi semasina cevrilir.
 
 Revision ID: 0005_talep

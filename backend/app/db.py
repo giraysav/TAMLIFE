@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Veritabani katmani: tek ortak panel DB'si + kullanici basina SQLite dosyasi. Import baglanti acmaz.
 
 panel     : TAMLIFE_DATABASE_URL (PostgreSQL; SQLite yalniz dev/test ya da TAMLIFE_SQLITE_IZIN) -> models.Base, Alembic ile.

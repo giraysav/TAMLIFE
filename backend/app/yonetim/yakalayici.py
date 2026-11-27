@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Yakalanmayan istisnalar: kullaniciya KOD + KAYIT NO doner, ham metin donmez; ayrinti ariza kaydina ve dosya gunlugune gider."""
 
 from __future__ import annotations

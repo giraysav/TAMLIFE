@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelir Faydasi Saglanan Isler tablolari. Base ortak (app.models); alembic ve create_all hepsini gorur."""
 
 from __future__ import annotations

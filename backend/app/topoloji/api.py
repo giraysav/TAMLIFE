@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TopoMaker HTTP katmani. Gorme: uretimdeki gibi musteri modulu (@modul_gerekli('musteri')); topoloji katalogda menude
 olmadigi icin rol gorunumu duzenleyicisinde secilemez, bu yuzden kapi 'musteri'dir. Dosya saklanmaz.
 

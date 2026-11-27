@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Urun-Tutar Excel ice aktarma: uretim kutucuklar/portfoy/urun_tutar.py (2026-09-27/28) birebir + DEV deposu (urun_tutar_ozet).
 
 Kurumsal "Urun -Tutar Raporu" (sozlesme detayi basina bir satir) okunur ve musteri basina OZET cikarilir; ozet urun_tutar_ozet

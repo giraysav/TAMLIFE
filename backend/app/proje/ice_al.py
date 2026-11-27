@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Takip Edilen Projeler Excel ice aktarma (2026-10-31 kullanici: "Berat Kagan'daki excelden alip import edecektik; herkesinki bos,
 millet bir daha manuel girmek istemeyebilir"). Giris noktasi Veri Girisi > Import (CLAUDE.md: panelin tek Excel/CSV girisi).
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kriter VERI KAYNAGI SECIMI: uretim kutucuklar/utilizasyon/kaynak_secimi.py + kutucuklar/veri/kurallar.py, DEV tamponuna uyarlandi.
 
 Bir kriter satirina, Veri Girisi'nde tampona alinmis bir kaynaktan (CSV, Oracle ice alma partisi...) degerin nasil okunacagi secilir;

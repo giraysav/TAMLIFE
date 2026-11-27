@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """AD/LDAPS dogrulamasi. Eski servisle (ad_service.py) ayni kurallar, ayni AD_* anahtarlari, ayni sebep kodlari.
 
 - Yalniz ldaps:// (TLS 1.2, sertifika dogrulamasi zorunlu; kurum CA'si AD_CA_CERT_FILE). Duz ldap:// acilista reddedilir.

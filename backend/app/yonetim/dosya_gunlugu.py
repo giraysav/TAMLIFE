@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Uygulama dosya gunlugu: donen dosya (5 MB x 5), istegi BEKLETMEZ (QueueHandler + QueueListener).
 
 Hata aninda 'ne oldu' sorusunun cevabi konsol penceresinde kalmasin: ariza kayit numarasiyla yigin izi buradan bulunur.

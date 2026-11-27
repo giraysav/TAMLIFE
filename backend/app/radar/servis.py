@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri Radar (uretim kutucuklar/radar/servis.py + reportdb_tampon.radar_adaylari). MANUEL GIRIS YOK.
 
 TAM Radar (2026-10-17 kullanici karari): TEMIP alarm kayitlarindan (tampon/temip_kayit, 01.01.2026'dan) Musteri No'su hicbir kartla

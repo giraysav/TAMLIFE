@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapor devre grafikleri (2026-11-20 kullanici: "reportdb'den alacagimiz veri ile grafigi cizecegiz; description ya da port
 yazildiginda gelen musteri bilgisi kullanici degistirmedikce grafik olusmaya devam edecek; donem raporun ayina gore"):
 report_cmdb (ReportDB CMDB kopyasi), report_circuit (musterinin secili devreleri), report_circuit_data (aylik saatlik olcumler).

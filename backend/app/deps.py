@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ortak FastAPI bagimliliklari: oturum ve yetki."""
 
 from __future__ import annotations

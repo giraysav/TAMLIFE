@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri Radar HTTP katmani. Gorme: 'radar' modulu (rol gorunumu). Elle veri girisi yok.
 
 GET  /radar?sayfa=&adet=&q=          -> Veri Girisi > Fark'ta Radar'a atanan kartsiz numaralarin TEMIP kayitlari, musteri bazinda (TEMIP

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Takip Edilen Projeler. Uretim karsiligi: kutucuklar/proje (servis.py, musteri_calisma.py), blueprints/projects_bp.py.
 
 Uc bolum:

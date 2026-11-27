@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kisiye ozel panel bildirimi (2026-10-31 kullanici: "talepte durum degisince talep sahibine bildirim gitsin").
 
 Panel e-posta gondermez (SMTP 2026-10-31 kaldirildi); bildirim ust cubuk zilinde gorunur. Ureten modul `ekle` ile yazar

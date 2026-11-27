@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Bildirim yaniti (2026-11-27): Erken Uyari bildirimine TAM'in "ilgilendim / gerekmedi" geri bildirimi (user_notification.response).
 
 Revision ID: 0033_bildirim_yanit

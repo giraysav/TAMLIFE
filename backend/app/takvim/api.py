@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Takvim HTTP katmani.
 
   /takvim/ben, /takvim/gun, /takvim/toplu  -> Izin&Takvim Yonetimi (takvim): giris yapan kisi yalniz kendi takvimini gorur ve yazar

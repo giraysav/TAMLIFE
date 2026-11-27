@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Hesap yonetimi (komut satiri; Yonetim > Kullanicilar ekrani gelene kadar). cd backend; ..\\.venv\\Scripts\\python.exe -m app.hesap ...
 
   liste                         kullanicilari listeler

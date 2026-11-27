@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kisiye ozel gorunurluk (2026-10-26 kullanici karari: "panele login olan user sadece kendisine ait olan verileri gorecek; tek istisna:
 Benim Yerim yalniz kullaniciya ozel, Raporlar'i herkes gorebilecek").
 

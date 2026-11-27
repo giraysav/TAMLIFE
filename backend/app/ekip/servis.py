@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ekip ozeti. Uretim karsiligi: kutucuklar/ekip/servis.py (_build_team_overview, _build_team_ai_summary, _build_team_stats,
 _build_tam_personal_ai_summary). Ayri modul degil, Genel Bakis'ta bolum (2026-10-11 kullanici karari).
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapor hazir metinleri (uretim kutucuklar/rapor/servis.py). Yalniz veri ve kucuk bicimleyiciler."""
 
 from __future__ import annotations

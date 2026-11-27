@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ekip ozeti HTTP katmani. Genel Bakis'ta bolum; ayri modul/menu yok. Girisi olan herkes cagirir, kapsam serviste
 (admin/TeamMngr tum ekip, TeamMember yalniz kendisi).
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Panel kullanici kaydi (app_user): oturum sahibinin satiri, AD ile ilk giriste acilan kisi, yerel acil hesap parolasi, giris yapmislar."""
 
 from __future__ import annotations

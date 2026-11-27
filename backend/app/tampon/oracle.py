@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Oracle kaynak katmani: uretim api_services.OracleSourceConfig + kutucuklar/veri/db_kaynak.py uyarlamasi.
 
 - Anahtar adlari uretimle ayni (backend/.env): <ON EK>_ENABLED / _HOST / _PORT / _SERVICE_NAME / _USER / _PASSWORD / _TIMEOUT /

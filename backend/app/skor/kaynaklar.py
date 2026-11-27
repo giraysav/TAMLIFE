@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Final skor motorunun veri kaynaklari: uretim kutucuklar/utilizasyon/veri_kaynaklari.py, DEV veritabanina uyarlandi.
 
 Her kaynak musteri basina METRIK uretir; motor metrikleri kriter kurallarina (barem hucreleri) gore puana cevirir. Oncelik (metrik

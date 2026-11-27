@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelistirme Talepleri HTTP katmani. Gorme/acma: 'talep' modulu (herkese acik). Yonetme: admin, TeamMngr ya da rolgorunum.TALEP_YETKISI.
 
   GET    /talep             -> is listesi (yonetebilen herkesinkini, digerleri kendi taleplerini gorur); ?durum=acik|<durum>|bos

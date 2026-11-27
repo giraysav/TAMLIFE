@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Veri iscisi: Oracle cekimleri panel (web) surecinin DISINDA (uretim isletim/reportdb_senkron.py + kutucuklar/veri/db_al.py).
 
   cd backend; ..\\.venv\\Scripts\\python.exe -m app.isci reportdb [--client <Instant Client>]

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Excel ice aktarma: kaynak tablo (kullanicinin "Gelir Faydasi" Excel'i) -> onizleme -> uygulama.
 
   onizleme(db, veri, dosya)  : dosyayi okur, her satiri ayristirir, hicbir sey yazmaz.

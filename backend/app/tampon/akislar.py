@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Veri akislari: panele veri getiren TUM yollar tek bakista (Veri Girisi ust paneli). Yalniz okur; Oracle'a baglanmaz.
 
 Her akis: nereden geldigi (dosya / isci / CLI), panelde nerede yonetildigi (ekran yolu), son gelis zamani ve durum.

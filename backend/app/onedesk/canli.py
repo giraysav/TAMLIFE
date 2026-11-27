@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """OneDesk sikayet / talep kayitlari -> onedesk_record (2026-11-21 kullanici: "talep ve sikayet kayitlarini da panele aktar. acik
 kapali hepsini aktar. alarmdaki kurallara gore esitle; 01.01.2026 00:00 itibari ile acik kayitlar ve kapanmislari kartlara aktar").
 

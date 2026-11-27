@@ -1,3 +1,4 @@
+/*! TAMLIFE (c) 2026 Giray Sav - Tum haklari saklidir. Izinsiz kopyalanamaz, dagitilamaz. */
 /* Yonetim > Veri Ozeti (2026-11-21): ReportDB / OneDesk / ONENT verisinin tek ekranda konsolide gorunumu + gunluk utilizasyon turu.
    React'tan bagimsiz; yonetim-sayfasi "veri" sekmesi window.TamlifeVeriOzeti.kur(el, {dil}) ile baglar. Yalniz admin ucu okur:
    GET /api/v1/yonetim/veri-ozeti, POST /api/v1/yonetim/veri-ozeti/calistir (CSRF cerezli). */

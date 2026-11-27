@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapor: personelin YAZDIGI metnin TR -> EN cevirisi (uretim ceviri.py'den tasindi).
 
 Sira: 1) cevrimdisi model (CTranslate2 + SentencePiece; Argos tr_en paketinin icindeki model, ~126 MB), sunucu internete

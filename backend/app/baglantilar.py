@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Baglanti yuvalarinin durumu (AD, Oracle kaynaklari): yalniz anahtar adlari, durum ve gizli olmayan ayar ozeti.
 
 Bu modulden cikan JSON gizli deger icermez (parola/anahtar asla). Oracle icin adres bile verilmez; AD icin yalniz sunucu adi, port,

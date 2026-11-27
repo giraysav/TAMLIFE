@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Tampon tablolari. Partinin kendisi (ingest_batch) app.models'te; burada blok, kural ve uygulama gunlugu."""
 
 from __future__ import annotations

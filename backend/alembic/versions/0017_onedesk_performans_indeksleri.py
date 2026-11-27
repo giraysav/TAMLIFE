@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """onedesk_record: Veri Girisi akislari ve RCA / oneriler icin iki indeks (2026-10-20 kullanici: "panelde asiri yavaslik var").
 
 Revision ID: 0017_onedesk_performans_indeksleri

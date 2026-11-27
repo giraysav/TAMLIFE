@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Rol gorunumleri: rolun giris sayfasi ve eylem yetkileri.
 
 Kullanici karari (2026-10-14): Yonetim alani (admin_only) disindaki her modul varsayilan olarak her personel (TeamMember) ve

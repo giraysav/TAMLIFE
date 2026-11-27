@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Yonetim HTTP katmani (/api/v1/yonetim). Hepsi yalniz admin; yazanlar CSRF'li (guvenlik kapisi). Is kurali bu paketin modullerindedir."""
 
 from __future__ import annotations

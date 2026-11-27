@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Sunucu metinlerinin dili: arayuz her istekte 'X-Dil: tr|en' basligini gonderir; yoksa Turkce.
 
 Is katmani dili parametre olarak tasimaz: m("Türkçe", "English") istegin diline gore birini dondurur. Dil, istek basinda

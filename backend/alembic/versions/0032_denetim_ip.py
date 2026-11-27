@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Denetim olaylari (2026-11-26 kullanici): giris yapan kullanicinin IP'si (audit_event.ip) ve kullaniciya gore agac gorunumu icin
 actor indeksi.
 

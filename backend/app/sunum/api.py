@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ceyrek Sunum HTTP katmani. Gorme: 'sunum' modulu (rol gorunumu). Yonetme: admin ya da rolgorunum.SUNUM_YETKISI.
 
   GET  /sunum/donem       -> secilen ceyregin ogeleri (gecmis ceyrekte ilk goruntulemede dondurulur)

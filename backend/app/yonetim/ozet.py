@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Genel Durum: tek istekte saglik kontrolleri + gostergeler + baglanti yuvalari (ilk acilis tek gidis-donus)."""
 
 from __future__ import annotations

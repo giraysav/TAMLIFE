@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ceyrek Sunum disa aktarma (2026-10-20 kullanici: "ceyrek sunumdaki her veriyi export edebilecegim bir buton: Excel / PDF").
 
 Ceyregin gorunur alanlari (servis.donem: ekrandaki ile ayni ogeler, onayli ceyrekte onay kaydi) tek bicime cevrilir:

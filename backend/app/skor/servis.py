@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Final skor servisi (TAM Utilizasyon): kriter tablolari, hesap, kayit, agac, personel agirligi, onay talebi.
 
 Uretim karsiliklari: kutucuklar/utilizasyon/{toplu_atama.py, servis.py}, blueprints/projects_bp.py (save_customer_score,

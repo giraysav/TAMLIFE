@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Müşteri Erken Uyarı (2026-11-27): müşteri aramadan önce sorunlu müşteriyi gösteren risk puanı (0-100).
 
 Panelde zaten akan verilerden hesaplanır; ayrı tablo, elle aktarma ya da işçi yoktur. Dört kayıt sinyali ve bir devre sinyali vardır:

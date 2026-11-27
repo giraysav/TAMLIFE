@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapor: taslak, alicilar, ayda tek ONAYLI gonderim, gonderim gecmisi ve geri alma.
 
 Uretim karsiliklari: kutucuklar/rapor/aylik.py (taslak, gonderim, geri alma), rapor/servis.py (rapor birimi,

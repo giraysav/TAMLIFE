@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kisinin e-posta imzasi (2026-10-26 kullanici: "profil kartindaki adres alanini kaldir, yerine Outlook'taki gibi resim ve yazi ile
 freetext imza; bu imza aylik rapor mail govdesinde de olacak; imzadaki fotograf Teknocan, yanina yazi yazilabilsin").
 

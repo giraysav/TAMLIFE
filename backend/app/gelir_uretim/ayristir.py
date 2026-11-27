@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Excel hucre metinlerinin guvenli ayristirilmasi: tutar, saat, yil ici gelir, tarih, durum, kisi adlari, baslik haritasi.
 
 Saf fonksiyonlar: veritabani, istek dili ve saat yok (bugun parametre olarak gelir). Sonuclar kod/anlam tasir; kullaniciya

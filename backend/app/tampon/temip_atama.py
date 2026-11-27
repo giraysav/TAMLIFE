@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TEMIP Musteri No'sunu karta ELLE atama (2026-10-18 kullanici istegi: "bazi musterilerde CRM kaynakli unvan hatasi var; eslesmeyen
 musterileri manuel atamak icin fonksiyon ekle").
 

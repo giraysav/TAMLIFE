@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Onedesk HTTP katmani (Kayit Takibi). Okuma: Onedesk modulunu gorenler (kapsam servis katmaninda). Kayitlar yalniz isci aktarimlariyla
 gelir (alarm: tampon/temip_kayit, sikayet / talep: onedesk/canli); elle aktarim yolu 2026-11-21 kaldirildi."""
 

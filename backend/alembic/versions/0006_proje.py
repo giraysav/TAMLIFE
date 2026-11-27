@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Takip edilen projeler: project / project_item / project_action iskeleti uretimdeki proje takibi semasina cevrilir,
 musteri bazli calisma isaretleri (project_customer_work) eklenir.
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """AD'de KTS_ ile baslayan gruplari listeler (SALT OKUNUR). Parola yalniz gizli girdiyle alinir; hicbir yere yazilmaz.
 
 Calistirma (kendi terminalinizde):

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """app_user: profil alanlari (ad, soyad, telefon, sirket, adres, web) ve kisiye verilen ek yetkiler (permissions).
 
 Revision ID: 0008_profil_kisi_yetki

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri Erken Uyari: puan kurallari (saf), sinyal toplama (DB) ve portfoy gorunurlugu (API)."""
 
 from __future__ import annotations

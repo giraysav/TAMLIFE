@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ortak yardimcilar (paketler birbirini import etmez, ortak kod burada): yanit/hata bicimi, zaman, sayfalama, kimlik tipi, Turkce metin."""
 
 from __future__ import annotations

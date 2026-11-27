@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Modul katalogu uclari: erisilebilir moduller, ana sayfa kartlari ve tek modul erisim denetimi (rol gorunumu sunucuda zorlanir)."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ham Musteri Verisi: musteri kartinin alan katalogu, dosya okuma (.xlsx / .csv), sablon ve bicim tanima.
 
 Uretim karsiligi: kutucuklar/veri/musteri_sablon.py (katalog, takma adlar, cati/istirak genis bicimi, uyum raporu, sablon) ve

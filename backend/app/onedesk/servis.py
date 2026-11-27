@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Onedesk sorgulari: aktif / kapanan sayilar, top10 musteri+lokasyon, RCA ortak noktalari, cozum tavsiyeleri.
 
 Kapsam (uretim _build_ats_summary): admin ve Manager tum kayitlari, Member yalniz kendi portfoyunu (kendi musterileri ve

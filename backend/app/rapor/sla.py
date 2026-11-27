@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapora yuklenen SLA Excel'i (OneDesk ciktisi): grafikler, aylik seriler ve donem sayilari.
 
 Uretim karsiligi: blueprints/customer_bp.py upload_excel, _gomulu_grafikler, _monthly_series, _kapanis_aylari.

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Calisma alani menusu. Yetki kurali authz.can_open; etiketlerin kaynagi catalog."""
 
 from __future__ import annotations

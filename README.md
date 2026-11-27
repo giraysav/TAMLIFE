@@ -1,5 +1,7 @@
 # TAMLIFE v3.5: İşletim Belgesi
 
+> © 2026 Giray Sav · Tüm hakları saklıdır. Kodun sahibi ve geliştiricisi: **Giray Sav** (Fullstack Designer). Ayrıntı: [NOTICE](NOTICE).
+
 Kurumsal müşteri ekiplerinin (TAM) paneli. Alarm, şikayet/talep, envanter (CMDB), devre performansı, skor ve aylık rapor tek müşteri kartında; Müşteri Erken Uyarı riskli müşteriyi nedeniyle birlikte öne çıkarır.
 
 Bu belge paneli **çalıştıran ve bakımını yapan** kişi içindir: nerede ne çalışır, nasıl yeniden başlatılır, veri nereden gelir, yedek ve geri dönüş, testler ve sık karşılaşılan sorunlar.

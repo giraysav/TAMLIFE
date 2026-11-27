@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Takvim servisi. Gun durumu kodlari uretimle ayni (kutucuklar/takvim/servis.py CALENDAR_STATUS_LABELS).
 
 Gunler kisinin kendi DB dosyasindadir (app.db.kullanici_oturumu); TAM Takvim her kisinin dosyasini okur.

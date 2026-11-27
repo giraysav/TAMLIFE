@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Utilizasyon: Urun-Tutar Excel ozeti (urun_tutar_ozet) ve skor gecmisinde eski skor (score_history.old_score).
 
 Revision ID: 0003_utilizasyon

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Utilizasyon veri ozeti (2026-11-21 kullanici: "her sabah 06:00'da isci calissin ve skoru guncellesin; skor hesabi icin kapanmis
 kayitlari baz alacagiz"): util_source_summary.
 

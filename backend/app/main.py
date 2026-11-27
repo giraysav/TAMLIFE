@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """FastAPI uygulamasi: ara katmanlar, hata isleyiciler, router'lar ve (varsa) derlenmis arayuz. Is kurali burada degil, ilgili paketlerde."""
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app import ad, isitici
+from app import __copyright__, ad, isitici
 from app.audit import audit_log
 from app.bildirim.api import router as bildirim_router
 from app.config import env_dosyasi_yukle, get_settings
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
         return ok(
             {
                 "service": "tamlife",
+                "copyright": __copyright__,
                 "database": ayar.database_url.split(":", 1)[0].split("+", 1)[0],
                 "database_configured": bool(ayar.database_url),
             }

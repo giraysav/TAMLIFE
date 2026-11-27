@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """RCA icin LLM cozum yorumu (istege bagli). Varsayilan KAPALI. Aylik rapor da (SLA analizi, ceviri) `tamamla` ile ayni ayari kullanir.
 
 Acik olmasi icin ucu de gerekir:

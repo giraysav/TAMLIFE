@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kaynak katalogu (ham tampon): source_catalog + source_catalog_object (2026-10-18 kullanici istegi: ReportDB TEMIP semasinin
 tablo -> alt tablo -> sutun agaci ve ornek satirlari Veri Girisi'nde).
 

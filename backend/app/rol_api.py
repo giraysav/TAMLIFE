@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Rol gorunumu uclari: rolun giris sayfasi ve eylem yetkileri (moduller herkese acik). Okuma ve yazma: yalniz admin (Yonetim alani)."""
 
 from __future__ import annotations

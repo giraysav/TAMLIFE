@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Devre trafik olcumleri (giris / cikis bit/sn) MSSQL LOE raporlama veritabanlarindan (isci tarafi; panel bu modulu kullanmaz).
 
 2026-11-26 kullanici: "inbound / outbound trafik loe_reporting_* tablolarinda (MSSQL)"; 2026-11-27 okuma yetkisi geldi. Sema

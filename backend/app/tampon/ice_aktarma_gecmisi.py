@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Elle yuklenen dosya aktarimlarinin gecmisi ve GERI ALMA (2026-11-01 kullanici: "urun-tutar'i eklenen musteri icin geri alma
 secenegi yok; importa manuel eklenen dosya olursa geri alma secenegi de olmali").
 

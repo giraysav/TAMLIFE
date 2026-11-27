@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 # Uretimden birebir tasindi: kutucuklar/utilizasyon/skor_motoru.py (2026-10-04; 'X' sabit puan kurali 2026-10-10).
 # Hesap kurali degistirilmez; esdegerlik testi tests/test_skor.py.
 """Final skor motoru - sunucu tarafi (2026-09-27). Toplu dinamik atamanin altyapisi.

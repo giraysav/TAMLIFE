@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Segmenti WHOLESALE olan cati kartlar (istirakleriyle) Toptan alanina (2026-10-20 kullanici: "hedef modulu Toptan olacak").
 
 Revision ID: 0018_wholesale_toptan

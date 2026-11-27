@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """revenue_benefit: Yol Haritasi, yillik verimlilik ve onay akisi sutunlari (2026-10-15 kullanici istegi).
 
 Revision ID: 0011_gelir_onay

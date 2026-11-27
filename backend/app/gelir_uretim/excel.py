@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Excel rapor: kullanicinin "Gelir Faydasi" Excel'inin 13 sutunu (ayni sira ve basliklar) + fayda turu; ikinci sayfa Ozet (toplamlar ve suzgec).
 Yalniz ONAYLI isler (servis.tum_kayitlar). Ilk sayfa ice_al ile yeniden okunabilir.
 

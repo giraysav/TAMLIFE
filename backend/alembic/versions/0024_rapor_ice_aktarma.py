@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gecmis aylik rapor ice aktarma (2026-10-31 kullanici: "eski raporlar ay ve yil secilerek musteri atamasiyla eklenebilsin; dosya genelde
 Outlook dosyasi"): report_dispatch.source (panel | ice_aktarma), archive_file, archive_name.
 

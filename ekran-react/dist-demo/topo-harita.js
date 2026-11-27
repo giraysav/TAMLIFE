@@ -1,3 +1,4 @@
+/*! TAMLIFE (c) 2026 Giray Sav - Tum haklari saklidir. Izinsiz kopyalanamaz, dagitilamaz. */
 /*
  * TAM Life - TopoMaker cografi harita (React paketinden AYRI kod).
  * 2026-11-24 kullanici: "cografi haritayi Turkiye haritasina yerlestir; zeminde iller olsun ve hangi ilde ne kadar servis varsa

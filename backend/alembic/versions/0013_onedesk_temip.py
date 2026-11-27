@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """onedesk_record: TEMIP kayitlari icin ticket_no, customer_no, detail ve iki indeks (2026-10-17 kullanici istegi).
 
 Revision ID: 0013_onedesk_temip

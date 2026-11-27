@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Turkcell'li Takvimi (2026-10-15 kullanicinin yukledigi "2026 Turkcell'li Takvimi" gorselinden): tum ekipte ayni olan gunler.
 
 Gunler kisinin dosyasina yazilmaz; kaydi olmayan gun bu tablodan gelir (takvim.servis._gunler). Kisi o gune kendi kaydini girerse

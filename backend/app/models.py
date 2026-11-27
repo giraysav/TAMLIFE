@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """PostgreSQL schema for the panel. No customer seed and no secret columns."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Oturum uclari: giris, cikis ve /session/me (menu, giris sayfasi, izinler)."""
 
 from __future__ import annotations

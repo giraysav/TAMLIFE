@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Final skor / TAM Utilizasyon HTTP katmani (/api/v1/skor). Is kurali servis.py, motor.py, kaynaklar.py'dedir.
 
 Yetki (uretim moduller.py: utilizasyon yalniz_admin; uclar @modul_gerekli('utilizasyon') / @admin_required): yonetim uclarinin

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TopoMaker cizim kurallari (2026-11-24 kullanici): kartta duzeltilmis CI lokasyon adi (customer_ci_flag.location_name) ve
 Urun-Tutar aktif devre no / acik adres listesi (urun_tutar_ozet.circuits).
 

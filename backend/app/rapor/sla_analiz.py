@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """SLA Excel'inin TUM verisinin analizi ve ozet rapor metni (aylik rapor).
 
 Uretim karsiliklari: ats_analizi.py (CI bazli analiz, kural tabanli oneriler, LLM yorumu), blueprints/customer_bp.py

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """RCA (kok neden) ortak nokta analizi: saf, cevrimdisi, kural tabanli. Uretim ats_analizi.py kurallarindan uyarlandi.
 
 Girdi: kayit sozlukleri {root_cause, customer, location, kind, category}. Hicbir veri disari cikmaz.

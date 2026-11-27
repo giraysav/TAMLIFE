@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri Yonetimi: liste, musteri karti ve kart duzenleme.
 
 Uretim karsiliklari: kutucuklar/portfoy/servis.py, portfoy/kart/servis.py, portfoy/kart/duzenleme.py,

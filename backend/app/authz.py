@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Role gate for the catalog. admin, TeamMngr, TeamMember."""
 
 from __future__ import annotations

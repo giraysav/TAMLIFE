@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Profil e-posta imzasi (2026-10-26 kullanici: "adres alanini kaldir, yerine Outlook'taki gibi resim + yazi imza; aylik rapor mail
 govdesinde de olacak"; ayni gun: "acik adres olmayacak, olan varsa da temizle"): app_user.signature_html eklenir, app_user.address
 silinir (dolu adresler de gider; once yedek). Geri alma adres sutununu bos olarak geri ekler.

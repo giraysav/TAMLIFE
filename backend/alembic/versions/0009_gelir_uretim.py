@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelir Faydasi Saglanan Isler: revenue_benefit ve revenue_benefit_person tablolari; bos income_production iskeleti kalkar.
 
 Revision ID: 0009_gelir_uretim

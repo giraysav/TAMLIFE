@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri karti kayit listesi (2026-10-18 kullanici istegi): Operasyon kutusundaki Alarm / Talep / Sikayet "acik / kapanan" dugmeleri
 o kartin secilen tur ve durumdaki kayitlarini listeler. Kaynak onedesk_record (TEMIP alarmlari: tampon/temip_kayit; Onedesk aktarimi).
 Kapanan = bu yil kapanan (karttaki "yil ici kapanan" sayaciyla ayni kapsam); acik = su an acik. Yalniz kartin kendi kayitlari

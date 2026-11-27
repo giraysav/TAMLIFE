@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Analiz: hangi sutun musteri kartlariyla (Musteri No / NCST / unvan) kac % eslesiyor. Veriyi DEGISTIRMEZ, yalniz rapor uretir.
 
 Maliyet: tum sutunlar x 3 alan x ORNEK_SATIR; 300 bin satirlik partide bile yalniz ilk ORNEK_SATIR satir taranir.

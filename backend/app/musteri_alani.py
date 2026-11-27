@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri karti alani (2026-10-19 kullanici istegi: "Toptan ve Baglantili Araclar Musteri Yonetimi'nin klonu ama baglantilariyla gelmis,
 Toptan'dan silince her yerden siliyor; bagimliliklarini kopar").
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Denetim olaylarinin KALICI yazimi: istegi BEKLETMEZ, veritabani kapaliyken girisi/islemi dusurmez.
 
 Neden kuyruk: olayi istek icinde senkron yazmak, veritabani erisilemezken her girisi baglanti zaman asimi kadar bekletir

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Onbellek isiticisi (2026-10-20 kullanici: "panelde asiri yavaslik var").
 
 Agir ozetlerin ilk hesabi (Onedesk top10 ~1,5 sn, RCA ~0,7 sn, Radar ~2 sn, TEMIP eslesme gruplari ~5 sn, tanitimin depo olcumu ~4 sn) ilk ziyaretciyi bekletiyordu.

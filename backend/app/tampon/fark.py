@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Fark alani (Veri Girisi > Fark, 2026-10-24 kullanici istegi: "canli DB'den alinan verilerle panelde musteri kartinda eslesmeyenler
 icin bir fark alani olustur; bunlari manuel olarak personele atayabileyim").
 

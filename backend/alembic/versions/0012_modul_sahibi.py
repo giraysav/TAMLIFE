@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """app_user.module_owner: kisinin sahibi oldugu modul (katalog anahtari) (2026-10-17 kullanici istegi).
 
 Revision ID: 0012_modul_sahibi

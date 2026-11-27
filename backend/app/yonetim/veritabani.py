@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """DB yonetimi: motor/surum/boyut, tablo sayilari, butunluk, TAM yedek (SQLite cevrimici yedek + dosyalar + SHA-256 manifest).
 
 Geri yukleme panelden YAPILMAZ: yikici bir islemdir ve panelin kendisini durdurmayi gerektirir. Ayri, SIFRELI ve onayli bir adim olarak

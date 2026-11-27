@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TAMLIFE tanitim sayfasinin verisi (Ceyrek Sunum 'tanitim' kaynagi).
 
 2026-10-20 kullanici: "daha profesyonel, ust yonetime sunulacak hale getir; ozet bilgi ve amac kapsam daha derli toplu olsun".

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """DEMO ornegi icin SAHTE veri uretir (gercek panel verisine DOKUNMAZ, ondan KOPYALAMAZ).
 
 Kullanim (demo.ps1 cagirir; elle de calisir):

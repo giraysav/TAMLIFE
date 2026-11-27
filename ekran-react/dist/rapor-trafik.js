@@ -1,3 +1,4 @@
+/*! TAMLIFE (c) 2026 Giray Sav - Tum haklari saklidir. Izinsiz kopyalanamaz, dagitilamaz. */
 /*
  * TAM Life - Aylik rapor devre grafikleri (React paketinden AYRI kod).
  * Cizim: Apache ECharts 6.1.0 (echarts-6.1.0.min.js, Apache-2.0; lisans: echarts-6.1.0.LICENSE.txt).

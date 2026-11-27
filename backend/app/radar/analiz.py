@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri Radar yonetim sunumu ve musteri analizi (2026-10-25 kullanici istegi: "radardaki atanan musteriler icin ust yonetime sunulacak
 satis firsati yaratmaya olanak saglayacak sunum gorseli, grafik; musteriye en cok hangi kok nedenden alarm olusmus, hangi konularda
 sikayet / talep olmus ozet; satis direktorleri ve GMY seviyesinde raporlanacak").

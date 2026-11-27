@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ham Musteri Verisi partisi -> musteri kartlari: ONIZLEME, onayli UYGULAMA ve GERI ALMA.
 
 Uretim karsiligi: kutucuklar/veri/musteri_aktar.py. Kurallar (uretimde kullanici onayli):

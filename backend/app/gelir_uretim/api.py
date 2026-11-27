@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelir Faydasi Saglanan Isler HTTP katmani. Gorme: modul_erisim("gelir_uretim") (rol gorunumune bagli). Yeni giris: modulu goren herkes
 (kayit sahibin onayina duser); onay, onayli kaydi duzenleme/silme: modul sahibi ya da admin (servis); ice aktarma ve sahip atama: yalniz admin.
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Rapor devre grafigi adi kullanicinin (2026-11-27 kullanici: "grafige kullanici kendisi isim versin; ONENT ya da CMDB'den aldigi
 detaylari yazmasin"). report_circuit.label bugune kadar hep otomatik (CMDB / envanter ayrintisi) uretildi; bosaltilir, baslik CI adi
 olur, kullanici panelden ad verir. Geri alinmaz.

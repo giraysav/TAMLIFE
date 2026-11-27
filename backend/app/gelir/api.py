@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelir HTTP katmani: ICT SMS (tamsms modulu) ve APN kurulum + musteri calismalari (tamapn modulu). Yetki sunucuda; kapsam servis katmaninda."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kritik CI isareti (2026-11-20 kullanici: "satirin yaninda KRITIK CI ise EVET / HAYIR secimi yapacak dropdown koy; kritik ci
 secildiginde satir diger satir renklerinden farkli olsun"): customer_ci_flag.
 

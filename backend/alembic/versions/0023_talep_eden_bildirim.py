@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelistirme talebinde talep eden ve gelis yolu; kisiye ozel bildirim (2026-10-31 kullanici: "talep eden kisi bilgisi ve
 kullanici adi olsun, talep eden secilebilir olsun - talep mail yoluyla da gelebilir; durum degisince talep sahibine bildirim gitsin").
 demand.requester_id (bos = talebi giren kisi, mevcut satirlar giren kisiyle doldurulur), demand.channel; user_notification tablosu.

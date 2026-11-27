@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ceyrek bazli sunum: panel ayari tablosu (app_setting) ve rol ek yetkisi takvim.sunuma_gonder -> sunum.gonder.
 
 Revision ID: 0004_sunum_ayar

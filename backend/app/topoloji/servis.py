@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TopoMaker: devre envanterinden (CSV/XLSX) ag topolojisi, SPoF tespiti ve il bazli cihaz dagilimi.
 
 Uretim kutucuklar/topoloji (engine.py + servis.py) is kurali tasindi; pandas/networkx/folium yerine duz Python. Sunucu HTML

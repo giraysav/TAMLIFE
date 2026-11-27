@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Takip Edilen Projeler HTTP katmani. Gorme ve yazma: 'proje' modulu; kayit kapsami servis katmaninda (Member yalniz kendi).
 
   GET    /proje                          -> TAM ozeti + proje detay listesi (aksiyonlarla) + sorumlu secenekleri

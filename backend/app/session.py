@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Server-side session. HttpOnly cookie, idle and absolute expiry, CSRF token.
 
 The cookie value is never returned in JSON. A new token is issued on every login,

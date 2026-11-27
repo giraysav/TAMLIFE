@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TAM Utilizasyon > Musteri Listesi: tum musterileri (cati ve istirak) listeler, toplu ekler, secilenleri ya da hepsini siler.
 
 Yalniz admin (router duzeyinde require_admin). Is kurali musteri/servis.py'dedir: ekleme `musteri_ekle`, silme `agaci_sil`

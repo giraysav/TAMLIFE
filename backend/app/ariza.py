@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ariza kaydi (cekirdek): her hata bir KOD ve KAYIT NO tasir. Ham istisna metni kullaniciya donmez; yigin izi dosya gunlugune yazilir.
 
 Kullanici ekranda "(kod TL-DB-01, kayit 3f9a1c2b)" gorur. Yonetici Yonetim > Arizalar'dan kayit numarasiyla bulur,

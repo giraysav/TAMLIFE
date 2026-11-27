@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri eslesmesi (Veri Girisi > Musteri Eslesmesi, 2026-10-24 kullanici ilkesi: "DB'lerden aldigimiz her veri TAM personelindeki
 atanmis musterilerle eslesmeli"). Yalniz okur; dis kaynaga baglanmaz.
 

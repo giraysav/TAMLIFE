@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri envanteri / Kritik CI (2026-11-20 kullanici: "onent'ten gelen NEMS_CMDB verilerinde musteri no ile eslesen CI'lari musteri
 kartindaki KRITIK CI alanina ekle; kritik ci artik excel ile degil onent db'den dinamik beslenecek"): customer_ci.
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kullanilmayan radar_prospect tablosu kalkar (Musteri Radar ReportDB tamponundan okur, bu tabloya hic yazmaz).
 
 Revision ID: 0010_radar_prospect_kaldir

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Test ortami: gecici SQLite, AD kapali, canli kaynaklara (Oracle / PostgreSQL / AD) baglanti YOK.
 
 Ortam degiskenleri app import edilmeden ONCE yazilir; env_dosyasi_yukle() var olan degeri ezmedigi icin backend/.env'deki canli

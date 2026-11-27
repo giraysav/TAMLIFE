@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """PostgreSQL dis kaynaklari (2026-10-19 kullanici: "ONENTDB merkelodm / ONENT, ONEDESKDB carbonat / elysion; postgre bu ortamlar").
 
 Ayarlar backend/.env: <ON EK>_ENABLED (yalniz 'true' acar), _HOST, _PORT (5432), _DBNAME, _USER, _PASSWORD, _SSLMODE (prefer), _TIMEOUT (10 sn).

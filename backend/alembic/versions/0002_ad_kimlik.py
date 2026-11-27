@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """app_user: AD kimligi (is_ad_user, ad_domain) ve yerel acil hesap parolasi (password_hash).
 
 Revision ID: 0002_ad_kimlik

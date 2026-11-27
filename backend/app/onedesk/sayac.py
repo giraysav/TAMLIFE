@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kayit yardimcilari (alarm / talep / sikayet): OneDesk ve Oracle tarihlerini okuma, kart sayaclarini kayitlardan yenileme.
 
 Kayitlar yalniz isci aktarimlariyla gelir: alarm ReportDB TEMIP (tampon/temip_kayit), sikayet / talep OneDesk (onedesk/canli).

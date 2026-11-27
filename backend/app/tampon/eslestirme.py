@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Eslestirme ve deger okuma yardimcilari (saf fonksiyonlar, veritabani yok).
 
 Musteri No: bir kartta BIRDEN COK numara olabilir ('22499633, 22499634'); karsilastirma anahtari bastaki sifirlari

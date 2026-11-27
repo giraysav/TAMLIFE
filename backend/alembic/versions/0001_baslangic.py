@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Panel DB baslangic semasi: acik op.create_table (2026-10-10; once create_all idi).
 
 Revision ID: 0001_baslangic

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Genel Bakis > Ekip Ozeti modul kutucuklari (2026-10-14 kullanici istegi: "panelde her modulun ve icerdigi verinin ozeti olmali").
 
 Kullanicinin menusundeki moduller icin tek kutu: bir ana sayi + kisa alt satir; tiklaninca modul acilir. Yonetim alanlari yok.

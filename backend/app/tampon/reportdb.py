@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """ReportDB (Oracle) ortak tanimlari: kaynak anahtari, isci adi, tur sikligi ve TEMIP alarm kayit turunun durum kaydi.
 
 2026-11-23 kullanici karari: "ozet sorguyu kaldir, db'lerden guncel veriyi 30 dk'lik periyotla cek". Eski alarm OZET sorgusu (musteri

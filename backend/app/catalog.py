@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Tek modul listesi. Uretim MODULLER, ANA_SAYFA_KUTUCUKLARI ve kutucuk kaydindan.
 
 Eski uygulamada her kutu ayri klasordeydi. Burada klasor yok; kimlik, ad ve

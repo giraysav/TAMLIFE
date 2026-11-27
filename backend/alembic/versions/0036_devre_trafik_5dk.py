@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Devre trafigi 5 dakikalik ayri seride (2026-11-27 kullanici: "LookOutEyes gosterimi ile ayni veriler"): report_circuit_data.traffic
 [[epoch_sn, giris bps, cikis bps], ...]. Panel LookOutEyes'in arsiv kuraliyla (5 dk / 30 dk / 2 saat / 1 gun) konsolide eder. Eski saatlik
 trafik (noktalarin 6-7. alani) bir sonraki isci turunda yeniden cekilir (summary.trafik_surum).

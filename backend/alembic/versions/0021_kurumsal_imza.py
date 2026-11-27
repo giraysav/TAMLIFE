@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kurumsal e-posta imzasi (2026-10-26 kullanici: "imza.html tasarimini panele tasiyalim"): app_user.signature_mode, title,
 department, landline, email. Mevcut serbest imzasi olan kisi 'serbest' kipine alinir.
 

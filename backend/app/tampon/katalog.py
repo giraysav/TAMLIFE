@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Kaynak katalogu (ham tampon): ReportDB'deki izinli semalarin nesne -> alt nesne -> sutun agaci ve ornek satirlari
 (2026-10-18 kullanici istegi: "tum veriyi almadan hangi veriyi kullanacagimiz anlasilmiyor; agacta goster, adim adim secelim").
 

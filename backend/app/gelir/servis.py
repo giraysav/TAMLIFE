@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """ICT SMS gelirleri, APN kurulum gelirleri ve APN musteri calismalari.
 
 Kayitlar TAM'in kendi DB dosyasindadir (app.db.kullanici_oturumu). Gorunurluk (uretim ad_benim): admin ve Manager tum dosyalari;

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Sutun profili: yol ustunde (satirlar bellekte biriktirilmez) doluluk, farkli deger, baskin tip, en sik degerler."""
 
 from __future__ import annotations

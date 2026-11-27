@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Giris, oturum, CSRF / Origin kapisi, yanit basliklari, giris sinirlayici, yetki ve denetim izi."""
 
 from __future__ import annotations
@@ -125,3 +126,10 @@ def test_istemci_ipsi_yalniz_guvenilen_vekilden_xff(monkeypatch):
     monkeypatch.setenv("TAMLIFE_TRUSTED_PROXIES", "127.0.0.1")
     assert client_ip(_istek("127.0.0.1", "1.2.3.4")) == "1.2.3.4"
     assert client_ip(_istek("127.0.0.1", "")) == "127.0.0.1"
+
+
+def test_telif_bilgisi_kodda_ve_saglik_ucunda(istemci):
+    import app
+
+    assert app.__author__ == "Giray Sav"
+    assert "Giray Sav" in istemci.get("/api/v1/health").json()["data"]["copyright"]

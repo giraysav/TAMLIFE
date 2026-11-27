@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Utilizasyon veri ozeti: ONENT envanterinden servis kategorileri ve baglanti tipleri (2026-11-21 kullanici: "Servis Cesitliligi ve
 Baglanti Tipi ONENT'ten doldurulsun").
 

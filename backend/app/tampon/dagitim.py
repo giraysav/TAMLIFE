@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Dagitim: tampondaki ham veriyi KURAL + SABIT HEDEF ile panel tablolarina yazar.
 
 Akis: onizle (yazmaz) -> uygula (onayli, TEK islem, her degisiklik distribution_log'a eski/yeni ile) -> geri al

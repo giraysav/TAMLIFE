@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Log yonetimi: kalici denetim olaylari (audit_event), arama, CSV disa aktarim, aktif oturumlar.
 
 Eski yaklasim (uretim): kisi basina ayri tablo (u_<id>). Burada TEK tablo + indeksli filtre; kisi/olay/sonuc/zaman suzulur.

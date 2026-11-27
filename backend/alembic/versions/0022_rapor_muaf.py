@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Raporu atilmayan musteri (2026-10-31 kullanici: "musteri bilgisinde raporu atilmamaktadir diye bir tik"): customer.report_exempt.
 Isaretli birim Gonderilen Aylik Rapor durum ozetinde bekleyen sayilmaz.
 

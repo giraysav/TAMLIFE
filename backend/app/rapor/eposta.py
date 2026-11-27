@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapor iletisi: HTML govde ve Outlook taslagi (.eml).
 
 Uretim karsiliklari: blueprints/customer_bp.py (_rapor_mail_html, _rapor_eml_olustur, _gorunen_adli, _mail_gorselleri)

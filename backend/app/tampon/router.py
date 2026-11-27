@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Tampon (Veri Girisi) HTTP katmani (/api/v1/tampon). Hepsi yalniz admin; yazanlar CSRF'li. Is kurali paketin modullerindedir."""
 
 from __future__ import annotations

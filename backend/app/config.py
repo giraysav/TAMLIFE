@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Runtime settings. Production key names, empty defaults, no stored secret."""
 
 from __future__ import annotations

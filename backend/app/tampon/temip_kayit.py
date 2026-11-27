@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """ReportDB TEMIP kurumsal alarm kayitlari -> onedesk_record (2026-10-17 kullanici karari).
 
 Kural:

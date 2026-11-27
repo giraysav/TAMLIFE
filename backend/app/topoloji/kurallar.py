@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TopoMaker cizim kural seti (2026-11-24 kullanici: "cizme kural seti olusturalim; ONENT'ten alinan CMDB verilerinde CI Name kosulu
 ekle, bu CI Name'ler icin nw_li gibi kural secme filtresi olsun").
 

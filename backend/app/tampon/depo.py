@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Tampon deposu: parti yasam dongusu ve ham satir bloklari.
 
 Tasarim (uretim ham_depo.py dersleri): satirlar BLOK_SATIR'lik JSON listesi olarak zlib ile sikistirilir; her blok

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Modul erisim bagimliligi (ortak): rolun gorunumunde modul varsa gecer, yoksa 403. Yetki sunucuda zorlanir."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Aylik rapor devre grafikleri: ReportDB LOE sorgusu (isci tarafi; panel sureci bu modulu Oracle icin KULLANMAZ).
 
 2026-11-20 kullanici: "reportdb'den alacagimiz veri ile grafigi cizecegiz; LOE_Reportdb_Sorgu.txt'deki sorguyu kullanacagiz, tablo

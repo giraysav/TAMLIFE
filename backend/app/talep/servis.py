@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gelistirme talebi / oneri kuyrugu. Uretim karsiligi: kutucuklar/talep/servis.py, blueprints/talep_bp.py.
 
 Kurallar (uretimle ayni):

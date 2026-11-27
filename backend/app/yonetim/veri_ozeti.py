@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Yonetim > Veri Ozeti (2026-11-21 kullanici: "ReportDB, OneDesk, ONENT DB'lerden gelen verileri konsolide edecegimiz sade, kullanimi
 ve anlasilmasi kolay, yonetimi kolay bir gorunum").
 

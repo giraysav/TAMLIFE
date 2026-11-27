@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ceyrek Sunum servisi. Kaynaklar tek kayitta (KAYNAKLAR: anahtar -> ad TR/EN -> ceyrek goruntusunu ureten fonksiyon).
 
 Her panel modulu sunumda kendi alanina sahiptir (KAYNAKLAR'da modul basina en az bir kaynak; veri olmasa da alan cizilir).

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Ham Musteri Verisi aktarimi: customer_import_run (geri alma kaydi); customer.customer_no 50 -> 200 karakter
 (bir kartta birden cok Musteri No virgulle tutulur).
 

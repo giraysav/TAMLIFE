@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """TopoMaker - musteri envanterinden topoloji.
 
 2026-11-24 kullanici (1): "lokasyon ismi ve ci name alanindaki verileri kullanarak onent'ten gelen ci bilgileri ile basit bir topo ciz".

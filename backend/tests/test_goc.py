@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Veritabani gocleri: bos bir veritabanina 0001'den son surume kadar zincir kesintisiz uygulanir ve modelle uyusur."""
 
 from __future__ import annotations

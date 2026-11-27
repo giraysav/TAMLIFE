@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Dis kaynaklar (Oracle): REPORTDB (ORACLE_REPORTDB_*), ONENTDB (ONENTDB_DB_*).
 
 Burada yalniz *_ENABLED bayragi okunur (acik_mi); surucu yuklenmez, baglanti acilmaz (baglanti: app.tampon.oracle, isci surecte).

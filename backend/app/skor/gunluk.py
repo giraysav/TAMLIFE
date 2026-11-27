@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Gunluk utilizasyon turu (2026-11-21 kullanici): her sabah 06:00'da isci calisir, veri ozetini yazar ve skoru gunceller.
 
   "30 dk kodu cok yorar, utilizasyon skorunu dinamik hesaplamak icin sabaha karsi bir isci kur. Skor hesabi icin kapanmis kayitlari

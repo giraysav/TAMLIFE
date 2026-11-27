@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """customer.modul: Musteri Yonetimi / Toptan / Baglantili Araclar kartlari ayri (2026-10-19 kullanici istegi).
 
 Revision ID: 0016_musteri_alani

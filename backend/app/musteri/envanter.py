@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Musteri envanteri / Kritik CI: ONENT NEMS_CMDB -> panel (customer_ci) -> musteri kartinin Kritik CI alani.
 
 2026-11-20 kullanici: "onent'ten gelen NEMS_CMDB verilerinde musteri no ile eslesen CI'lari, yani o musteriye ait cmdb verilerini

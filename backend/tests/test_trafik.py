@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Giray Sav. Tum haklari saklidir. TAMLIFE paneli - izinsiz kopyalanamaz, dagitilamaz.
 """Devre trafigi (MSSQL LOE): IMT -> rrdid eslesmesi ve saatlik toplama (sahte imlec), olcum noktalarina birlesme, hata yalitimi,
 Kurum Baglantilari karti (parola yok). Canli MSSQL'e baglanilmaz."""
 
