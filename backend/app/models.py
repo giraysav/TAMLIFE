@@ -351,6 +351,8 @@ class ReportCircuitData(Base):
     year: Mapped[int] = mapped_column(Integer, primary_key=True)
     month: Mapped[int] = mapped_column(Integer, primary_key=True)
     points: Mapped[list] = mapped_column(JSON, default=list)  # [[epoch_ms, erisim, gecikme, jitter, kayip, pencere], ...]
+    # 5 dk giris / cikis trafigi [[epoch_sn, giris bps, cikis bps], ...] (MSSQL LOE; LookOutEyes gosterimi panelde konsolide edilir)
+    traffic: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     summary: Mapped[dict] = mapped_column(JSON, default=dict)
     exchours: Mapped[str] = mapped_column(String(100), default="")
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

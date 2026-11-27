@@ -17,7 +17,9 @@ uzerinde olustursun; grafigi olustururken saat secimi olsun". Grafik ayari (metr
 GET .../rapor/trafik?donem=YYYY-MM sozlesmesi:
   {"yil", "ay", "duzenleyebilir": bool, "trafik_var": bool, "ayar": {"metrikler": [...], "saat": [bas, bit]}, "kaynak": {"cmdb": {...}, "olcum": {...}}, "bekliyor": bool,
    "devreler": [{"id", "ci", "baslik", "durum": "hazir" | "bekliyor" | "veri_yok", "cekildi", "exchours", "ozet",
-                 "noktalar": [[epoch_ms, erisim 0-1, gecikme ms, jitter ms, kayip 0-1, pencere 0/1, giris bps, cikis bps], ...]}]}
+                 "noktalar": [[epoch_ms, erisim 0-1, gecikme sn, jitter sn, kayip 0-1, pencere 0/1], ...] (saatlik),
+                 "trafik": {"adim": sn, "noktalar": [[epoch_ms, giris bps, cikis bps], ...], "giris"/"cikis": {"son", "en_yuksek", "ort"}} | null
+                 (LookOutEyes ile ayni cozunurluk: app.rapor.loe_trafik.cozunurluk / konsolide)}]}
 PUT .../rapor/devre-ayar {"metrikler": [...], "bas_zaman": "YYYY-MM-DDTHH:MM" | null, "bit_zaman": ...}: grafik araligi (bos = raporun donemi).
 """
 
@@ -334,12 +336,16 @@ def getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None 
     for s in secili:
         aylik = veriler.get(s.ciname, {})
         eksik = [d for d in gereken if d not in aylik]
-        noktalar = [n for d in gereken if d in aylik for n in (aylik[d].points or []) if bas_ms <= n[0] <= bit_ms]
+        noktalar = [n[:6] for d in gereken if d in aylik for n in (aylik[d].points or []) if bas_ms <= n[0] <= bit_ms]
         cekildi = max((v.fetched_at for v in aylik.values() if v.fetched_at), default=None)
-        durum = "bekliyor" if eksik else ("hazir" if noktalar else "veri_yok")
+        # trafik: LookOutEyes ile ayni cozunurluk ve ozet (2026-11-27 kullanici: karsilastiranlar fark gormesin)
+        seri = [x for d in gereken if d in aylik for x in (aylik[d].traffic or [])]
+        trafik_ = loe_trafik.konsolide(seri, bas_ms / 1000, bit_ms / 1000, loe_trafik.cozunurluk(bas_ms / 1000, simdi().timestamp())) if seri else None
+        durum = "bekliyor" if eksik else ("hazir" if noktalar or trafik_ else "veri_yok")
         devreler.append({
             "id": s.id, "ci": s.ciname, "baslik": s.label, "durum": durum, "cekildi": _iso(cekildi),
             "exchours": next((v.exchours for v in aylik.values() if v.exchours), ""), "ozet": _aralik_ozeti(noktalar), "noktalar": noktalar,
+            "trafik": trafik_,
             "trafik_eslesme": next(((v.summary or {}).get("trafik_eslesme") for v in aylik.values() if (v.summary or {}).get("trafik_eslesme")), ""),
         })  # fmt: skip
     return {

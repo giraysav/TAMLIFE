@@ -39,6 +39,7 @@ from app.tampon.eslestirme import anahtar, musteri_anahtarlari
 _log = logging.getLogger("tamlife.loe")
 KAYNAK = "oracle_reportdb"
 DURUM_ANAHTARI = "rapor.loe_durum"
+TRAFIK_SURUM = 2  # 2026-11-27: trafik 5 dk ayri seride (onceden saatlik, noktalarin 6-7. alani)
 IMT_BICIMI = re.compile(r"^\d{9,15}$")  # gecerli IMT (envanterdeki '-', '1' gibi yer tutucular eslesmez)
 TR = timezone(timedelta(hours=3))  # ReportDB DATETIME yerel saat (Turkiye, yaz saati yok)
 
@@ -162,9 +163,9 @@ def tekillestir(satirlar: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def noktalar(satirlar: list[dict[str, Any]]) -> list[list[Any]]:
-    """Grafik serisi: [epoch_ms, erisim (0-1), gecikme (ms), jitter (ms), kayip (0-1, LOE olcegi), pencere 0/1, giris bps, cikis bps];
-    saat basina TEK nokta, zamana gore sirali. Ayni saatin birden cok satiri birlesir: erisim = toplam AVAIL / toplam TOTAL, gecikme /
-    jitter / kayip ortalama, pencere herhangi biri, trafik ilk dolu deger."""
+    """Kalite serisi: [epoch_ms, erisim (0-1), gecikme (sn), jitter (sn), kayip (0-1, LOE olcegi), pencere 0/1]; saat basina TEK nokta,
+    zamana gore sirali. Ayni saatin birden cok satiri birlesir: erisim = toplam AVAIL / toplam TOTAL, gecikme / jitter / kayip ortalama,
+    pencere herhangi biri. Trafik ayri seride (report_circuit_data.traffic, 5 dk; LookOutEyes gosterimi panelde)."""
     saatler: dict[datetime, list[dict[str, Any]]] = {}
     for s in satirlar:
         saatler.setdefault(s["zaman"], []).append(s)
@@ -172,9 +173,6 @@ def noktalar(satirlar: list[dict[str, Any]]) -> list[list[Any]]:
     def ort(liste: list[dict[str, Any]], alan: str) -> float | None:
         d = [x[alan] for x in liste if x[alan] is not None]
         return sum(d) / len(d) if d else None
-
-    def ilk(liste: list[dict[str, Any]], alan: str) -> Any:
-        return next((x[alan] for x in liste if x.get(alan) is not None), None)
 
     sonuc = []
     for zaman in sorted(saatler):
@@ -188,8 +186,6 @@ def noktalar(satirlar: list[dict[str, Any]]) -> list[list[Any]]:
             None if jitter is None else round(jitter / 1000, 4),
             None if loss is None else round(loss / 100, 6),
             1 if any(x["pencere"] for x in g) else 0,
-            ilk(g, "giris"),
-            ilk(g, "cikis"),
         ])  # fmt: skip
     return sonuc
 
@@ -300,8 +296,8 @@ def _tazelenmeli(kayit: ReportCircuitData | None, yil: int, ay: int, an: datetim
     cekildi = _aware(kayit.fetched_at)
     _, bit = ay_araligi(yil, ay)
     bit = bit.replace(tzinfo=TR)
-    if loe_trafik.acik() and "trafik" not in (kayit.summary or {}):
-        return True  # trafik kaynagi acildiktan sonra trafiksiz cekilmis ay bir kez yeniden cekilir (2026-11-27)
+    if loe_trafik.acik() and (kayit.summary or {}).get("trafik_surum") != TRAFIK_SURUM:
+        return True  # trafik kaynagi acildiktan / bicim degistikten sonra ay bir kez yeniden cekilir (2026-11-27: 5 dk seri)
     if cekildi >= bit + timedelta(days=KESINLESME_GUN):
         return False  # ay kapandiktan sonra kesinlesmis veri
     esik = GUNCEL_AY_YENILEME_DK if an < bit else ONCEKI_AY_YENILEME_DK
@@ -334,14 +330,15 @@ def olcum_cek(db: Session, cinames: list[str], yil: int, ay: int) -> int:
                     "pencere": bool(_sayi(s[ix["PENCERE"]])),
                 })  # fmt: skip
     gruplar = {ci: tekillestir(satirlar) for ci, satirlar in gruplar.items()}
-    trafik = _trafik_ekle(db, gruplar, bas, bit)
+    trafik = _trafik_cek(db, list(gruplar), bas, bit)
     an = simdi()
     for ci, satirlar in gruplar.items():
         kayit = db.get(ReportCircuitData, (ci, yil, ay)) or ReportCircuitData(ciname=ci, year=yil, month=ay)
         ozet_ = ozet(satirlar)
         if trafik is not None:  # trafik cekildi (veri olsun olmasin); hata verdiyse anahtar yok, sonraki tazelemede yeniden denenir
-            ozet_["trafik"] = "var" if ci in trafik else "yok"
-            ozet_["trafik_eslesme"] = trafik.get(ci, "")
+            t = trafik.get(ci) or {}
+            ozet_.update(trafik="var" if t else "yok", trafik_eslesme=t.get("eslesme", ""), trafik_surum=TRAFIK_SURUM)
+            kayit.traffic = [list(x) for x in t.get("seri", [])]
         kayit.points, kayit.summary, kayit.exchours, kayit.fetched_at = noktalar(satirlar), ozet_, exch.get(ci, ""), an
         db.merge(kayit)
     db.commit()
@@ -363,15 +360,14 @@ def devre_imtleri(db: Session, cinames: list[str]) -> dict[str, str]:
     return {c: sonuc.get(c, "") for c in cinames}
 
 
-def _trafik_ekle(db: Session, gruplar: dict[str, list[dict[str, Any]]], bas: datetime, bit: datetime) -> dict[str, str] | None:
-    """Saatlik satirlara MSSQL trafigini (giris / cikis bps) yazar; Oracle olcumu olmayan saatler trafikle eklenir (pencere disi).
-    Donus: trafigi bulunan CI adi -> eslesme turu (ci_imt | ci | imt). Kaynak kapali ya da hata: None (Oracle metrikleri yine
-    yazilir; hata durum kaydina ve gunluge)."""
+def _trafik_cek(db: Session, cinames: list[str], bas: datetime, bit: datetime) -> dict[str, dict] | None:
+    """Devrelerin 5 dakikalik MSSQL trafigi: CI adi -> {"seri": [(epoch sn, giris bps, cikis bps)], "eslesme": ci_imt|ci|imt}.
+    Kaynak kapali ya da hata: None (Oracle metrikleri yine yazilir; hata durum kaydina ve gunluge)."""
     if not loe_trafik.acik():
         return None
-    imtler = devre_imtleri(db, list(gruplar))
+    imtler = devre_imtleri(db, cinames)
     try:
-        seriler = loe_trafik.saatlik_trafik(imtler, bas, bit)
+        seriler = loe_trafik.trafik_serileri(imtler, bas, bit)
     except Exception as e:  # noqa: BLE001 - trafik kaynagi hatasi olcumu durdurmaz
         from app.tampon import mssql
 
@@ -379,17 +375,8 @@ def _trafik_ekle(db: Session, gruplar: dict[str, list[dict[str, Any]]], bas: dat
         _log.warning("trafik cekilemedi: %s", mesaj)
         _durum_yaz(db, "trafik", son_deneme=simdi().isoformat(), hata=mesaj)
         return None
-    for ci, satirlar in gruplar.items():
-        seri = dict((seriler.get(ci) or {}).get("seri") or {})
-        for s in satirlar:  # ayni saatin her satirina (noktalar() tek noktada birlestirir)
-            if (v := seri.get(s["zaman"].replace(minute=0, second=0))) is not None:
-                s["giris"], s["cikis"] = v
-        oracle_saatleri = {s["zaman"].replace(minute=0, second=0) for s in satirlar}
-        for saat, (gir, cik) in ((k, v) for k, v in seri.items() if k not in oracle_saatleri):  # Oracle olcumu olmayan saat: yalniz trafik
-            satirlar.append({"zaman": saat, "avail": None, "total": None, "delay": None, "jitter": None, "loss": None, "pencere": False,
-                             "giris": gir, "cikis": cik})  # fmt: skip
     _durum_yaz(db, "trafik", son_deneme=simdi().isoformat(), son_basari=simdi().isoformat(), hata="")
-    return {ci: v["eslesme"] for ci, v in seriler.items() if ci in gruplar and v.get("seri")}
+    return {ci: v for ci, v in seriler.items() if ci in cinames and v.get("seri")}
 
 
 def senkron(db: Session, zorla: bool = False) -> dict[str, Any]:

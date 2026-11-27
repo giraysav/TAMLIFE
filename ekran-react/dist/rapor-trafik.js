@@ -27,7 +27,8 @@
 
   var METIN = {
     tr: {
-      trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
+      trafik: "Trafik", giris: "Inbound", cikis: "Outbound", son: "son",
+      cozunurluk: function (a) { return "Trafik: " + (a >= 86400 ? "günlük" : a >= 3600 ? (a / 3600) + " saatlik" : (a / 60) + " dakikalık") + " ortalama (LookOutEyes ile aynı çözünürlük)"; }, gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", veriler: "Grafikte gösterilecek veriler",
       bolum: "Devre grafikleri", ara: "IMT, açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
       uygula: "Uygula", uygulaNot: "Tarihleri seçip Uygula'ya basın",
@@ -45,7 +46,8 @@
       ay: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
     },
     en: {
-      trafik: "Traffic", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
+      trafik: "Traffic", giris: "Inbound", cikis: "Outbound", son: "last",
+      cozunurluk: function (a) { return "Traffic: " + (a >= 86400 ? "daily" : a >= 3600 ? (a / 3600) + "-hour" : (a / 60) + "-minute") + " average (same resolution as LookOutEyes)"; }, gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "avg", enYuksek: "peak", p95: "95th", veriler: "Data shown on the chart",
       bolum: "Circuit charts", ara: "Type an IMT, description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
       uygula: "Apply", uygulaNot: "Pick the dates and press Apply",
@@ -118,7 +120,7 @@
   // her panel tek eksen. Trafik saatlik (gunluk desen gorunsun), kalite verileri gunluk ortalama (saatlik gurultu yerine egilim).
   // Hafta sonlari hafif gri, kesintiler kirmizi bant. Renkler dataviz dogrulayicisindan gecti (panel ici ciftler, acik zemin).
   var C = {
-    giris: "#2a78d6", cikis: "#eb6834", gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948", erisim: "#0f766e",
+    giris: "#3cc43c", cikis: "#1f3fd1",  // LookOutEyes renkleri: Inbound yesil alan, Outbound mavi cizgi gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948", erisim: "#0f766e",
     metin: "#0b1f3a", ikincil: "#1f2a37", soluk: "#2f3b48", izgara: "#e3e8ee", kutu: "#f4f7fa", haftaSonu: "rgba(100,116,139,0.07)",
     kesinti: "rgba(227,73,72,0.14)"
   };
@@ -178,29 +180,24 @@
       }
     }
 
-    if (metrikler.indexOf("trafik") >= 0) {
-      var sg = istatistik(deger(6, 1)), sc = istatistik(deger(7, 1));
-      if (sg || sc) {
-        var enUst = Math.max(sg ? sg.enYuksek : 0, sc ? sc.enYuksek : 0), b = BIRIM[BIRIM.length - 1];
-        for (var k = 0; k < BIRIM.length; k++) if (enUst >= BIRIM[k][0]) { b = BIRIM[k]; break; }
-        var bol = b[0];
-        var veri = function (i) { return nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[i] != null ? n[i] / bol : null]; }); };
-        paneller.push({ ad: m.trafik, birim: b[1], boy: 150, ondalik: enUst / bol < 10 ? 1 : 0 });
-        var p = paneller.length - 1;
-        var sGiris = alanSerisi(m.giris, C.giris, veri(6), p);
-        seriler.push(Object.assign(sGiris, {
-          markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) },
-          markLine: sg ? { silent: true, symbol: "none", lineStyle: { type: "dashed", width: 1, color: C.giris },
-            label: { position: "insideEndTop", formatter: m.giris + " " + m.p95 + "  " + bps(sg.p95, dil), color: C.metin, fontSize: 11, fontWeight: 700,
-              backgroundColor: "rgba(255,255,255,0.9)", padding: [1, 4], borderRadius: 3 },
-            data: [{ yAxis: sg.p95 / bol }] } : undefined }));
-        seriler.push(alanSerisi(m.cikis, C.cikis, veri(7), p));
-        lejant.push(m.giris, m.cikis);
-        // 2026-11-27: LookOutEyes ile ayni dil (Avg / Max): buyuk deger ortalama, altinda saatlik en yuksek ve %95
-        // (en yuksek saatlik ortalamadir; LookOutEyes aylik gorunumde ~2 saatlik ortalamanin en yuksegini verir)
-        if (sg) kutular.push([m.giris + " " + m.ort, bps(sg.ort, dil), m.enYuksek + " " + bps(sg.enYuksek, dil) + " · " + m.p95 + " " + bps(sg.p95, dil)]);
-        if (sc) kutular.push([m.cikis + " " + m.ort, bps(sc.ort, dil), m.enYuksek + " " + bps(sc.enYuksek, dil) + " · " + m.p95 + " " + bps(sc.p95, dil)]);
-      }
+    // 2026-11-27 kullanici: "LookOutEyes gosterimi ile ayni veriler" - trafik ayri seride, LookOutEyes'in arsiv cozunurlugunde
+    // (sunucu: loe_trafik.cozunurluk / konsolide); Inbound yesil alan, Outbound mavi cizgi; Avg / Max / Last.
+    var trafikNotu = "";
+    if (metrikler.indexOf("trafik") >= 0 && devre.trafik && devre.trafik.noktalar && devre.trafik.noktalar.length) {
+      var tr = devre.trafik, tn = tr.noktalar, sg = tr.giris, sc = tr.cikis;
+      var enUst = Math.max(sg ? sg.en_yuksek : 0, sc ? sc.en_yuksek : 0), b = BIRIM[BIRIM.length - 1];
+      for (var k = 0; k < BIRIM.length; k++) if (enUst >= BIRIM[k][0]) { b = BIRIM[k]; break; }
+      var bol = b[0];
+      paneller.push({ ad: m.trafik, birim: b[1], boy: 150, ondalik: enUst / bol < 10 ? 1 : 0 });
+      var p = paneller.length - 1;
+      seriler.push(Object.assign(alanSerisi(m.giris, C.giris, tn.map(function (n) { return [n[0], n[1] == null ? null : n[1] / bol]; }), p), {
+        markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) } }));
+      seriler.push({ name: m.cikis, type: "line", xAxisIndex: p, yAxisIndex: p, showSymbol: false, connectNulls: false, sampling: "lttb",
+        data: tn.map(function (n) { return [n[0], n[2] == null ? null : n[2] / bol]; }), lineStyle: { width: 1.4, color: C.cikis }, itemStyle: { color: C.cikis } });
+      lejant.push(m.giris, m.cikis);
+      if (sg) kutular.push([m.giris + " " + m.ort, bps(sg.ort, dil), m.son + " " + bps(sg.son, dil) + " · " + m.enYuksek + " " + bps(sg.en_yuksek, dil)]);
+      if (sc) kutular.push([m.cikis + " " + m.ort, bps(sc.ort, dil), m.son + " " + bps(sc.son, dil) + " · " + m.enYuksek + " " + bps(sc.en_yuksek, dil)]);
+      trafikNotu = m.cozunurluk(tr.adim);
     }
 
     var gecikmeVar = metrikler.indexOf("gecikme") >= 0, jitterVar = metrikler.indexOf("jitter") >= 0;
@@ -279,7 +276,7 @@
 
     // Dip notu: tek satir
     graphic.push({ type: "text", left: 12, bottom: 10, style: {
-      text: m.kaynak + (devre.exchours ? "   ·   " + m.hizmetSaati + " " + devre.exchours : ""), fill: C.ikincil, font: "600 10.5px " + YAZI } });
+      text: m.kaynak + (trafikNotu ? "   ·   " + trafikNotu : "") + (devre.exchours ? "   ·   " + m.hizmetSaati + " " + devre.exchours : ""), fill: C.ikincil, font: "600 10.5px " + YAZI } });
 
     var son = paneller.length - 1;
     return {
@@ -340,13 +337,13 @@
       .then(function (veri) {
         veriYayinla(adres, veri);
         var ayar = (veri && veri.ayar) || { metrikler: [], saat: [0, 23] };
-        var liste = ((veri && veri.devreler) || []).filter(function (d) { return d && d.noktalar && d.noktalar.length; });
+        var liste = ((veri && veri.devreler) || []).filter(function (d) { return d && ((d.noktalar && d.noktalar.length) || (d.trafik && d.trafik.noktalar && d.trafik.noktalar.length)); });
         if (!liste.length || !ayar.metrikler.length) return [];
         return echartsYukle().then(function (ec) {
           var cikti = [];
           liste.forEach(function (d) {
             var ar = veri.aralik || { bas_ms: aralik(veri.yil, veri.ay)[0], bit_ms: aralik(veri.yil, veri.ay)[1] };
-            var k = [d.id, d.cekildi, dil, ar.bas_ms, ar.bit_ms, ayar.metrikler.join(","), d.noktalar.length, d.baslik || ""].join("|");
+            var k = [d.id, d.cekildi, dil, ar.bas_ms, ar.bit_ms, ayar.metrikler.join(","), d.noktalar.length, d.trafik ? d.trafik.adim + ":" + d.trafik.noktalar.length : 0, d.baslik || ""].join("|");
             if (!(k in pngOnbellek)) {
               var s = devreSecenek(d, ar, ayar, dil);
               pngOnbellek[k] = s ? ciz(ec, s) : null;

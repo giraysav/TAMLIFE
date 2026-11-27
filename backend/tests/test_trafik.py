@@ -72,26 +72,34 @@ def mssql_acik(monkeypatch):
 ARALIK = (datetime(2026, 11, 1), datetime(2026, 12, 1))
 
 
+def _an(saat: int) -> int:
+    return int(datetime(2026, 11, 10, saat, tzinfo=loe.TR).timestamp())
+
+
+def _deger(seri: list, saat: int) -> tuple:
+    return next((g, c) for t, g, c in seri if t == _an(saat))
+
+
 def test_eslesme_once_ci_adi_sonra_imt(mssql_acik):
-    sonuc = loe_trafik.saatlik_trafik({"ci-a": "100000000111", "ci-b": "100000000222", "ci-c": "100000000333", "ci-yok": "100000000999"}, *ARALIK)
+    sonuc = loe_trafik.trafik_serileri({"ci-a": "100000000111", "ci-b": "100000000222", "ci-c": "100000000333", "ci-yok": "100000000999"}, *ARALIK)
     assert set(sonuc) == {"ci-a", "ci-b", "ci-c"}  # eslesmeyen sessizce atlanir
     assert {c: v["eslesme"] for c, v in sonuc.items()} == {"ci-a": "ci_imt", "ci-b": "ci", "ci-c": "imt"}
-    # ci-a CI adiyla rrdid 10'a eslesti: IMT'nin ikinci arayuzu (11) bu CI'ya eklenmez
-    assert sonuc["ci-a"]["seri"][datetime(2026, 11, 10, 9)] == (100.0, 50.0)
-    assert sonuc["ci-a"]["seri"][datetime(2026, 11, 10, 10)] == (40.0, 0.0)
-    assert sonuc["ci-b"]["seri"][datetime(2026, 11, 10, 9)] == (7.0, 3.0)
+    # ci-a CI adiyla rrdid 10'a eslesti: IMT'nin ikinci arayuzu (11) bu CI'ya eklenmez; seri 5 dk ham, zamana gore
+    assert _deger(sonuc["ci-a"]["seri"], 9) == (100.0, 50.0) and _deger(sonuc["ci-a"]["seri"], 10) == (40.0, 0.0)
+    assert [t for t, _, _ in sonuc["ci-a"]["seri"]] == sorted(t for t, _, _ in sonuc["ci-a"]["seri"])
+    assert _deger(sonuc["ci-b"]["seri"], 9) == (7.0, 3.0)
 
 
 def test_yalniz_imt_ile_arayuzler_toplanir_ve_carpan(mssql_acik, monkeypatch):
-    sonuc = loe_trafik.saatlik_trafik({"ci-z": "100000000111"}, *ARALIK)  # tempcilist'te yok: IMT'nin iki arayuzu toplanir
-    assert sonuc["ci-z"]["eslesme"] == "imt" and sonuc["ci-z"]["seri"][datetime(2026, 11, 10, 9)] == (120.0, 55.0)
+    sonuc = loe_trafik.trafik_serileri({"ci-z": "100000000111"}, *ARALIK)  # tempcilist'te yok: IMT'nin iki arayuzu ayni anda toplanir
+    assert sonuc["ci-z"]["eslesme"] == "imt" and _deger(sonuc["ci-z"]["seri"], 9) == (120.0, 55.0)
     monkeypatch.setenv("MSSQL_LOE_TRAFIK_CARPAN", "8")
-    assert loe_trafik.saatlik_trafik({"ci-z": "100000000111"}, *ARALIK)["ci-z"]["seri"][datetime(2026, 11, 10, 9)] == (960.0, 440.0)
+    assert _deger(loe_trafik.trafik_serileri({"ci-z": "100000000111"}, *ARALIK)["ci-z"]["seri"], 9) == (960.0, 440.0)
 
 
 def test_ip_sutunlari_hic_sorgulanmaz(mssql_acik):
     SahteImlec.sorgular.clear()
-    loe_trafik.saatlik_trafik({"ci-a": "100000000111", "ci-b": "100000000222"}, *ARALIK)
+    loe_trafik.trafik_serileri({"ci-a": "100000000111", "ci-b": "100000000222"}, *ARALIK)
     metin = " ".join(SahteImlec.sorgular).upper()
     assert "IP_ADDRESS" not in metin and "GRAPH_NAME" not in metin and "SELECT *" not in metin
 
@@ -110,21 +118,34 @@ def _satir(saat: int) -> dict:
     return {"zaman": datetime(2026, 11, 10, saat), "avail": 3600.0, "total": 3600.0, "delay": 5000.0, "jitter": 400.0, "loss": 0.0, "pencere": True}
 
 
-def test_trafik_olcum_noktalarina_saatine_gore_yazilir(mssql_acik):
+def test_trafik_ayri_seride_kalite_noktalari_6_alan(mssql_acik):
     with oturum() as db:
         db.add(ReportCmdb(ciname="ci-a", customer_key="1", fields={"IMT": "100000000111"}, search_text="ci-a"))
         db.add(CustomerCi(customer_key="1", ci_name="ci-a", attrs={"imt": "-"}))  # envanterde yer tutucu IMT: CMDB'deki kullanilir
         db.commit()
-        gruplar = {"ci-a": [_satir(9), _satir(11)]}
-        bulunan = loe._trafik_ekle(db, gruplar, *ARALIK)
+        bulunan = loe._trafik_cek(db, ["ci-a"], *ARALIK)
         db.rollback()
-    assert bulunan == {"ci-a": "ci_imt"}
-    noktalar = loe.noktalar(gruplar["ci-a"])
-    saatler = {datetime.fromtimestamp(n[0] / 1000, loe.TR).hour: n for n in noktalar}
-    assert saatler[9][6:8] == [100.0, 50.0]  # CI adiyla eslesen arayuz
-    assert saatler[11][6:8] == [None, None]  # 11:00 icin trafik yok
-    assert saatler[10][6:8] == [40.0, 0.0] and saatler[10][1] is None and saatler[10][5] == 0  # Oracle olcumu olmayan saat: yalniz trafik
-    assert saatler[9][1] == 1.0 and saatler[9][2] == 5.0  # Oracle metrikleri yerinde
+    assert bulunan["ci-a"]["eslesme"] == "ci_imt" and _deger(bulunan["ci-a"]["seri"], 9) == (100.0, 50.0)
+    n = loe.noktalar([_satir(9), _satir(11)])
+    assert [len(x) for x in n] == [6, 6] and n[0][1] == 1.0 and n[0][2] == 5.0  # kalite serisi trafik tasimaz
+
+
+def test_lookouteyes_cozunurlugu_aralik_baslangicinin_yasina_gore():
+    simdi_ = 2_000_000_000
+    saat = 3600
+    assert loe_trafik.cozunurluk(simdi_ - 49 * saat, simdi_) == 300  # 5 dk arsivi 50 saat
+    assert loe_trafik.cozunurluk(simdi_ - 10 * 24 * saat, simdi_) == 1800  # 30 dk arsivi 14,6 gun
+    assert loe_trafik.cozunurluk(simdi_ - 57 * 24 * saat, simdi_) == 7200  # 2 saat arsivi 64,6 gun (Ekim, Kasim sonunda)
+    assert loe_trafik.cozunurluk(simdi_ - 90 * 24 * saat, simdi_) == 86400
+
+
+def test_konsolide_epoch_hizali_ortalama_ve_ozet():
+    t0 = 1_790_000_000 // 7200 * 7200  # 2 saatlik dilim basi
+    seri = [[t0 + i * 300, 10.0 * (i < 24) + 50.0 * (i >= 24), 1.0] for i in range(48)]  # ilk 2 saat 10, sonraki 2 saat 50
+    k = loe_trafik.konsolide(seri, t0, t0 + 4 * 3600, 7200)
+    assert k["adim"] == 7200 and [n[1] for n in k["noktalar"]] == [10.0, 50.0]
+    assert k["giris"] == {"son": 50.0, "en_yuksek": 50.0, "ort": 30.0} and k["cikis"]["ort"] == 1.0
+    assert loe_trafik.konsolide(seri, t0 + 1, t0 + 4 * 3600, 7200)["giris"]["son"] == 50.0  # baslangici araliktan once olan dilim yok
 
 
 def test_devre_imti_once_envanterden(mssql_acik):
@@ -140,20 +161,18 @@ def test_trafik_hatasi_olcumu_durdurmaz(mssql_acik, monkeypatch):
     def patla(*a, **k):
         raise RuntimeError("baglanti koptu Gizli-Parola-1")
 
-    monkeypatch.setattr(loe_trafik, "saatlik_trafik", patla)
+    monkeypatch.setattr(loe_trafik, "trafik_serileri", patla)
     with oturum() as db:
-        gruplar = {"ci-a": [_satir(9)]}
-        assert loe._trafik_ekle(db, gruplar, datetime(2026, 11, 1), datetime(2026, 12, 1)) is None
+        assert loe._trafik_cek(db, ["ci-a"], *ARALIK) is None
         durum = loe.durum_oku(db)["trafik"]
         db.rollback()
     assert "Gizli-Parola-1" not in durum["hata"] and durum["hata"]
-    assert "giris" not in gruplar["ci-a"][0]
 
 
 def test_kaynak_kapaliyken_trafik_cekilmez(monkeypatch):
     monkeypatch.setenv("MSSQL_LOE_ENABLED", "false")
     with oturum() as db:
-        assert loe._trafik_ekle(db, {"ci-a": [_satir(9)]}, datetime(2026, 11, 1), datetime(2026, 12, 1)) is None
+        assert loe._trafik_cek(db, ["ci-a"], *ARALIK) is None
 
 
 def test_kurum_kartinda_mssql_parolasiz(istemci, mssql_acik):

@@ -19,11 +19,12 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from app.tampon import mssql
 
 _log = logging.getLogger("tamlife.loe_trafik")
+TR = timezone(timedelta(hours=3))  # olcum zamani yerel saat (Turkiye)
 PARCA = 200  # IN listesi parametre sayisi (SQL Server siniri 2100)
 
 
@@ -73,9 +74,9 @@ def _rrd_haritasi(cur, imtler: list[str], bas: datetime, bit: datetime) -> dict[
     return sonuc
 
 
-def _saatlik(cur, rrdler: list[int], bas: datetime, bit: datetime) -> dict[int, dict[datetime, list[float]]]:
-    """rrdid -> saat -> [ortalama giris, ortalama cikis] (5 dakikalik olcumlerin saatlik ortalamasi)."""
-    sonuc: dict[int, dict[datetime, list[float]]] = defaultdict(dict)
+def _bes_dakika(cur, rrdler: list[int], bas: datetime, bit: datetime) -> dict[int, list[tuple[datetime, float, float]]]:
+    """rrdid -> [(olcum zamani, giris, cikis)] ham 5 dakikalik olcumler (konsolidasyon panelde, LookOutEyes kuraliyla)."""
+    sonuc: dict[int, list[tuple[datetime, float, float]]] = defaultdict(list)
     mevcut = {r[0] for r in cur.execute("SELECT name FROM sys.objects WHERE type = 'U' AND name LIKE 'data[0-9]%'")}
     for g in _gunler(bas, bit):
         tablo = f"data{g:%Y%m%d}"
@@ -83,12 +84,9 @@ def _saatlik(cur, rrdler: list[int], bas: datetime, bit: datetime) -> dict[int, 
             continue
         for parca in _parcalar(rrdler):
             yer = ", ".join("?" * len(parca))
-            sorgu = (
-                f"SELECT rrdid, DATEADD(hour, DATEDIFF(hour, 0, measuretime), 0) saat, AVG(inbound), AVG(outbound) FROM dbo.{tablo} "
-                f"WHERE rrdid IN ({yer}) AND measuretime >= ? AND measuretime < ? GROUP BY rrdid, DATEADD(hour, DATEDIFF(hour, 0, measuretime), 0)"
-            )
-            for rrd, saat, gir, cik in cur.execute(sorgu, *parca, bas, bit):
-                sonuc[int(rrd)][saat] = [gir, cik]
+            sorgu = f"SELECT rrdid, measuretime, inbound, outbound FROM dbo.{tablo} WHERE rrdid IN ({yer}) AND measuretime >= ? AND measuretime < ?"
+            for rrd, zaman, gir, cik in cur.execute(sorgu, *parca, bas, bit):
+                sonuc[int(rrd)].append((zaman, gir or 0.0, cik or 0.0))
     return sonuc
 
 
@@ -109,14 +107,14 @@ def _ci_rrd(cur, cinames: list[str]) -> dict[str, set[int]]:
     return sonuc
 
 
-def saatlik_trafik(imtler: dict[str, str], bas: datetime, bit: datetime) -> dict[str, dict]:
-    """CI adi -> IMT eslemesinden: CI adi -> {"seri": {saat (yerel, saat basi): (giris bps, cikis bps)}, "eslesme": ci_imt|ci|imt}.
-    Hicbir yolla bulunamayan devre sozlukte yok."""
+def trafik_serileri(imtler: dict[str, str], bas: datetime, bit: datetime) -> dict[str, dict]:
+    """CI adi -> IMT eslemesinden: CI adi -> {"seri": [(epoch sn, giris bps, cikis bps)] 5 dakikalik, zamana gore, "eslesme":
+    ci_imt|ci|imt}. Ayni CI'ya dusen arayuzlerin ayni andaki olcumleri toplanir. Bulunamayan devre sozlukte yok."""
     a = mssql.ayar()
     if not imtler or not a.hazir():
         return {}
     k = carpan()
-    toplam: dict[str, dict[datetime, list[float]]] = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0, 0]))
+    toplam: dict[str, dict[datetime, list[float]]] = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0]))
     eslesme: dict[str, str] = {}
     with a.baglan() as conn:
         cur = conn.cursor()
@@ -141,14 +139,48 @@ def saatlik_trafik(imtler: dict[str, str], bas: datetime, bit: datetime) -> dict
                     hedef[r].add(ci)
             if not hedef:
                 continue
-            for rrd, saatler in _saatlik(cur, sorted(hedef), bas, bit).items():
+            for rrd, olcumler in _bes_dakika(cur, sorted(hedef), bas, bit).items():
                 for ci in hedef[rrd]:
-                    for saat, (gir, cik) in saatler.items():
-                        h = toplam[ci][saat]
-                        h[0] += gir or 0.0
-                        h[1] += cik or 0.0
-                        h[2] += 1
+                    for zaman, gir, cik in olcumler:
+                        h = toplam[ci][zaman]
+                        h[0] += gir
+                        h[1] += cik
     return {
-        ci: {"seri": {s: (round(v[0] * k, 2), round(v[1] * k, 2)) for s, v in saatler.items() if v[2]}, "eslesme": eslesme[ci]}
-        for ci, saatler in toplam.items()
-    }
+        ci: {"seri": [(int(z.replace(tzinfo=TR).timestamp()), round(v[0] * k, 2), round(v[1] * k, 2)) for z, v in sorted(zamanlar.items())],
+             "eslesme": eslesme[ci]}
+        for ci, zamanlar in toplam.items()
+    }  # fmt: skip
+
+
+# --- LookOutEyes ile ayni gosterim (2026-11-27 kullanici: "LookOutEyes ile ayni veriler; fark hata aramaya yol acar") -------------
+# LookOutEyes RRD arsivinden cizer: grafik, araligin BASLANGICINI hala kapsayan en ince arsivi kullanir (arsivler simdiden geriye):
+# 5 dk x 600 (50 saat), 30 dk x 700 (14,6 gun), 2 saat x 775 (64,6 gun), 1 gun x 797. Noktalar UTC epoch'una hizali adim
+# ortalamasi; Avg / Max / Last bu noktalardan. Dogrulama (Ekim 2026, 2 saat): Avg birebir (122,60 / 36,36 M); Max / Last ~%1 icinde
+# (LOE kendi 2 saatlik arsivini okur, o arsiv disa aktarilmiyor; panel 5 dakikalik olcumden ayni adimla yeniden hesaplar).
+ARSIVLER = ((300, 600), (1800, 700), (7200, 775), (86400, 797))
+
+
+def cozunurluk(bas_sn: float, simdi_sn: float) -> int:
+    """Araligin baslangicini kapsayan en ince arsivin adimi (sn)."""
+    geri = max(0.0, simdi_sn - bas_sn)
+    return next((adim for adim, satir in ARSIVLER if adim * satir >= geri), ARSIVLER[-1][0])
+
+
+def konsolide(seri: list[list[float]], bas_sn: float, bit_sn: float, adim: int) -> dict:
+    """5 dk seriyi adim ortalamasina indirir (epoch'a hizali); araliktaki noktalar ve LookOutEyes ozeti (son / en yuksek / ortalama)."""
+    kova: dict[int, list[float]] = {}
+    for t, gir, cik in seri:
+        k = int(t // adim) * adim
+        if bas_sn <= k <= bit_sn:  # baslangici araliktaki dilimler (LookOutEyes karsilastirmasinda en yakin: Avg birebir)
+            h = kova.setdefault(k, [0.0, 0.0, 0])
+            h[0] += gir
+            h[1] += cik
+            h[2] += 1
+    noktalar = [[k * 1000, round(v[0] / v[2], 2), round(v[1] / v[2], 2)] for k, v in sorted(kova.items())]
+
+    def ozet(i: int) -> dict | None:
+        d = [n[i] for n in noktalar]
+        return {"son": d[-1], "en_yuksek": max(d), "ort": round(sum(d) / len(d), 2)} if d else None
+
+    return {"adim": adim, "noktalar": noktalar, "giris": ozet(1), "cikis": ozet(2)}
+
