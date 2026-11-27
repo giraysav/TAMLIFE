@@ -189,8 +189,10 @@
       var es = bosluklu(nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[1] != null ? n[1] * 100 : null]; }));
       if (es.some(function (x) { return x[1] != null; })) {
         // eksen 100'de biter, alt sinir en dusuk degerin biraz altinda (hep %100 ise 99-100; ECharts kendi halinde 30'dan basliyordu)
+        // 2026-11-28: alt sinir adima hizali (1 / 2 / 5 / 10 / 20 / 50) ve aralik sabit, yoksa etiketler "100, 99, 96, 95" gibi duzensiz cikiyordu
         var enDusuk = Math.min.apply(null, es.filter(function (x) { return x[1] != null; }).map(function (x) { return x[1]; }));
-        paneller.push({ ad: m.erisim, birim: "%", boy: 80, ondalik: 2, olcekli: true, enFazla: 100, enAz: Math.max(0, Math.floor(enDusuk - Math.max(1, (100 - enDusuk) * 0.1))) });
+        var erAdim = [0.5, 1, 2, 5, 10, 20, 50].filter(function (a) { return a * 2 >= 100 - enDusuk; })[0] || 50;
+        paneller.push({ ad: m.erisim, birim: "%", boy: 80, ondalik: 2, olcekli: true, enFazla: 100, enAz: Math.max(0, 100 - erAdim * 2), aralik: erAdim });
         seriler.push(Object.assign(alanSerisi(m.erisim, C.erisim, es, paneller.length - 1), {
           markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) } }));
         lejant.push(m.erisim);
@@ -318,7 +320,7 @@
           splitLine: { show: false } };
       }),
       yAxis: paneller.map(function (p, k) {
-        return { type: "value", gridIndex: k, min: p.enAz != null ? p.enAz : p.olcekli ? undefined : 0, max: p.enFazla, scale: !!p.olcekli, splitNumber: p.boy < 100 ? 2 : 3, axisLine: { show: false }, axisTick: { show: false },
+        return { type: "value", gridIndex: k, min: p.enAz != null ? p.enAz : p.olcekli ? undefined : 0, max: p.enFazla, interval: p.aralik, scale: !!p.olcekli, splitNumber: p.boy < 100 ? 2 : 3, axisLine: { show: false }, axisTick: { show: false },
           axisLabel: { color: C.ikincil, fontSize: 10.5, fontWeight: 600, formatter: function (v) { return sayi(v, dil, v && v < 1 ? p.ondalik : v % 1 ? 1 : 0); } },
           splitLine: { lineStyle: { color: C.izgara } } };
       }),
