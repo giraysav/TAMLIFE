@@ -154,3 +154,9 @@ def kullanici_oturumlarini_kapat(username: str) -> int:
         for t in kapanacak:
             _STORE.pop(t, None)
     return len(kapanacak)
+
+
+def reset_for_tests() -> None:
+    """Testler: bellekteki oturumlari temizler."""
+    with _LOCK:
+        _STORE.clear()

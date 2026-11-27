@@ -76,6 +76,15 @@ def engine(url: str | None = None) -> Engine:
         return _ENGINES[hedef]
 
 
+def dispose_engines() -> None:
+    """Testler: motorlari ve hazir kullanici dosyasi kaydini sifirlar (her test kendi gecici veritabanini kullanir)."""
+    with _LOCK:
+        for e in _ENGINES.values():
+            e.dispose()
+        _ENGINES.clear()
+        _HAZIR.clear()
+
+
 def oturum() -> Session:
     """Panel DB oturumu (istek disi kullanim: arka plan yazici, ariza kaydi, ornek veri). `with oturum() as db:`"""
     return Session(engine(), autoflush=False)

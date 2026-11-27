@@ -1,6 +1,6 @@
 # TAMLIFE v3.5: İşletim Belgesi
 
-> © 2026 Giray Sav · Tüm hakları saklıdır. Kodun sahibi ve geliştiricisi: **Giray Sav** (Fullstack Designer). Ayrıntı: [NOTICE](NOTICE).
+> © 2026 Giray Sav · Tüm hakları saklıdır. Kodun sahibi ve geliştiricisi: **Giray Sav** (Technical Account Manager; Fullstack Designer). Ayrıntı: [NOTICE](NOTICE).
 
 Kurumsal müşteri ekiplerinin (TAM) paneli. Alarm, şikayet/talep, envanter (CMDB), devre performansı, skor ve aylık rapor tek müşteri kartında; Müşteri Erken Uyarı riskli müşteriyi nedeniyle birlikte öne çıkarır.
 
