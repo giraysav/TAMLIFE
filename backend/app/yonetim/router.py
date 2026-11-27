@@ -59,9 +59,11 @@ def ad_erisim_testi(admin: Principal = Depends(require_admin)) -> dict[str, Any]
 def oracle_erisim_testi(kaynak: str, admin: Principal = Depends(require_admin)) -> dict[str, Any]:
     """Oracle kaynagi (oracle_reportdb | oracle_onent): ayar -> DNS -> TCP -> oturum (SELECT 1 FROM DUAL, ayri
     surecte). Yazmaz, tablo okumaz; yanit adres/parola tasimaz."""
-    from app.tampon import postgres
+    from app.tampon import mssql, postgres
 
-    if kaynak in postgres.KAYNAKLAR:  # PostgreSQL (ONENTDB / ONEDESKDB): ayar -> DNS -> TCP -> salt okunur oturum (SELECT 1)
+    if kaynak == mssql.KAYNAK:  # MSSQL (devre trafigi): ayar -> DNS -> TCP -> oturum + veritabani erisimi
+        adimlar = mssql.erisim_adimlari()
+    elif kaynak in postgres.KAYNAKLAR:  # PostgreSQL (ONENTDB / ONEDESKDB): ayar -> DNS -> TCP -> salt okunur oturum (SELECT 1)
         adimlar = postgres.erisim_adimlari(kaynak)
     elif kaynak not in oracle.KAYNAKLAR:
         raise oracle.OracleHata("Bu kaynak bir Oracle kaynağı değil.", 404)

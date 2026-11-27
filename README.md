@@ -14,7 +14,7 @@ Kaynaklar                     İşçiler (ayrı süreç)                 Panel  
 Oracle REPORTDB (TEMIP, LOE) ─┐
 OneDesk  (PostgreSQL)        ─┼─> python -m app.isci reportdb ─┐
 ONENT CMDB (PostgreSQL)      ─┤      (30 dk turu)               ├─> panel DB (SQLite) ─> FastAPI :8117 ─> TLS vekili :443 ─> tarayıcı
-MSSQL LOE trafik (yetki bekl.)┘   python -m app.isci utilizasyon ┘     backend/var/dev.db     127.0.0.1         https://tamlife
+MSSQL LOE trafik (giriş/çıkış) ┘   python -m app.isci utilizasyon ┘     backend/var/dev.db     127.0.0.1         https://tamlife
                                      (her gün 06:00)
 ```
 
@@ -49,7 +49,7 @@ Panel ve vekil döngüsü süreç kapanırsa **15 sn içinde** yeniden başlatı
 
 **30 dakikalık veri turu** (`python -m app.isci reportdb`, tur sınırı 20 dk), sırasıyla:
 1. TEMIP alarm kayıtları (artımlı) → müşteri kartları / TAM Radar
-2. `rapor-devre`: CMDB kopyası (günlük) + seçili rapor devrelerinin ölçümleri
+2. `rapor-devre`: CMDB kopyası (günlük) + seçili rapor devrelerinin ölçümleri; erişim/gecikme/jitter/kayıp Oracle'dan, giriş/çıkış trafiği MSSQL'den (devre → IMT → `detailsYYYY.rrdname` → `dataYYYYMMDD`, saatlik ortalama; veri bir gün geriden gelir)
 3. `envanter`: müşteri envanteri / Kritik CI (4 saatte bir)
 4. `onedesk-kayit`: şikayet / talep kayıtları (artımlı, günlük mutabakat)
 5. `erken_uyari_bildir`: kritik çatı müşterinin sorumlu TAM'ına panel bildirimi (aynı müşteri için 7 günde bir)
@@ -80,7 +80,7 @@ Ayarlar `backend/.env` dosyasındadır (**git dışı; asla commit etmeyin, GitH
 | `AD_ENABLED`, `AD_SERVER`, `AD_DOMAIN`, `AD_ROL_KONTROLU`, ... | AD/LDAPS girişi ve KTS_ rol kontrolü |
 | `ORACLE_REPORTDB_ENABLED` + bağlantı anahtarları | Alarm / LOE ölçümleri (Oracle Instant Client gerekir) |
 | `ONEDESKDB_PG_ENABLED`, `ONENTDB_PG_ENABLED` + bağlantı anahtarları | Şikayet/talep ve CMDB (PostgreSQL) |
-| `MSSQL_LOE_ENABLED` + bağlantı anahtarları | Devre trafik tabloları (okuma yetkisi bekleniyor; kod henüz okumuyor) |
+| `MSSQL_LOE_ENABLED`, `_HOST`, `_PORT`, `_DBNAME` (virgüllü: `loe_reporting_bb,loe_reporting_int,loe_reporting_vrf`), `_USER`, `_PASSWORD`, `_TRAFIK_CARPAN` | Devre giriş/çıkış trafiği (SQL kimliği; Windows'un yerleşik "SQL Server" ODBC sürücüsü + `pyodbc`) |
 
 `canli_baslat.ps1` ayrıca ortamı kurar: `TAMLIFE_ENV=prod`, `TAMLIFE_STATIC_DIR`, `TAMLIFE_TRUSTED_PROXIES=127.0.0.1` (yalnız vekilden gelen `X-Forwarded-For` kabul edilir), `TAMLIFE_ALLOWED_HOSTS`, `TAMLIFE_BACKUP_DIR`.
 
@@ -178,7 +178,7 @@ Arayüzün kaynak kodu bu depoda **yoktur**; yalnız derlenmiş `ekran-react/dis
 
 ## 11. Yol haritası
 
-1. Devre giriş/çıkış trafiği (MSSQL okuma yetkisi gelince: sürücü, bağlantı kartı, grafik tek seferde).
+1. `LOE_REPORTING_MBINT` / `_MBVRF` okuma yetkisi (mobil devreler; bugün yalnız misafir erişimi var).
 2. Arayüz kaynak kodunun depoya alınması; test ortamının canlıdan ayrılması.
 3. Panel veritabanının PostgreSQL'e taşınması (kod `psycopg` ile hazır), yük testi, diğer bölge ekiplerine açılış.
 

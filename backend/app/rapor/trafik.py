@@ -33,7 +33,7 @@ from app.dil import m
 from app.models import AppSetting, ReportCircuit, ReportCircuitData, ReportCmdb
 from app.musteri.servis import MusteriHata, duzenleyebilir_mi, musteri_getir, musteri_yaz_getir
 from app.ortak import simdi
-from app.rapor import loe
+from app.rapor import loe, loe_trafik
 from app.session import Principal
 from app.tampon.eslestirme import musteri_anahtarlari
 
@@ -272,7 +272,7 @@ def getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None 
         "aralik": {"bas": bas.strftime(ZAMAN_BICIMI), "bit": bit.strftime(ZAMAN_BICIMI), "bas_ms": bas_ms, "bit_ms": bit_ms,
                    "ozel": bool(ayar["aralik"])},  # fmt: skip
         "duzenleyebilir": duzenleyebilir_mi(db, user, musteri),
-        "trafik_var": loe.trafik_sutunlari() is not None,
+        "trafik_var": loe_trafik.acik(),  # 2026-11-27: MSSQL LOE trafik kaynagi (app.rapor.loe_trafik)
         "ayar": ayar,
         "kaynak": _kaynak_durumu(db),
         "bekliyor": any(d["durum"] == "bekliyor" for d in devreler),

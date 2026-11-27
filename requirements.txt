@@ -9,6 +9,7 @@ ldap3==2.9.1  # AD/LDAPS (yalniz AD_ENABLED=true iken yuklenir)
 pyasn1==0.6.5
 certifi>=2026.10.19  # PYSEC-2026-4320 (2026-10-25 denetimi); dolayli bagimlilik, guvenlik alt siniri
 oracledb==26.0.1  # Oracle (ReportDB/Onent/Urun-Tutar); yalniz isci surecte ve kaynak ENABLED=true iken yuklenir
+pyodbc==5.5.0  # MSSQL LOE devre trafigi (Windows yerlesik "SQL Server" ODBC surucusu); isci surecte ve Kurum Baglantilari testinde
 cryptography==50.0.2
 cffi==2.1.1
 pycparser==3.12

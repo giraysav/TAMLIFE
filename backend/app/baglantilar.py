@@ -22,6 +22,7 @@ def connections() -> list[dict[str, object]]:
         {"id": "oracle_reportdb", "slot": "ORACLE_REPORTDB", "tur": "veritabani", "configured": acik_mi("ORACLE_REPORTDB_ENABLED")},
         {"id": "onent", "slot": "ONENTDB", "tur": "veritabani", "configured": acik_mi("ONENTDB_PG_ENABLED")},  # 2026-10-19: PostgreSQL
         {"id": "onedesk", "slot": "ONEDESKDB", "tur": "veritabani", "configured": acik_mi("ONEDESKDB_PG_ENABLED")},
+        {"id": "mssql_loe", "slot": "MSSQL_LOE", "tur": "veritabani", "configured": acik_mi("MSSQL_LOE_ENABLED")},  # 2026-11-27: trafik
     ]
 
 
@@ -79,13 +80,18 @@ def integrations() -> dict[str, object]:
     for k, t in postgres.KAYNAKLAR.items():
         d = postgres.durum(k)
         items.append({"id": k, "label": t.label, "state": d["state"], "description": "Salt okunur PostgreSQL kaynagi (katalog isci surecte)", "missing": d["eksik"]})
+    from app.tampon import mssql
+
+    d = mssql.durum()
+    items.append({"id": mssql.KAYNAK, "label": mssql.ETIKET, "state": d["state"], "description": "Salt okunur MSSQL kaynagi: devre giris / cikis trafigi (cekim isci surecte)", "missing": d["eksik"]})  # fmt: skip
     return {"items": items, "runtime": {"network": "kapali (canli baglanti yok)", "assets": "yerel"}}
 
 
 def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
     """Yonetim > Kurum Baglantilari: AD/LDAPS + Oracle (REPORTDB) + PostgreSQL (ONENTDB, ONEDESKDB) kaynaklari. Gizli deger yok; Oracle'da
     adres/servis/kullanici yalniz tanimli mi. Canli baglanti yalniz test ucunda (ayri surec)."""
-    from app.tampon import oracle, postgres
+    from app.dil import m
+    from app.tampon import mssql, oracle, postgres
 
     sonuc: list[dict[str, object]] = []
     for i in integrations()["items"]:  # type: ignore[union-attr]
@@ -101,4 +107,8 @@ def kurum_baglantilari(db: Session) -> list[dict[str, object]]:
         elif i["id"] in postgres.KAYNAKLAR:
             sonuc.append({**i, "tur": "postgres", "acma_anahtari": postgres.KAYNAKLAR[i["id"]].enabled_key, "bilgiler": postgres.bilgiler(i["id"]),
                           "katalog": postgres.agac(db, i["id"])["katalog"]})  # fmt: skip
+        elif i["id"] == mssql.KAYNAK:
+            sonuc.append({**i, "tur": "mssql", "acma_anahtari": mssql.ENABLED_KEY, "bilgiler": mssql.bilgiler(),
+                          "description": m("Devrelerin giriş / çıkış trafiği (5 dakikalık ölçüm, saatlik ortalama); aylık rapor grafiğine girer. Salt okunur, çekim veri turunda.",
+                                           "Circuit inbound / outbound traffic (5-minute samples, hourly average) for the monthly report chart. Read-only, fetched by the data run.")})  # fmt: skip
     return sonuc
