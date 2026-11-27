@@ -70,6 +70,7 @@ if ($Calistir) {
         # Donguler kapanirsa 15 sn icinde yeniden acilir; panel yeniden baslatmasi yalniz panel dongusunu oldurur (-PanelYenile), vekil ve isci dokunulmaz.
         $Pyw = Join-Path $Kok '.venv\Scripts\pythonw.exe'
         $Backend = Join-Path $Kok 'backend'
+        $Tetik = Join-Path $Backend 'var\tetik\rapor-devre'
         $IsciAralikDk = 30  # 2026-11-23 kullanici: "guncel veriyi 30 dk periyotla cek" (onceden 6 dk)
         $IsciSinirDk = 20
         function Servis-Gunluk($m) { try { Add-Content -Path $Log -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [servis] $m" -Encoding ASCII } catch { } }
@@ -108,6 +109,13 @@ if ($Calistir) {
                     & cmd.exe /c "taskkill /PID $($isci.Id) /T /F >nul 2>&1"
                     Servis-Gunluk "ReportDB turu $IsciSinirDk dk'yi asti; sonlandirildi"
                     $isci = $null
+                }
+                # 2026-11-28: devre eklenince panel yalniz tetik dosyasi birakir (app.rapor.trafik.olcum_tetikle); panel SYSTEM kimligindeyken
+                # kendi baslattigi isciyi Oracle reddediyordu (ORA-04088). Tetigi yalniz TAMLIFEADLOG kopyasi tuketir; tur suruyorsa bekler.
+                if ($IsciKimligiUygun -and -not $isci -and (Test-Path $Tetik) -and (Test-Path $Pyw) -and (Test-Path (Join-Path $Istemci 'oci.dll')) -and -not (Isci-Calisiyor)) {
+                    Remove-Item -LiteralPath $Tetik -Force -ErrorAction SilentlyContinue
+                    [void](Start-Process -FilePath $Pyw -ArgumentList ('-m app.isci rapor-devre --client "{0}"' -f $Istemci) -WorkingDirectory $Backend -WindowStyle Hidden -PassThru)
+                    Servis-Gunluk "rapor-devre tetigi: olcum cekimi baslatildi"
                 }
                 if ($IsciKimligiUygun -and -not $isci -and ((Get-Date) - $isciSon).TotalMinutes -ge $IsciAralikDk -and (Test-Path $Pyw) -and (Test-Path (Join-Path $Istemci 'oci.dll')) -and -not (Isci-Calisiyor)) {
                     $isciSon = Get-Date

@@ -61,6 +61,14 @@ def _sema() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _tetik_gecici(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Devre ekleme testleri olcum tetigini canli var/tetik yerine gecici klasore yazar (canli servis dongusu tetiklenmez)."""
+    from app.rapor import trafik
+
+    monkeypatch.setattr(trafik, "TETIK_DOSYASI", _KOK / "tetik" / "rapor-devre")
+
+
+@pytest.fixture(autouse=True)
 def _temiz() -> Iterator[None]:
     """Her test bos tablolarla baslar; giris sinirlayici, oturumlar ve Erken Uyari onbellegi sifirlanir."""
     jeton = musteri_alani.ayarla(musteri_alani.VARSAYILAN)

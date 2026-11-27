@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -216,23 +217,22 @@ def ara(db: Session, user: Principal, musteri_id: int, metin: str) -> dict[str, 
     return sonuc
 
 
+TETIK_DOSYASI = Path(__file__).resolve().parents[2] / "var" / "tetik" / "rapor-devre"
+
+
 def olcum_tetikle() -> None:
-    """Devre eklenince / aralik degisince olcumu bir sonraki isci turunu beklemeden ceker: `app.isci rapor-devre` ayri surecte
-    (panel Oracle'a baglanmaz; katalog._ayri_baslat). Calisan tur varsa isci kilit nedeniyle atlar, veri sonraki turda gelir.
-    2026-11-26 kullanici: "IMT'yi yazinca cizmesi uzun surdu" (veri saatlik isci turunu bekliyordu)."""
+    """Devre eklenince / aralik degisince olcumu bir sonraki isci turunu beklemeden cektirir. Panel isciyi KENDISI BASLATMAZ, yalniz
+    tetik dosyasi birakir; TAMLIFEADLOG servis dongusu (kurulum/canli_gorev_kur.ps1) dosyayi 15 sn icinde gorur, siler ve
+    `app.isci rapor-devre`yi kendi kimligiyle baslatir.
+    2026-11-26 kullanici: "IMT'yi yazinca cizmesi uzun surdu". 2026-11-28: panel SYSTEM kimligiyle calisirken baslattigi isci de
+    SYSTEM oluyordu; Oracle giris tetikleyicisi reddetti (ORA-04088), veri 30 dk'lik turu bekledi ve raporda grafik cikmadi."""
     import logging
-    import sys
-    from pathlib import Path
 
-    from app.tampon import katalog
-
-    backend = Path(__file__).resolve().parents[2]
-    gunluk = backend / "var" / "logs"
     try:
-        gunluk.mkdir(parents=True, exist_ok=True)
-        katalog._ayri_baslat([sys.executable, "-m", "app.isci", "rapor-devre"], backend, gunluk / "isci_rapor_devre.log")
-    except Exception:  # noqa: BLE001 - tetik basarisizsa veri saatlik isci turunda gelir
-        logging.getLogger("tamlife.trafik").warning("rapor-devre tetiklenemedi", exc_info=True)
+        TETIK_DOSYASI.parent.mkdir(parents=True, exist_ok=True)
+        TETIK_DOSYASI.write_text(datetime.now().isoformat(timespec="seconds"), encoding="ascii")
+    except OSError:  # tetik yazilamazsa veri 30 dk'lik isci turunda gelir
+        logging.getLogger("tamlife.trafik").warning("rapor-devre tetigi yazilamadi", exc_info=True)
 
 
 GRAFIK_ADI_UZUNLUK = 120

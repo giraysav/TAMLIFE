@@ -312,3 +312,21 @@ def test_grafik_adini_kullanici_verir(istemci):
     assert istemci.patch(f"/api/v1/musteri/{mid}/rapor/devreler/{d['id']}", json={"ad": ""}).json()["data"]["ad"] == ""
     baska = musteri_ekle("Baska Musteri")
     assert istemci.patch(f"/api/v1/musteri/{baska}/rapor/devreler/{d['id']}", json={"ad": "x"}).status_code == 404
+
+
+def test_devre_eklenince_panel_isci_baslatmaz_tetik_birakir(istemci, monkeypatch):
+    """2026-11-28: panel SYSTEM kimligiyle isciyi kendisi baslatinca Oracle reddediyordu; artik yalniz tetik dosyasi birakir,
+    TAMLIFEADLOG servis dongusu isciyi kendi kimligiyle calistirir."""
+    from app.rapor import trafik
+    from app.tampon import katalog
+
+    def baslatma(*a, **k):
+        raise AssertionError("panel isci baslatmamali")
+
+    monkeypatch.setattr(katalog, "_ayri_baslat", baslatma)
+    trafik.TETIK_DOSYASI.unlink(missing_ok=True)
+    kullanici_ekle("yonetici", "admin")
+    mid = _imtli_musteri()
+    giris(istemci, "yonetici")
+    assert istemci.post(f"/api/v1/musteri/{mid}/rapor/devreler", json={"imt": "100005049268"}).status_code == 200
+    assert trafik.TETIK_DOSYASI.is_file()
