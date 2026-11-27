@@ -30,6 +30,7 @@
       trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", veriler: "Grafikte gösterilecek veriler",
       bolum: "Devre grafikleri", ara: "IMT, açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
+      uygula: "Uygula", uygulaNot: "Tarihleri seçip Uygula'ya basın",
       imtOlustur: function (n) { return "Bu IMT ile grafik oluştur (" + n + " devre)"; }, imtEkli: "Bu IMT'nin devreleri ekli", imtNot: "IMT envanterde bulundu; trafik CI adı ve IMT ile eşleştirilir.",
       eslesme: { ci_imt: "trafik: CI adı + IMT eşleşti", ci: "trafik: CI adıyla eşleşti", imt: "trafik: IMT ile eşleşti" },
       kaldir: "Kaldır", secili: "Seçili devreler", seciliYok: "Henüz devre seçilmedi.", sonucYok: "Eşleşen devre bulunamadı.",
@@ -45,6 +46,7 @@
       trafik: "Traffic", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "avg", enYuksek: "peak", p95: "95th", veriler: "Data shown on the chart",
       bolum: "Circuit charts", ara: "Type an IMT, description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
+      uygula: "Apply", uygulaNot: "Pick the dates and press Apply",
       imtOlustur: function (n) { return "Create chart with this IMT (" + n + " circuit" + (n === 1 ? "" : "s") + ")"; }, imtEkli: "Circuits of this IMT are added", imtNot: "IMT found in inventory; traffic is matched by CI name and IMT.",
       eslesme: { ci_imt: "traffic: CI name + IMT matched", ci: "traffic: matched by CI name", imt: "traffic: matched by IMT" },
       kaldir: "Remove", secili: "Selected circuits", seciliYok: "No circuit selected yet.", sonucYok: "No matching circuit.",
@@ -201,13 +203,14 @@
         var d = nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[i] != null ? n[i] * carpan : null]; });
         return d.some(function (x) { return x[1] != null; }) ? d : [];
       };
-      var gs = gecikmeVar ? saatlik(2, 1) : [], js = jitterVar ? saatlik(3, 1) : [];
+      // olcum saniye cinsinden saklanir (LOE: DELAY_AVG / 1000); ekranda ms (2026-11-27: onceden "0,00 ms" gorunuyordu)
+      var gs = gecikmeVar ? saatlik(2, 1000) : [], js = jitterVar ? saatlik(3, 1000) : [];
       if (gs.length || js.length) {
         paneller.push({ ad: gecikmeVar && jitterVar ? m.gecikme + " & " + m.jitter : gecikmeVar ? m.gecikme : m.jitter, birim: "ms", boy: 120, ondalik: 1 });
         var q = paneller.length - 1;
         [[gecikmeVar, gs, m.gecikme, C.gecikme, 2], [jitterVar, js, m.jitter, C.jitter, 3]].forEach(function (t) {
           if (!t[0] || !t[1].length) return;
-          var st = istatistik(deger(t[4], 1));
+          var st = istatistik(deger(t[4], 1000));
           seriler.push(alanSerisi(t[2], t[3], t[1], q));
           lejant.push(t[2]);
           if (st) kutular.push([m[t[2] === m.gecikme ? "gecikme" : "jitter"] + " " + m.ort, ms(st.ort, dil), m.enYuksek + " " + ms(st.enYuksek, dil)]);
@@ -419,13 +422,27 @@
       var g = el("input", S.secim);
       g.type = "datetime-local";
       g.step = "60";
-      g.addEventListener("change", function () { aralikKaydet(false); });
+      // 2026-11-27 kullanici: tarih secimi aninda kaydedilmez; "Uygula" ile sorgulanir
+      g.addEventListener("input", function () { durum.tarihKirli = true; uygulaDurum(); });
+      g.addEventListener("change", function () { durum.tarihKirli = true; uygulaDurum(); });
       return g;
     }
     var basSec = zamanGirdisi(), bitSec = zamanGirdisi();
     saatSatir.appendChild(basSec);
     saatSatir.appendChild(el("span", "color:#64748b", "–"));
     saatSatir.appendChild(bitSec);
+    var uygulaDugme = el("button", S.dugme, m.uygula);
+    uygulaDugme.type = "button";
+    uygulaDugme.addEventListener("click", function () { aralikKaydet(false); });
+    saatSatir.appendChild(uygulaDugme);
+    function uygulaDurum() {
+      var v = durum.veri, ar = v && v.ayar && v.ayar.aralik;
+      var b = basSec.value.slice(0, 16), t = bitSec.value.slice(0, 16);
+      var degisti = !!b && !!t && (!ar || ar.bas !== b || ar.bit !== t);
+      uygulaDugme.disabled = !degisti || !v || !v.duzenleyebilir || durum.calisiyor;
+      uygulaDugme.setAttribute("style", uygulaDugme.disabled ? S.pasif : S.dugme);
+      uygulaDugme.title = degisti ? "" : m.uygulaNot;
+    }
     var donemDugme = el("button", S.dugme2, m.raporDonemi);
     donemDugme.type = "button";
     donemDugme.addEventListener("click", function () { aralikKaydet(true); });
@@ -479,10 +496,11 @@
     }
     function ayarKaydet() { var v = durum.veri; ayarGonder(v && v.ayar ? v.ayar.aralik : null); }
     function aralikKaydet(donem) {
-      if (donem) { ayarGonder(null); return; }
+      if (donem) { durum.tarihKirli = false; ayarGonder(null); return; }
       var b = basSec.value, t = bitSec.value;
       if (!b || !t) return;
       if (t <= b) { durum.mesaj = m.aralikHata; ciz2(); return; }
+      durum.tarihKirli = false;
       ayarGonder({ bas: b.slice(0, 16), bit: t.slice(0, 16) });
     }
 
@@ -506,12 +524,14 @@
         k.etiket.title = ad === "trafik" && v && !v.trafik_var ? m.trafikYok : "";
       });
       var etkin = (ayar.aralik) || (v && v.aralik) || null;
-      if (etkin && document.activeElement !== basSec) basSec.value = etkin.bas;
-      if (etkin && document.activeElement !== bitSec) bitSec.value = etkin.bit;
+      // uygulanmamis secim (Uygula'ya basilmadi) periyodik yenilemede ezilmez
+      if (etkin && !durum.tarihKirli && document.activeElement !== basSec) basSec.value = etkin.bas;
+      if (etkin && !durum.tarihKirli && document.activeElement !== bitSec) bitSec.value = etkin.bit;
       basSec.disabled = bitSec.disabled = !duz || !v || durum.calisiyor;
       donemDugme.disabled = !duz || !v || durum.calisiyor || !ayar.aralik;
       donemDugme.style.opacity = donemDugme.disabled ? "0.5" : "1";
       aralikNot.textContent = v && !ayar.aralik ? m.raporDonemiAcik : "";
+      uygulaDurum();
       metrikUyari.textContent = v && !ayar.metrikler.length ? m.metrikYok : v && !v.trafik_var ? m.trafikYok : "";
       aramaKap.style.display = duz ? "" : "none";
       // secili devreler
@@ -524,7 +544,7 @@
         if (d.baslik) sol.appendChild(el("div", S.kucuk, d.baslik));
         var o = d.ozet || {};
         var ozet = d.durum === "hazir"
-          ? m.aylikLoe + ": " + m.erisim + " " + yuzde(o.erisilebilirlik, dil, 3) + " · " + m.gecikme + " " + ms(o.gecikme, dil) + " · " + m.jitter + " " + ms(o.jitter, dil) + " · " + m.kayip + " " + yuzde(o.kayip, dil, 3)
+          ? m.aylikLoe + ": " + m.erisim + " " + yuzde(o.erisilebilirlik, dil, 3) + " · " + m.gecikme + " " + ms(o.gecikme == null ? null : o.gecikme * 1000, dil) + " · " + m.jitter + " " + ms(o.jitter == null ? null : o.jitter * 1000, dil) + " · " + m.kayip + " " + yuzde(o.kayip, dil, 3)
           : "";
         sol.appendChild(el("div", S.kucuk + ";font-weight:700;color:" + (ROZET[d.durum] || RENK.gri),
           (d.durum === "hazir" ? m.hazir : d.durum === "bekliyor" ? m.bekliyor : m.veriYok) + (ozet ? " — " + ozet : "")));

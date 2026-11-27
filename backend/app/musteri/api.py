@@ -362,7 +362,8 @@ def devre_ekle(musteri_id: KimlikTipi, body: DevreGovde, e: Erisim = Depends(mus
 
 
 class DevreAyarGovde(BaseModel):
-    metrikler: list[Literal["trafik", "kayip", "jitter", "gecikme"]] = Field(default_factory=list, max_length=4)
+    # 2026-11-27: "erisim" (Availability) eklendi; eksikti ve isaretlenince her kayit 422 ile reddediliyordu
+    metrikler: list[Literal["erisim", "trafik", "kayip", "jitter", "gecikme"]] = Field(default_factory=list, max_length=5)
     bas_zaman: str | None = Field(default=None, max_length=16, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
     bit_zaman: str | None = Field(default=None, max_length=16, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
 

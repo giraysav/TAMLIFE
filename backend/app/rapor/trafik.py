@@ -23,6 +23,7 @@ PUT .../rapor/devre-ayar {"metrikler": [...], "bas_zaman": "YYYY-MM-DDTHH:MM" | 
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -48,8 +49,9 @@ METRIKLER = ("erisim", "trafik", "kayip", "jitter", "gecikme")
 # 2026-11-27 kullanici: "eslesen veri icin grafige availability, in/out trafik, ploss, delay, jitter hepsini yazsin"
 VARSAYILAN_METRIKLER = list(METRIKLER)
 ZAMAN_BICIMI = "%Y-%m-%dT%H:%M"
-EN_ERKEN = datetime(2024, 1, 1)
-EN_UZUN_GUN = 366
+# Gosterilmeyen alanlar: IP adresi tasiyanlar (envanter kurali: IP gosterilmez/alinmaz; 'ADDRESS' parcasi IPADDRESS'i de yakaliyordu)
+_IP_ALANI = re.compile(r"(^|_)IP(_|ADDR|$)", re.IGNORECASE)
+_IP_DEGERI = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 
 
 def _ayar_anahtari(musteri_id: int) -> str:
@@ -84,10 +86,7 @@ def ayar_yaz(db: Session, user: Principal, musteri_id: int, govde: dict[str, Any
     if govde.get("bas_zaman") or govde.get("bit_zaman"):
         if not bas or not bit or bit <= bas:
             raise MusteriHata(400, m("Bitiş, başlangıçtan sonra olmalı.", "End must be after start."))
-        if bas < EN_ERKEN or bit > datetime.now() + timedelta(days=1):
-            raise MusteriHata(400, m("Tarih aralığı geçersiz.", "Invalid date range."))
-        if bit - bas > timedelta(days=EN_UZUN_GUN):
-            raise MusteriHata(400, m(f"Aralık en fazla {EN_UZUN_GUN} gün olabilir.", f"The range can be at most {EN_UZUN_GUN} days."))
+        # 2026-11-27 kullanici: "time range ve donem sinirlamali olmamali" (onceden 2024 alt siniri, 366 gun ve gelecek tarih siniri)
         aralik = {"bas": bas.strftime(ZAMAN_BICIMI), "bit": bit.strftime(ZAMAN_BICIMI)}
     deger = {"metrikler": metrikler, "aralik": aralik}
     kayit = db.get(AppSetting, _ayar_anahtari(musteri_id))
@@ -154,7 +153,7 @@ def _kaynak_durumu(db: Session) -> dict[str, Any]:
 def _etiket(alanlar: dict[str, Any]) -> list[tuple[str, str]]:
     sonuc = []
     for ad, v in alanlar.items():
-        if ad in ("CINAME", "CUSTOMERNO") or v in (None, ""):
+        if ad in ("CINAME", "CUSTOMERNO") or v in (None, "") or _IP_ALANI.search(ad) or _IP_DEGERI.search(str(v)):
             continue
         if any(p in ad.upper() for p in _GOSTER):
             sonuc.append((ad, str(v)[:200]))
@@ -246,12 +245,13 @@ def _devre_ekle(db: Session, user: Principal, musteri: Customer, ci: str, etiket
     return var
 
 
-def _tum_metrikler(db: Session, user: Principal, musteri_id: int) -> None:
-    """IMT ile olusturulan grafikte butun veriler (erisim, trafik, kayip, jitter, gecikme) cizilir; secili tarih araligi korunur."""
+def _tum_metrikler(db: Session, user: Principal, musteri_id: int, aralik_sifirla: bool = False) -> None:
+    """IMT ile olusturulan grafikte butun veriler (erisim, trafik, kayip, jitter, gecikme) cizilir. aralik_sifirla: 2026-11-27
+    kullanici "IMT girilince o ayi kapsayan donem icin grafigi cizsin" - ozel tarih araligi kalkar, raporun donemi kullanilir."""
     ayar = ayar_oku(db, musteri_id)
-    if set(ayar["metrikler"]) != set(METRIKLER):
-        ar = ayar["aralik"] or {}
-        ayar_yaz(db, user, musteri_id, {"metrikler": list(METRIKLER), "bas_zaman": ar.get("bas"), "bit_zaman": ar.get("bit")})
+    ar = None if aralik_sifirla else (ayar["aralik"] or {})
+    if set(ayar["metrikler"]) != set(METRIKLER) or (aralik_sifirla and ayar["aralik"]):
+        ayar_yaz(db, user, musteri_id, {"metrikler": list(METRIKLER), "bas_zaman": (ar or {}).get("bas"), "bit_zaman": (ar or {}).get("bit")})
 
 
 def ekle(db: Session, user: Principal, musteri_id: int, ci: str | None = None, imt: str | None = None) -> dict[str, Any]:
@@ -263,7 +263,7 @@ def ekle(db: Session, user: Principal, musteri_id: int, ci: str | None = None, i
         if not cis:
             raise MusteriHata(404, m("Bu IMT müşterinin envanterinde bulunamadı.", "This IMT was not found in the customer's inventory."))
         eklenen = [_devre_ekle(db, user, musteri, c.ci_name, " · ".join(v for _, v in _envanter_etiketi(c, imt))) for c in cis]
-        _tum_metrikler(db, user, musteri.id)
+        _tum_metrikler(db, user, musteri.id, aralik_sifirla=True)
         return {"imt": imt, "eklenen": [{"id": v.id, "ci": v.ciname} for v in eklenen]}
     ci = (ci or "").strip()[:200]
     if not ci:

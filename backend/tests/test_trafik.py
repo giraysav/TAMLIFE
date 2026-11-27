@@ -235,3 +235,41 @@ def test_kopya_saatler_atilir_ayni_saat_tek_noktada_birlesir():
     assert len(n) == 2  # saat basina tek nokta
     assert n[1][1] == 0.5 and n[1][4] == 0.02  # erisim = toplam avail / toplam total; kayip ortalama
     assert loe.ozet(satirlar)["saat"] == 3  # ozet kopyalari saymaz
+
+
+# --- 2026-11-27 ekran hatasi: grafik ayari 422 ("Islem yapilamadi"), tarih sinirlari, IP etiketi -----------------
+def test_grafik_ayari_tum_metrikler_ve_sinirsiz_aralik(istemci):
+    from conftest import musteri_ekle
+
+    kullanici_ekle("yonetici", "admin")
+    mid = musteri_ekle("Musteri")
+    giris(istemci, "yonetici")
+    tum = ["erisim", "trafik", "kayip", "jitter", "gecikme"]
+    r = istemci.put(f"/api/v1/musteri/{mid}/rapor/devre-ayar", json={"metrikler": tum})
+    assert r.status_code == 200 and r.json()["data"]["metrikler"] == tum  # Availability isaretlenince 422 veriyordu
+    uzun = {"metrikler": tum, "bas_zaman": "2019-01-01T00:00", "bit_zaman": "2026-10-31T23:59"}  # 2024 alti ve 366 gun ustu
+    assert istemci.put(f"/api/v1/musteri/{mid}/rapor/devre-ayar", json=uzun).status_code == 200
+    ters = {"metrikler": tum, "bas_zaman": "2026-10-31T23:59", "bit_zaman": "2026-10-01T00:00"}
+    assert istemci.put(f"/api/v1/musteri/{mid}/rapor/devre-ayar", json=ters).status_code == 400
+
+
+def test_imt_ile_grafik_raporun_donemine_doner(istemci):
+    kullanici_ekle("yonetici", "admin")
+    mid = _imtli_musteri()
+    giris(istemci, "yonetici")
+    ozel = {"metrikler": ["trafik"], "bas_zaman": "2026-09-01T00:00", "bit_zaman": "2026-09-30T23:59"}
+    istemci.put(f"/api/v1/musteri/{mid}/rapor/devre-ayar", json=ozel)
+    istemci.post(f"/api/v1/musteri/{mid}/rapor/devreler", json={"imt": "100005049268"})
+    ayar = istemci.get(f"/api/v1/musteri/{mid}/rapor/trafik").json()["data"]["ayar"]
+    assert ayar["aralik"] is None and len(ayar["metrikler"]) == 5
+
+
+def test_devre_etiketi_ve_arama_ip_gostermez():
+    from app.rapor import trafik
+
+    alanlar = {"CINAME": "ci", "SERVICE": "KURUMSAL INTERNET", "IPADDRESS": "10.58.240.34", "MAXIMO_IP_ADDRESS": "10.1.1.1",
+               "ADDRESS": "Vadi Istanbul", "DESCRIPTION": "uc 192.168.0.1 port"}  # fmt: skip
+    etiket = trafik._etiket(alanlar)
+    assert ("SERVICE", "KURUMSAL INTERNET") in etiket and ("ADDRESS", "Vadi Istanbul") in etiket
+    assert not any(a in ("IPADDRESS", "MAXIMO_IP_ADDRESS", "DESCRIPTION") for a, _ in etiket)
+    assert "10.58" not in trafik._baslik(alanlar)
