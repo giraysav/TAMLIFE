@@ -264,6 +264,22 @@ def utilizasyon_turu(kuru: bool = False) -> int:
     return 0 if " OK " in satir else 1
 
 
+def erken_uyari_bildir() -> int:
+    """Kayit turundan sonra: kritik musterinin sorumlu TAM'ina panel bildirimi (tekrar siniri app.musteri.erken_uyari.bildir)."""
+    from app.musteri import erken_uyari
+
+    t0 = time.time()
+    try:
+        with oturum() as db:
+            d = erken_uyari.bildir(db)
+            db.commit()
+    except Exception as e:  # noqa: BLE001
+        return _hata("erken-uyari-bildir", f"basarisiz: {type(e).__name__}: {str(e)[:200]}")
+    if d["gonderilen"]:  # sessiz turlar gunlugu doldurmasin
+        gunluge_yaz(f"erken-uyari-bildir OK {d['kritik']} kritik, {d['gonderilen']} bildirim, {d['atlanan']} atlandi ({time.time() - t0:.1f} sn)")
+    return 0
+
+
 def erken_uyari_dogrula(hafta: int) -> int:
     """Musteri Erken Uyari geriye donuk dogrulamasi (yalniz panel verisi, kaynaga baglanmaz): seviye -> sonraki 14 gunde sikayet orani."""
     from app.musteri import erken_uyari
@@ -544,6 +560,7 @@ def main(argv: list[str] | None = None) -> int:
         rapor_devre()  # 2026-11-20: ayni 30 dk'lik turda; sonucu alarm turunun cikis kodunu degistirmez
         envanter_turu()  # 2026-11-20: Kritik CI envanteri (4 saatte bir)
         onedesk_kayit_turu()  # 2026-11-21: OneDesk sikayet / talep kayitlari (alarm kurallariyla)
+        erken_uyari_bildir()  # 2026-11-27 (kullanici onayi): yeni kayitlarla kritik olan musterinin TAM'ina panel bildirimi
         return kod
     return _hata(a.is_, "bilinmeyen is")
 

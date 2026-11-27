@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
+from app import musteri_alani
 from app.dil import m, secili
 from app.models import Customer, OnedeskRecord, ReportCircuit, ReportCircuitData
 from app.ortak import simdi
@@ -203,16 +204,59 @@ def _sinyaller(db: Session, an: datetime | None = None) -> dict[int, _Sinyal]:
     return s
 
 
+def _hesapla(db: Session) -> dict[int, dict]:
+    return {mid: p for mid, x in _sinyaller(db).items() if (p := _puanla(x))["puan"] > 0}
+
+
+BILDIRIM_TURU = "erken_uyari"
+BILDIRIM_ARALIK_GUN = 7  # ayni musteri icin sorumlu TAM'a en fazla haftada bir
+
+
+@musteri_alani.tum_alanlarda
+def bildir(db: Session) -> dict[str, int]:
+    """Kritik seviyedeki cati musterinin sorumlu TAM'ina panel bildirimi (2026-11-27, yol haritasi "Simdi").
+
+    Isci turu sonunda cagrilir (commit cagirana aittir). Tekrar siniri ayri durum tablosu tutmadan bildirimin kendisinden okunur:
+    ayni kisiye ayni musteri icin son BILDIRIM_ARALIK_GUN gunde erken_uyari bildirimi varsa yenisi yazilmaz. Sahibi olmayan kart atlanir.
+    Tum musteri alanlari (Musteri Yonetimi, Toptan, Baglantili Araclar) kapsanir."""
+    from app.bildirim import servis as bildirim
+    from app.models import UserNotification
+
+    kritik = {mid: p for mid, p in _hesapla(db).items() if p["seviye"] == "kritik"}
+    if not kritik:
+        return {"kritik": 0, "gonderilen": 0, "atlanan": 0}
+    esik = simdi() - timedelta(days=BILDIRIM_ARALIK_GUN)
+    yakin = {
+        (kisi, ref)
+        for kisi, ref in db.execute(
+            select(UserNotification.user_id, UserNotification.ref_id)
+            .where(UserNotification.kind == BILDIRIM_TURU, UserNotification.created_at >= esik, UserNotification.ref_id.in_(list(kritik)))
+        )
+    }
+    gonderilen = atlanan = 0
+    for c in db.scalars(select(Customer).where(Customer.id.in_(list(kritik)))):
+        p = kritik[c.id]
+        if c.owner_id is None or (c.owner_id, c.id) in yakin:
+            atlanan += 1
+            continue
+        neden = p["nedenler"][0]["metin"] if p["nedenler"] else ""
+        mesaj = m(f"Erken Uyarı: {c.name} kritik seviyede (puan {p['puan']}). {neden}", f"Early Warning: {c.name} is critical (score {p['puan']}). {neden}")
+        bildirim.ekle(db, c.owner_id, BILDIRIM_TURU, mesaj, f"#/{c.modul or musteri_alani.VARSAYILAN}?m={c.id}", c.id)
+        gonderilen += 1
+    return {"kritik": len(kritik), "gonderilen": gonderilen, "atlanan": atlanan}
+
+
 def tumu(db: Session) -> dict[int, dict]:
     """Çatı müşteri kimliği -> {puan, seviye, nedenler}. Sinyali olmayan müşteri sözlükte yoktur (puan 0, normal)."""
     global _onbellek
     from app.tampon.temip_kayit import surum  # geç import: tampon zinciri yalnız gerekince
 
-    iz = (str(db.get_bind().url), db.scalar(select(func.max(OnedeskRecord.id))), surum(db), simdi().date(), secili())
+    # alan: Customer sorgulari istegin musteri alanina suzulur (Musteri Yonetimi / Toptan / Baglantili); her alanin sonucu ayri
+    iz = (str(db.get_bind().url), db.scalar(select(func.max(OnedeskRecord.id))), surum(db), simdi().date(), secili(), musteri_alani.secili())
     with _kilit:
         if _onbellek is not None and _onbellek[0] == iz and time.monotonic() - _onbellek[1] < ONBELLEK_SN:
             return _onbellek[2]
-    sonuc = {mid: p for mid, x in _sinyaller(db).items() if (p := _puanla(x))["puan"] > 0}
+    sonuc = _hesapla(db)
     with _kilit:
         _onbellek = (iz, time.monotonic(), sonuc)
     return sonuc

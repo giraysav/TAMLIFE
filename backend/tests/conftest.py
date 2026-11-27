@@ -41,7 +41,7 @@ from app import session as oturum_deposu  # noqa: E402
 from app.db import engine, oturum  # noqa: E402
 from app.kullanicilar import parola_ozeti  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.models import AppUser, AuditEvent, Base, Customer, OnedeskRecord  # noqa: E402
+from app.models import AppUser, AuditEvent, Base, Customer, OnedeskRecord, UserNotification  # noqa: E402
 from app.musteri import erken_uyari  # noqa: E402
 from app.ortak import simdi  # noqa: E402
 from app.security import limiter  # noqa: E402
@@ -60,7 +60,7 @@ def _sema() -> Iterator[None]:
 def _temiz() -> Iterator[None]:
     """Her test bos tablolarla baslar; giris sinirlayici, oturumlar ve Erken Uyari onbellegi sifirlanir."""
     with oturum() as db:
-        for tablo in (OnedeskRecord, AuditEvent, Customer, AppUser):
+        for tablo in (UserNotification, OnedeskRecord, AuditEvent, Customer, AppUser):
             db.execute(delete(tablo))
         db.commit()
     limiter.reset()

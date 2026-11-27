@@ -151,3 +151,56 @@ def test_neden_metni_istegin_dilinde(istemci):
     tr = istemci.get("/api/v1/musteri/portfoy").json()["data"]["uyarilar"][0]["nedenler"][0]["metin"]
     en = istemci.get("/api/v1/musteri/portfoy", headers={"X-Dil": "en"}).json()["data"]["uyarilar"][0]["nedenler"][0]["metin"]
     assert "şikayet" in tr and "complaints" in en
+
+
+# --- bildirim ve musteri alanlari -----------------------------------------------------------------------------
+def _kritik(sahip: int | None, ad: str, segment: str = "SA") -> int:
+    m = musteri_ekle(ad, sahip=sahip, segment=segment)
+    kayit_ekle(m, "sikayet", gun_once=2, durum="open", adet=3)
+    kayit_ekle(m, "alarm", gun_once=3, adet=25, ci="ana-hat")
+    kayit_ekle(m, "talep", gun_once=10, durum="open", adet=3)
+    return m
+
+
+def _bildirimler() -> list:
+    from app.models import UserNotification
+
+    with oturum() as db:
+        return [(b.user_id, b.kind, b.ref_id, b.message, b.link) for b in db.query(UserNotification).order_by(UserNotification.id)]
+
+
+def test_kritik_musterinin_tamina_bildirim_bir_kez():
+    tam = kullanici_ekle("tcsorumlu")
+    kritik = _kritik(tam, "Kritik Musteri")
+    _kritik(None, "Sahipsiz Kritik")
+    _riskli(tam, "Yalniz Izle")  # kritik degil: bildirim yok
+    with oturum() as db:
+        assert eu.bildir(db) == {"kritik": 2, "gonderilen": 1, "atlanan": 1}
+        db.commit()
+    [(kisi, tur, ref, mesaj, adres)] = _bildirimler()
+    assert (kisi, tur, ref) == (tam, eu.BILDIRIM_TURU, kritik)
+    assert "Kritik Musteri kritik seviyede" in mesaj and adres == f"#/musteri?m={kritik}"
+    with oturum() as db:  # sonraki tur: 7 gun dolmadan tekrar yok
+        assert eu.bildir(db)["gonderilen"] == 0
+        db.commit()
+    assert len(_bildirimler()) == 1
+
+
+def test_bildirim_toptan_kartlarini_da_kapsar():
+    tam = kullanici_ekle("tctoptan")
+    toptan = _kritik(tam, "Toptan Musteri", segment="WHOLESALE")
+    with oturum() as db:
+        assert eu.bildir(db)["gonderilen"] == 1
+        db.commit()
+    assert _bildirimler()[0][4] == f"#/toptan?m={toptan}"
+
+
+def test_toptan_ekrani_kendi_riskini_gorur(istemci):
+    # onbellek musteri alanina gore ayrilir: once Musteri Yonetimi acilsa da Toptan kartinin riski kaybolmaz
+    kullanici_ekle("yonetici", "admin")
+    _riskli(None, "Normal Alan Musterisi")
+    toptan = _kritik(None, "Toptan Riskli", segment="WHOLESALE")
+    giris(istemci, "yonetici")
+    istemci.get("/api/v1/musteri/portfoy")
+    r = istemci.get("/api/v1/musteri/portfoy", headers={"X-Musteri-Alani": "toptan"}).json()["data"]
+    assert [u["id"] for u in r["uyarilar"]] == [toptan] and r["uyarilar"][0]["seviye"] == "kritik"
