@@ -586,6 +586,9 @@ class UserNotification(Base):
     link: Mapped[str] = mapped_column(String(200), default="")  # panel ici adres (#/talep)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 2026-11-27: Erken Uyari bildiriminde TAM'in geri bildirimi (ilgilendim | gerekmedi; bos = yanitlanmadi). Goc 0033.
+    response: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class SmsRevenue(KullaniciBase):

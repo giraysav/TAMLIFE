@@ -246,6 +246,26 @@ def bildir(db: Session) -> dict[str, int]:
     return {"kritik": len(kritik), "gonderilen": gonderilen, "atlanan": atlanan}
 
 
+OZET_GUN = 30
+
+
+def geri_bildirim_ozeti(db: Session, kisi_id: int | None) -> dict[str, int]:
+    """Son OZET_GUN gunde giden Erken Uyari bildirimleri ve TAM yanitlari (uyari dongusu: kacina bakildi, kaci gercekti).
+    kisi_id None: tum ekip (alani tumuyle goren yonetici); degilse yalniz o kisinin bildirimleri."""
+    from app.models import UserNotification as N
+
+    sorgu = select(
+        func.count(),
+        func.sum(case((N.response == "ilgilendim", 1), else_=0)),
+        func.sum(case((N.response == "gerekmedi", 1), else_=0)),
+    ).where(N.kind == BILDIRIM_TURU, N.created_at >= simdi() - timedelta(days=OZET_GUN))
+    if kisi_id is not None:
+        sorgu = sorgu.where(N.user_id == kisi_id)
+    toplam, ilgi, gerekmedi = db.execute(sorgu).one()
+    toplam, ilgi, gerekmedi = int(toplam or 0), int(ilgi or 0), int(gerekmedi or 0)
+    return {"gun": OZET_GUN, "bildirim": toplam, "ilgilendim": ilgi, "gerekmedi": gerekmedi, "yanitsiz": toplam - ilgi - gerekmedi}
+
+
 def tumu(db: Session) -> dict[int, dict]:
     """Çatı müşteri kimliği -> {puan, seviye, nedenler}. Sinyali olmayan müşteri sözlükte yoktur (puan 0, normal)."""
     global _onbellek

@@ -204,3 +204,71 @@ def test_toptan_ekrani_kendi_riskini_gorur(istemci):
     istemci.get("/api/v1/musteri/portfoy")
     r = istemci.get("/api/v1/musteri/portfoy", headers={"X-Musteri-Alani": "toptan"}).json()["data"]
     assert [u["id"] for u in r["uyarilar"]] == [toptan] and r["uyarilar"][0]["seviye"] == "kritik"
+
+
+# --- musteri karti ve bildirim yaniti ----------------------------------------------------------------------
+def test_cati_kartinda_risk_istirak_kartinda_yok(istemci):
+    kullanici_ekle("yonetici", "admin")
+    cati = _kritik(None, "Cati Kritik")
+    istirak = musteri_ekle("Cati Istirak", ust=cati)
+    giris(istemci, "yonetici")
+    kart = istemci.get(f"/api/v1/musteri/{cati}").json()["data"]["operasyon"]["erken_uyari"]
+    assert kart["seviye"] == "kritik" and kart["nedenler"]
+    assert istemci.get(f"/api/v1/musteri/{istirak}").json()["data"]["operasyon"]["erken_uyari"] is None
+
+
+def _bildirim_uret(tam: int) -> int:
+    _kritik(tam, "Kritik Musteri")
+    with oturum() as db:
+        eu.bildir(db)
+        db.commit()
+    return _bildirimler()[0]
+
+
+def test_tam_kendi_bildirimine_yanit_verir_ve_ozete_yansir(istemci):
+    from app.models import UserNotification
+
+    tam = kullanici_ekle("tcsorumlu")
+    _bildirim_uret(tam)
+    with oturum() as db:
+        bid = db.query(UserNotification.id).scalar()
+    giris(istemci, "tcsorumlu")
+    zil = istemci.get("/api/v1/bildirim").json()["data"]["son"][0]
+    assert zil["yanitlanir"] is True and zil["yanit"] == ""
+    assert istemci.post(f"/api/v1/bildirim/{bid}/yanit", json={"karar": "uydurma"}).status_code == 422
+    r = istemci.post(f"/api/v1/bildirim/{bid}/yanit", json={"karar": "ilgilendim"})
+    assert r.status_code == 200 and r.json()["data"]["yanit"] == "ilgilendim"
+    zil = istemci.get("/api/v1/bildirim").json()["data"]
+    assert zil["son"][0]["yanit"] == "ilgilendim" and zil["okunmamis"] == 0
+    oz = istemci.get("/api/v1/musteri/portfoy").json()["data"]["uyari_ozet"]
+    assert (oz["bildirim"], oz["ilgilendim"], oz["gerekmedi"], oz["yanitsiz"]) == (1, 1, 0, 0)
+
+
+def test_baskasinin_bildirimine_yanit_verilemez(istemci):
+    from app.models import UserNotification
+
+    tam = kullanici_ekle("tcsorumlu")
+    kullanici_ekle("tcbaskasi")
+    _bildirim_uret(tam)
+    with oturum() as db:
+        bid = db.query(UserNotification.id).scalar()
+    giris(istemci, "tcbaskasi")
+    assert istemci.post(f"/api/v1/bildirim/{bid}/yanit", json={"karar": "gerekmedi"}).status_code == 404
+    oz = istemci.get("/api/v1/musteri/portfoy").json()["data"]["uyari_ozet"]
+    assert oz["bildirim"] == 0  # personel ozette yalniz kendi bildirimlerini gorur
+
+
+def test_yanitlanamayan_bildirim_turu_404(istemci):
+    from app.bildirim import servis as bildirim
+
+    tam = kullanici_ekle("tcsorumlu")
+    with oturum() as db:
+        bildirim.ekle(db, tam, "talep", "Talebiniz guncellendi", "#/talep", 1)
+        db.commit()
+    from app.models import UserNotification
+
+    with oturum() as db:
+        bid = db.query(UserNotification.id).scalar()
+    giris(istemci, "tcsorumlu")
+    assert istemci.get("/api/v1/bildirim").json()["data"]["son"][0]["yanitlanir"] is False
+    assert istemci.post(f"/api/v1/bildirim/{bid}/yanit", json={"karar": "ilgilendim"}).status_code == 404

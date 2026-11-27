@@ -296,6 +296,7 @@ def portfoy(
             }
             for c in parca
         ],
+        "uyari_ozet": erken_uyari.geri_bildirim_ozeti(db, None if hepsi else (uid or -1)),  # bildirim -> TAM yaniti; kaydi yoksa hicbiri
         # Erken Uyari kutusu: filtreye uyan (ve kullanicinin kendi) catilar icinde en riskli UYARI_ADET musteri
         "uyarilar": [
             {"id": c.id, "name": c.name, **r}
@@ -463,6 +464,8 @@ def karti(db: Session, user: Principal, musteri_id: int, izinli: frozenset[str] 
             > 0,
             "kendi": _sayilar([musteri]),
             "istirak_dahil": _sayilar([musteri, *istirakler]) if istirakler else None,
+            # 2026-11-27 Erken Uyari: puan catida toplanir; yalniz cati kartinda (istirak kartinda catinin tumu sizmasin)
+            "erken_uyari": erken_uyari.tumu(db).get(musteri.id, erken_uyari.BOS) if musteri.parent_id is None else None,
         },
         "ekip": _matris_satirlari(db, "destech", adlar),
         "iletisim": iletisim_sozlugu(db, musteri.id),
