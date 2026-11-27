@@ -264,6 +264,30 @@ def utilizasyon_turu(kuru: bool = False) -> int:
     return 0 if " OK " in satir else 1
 
 
+def erken_uyari_dogrula(hafta: int) -> int:
+    """Musteri Erken Uyari geriye donuk dogrulamasi (yalniz panel verisi, kaynaga baglanmaz): seviye -> sonraki 14 gunde sikayet orani."""
+    from app.musteri import erken_uyari
+
+    t0 = time.time()
+    try:
+        with oturum() as db:
+            d = erken_uyari.dogrula(db, hafta=hafta)
+    except Exception as e:  # noqa: BLE001
+        return _hata("erken-uyari-dogrula", f"basarisiz: {type(e).__name__}: {str(e)[:200]}")
+    print(f"Referans gunleri {d['bas']} .. {d['bit']} ({d['hafta']} hafta); sonuc: sonraki 14 gunde yeni sikayet")
+    for kume, baslik in (("tum", "Tum musteriler"), ("temiz", "Onceki 14 gunde sikayeti OLMAYANLAR")):
+        print(f"  {baslik}:")
+        for sev, v in d[kume].items():
+            print(f"    {sev:<7} {v['gozlem']:>6} gozlem  {v['sikayet']:>5} sikayet  " + (f"%{100 * v['oran']:.1f}" if v["oran"] is not None else "-"))
+    t, n = d["temiz"]["yuksek"], d["temiz"]["normal"]
+    kat = f"{t['oran'] / n['oran']:.1f}x" if t["oran"] and n["oran"] else "-"
+    satir = (f"erken-uyari-dogrula OK {d['hafta']} hafta, {time.time() - t0:.0f} sn; kritik %{100 * (d['tum']['kritik']['oran'] or 0):.1f} / "
+             f"normal %{100 * (d['tum']['normal']['oran'] or 0):.1f}; temiz yuksek/normal {kat}; sikayetlerin %{100 * (d['onceden_gorulen'] or 0):.1f}'i onceden kritik+yuksek")  # fmt: skip
+    print(f"[OK] {satir}")
+    gunluge_yaz(satir)
+    return 0
+
+
 def _kayit_ozeti(k: dict) -> str:
     return (f"alarm kayitlari ({k['kip']}): +{k['eklenen']} yeni, {k['guncellenen']} guncel, {k['acik_satir']} acik, "
             f"{k['dusen_acik']} dusen ({k.get('aranan_dusen', k['dusen_acik'])} arandi)/{k['kapanan_sorgu']} kapanan,{k['yeniden_baglanan']} yeniden baglanan, {k['etkilenen_kart']} kart")  # fmt: skip
@@ -485,6 +509,8 @@ def main(argv: list[str] | None = None) -> int:
     ok.add_argument("--kip", choices=("tam", "artimli", "mutabakat"), default=None, help="vars. otomatik")
     ut = alt.add_parser("utilizasyon", help="gunluk utilizasyon: kapanan kayitlar + envanter -> ozet ve skor (06:00)")
     ut.add_argument("--kuru", action="store_true", help="ozeti yaz, skora dokunma")
+    eu = alt.add_parser("erken-uyari-dogrula", help="Musteri Erken Uyari geriye donuk dogrulama (panel verisiyle, Oracle'siz)")
+    eu.add_argument("--hafta", type=int, default=16, help="kac haftalik referans gunu (4-40)")
     e = alt.add_parser("temip-eslesme", help="paneldeki TEMIP kayitlarinin kart / personel eslesmesi (Oracle'siz)")
     e.add_argument("--csv", action="store_true", help="var/kesif/'e CSV yaz")
     for alt_p in (r,):
@@ -493,6 +519,8 @@ def main(argv: list[str] | None = None) -> int:
     env_dosyasi_yukle()
     if a.is_ == "temip-eslesme":
         return temip_eslesme(a.csv)
+    if a.is_ == "erken-uyari-dogrula":
+        return erken_uyari_dogrula(max(4, min(int(a.hafta), 40)))
     if a.is_ == "pg-katalog":
         return pg_katalog_calistir(a.kaynak, max(1, min(int(a.ornek), 200)), a.kullanici)
     if a.is_ == "envanter":

@@ -19,7 +19,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
@@ -129,9 +129,13 @@ def _puanla(s: _Sinyal) -> dict:
     }
 
 
-def _sinyaller(db: Session) -> dict[int, _Sinyal]:
-    """Bütün kartların sinyalleri, çatı müşterisine toplanmış olarak (iştirak -> çatı)."""
-    simdi_ = simdi()
+def _sinyaller(db: Session, an: datetime | None = None) -> dict[int, _Sinyal]:
+    """Bütün kartların sinyalleri, çatı müşterisine toplanmış olarak (iştirak -> çatı).
+
+    an verilirse (geriye dönük doğrulama) yalnız o ana kadarki veri kullanılır: "açık" = o anda açılmış ve henüz kapanmamış;
+    devre sinyali (ay sonu özeti) o anda bilinemeyeceği için atlanır. an yoksa şimdi ve kaydın güncel durumu.
+    """
+    simdi_ = an or simdi()
     son = simdi_ - timedelta(days=PENCERE_GUN)
     taban = son - timedelta(days=TABAN_GUN)
     bekleme = simdi_ - timedelta(days=BEKLEME_GUN)
@@ -139,33 +143,35 @@ def _sinyaller(db: Session) -> dict[int, _Sinyal]:
     s: dict[int, _Sinyal] = defaultdict(_Sinyal)
     R = OnedeskRecord
     planli_degil = R.category != PLANLI
+    acik = (R.status == "open") if an is None else ((R.opened_at < simdi_) & (R.closed_at.is_(None) | (R.closed_at >= simdi_)))
+    once = R.opened_at < simdi_
 
     alarm = R.kind == "alarm"
     for mid, son_, taban_ in db.execute(
         select(R.customer_id, func.sum(case((R.opened_at >= son, 1), else_=0)), func.sum(case((R.opened_at < son, 1), else_=0)))
-        .where(alarm, planli_degil, R.customer_id.is_not(None), R.opened_at >= taban)
+        .where(alarm, planli_degil, R.customer_id.is_not(None), R.opened_at >= taban, once)
         .group_by(R.customer_id)
     ):
         x = s[cati.get(mid, YOK)]
         x.alarm_son += int(son_ or 0)
         x.alarm_taban += int(taban_ or 0)
 
-    for mid, son_, acik in db.execute(
+    for mid, son_, acik_adet in db.execute(
         select(
             R.customer_id,
             func.sum(case((R.opened_at >= son, 1), else_=0)),
-            func.sum(case((R.status == "open", 1), else_=0)),
+            func.sum(case((acik, 1), else_=0)),
         )
-        .where(R.kind == "sikayet", R.customer_id.is_not(None), (R.opened_at >= son) | (R.status == "open"))
+        .where(R.kind == "sikayet", R.customer_id.is_not(None), once, (R.opened_at >= son) | acik)
         .group_by(R.customer_id)
     ):
         x = s[cati.get(mid, YOK)]
         x.sikayet_son += int(son_ or 0)
-        x.sikayet_acik += int(acik or 0)
+        x.sikayet_acik += int(acik_adet or 0)
 
     for mid, tur, adet in db.execute(
         select(R.customer_id, R.kind, func.count())
-        .where(R.status == "open", R.customer_id.is_not(None), R.opened_at < bekleme, planli_degil)
+        .where(acik, R.customer_id.is_not(None), R.opened_at < bekleme, planli_degil)
         .group_by(R.customer_id, R.kind)
     ):
         x = s[cati.get(mid, YOK)]
@@ -176,7 +182,7 @@ def _sinyaller(db: Session) -> dict[int, _Sinyal]:
 
     for mid, ci, adet in db.execute(
         select(R.customer_id, R.location, func.count())
-        .where(alarm, planli_degil, R.customer_id.is_not(None), R.opened_at >= son, R.location != "")
+        .where(alarm, planli_degil, R.customer_id.is_not(None), R.opened_at >= son, once, R.location != "")
         .group_by(R.customer_id, R.location)
         .having(func.count() >= TEKRAR_ESIGI)
     ):
@@ -184,7 +190,7 @@ def _sinyaller(db: Session) -> dict[int, _Sinyal]:
         x.tekrar[ci] = x.tekrar.get(ci, 0) + int(adet)
 
     yil, ay = simdi_.year, simdi_.month
-    for mid, ci, ozet in db.execute(
+    for mid, ci, ozet in [] if an is not None else db.execute(
         select(ReportCircuit.customer_id, ReportCircuit.ciname, ReportCircuitData.summary)
         .join(ReportCircuitData, and_(ReportCircuitData.ciname == ReportCircuit.ciname, ReportCircuitData.year == yil, ReportCircuitData.month == ay))
     ):
@@ -210,3 +216,44 @@ def tumu(db: Session) -> dict[int, dict]:
     with _kilit:
         _onbellek = (iz, time.monotonic(), sonuc)
     return sonuc
+
+
+def dogrula(db: Session, *, hafta: int = 16) -> dict:
+    """Geriye dönük doğrulama (2026-11-27, jüri sorusu "puan işe yarıyor mu?"): son `hafta` haftanın her pazartesisinde puan
+    YALNIZ o güne kadarki veriyle hesaplanır; çatı müşterinin sonraki PENCERE_GUN günde yeni şikayet açıp açmadığına bakılır.
+    "temiz" kümesi önceki 14 günde şikayeti olmayan müşterilerdir (şikayet sinyalinin kendini tekrar etmesini ayıklar)."""
+    bugun = simdi().replace(hour=0, minute=0, second=0, microsecond=0)
+    son_gun = bugun - timedelta(days=PENCERE_GUN + bugun.weekday())  # sonucu tamamen bilinen en yakın pazartesi
+    gunler = [son_gun - timedelta(days=7 * k) for k in range(hafta)][::-1]
+    cati = {i: (p or i) for i, p in db.execute(select(Customer.id, Customer.parent_id))}
+    catilar = {i for i, p in cati.items() if p == i}
+    tum: dict[str, list[int]] = {ad: [0, 0] for _, ad in SEVIYELER} | {"normal": [0, 0]}
+    temiz: dict[str, list[int]] = {ad: [0, 0] for ad in tum}
+    olay_toplam = olay_onceden = 0
+    R = OnedeskRecord
+    for an in gunler:
+        s = _sinyaller(db, an)
+        sonra = {
+            cati.get(mid, YOK)
+            for (mid,) in db.execute(
+                select(R.customer_id).where(R.kind == "sikayet", R.customer_id.is_not(None), R.opened_at >= an, R.opened_at < an + timedelta(days=PENCERE_GUN)).distinct()
+            )
+        } & catilar
+        for c in catilar:
+            x = s.get(c)
+            sev = _puanla(x)["seviye"] if x else "normal"
+            olay = c in sonra
+            tum[sev][0] += 1
+            tum[sev][1] += olay
+            if x is None or x.sikayet_son == 0:
+                temiz[sev][0] += 1
+                temiz[sev][1] += olay
+            if olay:
+                olay_toplam += 1
+                olay_onceden += sev in ("kritik", "yuksek")
+    oran = lambda t: {k: {"gozlem": g, "sikayet": o, "oran": round(o / g, 3) if g else None} for k, (g, o) in t.items()}  # noqa: E731
+    return {
+        "bas": gunler[0].date().isoformat(), "bit": gunler[-1].date().isoformat(), "hafta": hafta,
+        "tum": oran(tum), "temiz": oran(temiz),
+        "onceden_gorulen": round(olay_onceden / olay_toplam, 3) if olay_toplam else None, "sikayet_olayi": olay_toplam,
+    }  # fmt: skip
