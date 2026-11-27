@@ -99,6 +99,32 @@ with oturum() as db:
                              opened_at=gun(ac), closed_at=gun(max(ac - rnd.randint(0, 6), 0)) if kapali else None,
                              root_cause="Örnek kök neden açıklaması." if kapali and rnd.random() < 0.6 else "",
                              resolution="Örnek çözüm notu." if kapali else "", source="import", customer_no=c.customer_no or ""))
+
+    # --- Erken Uyari senaryosu (2026-11-27, hackathon demosu): uc cati musteride bilinen oruntu; puan app.musteri.erken_uyari ile hesaplanir.
+    def kayit(c: Customer, tur: str, gun_once: float, *, acik: bool = False, ci: str = "", kategori: str = "Hat kesintisi") -> None:
+        an = simdi - timedelta(days=gun_once)
+        db.add(OnedeskRecord(kind=tur, external_key=f"DEMO-EU-{rnd.randint(100000, 999999)}", customer_id=c.id, status="open" if acik else "closed",
+                             customer_label=c.name, location=ci or f"Lokasyon {rnd.randint(1, 12)}", category=kategori, opened_at=an,
+                             closed_at=None if acik else an + timedelta(hours=rnd.randint(1, 20)), source="import", customer_no=c.customer_no or ""))
+
+    kritik, yuksek, izle = musteriler[0], musteriler[2], musteriler[4]
+    for _ in range(18):  # onceki 8 hafta: sakin (14 gunde ~4-5 alarm)
+        kayit(kritik, "alarm", rnd.uniform(16, 69))
+    for _ in range(26):  # son 14 gun: ana hat surekli dusuyor
+        kayit(kritik, "alarm", rnd.uniform(0.2, 13.5), ci="demo-ci-merkez-ana-hat")
+    for _ in range(12):
+        kayit(kritik, "alarm", rnd.uniform(0.2, 13.5))
+    for _ in range(6):  # planli calisma: puana girmez
+        kayit(kritik, "alarm", rnd.uniform(1, 10), kategori="PLANLI CALISMA ALARMI")
+    for i in range(3):
+        kayit(kritik, "sikayet", rnd.uniform(1, 12), acik=i == 0)
+    kayit(kritik, "talep", 11, acik=True)
+    for i in range(2):
+        kayit(yuksek, "sikayet", rnd.uniform(2, 12), acik=i == 0)
+    for _ in range(8):
+        kayit(yuksek, "alarm", rnd.uniform(0.5, 13), ci="demo-ci-sube-yedek-hat")
+    for _ in range(3):
+        kayit(izle, "talep", rnd.uniform(9, 20), acik=True)
     db.flush()
     for c in musteriler:
         for tur, alan in (("alarm", "alarm_count"), ("talep", "request_count"), ("sikayet", "complaint_count")):
