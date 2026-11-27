@@ -17,7 +17,7 @@ from sqlalchemy import Column, Table, delete, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app import gorunurluk, musteri_alani
-from app.musteri import envanter
+from app.musteri import envanter, erken_uyari
 from app.authz import is_admin, yonetici_mi
 from app.bildirim import servis as bildirim
 from app.gelir.servis import tum_gelirler, unvan_tasi
@@ -186,6 +186,7 @@ def liste(db: Session, user: Principal, arama: str = "", sayfa: int = 1, adet: i
 
 # --- portfoy (kart izgarasi) ---------------------------------------------------------------------------
 PORTFOY_SAYFA = 24
+UYARI_ADET = 5
 
 
 def _kalip(arama: str) -> str:
@@ -231,7 +232,14 @@ def portfoy_catilari(arama: str = "", tam_id: int | None = None, segment: str = 
 
 
 def portfoy(
-    db: Session, user: Principal, arama: str = "", tam_id: int | None = None, segment: str = "", sayfa: int = 1, adet: int = PORTFOY_SAYFA
+    db: Session,
+    user: Principal,
+    arama: str = "",
+    tam_id: int | None = None,
+    segment: str = "",
+    sayfa: int = 1,
+    adet: int = PORTFOY_SAYFA,
+    sira: str = "ad",
 ) -> dict:
     """Cati musterilerin kart listesi (uretim 'Musterilerim'): iştirakler cati kartinin icinde; arama iştirak adini da kapsar.
 
@@ -241,6 +249,11 @@ def portfoy(
     hepsi = gorunurluk.tumunu_gorur(db, user, musteri_alani.secili())
     uid = None if hepsi else kullanici_id(db, user)
     tum = list(db.scalars(portfoy_catilari(arama, tam_id, segment, None if hepsi else gorunurluk.cati_kosulu(uid))))
+    cerceve = set() if hepsi else {c.id for c in tum if c.owner_id != uid}  # catisi baskasinin: sayilari / skoru / riski gosterilmez
+    riskler = erken_uyari.tumu(db)  # 2026-11-27 Musteri Erken Uyari (cati kimligi -> puan, seviye, nedenler)
+    risk = lambda c: None if c.id in cerceve else riskler.get(c.id, erken_uyari.BOS)  # noqa: E731
+    if sira == "risk":
+        tum.sort(key=lambda c: -(r["puan"] if (r := risk(c)) else -1))  # sabit siralama: esit puanda ad sirasi korunur
     toplam = len(tum)
     sayfa = max(1, min(sayfa, max(1, math.ceil(toplam / adet))))
     parca = tum[(sayfa - 1) * adet : sayfa * adet]
@@ -248,7 +261,6 @@ def portfoy(
     alt_sorgu = select(Customer).where(Customer.parent_id.in_([c.id for c in tum] or [-1]))
     if not hepsi:
         alt_sorgu = alt_sorgu.where(gorunurluk.kart_kosulu(uid))  # baskasinin catisinda yalniz kendi istirakleri
-    cerceve = set() if hepsi else {c.id for c in tum if c.owner_id != uid}  # catisi baskasinin: sayilari / skoru gosterilmez
     altlar: dict[int, list[Customer]] = {}
     for a in db.scalars(alt_sorgu.order_by(Customer.name)):
         altlar.setdefault(a.parent_id, []).append(a)
@@ -280,8 +292,16 @@ def portfoy(
                 "istirakler": [{"id": a.id, "name": a.name} for a in altlar.get(c.id, [])],
                 "duzenlenebilir": duzenleyebilir_mi(db, user, c),
                 "cerceve": c.id in cerceve,  # baskasinin catisi: yalniz kendi istiraklerinin cercevesi, kart acilmaz
+                "risk": risk(c),
             }
             for c in parca
+        ],
+        # Erken Uyari kutusu: filtreye uyan (ve kullanicinin kendi) catilar icinde en riskli UYARI_ADET musteri
+        "uyarilar": [
+            {"id": c.id, "name": c.name, **r}
+            for c, r in sorted(((c, riskler[c.id]) for c in kendi if c.id in riskler and riskler[c.id]["seviye"] != "normal"), key=lambda x: -x[1]["puan"])[
+                :UYARI_ADET
+            ]
         ],
         "ozet": {
             "cati": len(kendi),

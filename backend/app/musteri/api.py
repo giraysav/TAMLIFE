@@ -114,10 +114,11 @@ def portfoy(
     segment: str = Query(default="", max_length=20),
     page: int = Query(default=1, ge=1, le=EN_BUYUK_SAYFA_NO),
     per_page: int = Query(default=ms.PORTFOY_SAYFA, ge=1, le=ms.EN_FAZLA_SAYFA_BASINA),
+    sira: str = Query(default="ad", pattern="^(ad|risk)$"),
     e: Erisim = Depends(musteri_erisim),
     db: Session = Depends(get_db),
 ):
-    return _yap(db, lambda: ms.portfoy(db, e.user, q, tam, segment, page, per_page))
+    return _yap(db, lambda: ms.portfoy(db, e.user, q, tam, segment, page, per_page, sira))
 
 
 @router.get("/musteri/{musteri_id:int}/kayitlar")
