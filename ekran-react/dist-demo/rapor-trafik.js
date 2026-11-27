@@ -196,8 +196,10 @@
             data: [{ yAxis: sg.p95 / bol }] } : undefined }));
         seriler.push(alanSerisi(m.cikis, C.cikis, veri(7), p));
         lejant.push(m.giris, m.cikis);
-        if (sg) kutular.push([m.giris + " " + m.p95, bps(sg.p95, dil), m.ort + " " + bps(sg.ort, dil)]);
-        if (sc) kutular.push([m.cikis + " " + m.p95, bps(sc.p95, dil), m.ort + " " + bps(sc.ort, dil)]);
+        // 2026-11-27: LookOutEyes ile ayni dil (Avg / Max): buyuk deger ortalama, altinda saatlik en yuksek ve %95
+        // (en yuksek saatlik ortalamadir; LookOutEyes aylik gorunumde ~2 saatlik ortalamanin en yuksegini verir)
+        if (sg) kutular.push([m.giris + " " + m.ort, bps(sg.ort, dil), m.enYuksek + " " + bps(sg.enYuksek, dil) + " · " + m.p95 + " " + bps(sg.p95, dil)]);
+        if (sc) kutular.push([m.cikis + " " + m.ort, bps(sc.ort, dil), m.enYuksek + " " + bps(sc.enYuksek, dil) + " · " + m.p95 + " " + bps(sc.p95, dil)]);
       }
     }
 
