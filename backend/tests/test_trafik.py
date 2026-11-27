@@ -224,3 +224,14 @@ def test_rapor_kazanci_cati_ve_istirak_toplami(istemci):
     k = istemci.get("/api/v1/rapor/durum").json()["data"]["kazanc"]
     assert (k["cati"], k["istirak"], k["musteri"], k["dakika"]) == (3, 2, 5, 15)
     assert k["saat_ay"] == 1.2 and k["adam_gun_ay"] == 0.2 and "5 müşteri (3 çatı + 2 iştirak)" in k["metin"]
+
+
+def test_kopya_saatler_atilir_ayni_saat_tek_noktada_birlesir():
+    kopya = [_satir(9) for _ in range(19)]  # kaynakta birebir tekrarlanan saat
+    kesinti = {**_satir(10), "avail": 0.0, "loss": 4.0}  # ayni saatte iki farkli satir: kesinti + normal
+    satirlar = loe.tekillestir([*kopya, kesinti, _satir(10)])
+    assert len(satirlar) == 3
+    n = loe.noktalar(satirlar)
+    assert len(n) == 2  # saat basina tek nokta
+    assert n[1][1] == 0.5 and n[1][4] == 0.02  # erisim = toplam avail / toplam total; kayip ortalama
+    assert loe.ozet(satirlar)["saat"] == 3  # ozet kopyalari saymaz

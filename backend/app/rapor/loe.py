@@ -148,21 +148,48 @@ def ozet(satirlar: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def tekillestir(satirlar: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Kaynakta birebir tekrarlanan saatlik satirlari atar (2026-11-27: Ekim'de bir gunun her saati 19 kez geliyordu; ozette o gun
+    19 kat agirlik aliyordu). Degerleri farkli ayni saat satirlari kalir (ozet LOE formuluyle hepsini sayar)."""
+    gorulen: set[tuple] = set()
+    sonuc = []
+    for s in satirlar:
+        k = (s["zaman"], s["avail"], s["total"], s["delay"], s["jitter"], s["loss"], s["pencere"])
+        if k not in gorulen:
+            gorulen.add(k)
+            sonuc.append(s)
+    return sonuc
+
+
 def noktalar(satirlar: list[dict[str, Any]]) -> list[list[Any]]:
     """Grafik serisi: [epoch_ms, erisim (0-1), gecikme (ms), jitter (ms), kayip (0-1, LOE olcegi), pencere 0/1, giris bps, cikis bps];
-    zamana gore sirali."""
+    saat basina TEK nokta, zamana gore sirali. Ayni saatin birden cok satiri birlesir: erisim = toplam AVAIL / toplam TOTAL, gecikme /
+    jitter / kayip ortalama, pencere herhangi biri, trafik ilk dolu deger."""
+    saatler: dict[datetime, list[dict[str, Any]]] = {}
+    for s in satirlar:
+        saatler.setdefault(s["zaman"], []).append(s)
+
+    def ort(liste: list[dict[str, Any]], alan: str) -> float | None:
+        d = [x[alan] for x in liste if x[alan] is not None]
+        return sum(d) / len(d) if d else None
+
+    def ilk(liste: list[dict[str, Any]], alan: str) -> Any:
+        return next((x[alan] for x in liste if x.get(alan) is not None), None)
+
     sonuc = []
-    for s in sorted(satirlar, key=lambda x: x["zaman"]):
-        t = s["total"]
+    for zaman in sorted(saatler):
+        g = saatler[zaman]
+        t = sum(x["total"] or 0 for x in g)
+        delay, jitter, loss = ort(g, "delay"), ort(g, "jitter"), ort(g, "loss")
         sonuc.append([
-            int(s["zaman"].replace(tzinfo=TR).timestamp() * 1000),
-            round((s["avail"] or 0) / t, 6) if t else None,
-            None if s["delay"] is None else round(s["delay"] / 1000, 4),
-            None if s["jitter"] is None else round(s["jitter"] / 1000, 4),
-            None if s["loss"] is None else round(s["loss"] / 100, 6),
-            1 if s["pencere"] else 0,
-            s.get("giris"),
-            s.get("cikis"),
+            int(zaman.replace(tzinfo=TR).timestamp() * 1000),
+            round(sum(x["avail"] or 0 for x in g) / t, 6) if t else None,
+            None if delay is None else round(delay / 1000, 4),
+            None if jitter is None else round(jitter / 1000, 4),
+            None if loss is None else round(loss / 100, 6),
+            1 if any(x["pencere"] for x in g) else 0,
+            ilk(g, "giris"),
+            ilk(g, "cikis"),
         ])  # fmt: skip
     return sonuc
 
@@ -306,6 +333,7 @@ def olcum_cek(db: Session, cinames: list[str], yil: int, ay: int) -> int:
                     "delay": _sayi(s[ix["DELAY_AVG"]]), "jitter": _sayi(s[ix["JITTER_AVG"]]), "loss": _sayi(s[ix["PACKET_LOST_AVG"]]),
                     "pencere": bool(_sayi(s[ix["PENCERE"]])),
                 })  # fmt: skip
+    gruplar = {ci: tekillestir(satirlar) for ci, satirlar in gruplar.items()}
     trafik = _trafik_ekle(db, gruplar, bas, bit)
     an = simdi()
     for ci, satirlar in gruplar.items():
@@ -353,10 +381,11 @@ def _trafik_ekle(db: Session, gruplar: dict[str, list[dict[str, Any]]], bas: dat
         return None
     for ci, satirlar in gruplar.items():
         seri = dict((seriler.get(ci) or {}).get("seri") or {})
-        for s in satirlar:
-            if (v := seri.pop(s["zaman"].replace(minute=0, second=0), None)) is not None:
+        for s in satirlar:  # ayni saatin her satirina (noktalar() tek noktada birlestirir)
+            if (v := seri.get(s["zaman"].replace(minute=0, second=0))) is not None:
                 s["giris"], s["cikis"] = v
-        for saat, (gir, cik) in seri.items():  # Oracle olcumu olmayan saat: yalniz trafik
+        oracle_saatleri = {s["zaman"].replace(minute=0, second=0) for s in satirlar}
+        for saat, (gir, cik) in ((k, v) for k, v in seri.items() if k not in oracle_saatleri):  # Oracle olcumu olmayan saat: yalniz trafik
             satirlar.append({"zaman": saat, "avail": None, "total": None, "delay": None, "jitter": None, "loss": None, "pencere": False,
                              "giris": gir, "cikis": cik})  # fmt: skip
     _durum_yaz(db, "trafik", son_deneme=simdi().isoformat(), son_basari=simdi().isoformat(), hata="")
