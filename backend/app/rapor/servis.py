@@ -28,11 +28,25 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import imza as imza_modulu
+from app import musteri_alani
 from app.authz import yonetici_mi
 from app.dil import m, secili
 from app.kullanicilar import kisi_imzasi, kullanici_kaydi, personel
-from app.models import AppUser, Customer, Report, ReportDispatch, ReportDraft, ReportRecipient
-from app.musteri.servis import MusteriHata, duzenleyebilir_mi, musteri_getir, musteri_yaz_getir, rapor_birimi_mi
+from app.models import (
+    AppUser,
+    Customer,
+    Report,
+    ReportDispatch,
+    ReportDraft,
+    ReportRecipient,
+)
+from app.musteri.servis import (
+    MusteriHata,
+    duzenleyebilir_mi,
+    musteri_getir,
+    musteri_yaz_getir,
+    rapor_birimi_mi,
+)
 from app.onedesk import yz
 from app.ortak import ay_adi, rapor_donemi, tr_kucuk
 from app.rapor import ceviri, eposta, sla, sla_analiz
@@ -636,6 +650,30 @@ def durum_listesi(db: Session, user: Principal, ay: int, yil: int, tip: str, tam
     return {"yil": yil, "ay": ay, "tip": tip, "satirlar": satirlar}
 
 
+RAPOR_KAZANC_DK = 15  # 2026-11-27 kullanici: "adam gun sayisini 15 dk uzerinden cati + istirak toplam musteri sayisina gore"
+IS_GUNU_SAAT = 8
+
+
+@musteri_alani.tum_alanlarda
+def rapor_kazanci(db: Session) -> dict:
+    """Aylik raporun panelden hazirlanmasiyla kazanilan sure: paneldeki her musteri karti (cati + istirak, tum alanlar: Musteri
+    Yonetimi + Toptan + Baglantili) basina RAPOR_KAZANC_DK."""
+    cati, istirak = db.execute(select(func.count().filter(Customer.parent_id.is_(None)), func.count().filter(Customer.parent_id.is_not(None)))).one()
+    toplam = int(cati or 0) + int(istirak or 0)
+    saat = toplam * RAPOR_KAZANC_DK / 60
+    gun_ay = saat / IS_GUNU_SAAT
+    return {
+        "cati": int(cati or 0), "istirak": int(istirak or 0), "musteri": toplam, "dakika": RAPOR_KAZANC_DK,
+        "saat_ay": round(saat, 1), "adam_gun_ay": round(gun_ay, 1), "adam_gun_yil": round(gun_ay * 12),
+        "baslik": m("Aylık rapor kazancı", "Monthly report time saved"),
+        "deger": m(f"{gun_ay:.1f} adam-gün / ay".replace(".", ","), f"{gun_ay:.1f} person-days / month"),
+        "metin": m(
+            f"{toplam} müşteri ({int(cati or 0)} çatı + {int(istirak or 0)} iştirak) × {RAPOR_KAZANC_DK} dk = ayda {saat:.1f} saat · yılda {round(gun_ay * 12)} adam-gün".replace(".", ","),
+            f"{toplam} customers ({int(cati or 0)} parent + {int(istirak or 0)} affiliate) × {RAPOR_KAZANC_DK} min = {saat:.1f} hours a month · {round(gun_ay * 12)} person-days a year",
+        ),
+    }  # fmt: skip
+
+
 def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
     """TAM basina rapor birimi sayisi ve bu ayin atilan/bekleyen rapor sayisi (uretim _build_rapor_durumu).
     Catisina dahil bir istirak icin hazirlanan rapor CATININ raporu sayilir. Satirlar tek personel kumesidir (app.kullanicilar.personel):
@@ -661,7 +699,8 @@ def durum_ozeti(db: Session, user: Principal, ay: int, yil: int) -> dict:
         satir["musteri"] += 1
         satir["atilan" if c.id in atilanlar else "bekleyen"] += 1
     sirali = sorted(satirlar.values(), key=lambda s: (s["id"] is None, tr_kucuk(s["ad"])))  # "-" satiri hep sonda
-    return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen", "muaf")}}
+    return {"yil": yil, "ay": ay, "satirlar": sirali, "toplam": {k: sum(s[k] for s in sirali) for k in ("musteri", "atilan", "bekleyen", "muaf")},
+            "kazanc": rapor_kazanci(db)}  # fmt: skip
 
 
 # --- gecmis rapor ice aktarma (2026-10-31) ----------------------------------------------------------------

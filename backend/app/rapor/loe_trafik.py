@@ -6,8 +6,12 @@
                    (kumelenmis indeks rrdid, measuredate). IMT -> rrdid eslesmesi buradan (yilin tablosu bir kez taranir).
   data<YYYYMMDD>   5 dakikalik olcum: rrdid, inbound, outbound (bit/sn, sablon inoutbits64), measuretime (yerel saat); kumelenmis
                    indeks rrdid, measuretime. Gunun tablosu ertesi gun dolar (bir gun gecikme).
-Devrenin IMT'si panelde CMDB kopyasinda (report_cmdb.fields["IMT"], envanterden). Bir IMT birden cok rrdid'ye (arayuz degisimi)
-dagilabilir: saatlik degerler toplanir. tempcilist tablosu IP adresi tasidigi icin KULLANILMAZ (envanter kurali).
+  tempcilist (bb) / tempcilistrel (vrf)  CI adi -> RRD_ID eslemesi. Tabloda IP sutunlari da var: YALNIZ CINAME ve RRD_ID okunur
+                   (envanter kurali: IP alinmaz; GRAPH_NAME de IP tasiyabildigi icin okunmaz).
+
+2026-11-27 kullanici: "IMT gelince ONENT'ten CI adi, sonra o IMT ve CI adi ile MSSQL'de karsilastir". Eslesme sirasi (devre basina):
+  1) CI adi -> tempcilist RRD_ID ("ci"); ayni grafik IMT ile de bulunursa "ci_imt" (iki yol ayni grafigi gosteriyor)
+  2) CI adi bulunamazsa IMT -> details<YYYY>.rrdname ("imt"); bir IMT birden cok rrdid'ye (arayuz degisimi) dagilabilir: toplanir.
 """
 
 from __future__ import annotations
@@ -88,33 +92,63 @@ def _saatlik(cur, rrdler: list[int], bas: datetime, bit: datetime) -> dict[int, 
     return sonuc
 
 
-def saatlik_trafik(imtler: dict[str, str], bas: datetime, bit: datetime) -> dict[str, dict[datetime, tuple[float | None, float | None]]]:
-    """CI adi -> IMT eslemesinden: CI adi -> saat (yerel, saat basi) -> (giris bps, cikis bps). Bulunamayan devre sozlukte yok."""
+ESLEME_TABLOLARI = ("tempcilist", "tempcilistrel")  # CI adi -> RRD_ID (veritabanina gore biri bulunur)
+
+
+def _ci_rrd(cur, cinames: list[str]) -> dict[str, set[int]]:
+    """CI adi -> RRD_ID kumesi (yalniz CINAME ve RRD_ID sutunlari)."""
+    sonuc: dict[str, set[int]] = defaultdict(set)
+    mevcut = {r[0] for r in cur.execute("SELECT name FROM sys.objects WHERE type = 'U' AND name IN ('tempcilist', 'tempcilistrel')")}
+    for tablo in ESLEME_TABLOLARI:
+        if tablo not in mevcut:
+            continue
+        for parca in _parcalar(cinames):
+            yer = ", ".join("?" * len(parca))
+            for ci, rrd in cur.execute(f"SELECT CINAME, RRD_ID FROM dbo.{tablo} WHERE RRD_ID IS NOT NULL AND CINAME IN ({yer})", *parca):
+                sonuc[str(ci)].add(int(rrd))
+    return sonuc
+
+
+def saatlik_trafik(imtler: dict[str, str], bas: datetime, bit: datetime) -> dict[str, dict]:
+    """CI adi -> IMT eslemesinden: CI adi -> {"seri": {saat (yerel, saat basi): (giris bps, cikis bps)}, "eslesme": ci_imt|ci|imt}.
+    Hicbir yolla bulunamayan devre sozlukte yok."""
     a = mssql.ayar()
-    imt_ci: dict[str, list[str]] = defaultdict(list)
-    for ci, imt in imtler.items():
-        if imt:
-            imt_ci[imt].append(ci)
-    if not imt_ci or not a.hazir():
+    if not imtler or not a.hazir():
         return {}
     k = carpan()
     toplam: dict[str, dict[datetime, list[float]]] = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0, 0]))
+    eslesme: dict[str, str] = {}
     with a.baglan() as conn:
         cur = conn.cursor()
         for vt in a.veritabanlari:
             cur.execute(f"USE [{vt}]")
-            rrd_imt = _rrd_haritasi(cur, sorted(imt_ci), bas, bit)
-            if not rrd_imt:
+            ci_rrd = {ci: r for ci, r in _ci_rrd(cur, sorted(imtler)).items() if ci not in eslesme}
+            kalan_imt = sorted({imtler[ci] for ci in imtler if imtler[ci] and ci not in eslesme and ci not in ci_rrd})
+            ci_imt_rrd: dict[str, set[int]] = defaultdict(set)
+            imt_rrd = _rrd_haritasi(cur, sorted({*kalan_imt, *(imtler[ci] for ci in ci_rrd if imtler.get(ci))}), bas, bit)
+            for rrd, imt in imt_rrd.items():
+                ci_imt_rrd[imt].add(rrd)
+            hedef: dict[int, set[str]] = defaultdict(set)  # rrdid -> CI adlari
+            for ci, rrdler in ci_rrd.items():
+                eslesme[ci] = "ci_imt" if rrdler & ci_imt_rrd.get(imtler.get(ci) or "", set()) else "ci"
+                for r in rrdler:
+                    hedef[r].add(ci)
+            for ci, imt in imtler.items():
+                if ci in eslesme or not imt or imt not in ci_imt_rrd:
+                    continue
+                eslesme[ci] = "imt"
+                for r in ci_imt_rrd[imt]:
+                    hedef[r].add(ci)
+            if not hedef:
                 continue
-            for rrd, saatler in _saatlik(cur, sorted(rrd_imt), bas, bit).items():
-                for saat, (gir, cik) in saatler.items():
-                    h = toplam[rrd_imt[rrd]][saat]
-                    h[0] += gir or 0.0
-                    h[1] += cik or 0.0
-                    h[2] += 1
-    sonuc: dict[str, dict[datetime, tuple[float | None, float | None]]] = {}
-    for imt, saatler in toplam.items():
-        seri = {s: (round(v[0] * k, 2), round(v[1] * k, 2)) for s, v in saatler.items() if v[2]}
-        for ci in imt_ci[imt]:
-            sonuc[ci] = seri
-    return sonuc
+            for rrd, saatler in _saatlik(cur, sorted(hedef), bas, bit).items():
+                for ci in hedef[rrd]:
+                    for saat, (gir, cik) in saatler.items():
+                        h = toplam[ci][saat]
+                        h[0] += gir or 0.0
+                        h[1] += cik or 0.0
+                        h[2] += 1
+    return {
+        ci: {"seri": {s: (round(v[0] * k, 2), round(v[1] * k, 2)) for s, v in saatler.items() if v[2]}, "eslesme": eslesme[ci]}
+        for ci, saatler in toplam.items()
+    }

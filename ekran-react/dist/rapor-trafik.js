@@ -23,13 +23,15 @@
   var RENK = { lacivert: "#002855", sari: "#e8a400", mavi: "#0284c7", mor: "#7c3aed", kirmizi: "#be123c", gri: "#64748b", cizgi: "#e2e8f0" };
   var YAZI = "'Segoe UI', Calibri, Arial, sans-serif";
   var GENISLIK = 900, YUKSEKLIK = 380, PIKSEL = 3; // 3x: PDF'te ve buyutmede yazilar keskin kalsin
-  var METRIKLER = ["trafik", "kayip", "jitter", "gecikme"];
+  var METRIKLER = ["erisim", "trafik", "kayip", "jitter", "gecikme"]; // 2026-11-27: erisim de cizgi panel
 
   var METIN = {
     tr: {
       trafik: "Trafik", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "ort.", enYuksek: "en yüksek", p95: "%95", veriler: "Grafikte gösterilecek veriler",
-      bolum: "Devre grafikleri", ara: "Açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
+      bolum: "Devre grafikleri", ara: "IMT, açıklama, port ya da CI adı yazın (en az 3 karakter)", ekle: "Ekle", ekli: "Ekli",
+      imtOlustur: function (n) { return "Bu IMT ile grafik oluştur (" + n + " devre)"; }, imtEkli: "Bu IMT'nin devreleri ekli", imtNot: "IMT envanterde bulundu; trafik CI adı ve IMT ile eşleştirilir.",
+      eslesme: { ci_imt: "trafik: CI adı + IMT eşleşti", ci: "trafik: CI adıyla eşleşti", imt: "trafik: IMT ile eşleşti" },
       kaldir: "Kaldır", secili: "Seçili devreler", seciliYok: "Henüz devre seçilmedi.", sonucYok: "Eşleşen devre bulunamadı.",
       fazla: "ilk 100 sonuç gösteriliyor", toplam: "eşleşme", hazir: "Hazır", bekliyor: "Veri hazırlanıyor (birkaç dakika)",
       veriYok: "Bu dönemde ölçüm yok", kaldirOnay: "Bu devre rapordan kaldırılsın mı?", metrikYok: "Grafik için en az bir veri seçin.",
@@ -42,7 +44,9 @@
     en: {
       trafik: "Traffic", giris: "Input", cikis: "Output", gecikme: "Delay", jitter: "Jitter", kayip: "Packet Loss", erisim: "Availability",
       ort: "avg", enYuksek: "peak", p95: "95th", veriler: "Data shown on the chart",
-      bolum: "Circuit charts", ara: "Type a description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
+      bolum: "Circuit charts", ara: "Type an IMT, description, port or CI name (min. 3 characters)", ekle: "Add", ekli: "Added",
+      imtOlustur: function (n) { return "Create chart with this IMT (" + n + " circuit" + (n === 1 ? "" : "s") + ")"; }, imtEkli: "Circuits of this IMT are added", imtNot: "IMT found in inventory; traffic is matched by CI name and IMT.",
+      eslesme: { ci_imt: "traffic: CI name + IMT matched", ci: "traffic: matched by CI name", imt: "traffic: matched by IMT" },
       kaldir: "Remove", secili: "Selected circuits", seciliYok: "No circuit selected yet.", sonucYok: "No matching circuit.",
       fazla: "showing first 100 results", toplam: "matches", hazir: "Ready", bekliyor: "Preparing data (a few minutes)",
       veriYok: "No measurement this period", kaldirOnay: "Remove this circuit from the report?", metrikYok: "Select at least one data type for the chart.",
@@ -108,7 +112,7 @@
   // her panel tek eksen. Trafik saatlik (gunluk desen gorunsun), kalite verileri gunluk ortalama (saatlik gurultu yerine egilim).
   // Hafta sonlari hafif gri, kesintiler kirmizi bant. Renkler dataviz dogrulayicisindan gecti (panel ici ciftler, acik zemin).
   var C = {
-    giris: "#2a78d6", cikis: "#eb6834", gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948",
+    giris: "#2a78d6", cikis: "#eb6834", gecikme: "#6250d6", jitter: "#1baf7a", kayip: "#e34948", erisim: "#0f766e",
     metin: "#0b1f3a", ikincil: "#1f2a37", soluk: "#2f3b48", izgara: "#e3e8ee", kutu: "#f4f7fa", haftaSonu: "rgba(100,116,139,0.07)",
     kesinti: "rgba(227,73,72,0.14)"
   };
@@ -157,6 +161,16 @@
     function deger(i, carpan) { return nk.filter(function (n) { return saatte(n[0], saat); }).map(function (n) { return n[i] == null ? null : n[i] * carpan; }); }
 
     if (o.erisilebilirlik != null) kutular.push([m.erisim, yuzde(o.erisilebilirlik, dil, 3), m.aylikLoe]);
+
+    if (metrikler.indexOf("erisim") >= 0) {
+      var es = nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[1] != null ? n[1] * 100 : null]; });
+      if (es.some(function (x) { return x[1] != null; })) {
+        paneller.push({ ad: m.erisim, birim: "%", boy: 80, ondalik: 2, olcekli: true });
+        seriler.push(Object.assign(alanSerisi(m.erisim, C.erisim, es, paneller.length - 1), {
+          markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) } }));
+        lejant.push(m.erisim);
+      }
+    }
 
     if (metrikler.indexOf("trafik") >= 0) {
       var sg = istatistik(deger(6, 1)), sc = istatistik(deger(7, 1));
@@ -514,6 +528,7 @@
           : "";
         sol.appendChild(el("div", S.kucuk + ";font-weight:700;color:" + (ROZET[d.durum] || RENK.gri),
           (d.durum === "hazir" ? m.hazir : d.durum === "bekliyor" ? m.bekliyor : m.veriYok) + (ozet ? " — " + ozet : "")));
+        if (d.trafik_eslesme && m.eslesme[d.trafik_eslesme]) sol.appendChild(el("div", S.kucuk, m.eslesme[d.trafik_eslesme]));
         satir.appendChild(sol);
         if (v.duzenleyebilir) {
           var b = el("button", S.dugme2, m.kaldir);
@@ -539,6 +554,18 @@
       sonucKap.appendChild(el("div", S.kucuk + ";padding-top:8px", r.toplam + " " + m.toplam + (r.toplam > r.sonuclar.length ? " · " + m.fazla : "")));
       var secili = {};
       ((durum.veri && durum.veri.devreler) || []).forEach(function (d) { secili[d.ci] = true; });
+      if (r.imt) {
+        // 2026-11-27: yalniz IMT ile grafik - IMT'nin tum envanter devreleri tek tikla, butun veriler secili
+        var hepsi = r.sonuclar.every(function (s) { return secili[s.ci] || s.secili; });
+        var imtSatir = el("div", S.satir + ";align-items:center"), imtSol = el("div", S.kucuk + ";margin:0", m.imtNot);
+        var ib = el("button", hepsi ? S.pasif : S.dugme, hepsi ? m.imtEkli : m.imtOlustur(r.toplam));
+        ib.type = "button";
+        ib.disabled = hepsi;
+        if (!hepsi) ib.onclick = function () { islem(function () { return durum.p.istek("POST", durum.p.taban + "/devreler", { imt: r.imt }); }, aramaYenile); };
+        imtSatir.appendChild(imtSol);
+        imtSatir.appendChild(ib);
+        sonucKap.appendChild(imtSatir);
+      }
       r.sonuclar.forEach(function (s) {
         var satir = el("div", S.satir), sol = el("div", "min-width:0");
         sol.appendChild(el("div", S.ci, s.ci));

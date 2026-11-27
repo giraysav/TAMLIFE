@@ -37,11 +37,14 @@ os.environ.update(
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import delete  # noqa: E402
 
+from app import musteri_alani  # noqa: E402
 from app import session as oturum_deposu  # noqa: E402
 from app.db import engine, oturum  # noqa: E402
 from app.kullanicilar import parola_ozeti  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.models import AppUser, AuditEvent, Base, Customer, OnedeskRecord, UserNotification  # noqa: E402
+from app.models import (  # noqa: E402
+    AppSetting, AppUser, AuditEvent, Base, Customer, CustomerCi, OnedeskRecord, ReportCircuit, ReportCircuitData, ReportCmdb, UserNotification,
+)
 from app.musteri import erken_uyari  # noqa: E402
 from app.ortak import simdi  # noqa: E402
 from app.security import limiter  # noqa: E402
@@ -59,10 +62,15 @@ def _sema() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def _temiz() -> Iterator[None]:
     """Her test bos tablolarla baslar; giris sinirlayici, oturumlar ve Erken Uyari onbellegi sifirlanir."""
-    with oturum() as db:
-        for tablo in (UserNotification, OnedeskRecord, AuditEvent, Customer, AppUser):
-            db.execute(delete(tablo))
-        db.commit()
+    jeton = musteri_alani.ayarla(musteri_alani.VARSAYILAN)
+    musteri_alani._alan.set(musteri_alani.TUMU)  # Customer silmesi alana suzulmesin (Toptan kartlari da silinsin)
+    try:
+        with oturum() as db:
+            for tablo in (UserNotification, ReportCircuitData, ReportCircuit, ReportCmdb, CustomerCi, AppSetting, OnedeskRecord, AuditEvent, Customer, AppUser):
+                db.execute(delete(tablo))
+            db.commit()
+    finally:
+        musteri_alani.geri_al(jeton)
     limiter.reset()
     oturum_deposu._STORE.clear()
     erken_uyari._onbellek = None

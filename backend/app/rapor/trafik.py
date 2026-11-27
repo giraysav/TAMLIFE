@@ -30,7 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.dil import m
-from app.models import AppSetting, ReportCircuit, ReportCircuitData, ReportCmdb
+from app.models import AppSetting, Customer, CustomerCi, ReportCircuit, ReportCircuitData, ReportCmdb
 from app.musteri.servis import MusteriHata, duzenleyebilir_mi, musteri_getir, musteri_yaz_getir
 from app.ortak import simdi
 from app.rapor import loe, loe_trafik
@@ -44,8 +44,9 @@ EN_COK_SONUC = 100
 _GOSTER = ("IMT", "DESC", "ACIKLAMA", "PORT", "ORG_ADI", "SERVICE", "HIZ", "SPEED", "BANDWIDTH", "EXCHOURS", "ADRES", "ADDRESS")
 
 
-METRIKLER = ("trafik", "kayip", "jitter", "gecikme")
-VARSAYILAN_METRIKLER = ["kayip", "jitter", "gecikme"]
+METRIKLER = ("erisim", "trafik", "kayip", "jitter", "gecikme")
+# 2026-11-27 kullanici: "eslesen veri icin grafige availability, in/out trafik, ploss, delay, jitter hepsini yazsin"
+VARSAYILAN_METRIKLER = list(METRIKLER)
 ZAMAN_BICIMI = "%Y-%m-%dT%H:%M"
 EN_ERKEN = datetime(2024, 1, 1)
 EN_UZUN_GUN = 366
@@ -164,20 +165,48 @@ def _baslik(alanlar: dict[str, Any]) -> str:
     return " · ".join(v for _, v in _etiket(alanlar)[:2])[:300]
 
 
+def _kart_anahtarlari(db: Session, musteri: Customer) -> list[str]:
+    """Kartin ve (cati ise) istiraklerinin Musteri No anahtarlari: IMT bir istirakin numarasinda olabilir."""
+    numaralar = [musteri.customer_no, *db.scalars(select(Customer.customer_no).where(Customer.parent_id == musteri.id))]
+    return sorted({k for n in numaralar for k in musteri_anahtarlari(n)})
+
+
+def _imt_cileri(db: Session, anahtarlar: list[str], imt: str) -> list[CustomerCi]:
+    """IMT'ye bagli ONENT envanter CI'lari (kartin musteri numaralari icinde; ayni IMT ana + yedek hatta olabilir)."""
+    if not anahtarlar or not loe.IMT_BICIMI.match(imt):
+        return []
+    sorgu = select(CustomerCi).where(CustomerCi.customer_key.in_(anahtarlar), CustomerCi.attrs["imt"].as_string() == imt)
+    gorulen: dict[str, CustomerCi] = {}
+    for ci in db.scalars(sorgu.order_by(CustomerCi.ci_name)):
+        if ci.ci_name and ci.ci_name not in gorulen:
+            gorulen[ci.ci_name] = ci
+    return list(gorulen.values())
+
+
+def _envanter_etiketi(ci: CustomerCi, imt: str) -> list[tuple[str, str]]:
+    return [(ad, v) for ad, v in (("IMT", imt), (m("Hizmet", "Service"), ci.service or ""), (m("Durum", "Status"), ci.status or "")) if v]
+
+
 def ara(db: Session, user: Principal, musteri_id: int, metin: str) -> dict[str, Any]:
-    """Musterinin (Musteri No) CMDB devrelerinde esnek arama: CI adi, aciklama, port ... herhangi bir sutunda parca eslesmesi."""
+    """Musterinin devrelerinde arama. IMT yazilirsa (2026-11-27 kullanici: "kullanici yalniz IMT ile grafik olusturabilsin") once
+    ONENT envanterinde IMT -> CI adi; bulunamazsa ve diger metinlerde CMDB kopyasinda esnek arama (CI adi, aciklama, port ...)."""
     musteri = musteri_getir(db, user, musteri_id)
     q = " ".join((metin or "").split())[:EN_COK_ARAMA].casefold()
     anahtarlar = musteri_anahtarlari(musteri.customer_no)
-    sonuc: dict[str, Any] = {"metin": q, "musteri_no_var": bool(anahtarlar), "kaynak": _kaynak_durumu(db), "sonuclar": [], "toplam": 0}
+    sonuc: dict[str, Any] = {"metin": q, "musteri_no_var": bool(anahtarlar), "kaynak": _kaynak_durumu(db), "sonuclar": [], "toplam": 0, "imt": None}
     if len(q) < EN_AZ_ARAMA or not anahtarlar:
+        return sonuc
+    secili = set(db.scalars(select(ReportCircuit.ciname).where(ReportCircuit.customer_id == musteri.id)))
+    if loe.IMT_BICIMI.match(q) and (cis := _imt_cileri(db, _kart_anahtarlari(db, musteri), q)):
+        sonuc["imt"] = q
+        sonuc["sonuclar"] = [{"ci": c.ci_name, "alanlar": _envanter_etiketi(c, q), "secili": c.ci_name in secili} for c in cis[:EN_COK_SONUC]]
+        sonuc["toplam"] = len(cis)
         return sonuc
     parcalar = q.split(" ")
     sorgu = select(ReportCmdb).where(ReportCmdb.customer_key.in_(anahtarlar))
     for p in parcalar:
         sorgu = sorgu.where(ReportCmdb.search_text.contains(p, autoescape=True))
     satirlar = db.scalars(sorgu.order_by(ReportCmdb.ciname)).all()
-    secili = set(db.scalars(select(ReportCircuit.ciname).where(ReportCircuit.customer_id == musteri.id)))
     gorulen: set[str] = set()
     for s in satirlar:
         if s.ciname in gorulen:
@@ -208,18 +237,48 @@ def olcum_tetikle() -> None:
         logging.getLogger("tamlife.trafik").warning("rapor-devre tetiklenemedi", exc_info=True)
 
 
-def ekle(db: Session, user: Principal, musteri_id: int, ci: str) -> dict[str, Any]:
-    musteri = musteri_yaz_getir(db, user, musteri_id)
-    ci = (ci or "").strip()[:200]
-    anahtarlar = musteri_anahtarlari(musteri.customer_no)
-    satir = db.scalars(select(ReportCmdb).where(ReportCmdb.ciname == ci, ReportCmdb.customer_key.in_(anahtarlar)).limit(1)).first() if ci else None
-    if satir is None:
-        raise MusteriHata(404, m("Devre bu müşterinin CMDB kayıtlarında bulunamadı.", "Circuit not found in this customer's CMDB records."))
+def _devre_ekle(db: Session, user: Principal, musteri: Customer, ci: str, etiket: str) -> ReportCircuit:
     var = db.scalars(select(ReportCircuit).where(ReportCircuit.customer_id == musteri.id, ReportCircuit.ciname == ci)).first()
     if var is None:
-        var = ReportCircuit(customer_id=musteri.id, ciname=ci, label=_baslik(satir.fields or {}), added_by=user.username, added_at=simdi())
+        var = ReportCircuit(customer_id=musteri.id, ciname=ci, label=etiket[:300], added_by=user.username, added_at=simdi())
         db.add(var)
         db.flush()
+    return var
+
+
+def _tum_metrikler(db: Session, user: Principal, musteri_id: int) -> None:
+    """IMT ile olusturulan grafikte butun veriler (erisim, trafik, kayip, jitter, gecikme) cizilir; secili tarih araligi korunur."""
+    ayar = ayar_oku(db, musteri_id)
+    if set(ayar["metrikler"]) != set(METRIKLER):
+        ar = ayar["aralik"] or {}
+        ayar_yaz(db, user, musteri_id, {"metrikler": list(METRIKLER), "bas_zaman": ar.get("bas"), "bit_zaman": ar.get("bit")})
+
+
+def ekle(db: Session, user: Principal, musteri_id: int, ci: str | None = None, imt: str | None = None) -> dict[str, Any]:
+    """Devre ekleme: CI adi (CMDB kopyasindan ya da ONENT envanterinden) ya da IMT (IMT'ye bagli tum envanter CI'lari)."""
+    musteri = musteri_yaz_getir(db, user, musteri_id)
+    imt = (imt or "").strip()
+    if imt:
+        cis = _imt_cileri(db, _kart_anahtarlari(db, musteri), imt)
+        if not cis:
+            raise MusteriHata(404, m("Bu IMT müşterinin envanterinde bulunamadı.", "This IMT was not found in the customer's inventory."))
+        eklenen = [_devre_ekle(db, user, musteri, c.ci_name, " · ".join(v for _, v in _envanter_etiketi(c, imt))) for c in cis]
+        _tum_metrikler(db, user, musteri.id)
+        return {"imt": imt, "eklenen": [{"id": v.id, "ci": v.ciname} for v in eklenen]}
+    ci = (ci or "").strip()[:200]
+    if not ci:
+        raise MusteriHata(400, m("CI adı ya da IMT gerekli.", "A CI name or IMT is required."))
+    anahtarlar = musteri_anahtarlari(musteri.customer_no)
+    satir = db.scalars(select(ReportCmdb).where(ReportCmdb.ciname == ci, ReportCmdb.customer_key.in_(anahtarlar)).limit(1)).first()
+    if satir is not None:
+        var = _devre_ekle(db, user, musteri, ci, _baslik(satir.fields or {}))
+        return {"id": var.id, "ci": var.ciname}
+    envanter = db.scalars(select(CustomerCi).where(CustomerCi.ci_name == ci, CustomerCi.customer_key.in_(_kart_anahtarlari(db, musteri))).limit(1)).first()
+    if envanter is None:
+        raise MusteriHata(404, m("Devre bu müşterinin CMDB kayıtlarında bulunamadı.", "Circuit not found in this customer's CMDB records."))
+    imt_ = str((envanter.attrs or {}).get("imt") or "").strip()
+    etiket = " · ".join(v for _, v in _envanter_etiketi(envanter, imt_ if loe.IMT_BICIMI.match(imt_) else ""))
+    var = _devre_ekle(db, user, musteri, ci, etiket)
     return {"id": var.id, "ci": var.ciname}
 
 
@@ -265,6 +324,7 @@ def getir(db: Session, user: Principal, musteri_id: int, donem_kodu: str | None 
         devreler.append({
             "id": s.id, "ci": s.ciname, "baslik": s.label, "durum": durum, "cekildi": _iso(cekildi),
             "exchours": next((v.exchours for v in aylik.values() if v.exchours), ""), "ozet": _aralik_ozeti(noktalar), "noktalar": noktalar,
+            "trafik_eslesme": next(((v.summary or {}).get("trafik_eslesme") for v in aylik.values() if (v.summary or {}).get("trafik_eslesme")), ""),
         })  # fmt: skip
     return {
         "yil": yil,

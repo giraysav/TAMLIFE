@@ -39,6 +39,7 @@ from app.tampon.eslestirme import anahtar, musteri_anahtarlari
 _log = logging.getLogger("tamlife.loe")
 KAYNAK = "oracle_reportdb"
 DURUM_ANAHTARI = "rapor.loe_durum"
+IMT_BICIMI = re.compile(r"^\d{9,15}$")  # gecerli IMT (envanterdeki '-', '1' gibi yer tutucular eslesmez)
 TR = timezone(timedelta(hours=3))  # ReportDB DATETIME yerel saat (Turkiye, yaz saati yok)
 
 _AD = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]*(\.[A-Za-z][A-Za-z0-9_$#]*)?$")
@@ -103,11 +104,11 @@ def olcum_sorgusu(cinames: list[str], bas: datetime, bit: datetime) -> tuple[str
     sorgu = (
         "SELECT DY.CINAME, TO_CHAR(DY.DATETIME, 'YYYY-MM-DD HH24:MI:SS') ZAMAN, DY.AVAIL_TIME, DY.TOTAL_TIME, DY.DELAY_AVG, "
         "DY.JITTER_AVG, DY.PACKET_LOST_AVG, ORG.EXCHOURS, "
-        "CASE WHEN P.EXCHOURS IS NOT NULL "
+        "CASE WHEN ORG.CINAME IS NULL THEN 1 WHEN P.EXCHOURS IS NOT NULL "
         "AND TRUNC(DY.DATETIME) - TRUNC(DY.DATETIME, 'IW') + 1 <= P.SON_GUN "
         "AND TO_CHAR(DY.DATETIME, 'HH24MISS') BETWEEN P.BAS AND P.BIT THEN 1 ELSE 0 END PENCERE "
         f"FROM {olcum_tablosu()} DY "
-        f"JOIN (SELECT CINAME, MAX(EXCHOURS) EXCHOURS FROM {cmdb_tablosu()} WHERE CINAME IN ({yer}) GROUP BY CINAME) ORG "
+        f"LEFT JOIN (SELECT CINAME, MAX(EXCHOURS) EXCHOURS FROM {cmdb_tablosu()} WHERE CINAME IN ({yer}) GROUP BY CINAME) ORG "
         "ON ORG.CINAME = DY.CINAME "
         f"LEFT JOIN ({_pencere_sql()}) P ON P.EXCHOURS = ORG.EXCHOURS "
         f"WHERE DY.CINAME IN ({yer}) AND DY.DATETIME >= :bas AND DY.DATETIME < :bit"
@@ -312,21 +313,35 @@ def olcum_cek(db: Session, cinames: list[str], yil: int, ay: int) -> int:
         ozet_ = ozet(satirlar)
         if trafik is not None:  # trafik cekildi (veri olsun olmasin); hata verdiyse anahtar yok, sonraki tazelemede yeniden denenir
             ozet_["trafik"] = "var" if ci in trafik else "yok"
+            ozet_["trafik_eslesme"] = trafik.get(ci, "")
         kayit.points, kayit.summary, kayit.exchours, kayit.fetched_at = noktalar(satirlar), ozet_, exch.get(ci, ""), an
         db.merge(kayit)
     db.commit()
     return sum(len(v) for v in gruplar.values())
 
 
-def _trafik_ekle(db: Session, gruplar: dict[str, list[dict[str, Any]]], bas: datetime, bit: datetime) -> set[str] | None:
-    """Saatlik satirlara MSSQL trafigini (giris / cikis bps) yazar; trafigi bulunan CI adlari. Kaynak kapali ya da hata: None
-    (Oracle metrikleri yine yazilir; hata durum kaydina ve gunluge)."""
+def devre_imtleri(db: Session, cinames: list[str]) -> dict[str, str]:
+    """CI adi -> IMT: once ONENT envanteri (customer_ci.attrs.imt; 2026-11-27 kullanici "IMT'yi ONENT'ten"), yoksa CMDB kopyasi.
+    Gecersiz IMT ('-', '1' gibi yer tutucular) alinmaz."""
+    sonuc: dict[str, str] = {}
+    for ad, attrs in db.execute(select(CustomerCi.ci_name, CustomerCi.attrs).where(CustomerCi.ci_name.in_(cinames))):
+        imt = str((attrs or {}).get("imt") or "").strip()
+        if IMT_BICIMI.match(imt):
+            sonuc.setdefault(ad, imt)
+    for k in db.scalars(select(ReportCmdb).where(ReportCmdb.ciname.in_([c for c in cinames if c not in sonuc]))):
+        imt = str((k.fields or {}).get("IMT") or "").strip()
+        if IMT_BICIMI.match(imt):
+            sonuc.setdefault(k.ciname, imt)
+    return {c: sonuc.get(c, "") for c in cinames}
+
+
+def _trafik_ekle(db: Session, gruplar: dict[str, list[dict[str, Any]]], bas: datetime, bit: datetime) -> dict[str, str] | None:
+    """Saatlik satirlara MSSQL trafigini (giris / cikis bps) yazar; Oracle olcumu olmayan saatler trafikle eklenir (pencere disi).
+    Donus: trafigi bulunan CI adi -> eslesme turu (ci_imt | ci | imt). Kaynak kapali ya da hata: None (Oracle metrikleri yine
+    yazilir; hata durum kaydina ve gunluge)."""
     if not loe_trafik.acik():
         return None
-    imtler = {
-        k.ciname: str((k.fields or {}).get("IMT") or "").strip()
-        for k in db.scalars(select(ReportCmdb).where(ReportCmdb.ciname.in_(list(gruplar))))
-    }
+    imtler = devre_imtleri(db, list(gruplar))
     try:
         seriler = loe_trafik.saatlik_trafik(imtler, bas, bit)
     except Exception as e:  # noqa: BLE001 - trafik kaynagi hatasi olcumu durdurmaz
@@ -337,12 +352,15 @@ def _trafik_ekle(db: Session, gruplar: dict[str, list[dict[str, Any]]], bas: dat
         _durum_yaz(db, "trafik", son_deneme=simdi().isoformat(), hata=mesaj)
         return None
     for ci, satirlar in gruplar.items():
-        seri = seriler.get(ci) or {}
+        seri = dict((seriler.get(ci) or {}).get("seri") or {})
         for s in satirlar:
-            if (v := seri.get(s["zaman"].replace(minute=0, second=0))) is not None:
+            if (v := seri.pop(s["zaman"].replace(minute=0, second=0), None)) is not None:
                 s["giris"], s["cikis"] = v
+        for saat, (gir, cik) in seri.items():  # Oracle olcumu olmayan saat: yalniz trafik
+            satirlar.append({"zaman": saat, "avail": None, "total": None, "delay": None, "jitter": None, "loss": None, "pencere": False,
+                             "giris": gir, "cikis": cik})  # fmt: skip
     _durum_yaz(db, "trafik", son_deneme=simdi().isoformat(), son_basari=simdi().isoformat(), hata="")
-    return {ci for ci in gruplar if seriler.get(ci)}
+    return {ci: v["eslesme"] for ci, v in seriler.items() if ci in gruplar and v.get("seri")}
 
 
 def senkron(db: Session, zorla: bool = False) -> dict[str, Any]:

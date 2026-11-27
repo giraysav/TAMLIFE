@@ -342,7 +342,8 @@ def trafik_oku(musteri_id: KimlikTipi, donem: str | None = DonemQ, e: Erisim = D
 
 
 class DevreGovde(BaseModel):
-    ci: str = Field(min_length=1, max_length=200)
+    ci: str | None = Field(default=None, min_length=1, max_length=200)
+    imt: str | None = Field(default=None, pattern=r"^\d{9,15}$")  # 2026-11-27: IMT ile grafik (envanterdeki tum CI'lari)
 
 
 @router.get("/musteri/{musteri_id:int}/rapor/devre-ara")
@@ -353,8 +354,9 @@ def devre_ara(musteri_id: KimlikTipi, q: str = Query(default="", max_length=200)
 
 @router.post("/musteri/{musteri_id:int}/rapor/devreler")
 def devre_ekle(musteri_id: KimlikTipi, body: DevreGovde, e: Erisim = Depends(musteri_erisim), db: Session = Depends(get_db)):
-    sonuc = _yap(db, lambda: trafik.ekle(db, e.user, musteri_id, body.ci), yaz=True)
-    _denetim(e.user, "rapor.devre_ekle", f"musteri={musteri_id} ci={body.ci[:80]}")
+    sonuc = _yap(db, lambda: trafik.ekle(db, e.user, musteri_id, body.ci, body.imt), yaz=True)
+    hedef = f"imt={body.imt}" if body.imt else f"ci={(body.ci or '')[:80]}"
+    _denetim(e.user, "rapor.devre_ekle", f"musteri={musteri_id} {hedef}")
     trafik.olcum_tetikle()
     return sonuc
 
