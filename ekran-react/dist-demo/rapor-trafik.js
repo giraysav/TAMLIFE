@@ -42,7 +42,7 @@
       veriYok: "Bu dönemde ölçüm yok", kaldirOnay: "Bu devre rapordan kaldırılsın mı?", metrikYok: "Grafik için en az bir veri seçin.",
       noYok: "Kartta Müşteri No olmadığı için devre aranamıyor.", cmdbYok: "Devre listesi henüz hazır değil; arama sonuç vermeyebilir.", olcumHata: "Ölçüm verisi şu an güncellenemiyor; son alınan veri gösteriliyor.",
       salt: "Bu kartta değişiklik yetkiniz yok; ayarlar ve seçili devreler gösteriliyor.", hata: "İşlem yapılamadı",
-      trafikYok: "Trafik verisi henüz hazır değil.", aylikLoe: "Dönem", hizmetSaati: "Hizmet saati", tarihAraligi: "Tarih aralığı", raporDonemi: "Rapor dönemi", raporDonemiAcik: "Raporun dönemi kullanılıyor", aralikHata: "Bitiş, başlangıçtan sonra olmalı.", kesinti: "Kesinti",
+      trafikYok: "Trafik verisi henüz hazır değil.", aylikLoe: "Dönem", kapsam: function (a, b) { return "ölçüm " + a + "/" + b + " saat"; }, hizmetSaati: "Hizmet saati", tarihAraligi: "Tarih aralığı", raporDonemi: "Rapor dönemi", raporDonemiAcik: "Raporun dönemi kullanılıyor", aralikHata: "Bitiş, başlangıçtan sonra olmalı.", kesinti: "Kesinti",
       kaynak: "Saatlik ölçüm · gri alan hafta sonu",
       ay: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
     },
@@ -61,7 +61,7 @@
       veriYok: "No measurement this period", kaldirOnay: "Remove this circuit from the report?", metrikYok: "Select at least one data type for the chart.",
       noYok: "This card has no Customer No, so circuits cannot be searched.", cmdbYok: "Circuit list is not ready yet; search may return no results.", olcumHata: "Measurement data cannot be updated right now; the last received data is shown.",
       salt: "You cannot change this card; settings and selected circuits are shown.", hata: "Action failed",
-      trafikYok: "Traffic data is not ready yet.", aylikLoe: "Period", hizmetSaati: "Service hours", tarihAraligi: "Date range", raporDonemi: "Report period", raporDonemiAcik: "Using the report period", aralikHata: "End must be after start.", kesinti: "Outage",
+      trafikYok: "Traffic data is not ready yet.", aylikLoe: "Period", kapsam: function (a, b) { return "measured " + a + "/" + b + " h"; }, hizmetSaati: "Service hours", tarihAraligi: "Date range", raporDonemi: "Report period", raporDonemiAcik: "Using the report period", aralikHata: "End must be after start.", kesinti: "Outage",
       kaynak: "Hourly measurement · grey area weekend",
       ay: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     }
@@ -154,6 +154,17 @@
   }
 
   /** Tum veriler ayni bicimde: saatlik, ici dolu alan (cizgi + yukaridan asagi solan dolgu). */
+  // Saatlik kalite serisinde iki olcum arasi 1,5 saatten uzunsa araya bos nokta konur: cizgi kesilir (2026-11-27: kaynakta
+  // 8-25 Ekim yoktu; grafik bosluklari duz egik cizgiyle birlestirip "veri var" gibi gosteriyordu).
+  function bosluklu(dizi) {
+    var sonuc = [];
+    for (var i = 0; i < dizi.length; i++) {
+      if (i > 0 && dizi[i][0] - dizi[i - 1][0] > 5400e3) sonuc.push([dizi[i - 1][0] + 3600e3, null]);
+      sonuc.push(dizi[i]);
+    }
+    return sonuc;
+  }
+
   function alanSerisi(ad, renk, veri, panel) {
     var rgb = [1, 3, 5].map(function (i) { return parseInt(renk.substr(i, 2), 16); }).join(",");
     return { name: ad, type: "line", xAxisIndex: panel, yAxisIndex: panel, data: veri, showSymbol: false, connectNulls: false, sampling: "lttb",
@@ -170,12 +181,16 @@
     var golge = haftaSonlari(r), kes = kesintiler(nk);
     function deger(i, carpan) { return nk.filter(function (n) { return saatte(n[0], saat); }).map(function (n) { return n[i] == null ? null : n[i] * carpan; }); }
 
-    if (o.erisilebilirlik != null) kutular.push([m.erisim, yuzde(o.erisilebilirlik, dil, 3), m.aylikLoe]);
+    var olcumSaat = nk.filter(function (n) { return n[1] != null; }).length, aralikSaat = Math.round((r[1] - r[0]) / 3600e3);
+    if (o.erisilebilirlik != null) kutular.push([m.erisim, yuzde(o.erisilebilirlik, dil, 3),
+      olcumSaat < aralikSaat - 1 ? m.kapsam(olcumSaat, aralikSaat) : m.aylikLoe]);
 
     if (metrikler.indexOf("erisim") >= 0) {
-      var es = nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[1] != null ? n[1] * 100 : null]; });
+      var es = bosluklu(nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[1] != null ? n[1] * 100 : null]; }));
       if (es.some(function (x) { return x[1] != null; })) {
-        paneller.push({ ad: m.erisim, birim: "%", boy: 80, ondalik: 2, olcekli: true });
+        // eksen 100'de biter, alt sinir en dusuk degerin biraz altinda (hep %100 ise 99-100; ECharts kendi halinde 30'dan basliyordu)
+        var enDusuk = Math.min.apply(null, es.filter(function (x) { return x[1] != null; }).map(function (x) { return x[1]; }));
+        paneller.push({ ad: m.erisim, birim: "%", boy: 80, ondalik: 2, olcekli: true, enFazla: 100, enAz: Math.max(0, Math.floor(enDusuk - Math.max(1, (100 - enDusuk) * 0.1))) });
         seriler.push(Object.assign(alanSerisi(m.erisim, C.erisim, es, paneller.length - 1), {
           markArea: { silent: true, data: golge.map(function (a) { return [{ xAxis: a[0].xAxis, itemStyle: { color: C.haftaSonu } }, a[1]]; }) } }));
         lejant.push(m.erisim);
@@ -207,7 +222,7 @@
     var gecikmeVar = metrikler.indexOf("gecikme") >= 0, jitterVar = metrikler.indexOf("jitter") >= 0;
     if (gecikmeVar || jitterVar) {
       var saatlik = function (i, carpan) {
-        var d = nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[i] != null ? n[i] * carpan : null]; });
+        var d = bosluklu(nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[i] != null ? n[i] * carpan : null]; }));
         return d.some(function (x) { return x[1] != null; }) ? d : [];
       };
       // olcum saniye cinsinden saklanir (LOE: DELAY_AVG / 1000); ekranda ms (2026-11-27: onceden "0,00 ms" gorunuyordu)
@@ -227,7 +242,7 @@
     }
 
     if (metrikler.indexOf("kayip") >= 0) {
-      var ks = nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[4] != null ? n[4] * 100 : null]; }), stk = istatistik(deger(4, 100));
+      var ks = bosluklu(nk.map(function (n) { return [n[0], saatte(n[0], saat) && n[4] != null ? n[4] * 100 : null]; })), stk = istatistik(deger(4, 100));
       if (stk) {
         paneller.push({ ad: m.kayip, birim: "%", boy: 90, ondalik: 2 });
         var z = paneller.length - 1;
@@ -303,7 +318,7 @@
           splitLine: { show: false } };
       }),
       yAxis: paneller.map(function (p, k) {
-        return { type: "value", gridIndex: k, min: p.olcekli ? undefined : 0, scale: !!p.olcekli, splitNumber: p.boy < 100 ? 2 : 3, axisLine: { show: false }, axisTick: { show: false },
+        return { type: "value", gridIndex: k, min: p.enAz != null ? p.enAz : p.olcekli ? undefined : 0, max: p.enFazla, scale: !!p.olcekli, splitNumber: p.boy < 100 ? 2 : 3, axisLine: { show: false }, axisTick: { show: false },
           axisLabel: { color: C.ikincil, fontSize: 10.5, fontWeight: 600, formatter: function (v) { return sayi(v, dil, v && v < 1 ? p.ondalik : v % 1 ? 1 : 0); } },
           splitLine: { lineStyle: { color: C.izgara } } };
       }),
